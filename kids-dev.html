@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kids Town Dev Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0e17;color:#e2e8f0;padding:20px}
+.container{max-width:1400px;margin:0 auto}
+
+/* Header */
+.header{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;background:#111827;border-radius:16px;border:1px solid #1e293b;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+.header h1{font-size:22px;font-weight:700;background:linear-gradient(135deg,#a855f7,#22c55e);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header .links{display:flex;gap:8px}
+.header .links a{color:#3b82f6;text-decoration:none;font-size:13px;padding:6px 14px;background:#1a2236;border-radius:8px;border:1px solid #1e293b}
+.header .links a:hover{background:#1e293b}
+.header .badge{background:#1a2236;padding:6px 14px;border-radius:20px;font-size:12px;color:#64748b;border:1px solid #1e293b}
+.header .badge span{color:#22c55e;font-weight:600}
+
+/* Summary cards */
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:20px}
+.summary-card{padding:18px 20px;border-radius:14px;border:1px solid #1e293b;background:#111827}
+.summary-card .label{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#64748b;margin-bottom:6px}
+.summary-card .value{font-size:26px;font-weight:800;margin-bottom:2px}
+.summary-card.blue .value{color:#3b82f6}
+.summary-card.green .value{color:#22c55e}
+.summary-card.gold .value{color:#f59e0b}
+.summary-card.purple .value{color:#a855f7}
+.summary-card.cyan .value{color:#06b6d4}
+.summary-card.pink .value{color:#ec4899}
+.summary-card .sub{font-size:11px;color:#64748b}
+
+/* Section */
+.section{margin-bottom:24px}
+.section-title{font-size:15px;font-weight:700;color:#e2e8f0;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.section-title .count{font-size:11px;font-weight:400;color:#64748b;background:#1a2236;padding:2px 10px;border-radius:10px}
+
+/* Feature timeline */
+.phase-grid{display:flex;gap:16px;overflow-x:auto;padding-bottom:8px}
+.phase-card{min-width:300px;max-width:380px;background:#111827;border-radius:14px;border:1px solid #1e293b;padding:20px;flex-shrink:0}
+.phase-card h3{font-size:14px;font-weight:700;color:#f0f6fc;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.phase-card h3 .phase-pct{font-size:11px;color:#64748b;font-weight:400}
+.feature-item{display:flex;align-items:flex-start;padding:8px 0;border-bottom:1px solid #1a2236;gap:10px}
+.feature-item:last-child{border-bottom:none}
+.feature-item .icon{font-size:14px;width:20px;text-align:center;flex-shrink:0}
+.feature-item .info{flex:1}
+.feature-item .info .name{font-size:13px;font-weight:600;color:#e2e8f0}
+.feature-item .info .detail{font-size:11px;color:#64748b;margin-top:2px}
+.feature-item .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.feature-item .status-dot.completed{background:#22c55e;box-shadow:0 0 6px rgba(34,197,94,0.4)}
+.feature-item .status-dot.planned{background:#f59e0b;box-shadow:0 0 6px rgba(245,158,11,0.3)}
+
+/* Kid cards */
+.kid-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:20px}
+.kid-card{background:#111827;border-radius:14px;border:1px solid #1e293b;overflow:hidden}
+.kid-card .kid-header{padding:14px 18px;display:flex;align-items:center;gap:12px}
+.kid-card .kid-avatar{font-size:32px}
+.kid-card .kid-meta{flex:1}
+.kid-card .kid-meta .kid-name{font-size:15px;font-weight:700}
+.kid-card .kid-meta .kid-points{font-size:13px;color:#f59e0b;font-weight:600}
+.kid-card .kid-stats{padding:10px 18px 14px;display:flex;gap:16px;flex-wrap:wrap}
+.kid-card .kid-stat{display:flex;align-items:center;gap:4px;font-size:12px;color:#94a3b8}
+.kid-card .kid-stat strong{color:#e2e8f0;font-weight:700}
+.kid-card .kid-buildings{padding:0 18px 14px;display:flex;flex-wrap:wrap;gap:4px}
+.building-badge{display:inline-flex;align-items:center;gap:2px;background:#1a2236;padding:2px 8px;border-radius:8px;font-size:11px;color:#94a3b8;border:1px solid #1e293b}
+.building-badge .b-icon{font-size:12px}
+.building-badge .b-lv{color:#f59e0b;font-size:10px}
+
+/* Heatmap table */
+.heatmap-wrap{background:#111827;border-radius:14px;border:1px solid #1e293b;overflow-x:auto;margin-bottom:20px}
+.heatmap-wrap .hm-header{padding:14px 18px;border-bottom:1px solid #1e293b;font-size:14px;font-weight:700;color:#e2e8f0}
+.heatmap-table{width:100%;border-collapse:collapse;font-size:12px}
+.heatmap-table th{padding:8px 10px;text-align:center;color:#64748b;font-weight:600;border-bottom:1px solid #1e293b;position:sticky;top:0;background:#111827}
+.heatmap-table td{padding:6px 6px;text-align:center;border-bottom:1px solid #1a2236}
+.heatmap-table tr:hover{background:#1a2236}
+.heatmap-cell{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;font-size:13px}
+.heatmap-cell.earned{background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3)}
+.heatmap-cell.missing{background:rgba(100,116,139,0.08);border:1px solid rgba(100,116,139,0.1);color:#4a5568}
+
+/* Activity Log */
+.activity-wrap{background:#111827;border-radius:14px;border:1px solid #1e293b;overflow:hidden;margin-bottom:20px}
+.activity-wrap .act-header{padding:14px 18px;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:center}
+.activity-wrap .act-header h3{font-size:14px;font-weight:700;color:#e2e8f0}
+.activity-item{display:flex;align-items:center;padding:8px 18px;border-bottom:1px solid #1a2236;gap:10px;font-size:12px}
+.activity-item:last-child{border-bottom:none}
+.activity-item:hover{background:#1a2236}
+.activity-item .act-time{color:#4a5568;min-width:80px;font-size:11px}
+.activity-item .act-avatar{font-size:16px;min-width:20px;text-align:center}
+.activity-item .act-name{color:#94a3b8;font-weight:600;min-width:40px}
+.activity-item .act-desc{color:#e2e8f0;flex:1}
+.activity-item .act-score{font-weight:700;min-width:30px;text-align:right}
+.activity-item .act-score.positive{color:#22c55e}
+.activity-item .act-score.negative{color:#ef4444}
+
+/* Loading/Error */
+.loading{text-align:center;padding:60px 20px;color:#64748b}
+.loading .spinner{display:inline-block;width:32px;height:32px;border:3px solid #1e293b;border-top:3px solid #a855f7;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error-msg{text-align:center;padding:40px;color:#ef4444;background:#111827;border-radius:14px;border:1px solid #1e293b;margin-bottom:20px}
+
+/* Task completions */
+.task-item{display:flex;align-items:center;padding:6px 18px;gap:10px;font-size:12px;border-bottom:1px solid #1a2236}
+.task-item:last-child{border-bottom:none}
+.task-item:hover{background:#1a2236}
+.task-item .task-icon{font-size:16px}
+.task-item .task-title{color:#e2e8f0;flex:1}
+.task-item .task-points{color:#f59e0b;font-weight:600}
+.task-item .task-kid{color:#94a3b8;font-size:11px}
+.task-item .task-time{color:#4a5568;min-width:80px;font-size:11px}
+
+/* Progress bar */
+.progress-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:#1e293b;margin:8px 0}
+.progress-bar .bar-completed{background:#22c55e;transition:width 0.5s}
+.progress-bar .bar-planned{background:#f59e0b;transition:width 0.5s}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;margin-bottom:16px;background:#111827;border-radius:12px;padding:4px;border:1px solid #1e293b}
+.tab{flex:1;text-align:center;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;color:#64748b;transition:all 0.2s}
+.tab:hover{color:#e2e8f0}
+.tab.active{background:#1e293b;color:#e2e8f0}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+@media(max-width:640px){
+  .phase-grid{flex-direction:column}
+  .phase-card{min-width:auto;max-width:none}
+  .kid-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <h1>🏠 Kids Town 開發儀表板</h1>
+    <div class="links">
+      <a href="/">📊 主 Dashboard</a>
+      <a href="/kids">🎮 Kids Town</a>
+      <a href="/kanban">📋 Kanban</a>
+    </div>
+    <div class="badge">📡 <span id="updateTime">—</span></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('overview',this)">📊 概覽</div>
+    <div class="tab" onclick="switchTab('features',this)">✅ 功能進度</div>
+    <div class="tab" onclick="switchTab('kids',this)">👶 小朋友</div>
+    <div class="tab" onclick="switchTab('activity',this)">📜 活動紀錄</div>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <div>載入 Kids Town 開發數據...</div>
+  </div>
+  <div id="error" class="error-msg" style="display:none"></div>
+
+  <!-- Overview Tab -->
+  <div id="tab-overview" class="tab-content active"></div>
+
+  <!-- Features Tab -->
+  <div id="tab-features" class="tab-content"></div>
+
+  <!-- Kids Tab -->
+  <div id="tab-kids" class="tab-content"></div>
+
+  <!-- Activity Tab -->
+  <div id="tab-activity" class="tab-content"></div>
+</div>
+
+<script>
+let data = null;
+const API = '/api/dev-dashboard';
+
+async function loadData() {
+  document.getElementById('loading').style.display='';
+  document.getElementById('error').style.display='none';
+  try {
+    const resp = await fetch(API);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    data = await resp.json();
+    document.getElementById('loading').style.display='none';
+    if (data.error) { showError(data.error); return; }
+    renderAll();
+  } catch(e) {
+    document.getElementById('loading').style.display='none';
+    showError('無法載入數據: ' + e.message);
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('error');
+  el.innerHTML = '⚠️ ' + msg;
+  el.style.display = '';
+}
+
+function switchTab(name, tabEl) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  tabEl.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+function renderAll() {
+  renderOverview();
+  renderFeatures();
+  renderKids();
+  renderActivity();
+  document.getElementById('updateTime').textContent = new Date().toLocaleString('zh-TW', {timeZone:'Asia/Taipei'});
+}
+
+function renderOverview() {
+  const s = data.summary;
+  const fc = data.feature_counts;
+  const totalFeatures = data.features.length;
+  const pct = totalFeatures > 0 ? Math.round(fc.completed / totalFeatures * 100) : 0;
+
+  let html = `
+    <div class="summary-grid">
+      <div class="summary-card purple">
+        <div class="label">👶 小朋友</div>
+        <div class="value">${s.total_kids}</div>
+        <div class="sub">共 ${s.total_points} 🪙</div>
+      </div>
+      <div class="summary-card green">
+        <div class="label">✅ 任務完成率</div>
+        <div class="value">${s.completion_rate}%</div>
+        <div class="sub">${s.completed_tasks} / ${s.total_tasks}</div>
+      </div>
+      <div class="summary-card gold">
+        <div class="label">🏗️ 建築物</div>
+        <div class="value">${s.total_buildings}</div>
+        <div class="sub">${s.building_types_used} / ${s.building_defs} 種</div>
+      </div>
+      <div class="summary-card cyan">
+        <div class="label">✅ 功能進度</div>
+        <div class="value">${pct}%</div>
+        <div class="sub">${fc.completed} / ${totalFeatures} 項</div>
+      </div>
+    </div>
+
+    <!-- Total progress bar -->
+    <div style="background:#111827;border-radius:14px;border:1px solid #1e293b;padding:18px 20px;margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#94a3b8;margin-bottom:6px">
+        <span>✅ 開發進度總覽</span>
+        <span>${fc.completed} 已完成 · ${fc.planned} 待開發</span>
+      </div>
+      <div class="progress-bar">
+        <div class="bar-completed" style="width:${pct}%"></div>
+        <div class="bar-planned" style="width:${100-pct}%"></div>
+      </div>
+      <div style="display:flex;gap:16px;font-size:11px;margin-top:8px">
+        <span style="color:#22c55e">⬤ 已完成 ${fc.completed}</span>
+        <span style="color:#f59e0b">⬤ 待開發 ${fc.planned}</span>
+      </div>
+    </div>
+
+    <!-- Kid ranking mini -->
+    <div class="heatmap-wrap">
+      <div class="hm-header">🏆 小朋友排名 (<span id="timePeriod">累計</span>)</div>
+      <table class="heatmap-table">
+        <thead><tr>
+          <th style="width:28px">#</th>
+          <th>名字</th>
+          <th>🪙 分數</th>
+          <th>🏗️ 建築</th>
+          <th>🔥 Streak</th>
+          <th>🏆 成就</th>
+        </tr></thead>
+        <tbody>
+  `;
+  data.kid_details.forEach((k, i) => {
+    const rankClass = i===0 ? 'rank-1' : i===1 ? 'rank-2' : i===2 ? 'rank-3' : '';
+    const streak = k.streak ? (k.streak.current_streak || 0) : 0;
+    html += `<tr>
+      <td class="rank ${rankClass}">${i+1}</td>
+      <td style="font-weight:600">${k.avatar} ${k.name}</td>
+      <td style="font-weight:700;color:#f59e0b">${k.points}</td>
+      <td>${k.buildings}</td>
+      <td style="color:${streak>=3?'#22c55e':'#94a3b8'}">${streak > 0 ? '🔥'.repeat(Math.min(streak,3)) + ' ' + streak : '—'}</td>
+      <td>${k.achievements_unlocked}</td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
+
+  document.getElementById('tab-overview').innerHTML = html;
+}
+
+function renderFeatures() {
+  if (!data.features) { document.getElementById('tab-features').innerHTML = '<div class="error-msg">⚠️ 無功能數據</div>'; return; }
+
+  // Group by phase
+  const groups = {};
+  data.features.forEach(f => {
+    if (!groups[f.phase]) groups[f.phase] = {features:[]};
+    groups[f.phase].features.push(f);
+  });
+
+  const phaseNames = {1:'Phase 1: 底層系統',2:'Phase 2: 城鎮+建築物',3:'Phase 3: 探險+材料',4:'Phase 4: 家長管理',5:'Phase 5: 排行榜+成就',6:'下一階段功能'};
+
+  let html2 = '<div class="phase-grid">';
+  Object.keys(groups).sort().forEach(phase => {
+    const items = groups[phase].features;
+    const done = items.filter(f => f.status==='completed').length;
+    const pct = Math.round(done / items.length * 100);
+    html2 += `<div class="phase-card">
+      <h3>
+        <span>${phaseNames[phase] || 'Phase ' + phase}</span>
+        <span class="phase-pct">${done}/${items.length} · ${pct}%</span>
+      </h3>
+      <div class="progress-bar" style="margin-bottom:12px">
+        <div class="bar-completed" style="width:${pct}%"></div>
+      </div>
+      ${items.map(f => `
+        <div class="feature-item">
+          <div class="status-dot ${f.status}"></div>
+          <div class="icon">${f.name.match(/^[^\s]+/)?.[0] || '📋'}</div>
+          <div class="info">
+            <div class="name">${f.name}</div>
+            <div class="detail">${f.detail}${f.priority ? ' · '+f.priority : ''}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+  });
+  html2 += '</div>';
+
+  document.getElementById('tab-features').innerHTML = html2;
+}
+
+function renderKids() {
+  let html = '<div class="kid-grid">';
+  data.kid_details.forEach(k => {
+    const streak = k.streak ? k.streak : {current_streak:0,best_streak:0};
+    html += `<div class="kid-card">
+      <div class="kid-header" style="border-left:3px solid ${k.color}">
+        <div class="kid-avatar">${k.avatar}</div>
+        <div class="kid-meta">
+          <div class="kid-name" style="color:${k.color}">${k.name}</div>
+          <div class="kid-points">🪙 ${k.points} 分</div>
+        </div>
+      </div>
+      <div class="kid-stats">
+        <div class="kid-stat">🏗️ <strong>${k.buildings}</strong> 建築</div>
+        <div class="kid-stat">🔥 <strong>${streak.current_streak}</strong> 連續 (最佳 ${streak.best_streak})</div>
+        <div class="kid-stat">🏆 <strong>${k.achievements_unlocked}</strong> 成就</div>
+        <div class="kid-stat">📅 ${k.created_at ? k.created_at.split(' ')[0] : '—'}</div>
+      </div>`;
+    if (k.buildings_detail && k.buildings_detail.length > 0) {
+      html += `<div class="kid-buildings">`;
+      k.buildings_detail.forEach(b => {
+        html += `<span class="building-badge"><span class="b-icon">${b.icon}</span>${b.name} <span class="b-lv">Lv.${b.level}</span></span>`;
+      });
+      html += `</div>`;
+    }
+    html += `</div>`;
+  });
+  html += '</div>';
+  document.getElementById('tab-kids').innerHTML = html;
+}
+
+function renderActivity() {
+  // Recent task completions
+  const tasks = data.recent_task_completions || [];
+  const points = data.recent_activity || [];
+
+  let html = `
+    <div class="activity-wrap">
+      <div class="act-header">
+        <h3>✅ 最近完成任務</h3>
+        <span class="count" style="font-size:11px;color:#64748b">最新 ${tasks.length} 筆</span>
+      </div>
+      ${tasks.length === 0 ? '<div style="padding:20px;text-align:center;color:#64748b">暫無任務記錄</div>' :
+        tasks.slice(0,15).map(t => {
+          const time = t.completed_at ? t.completed_at.replace('T',' ').substring(0,16) : '—';
+          return `<div class="task-item">
+            <span class="task-icon">${t.icon || '✅'}</span>
+            <span class="task-title">${t.title}</span>
+            <span class="task-points">+${t.points}🪙</span>
+            <span class="task-kid">${t.kid_avatar || ''} ${t.kid_name || ''}</span>
+            <span class="task-time">${time}</span>
+          </div>`;
+        }).join('')
+      }
+    </div>
+
+    <div class="activity-wrap">
+      <div class="act-header">
+        <h3>📜 活動紀錄</h3>
+        <span style="font-size:11px;color:#64748b">最新 ${points.length} 筆</span>
+      </div>
+      ${points.length === 0 ? '<div style="padding:20px;text-align:center;color:#64748b">暫無活動記錄</div>' :
+        points.map(a => {
+          const time = a.created_at ? a.created_at.replace('T',' ').substring(0,16) : '—';
+          const sign = a.amount > 0 ? '+' : '';
+          return `<div class="activity-item">
+            <span class="act-time">${time}</span>
+            <span class="act-avatar">${a.kid_avatar || '👤'}</span>
+            <span class="act-name">${a.kid_name}</span>
+            <span class="act-desc">${a.reason || '—'}</span>
+            <span class="act-score ${a.amount > 0 ? 'positive' : 'negative'}">${sign}${a.amount}🪙</span>
+          </div>`;
+        }).join('')
+      }
+    </div>
+
+    <!-- Achievement heatmap -->
+    <div class="heatmap-wrap">
+      <div class="hm-header">🏆 成就解鎖熱點</div>
+      <table class="heatmap-table">
+        <thead>
+          <tr>
+            <th style="text-align:left;min-width:80px">成就</th>
+            ${data.kid_details.map(k => `<th>${k.avatar} ${k.name}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  data.achievement_defs.forEach(def => {
+    html += `<tr>
+      <td style="text-align:left;font-size:12px;padding:6px 10px" title="${def.title}: ${def.description}">
+        <span style="margin-right:4px">${def.icon}</span>${def.title}
+      </td>`;
+    data.kid_details.forEach(k => {
+      const a = data.achievement_heatmap[k.id]?.achievements?.[def.id];
+      html += `<td>${a ? '<span class="heatmap-cell earned" title="'+a.earned_at+'">✅</span>' : '<span class="heatmap-cell missing">—</span>'}</td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div>`;
+
+  document.getElementById('tab-activity').innerHTML = html;
+}
+
+loadData();
+</script>
+</body>
+</html>

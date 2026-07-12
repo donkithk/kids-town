@@ -1,0 +1,85 @@
+{
+  "generated_at": "2026-07-07 20:40:46",
+  "assets": [
+    {
+      "file": "building-house.png",
+      "status": "ok"
+    },
+    {
+      "file": "building-shop.png",
+      "status": "ok"
+    },
+    {
+      "file": "building-school.png",
+      "status": "ok"
+    },
+    {
+      "file": "building-fire.png",
+      "status": "ok"
+    },
+    {
+      "file": "building-library.png",
+      "status": "ok"
+    },
+    {
+      "file": "building-bakery.png",
+      "status": "ok"
+    },
+    {
+      "file": "character-boy.png",
+      "status": "ok"
+    },
+    {
+      "file": "character-girl.png",
+      "status": "ok"
+    },
+    {
+      "file": "character-mom.png",
+      "status": "ok"
+    },
+    {
+      "file": "character-dad.png",
+      "status": "ok"
+    },
+    {
+      "file": "tree.png",
+      "status": "ok"
+    },
+    {
+      "file": "tree-cherry.png",
+      "status": "ok"
+    },
+    {
+      "file": "mailbox.png",
+      "status": "ok"
+    },
+    {
+      "file": "streetlamp.png",
+      "status": "ok"
+    },
+    {
+      "file": "bench.png",
+      "status": "ok"
+    },
+    {
+      "file": "slide.png",
+      "status": "fail",
+      "error": "429 Client Error: Too Many Requests for url: https://image.pollinations.ai/prompt/game%20asset%20a%20colorful%20playground%20slide%20children%20game%20town%20children%27s%20game%20flat%20vector%20illustration%20cartoon%20cute%20colorful?width=512&height=512&nofeed=true"
+    },
+    {
+      "file": "sun.png",
+      "status": "fail",
+      "error": "429 Client Error: Too Many Requests for url: https://image.pollinations.ai/prompt/game%20asset%20a%20happy%20smiling%20sun%20with%20rays%20children%20game%20children%27s%20game%20flat%20vector%20illustration%20cartoon%20cute%20colorful?width=512&height=512&nofeed=true"
+    },
+    {
+      "file": "cloud.png",
+      "status": "fail",
+      "error": "429 Client Error: Too Many Requests for url: https://image.pollinations.ai/prompt/game%20asset%20a%20fluffy%20white%20cloud%20children%20game%20sky%20children%27s%20game%20flat%20vector%20illustration%20cartoon%20cute%20colorful?width=512&height=512&nofeed=true"
+    },
+    {
+      "file": "fence.png",
+      "status": "fail",
+      "error": "429 Client Error: Too Many Requests for url: https://image.pollinations.ai/prompt/game%20asset%20a%20white%20picket%20fence%20section%20children%20game%20children%27s%20game%20flat%20vector%20illustration%20cartoon%20cute%20colorful?width=512&height=512&nofeed=true"
+    }
+  ]
+}

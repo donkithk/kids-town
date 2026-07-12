@@ -1,0 +1,32 @@
+{
+  "name": "Kids Town 開羅小鎮",
+  "short_name": "Kids Town",
+  "description": "小朋友任務積分 + 城鎮建設遊戲",
+  "start_url": "/kids/",
+  "display": "standalone",
+  "display_override": ["standalone", "window-controls-overlay"],
+  "orientation": "portrait",
+  "background_color": "#fef3c7",
+  "theme_color": "#f97316",
+  "scope": "/kids/",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/kids/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/kids/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "games", "kids"],
+  "lang": "zh-TW",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  }
+}

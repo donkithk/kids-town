@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🧒 Kids Town 2.0 — Wireframe</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f172a; color: #e2e8f0;
+  min-height: 100vh;
+}
+.app {
+  max-width: 500px; margin: 0 auto;
+  background: #1e293b; min-height: 100vh;
+  position: relative; overflow: hidden;
+}
+
+/* HEADER */
+.header {
+  background: linear-gradient(135deg, #1e40af, #7c3aed);
+  padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;
+  position: sticky; top: 0; z-index: 10;
+}
+.header h1 { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.header-resources { display: flex; gap: 14px; font-size: 13px; }
+.resource { display: flex; align-items: center; gap: 3px; }
+.resource .icon { font-size: 16px; }
+.resource .val { font-weight: 600; }
+
+/* CHILD SELECTOR */
+.child-bar {
+  background: #334155; padding: 8px 16px;
+  display: flex; gap: 8px; overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.child-tab {
+  padding: 6px 14px; border-radius: 20px;
+  background: #475569; white-space: nowrap;
+  font-size: 13px; cursor: pointer; transition: 0.2s;
+  display: flex; align-items: center; gap: 4px;
+}
+.child-tab.active { background: #6366f1; font-weight: 600; }
+.child-tab:hover { background: #5b6e8a; }
+.child-tab .avatar { font-size: 16px; }
+
+/* TABS */
+.tabs {
+  display: flex; background: #1e293b; border-bottom: 1px solid #334155;
+}
+.tab-btn {
+  flex: 1; padding: 10px 0; text-align: center; font-size: 12px;
+  cursor: pointer; color: #94a3b8; transition: 0.2s;
+  border-bottom: 2px solid transparent;
+}
+.tab-btn.active { color: #818cf8; border-bottom-color: #818cf8; font-weight: 600; }
+.tab-btn:hover { color: #cbd5e1; }
+
+/* TAB CONTENT */
+.tab-content { display: none; padding: 16px; }
+.tab-content.active { display: block; }
+
+/* TOWN GRID */
+.town-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 10px; margin-bottom: 16px;
+}
+.plot {
+  aspect-ratio: 1; border-radius: 12px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  font-size: 11px; cursor: pointer; transition: 0.2s;
+  background: #334155; border: 2px dashed #475569;
+  position: relative;
+}
+.plot:hover { transform: scale(1.05); border-color: #818cf8; }
+.plot.built {
+  background: linear-gradient(135deg, #1e3a5f, #2d4a7f);
+  border: 2px solid #3b82f6;
+}
+.plot .building-icon { font-size: 28px; margin-bottom: 2px; }
+.plot .building-name { font-size: 9px; opacity: 0.8; }
+.plot .level-badge {
+  position: absolute; top: -4px; right: -4px;
+  background: #f59e0b; color: #1e293b;
+  width: 18px; height: 18px; border-radius: 50%;
+  font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.plot .constructing {
+  position: absolute; inset: 0; border-radius: 12px;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: #fbbf24;
+}
+.plot .empty-icon { font-size: 20px; opacity: 0.3; }
+
+/* BUILDING SHOP */
+.building-shop {
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  gap: 10px; margin-bottom: 16px;
+}
+.shop-item {
+  background: #334155; border-radius: 12px; padding: 14px;
+  cursor: pointer; transition: 0.2s;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.shop-item:hover { background: #3b4a5f; transform: translateY(-2px); }
+.shop-item .s-icon { font-size: 32px; }
+.shop-item .s-name { font-size: 13px; font-weight: 600; }
+.shop-item .s-price { font-size: 12px; color: #fbbf24; display: flex; align-items: center; gap: 4px; }
+.shop-item .s-effect { font-size: 10px; color: #94a3b8; text-align: center; }
+.shop-item.disabled { opacity: 0.4; cursor: not-allowed; }
+.shop-item.owned { border: 2px solid #22c55e; }
+.shop-item.owned::after { content: '✅'; font-size: 14px; }
+
+/* EXPLORATION MAP */
+.exp-map {
+  position: relative; min-height: 320px;
+  display: flex; flex-direction: column; align-items: center;
+}
+.exp-region {
+  width: 100%; padding: 16px; border-radius: 12px;
+  background: #334155; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 12px;
+  transition: 0.2s; cursor: pointer;
+}
+.exp-region:hover { background: #3b4a5f; }
+.exp-region.locked { opacity: 0.4; cursor: not-allowed; }
+.exp-region.locked:hover { background: #334155; }
+.exp-region .r-icon { font-size: 28px; }
+.exp-region .r-info { flex: 1; }
+.exp-region .r-name { font-weight: 600; font-size: 14px; }
+.exp-region .r-desc { font-size: 11px; color: #94a3b8; }
+.exp-region .r-status { font-size: 11px; }
+.exp-region .r-status.unlocked { color: #22c55e; }
+.exp-region .r-status.locked { color: #ef4444; }
+.exp-region .r-reward { font-size: 10px; color: #fbbf24; }
+.exp-arrow { text-align: center; font-size: 20px; color: #475569; margin: -4px 0; }
+
+/* EXPEDITION TEAM */
+.exp-team {
+  display: flex; gap: 10px; margin: 12px 0;
+  justify-content: center;
+}
+.team-slot {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: #334155; border: 2px dashed #475569;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; cursor: pointer; transition: 0.2s;
+}
+.team-slot.filled { border: 2px solid #6366f1; background: #1e1b4b; }
+.team-slot:hover { border-color: #818cf8; }
+.exp-btn {
+  width: 100%; padding: 12px; border-radius: 12px;
+  border: none; font-size: 15px; font-weight: 600; cursor: pointer;
+  transition: 0.2s; margin-top: 8px;
+}
+.exp-btn.go { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; }
+.exp-btn.go:hover { transform: scale(1.02); }
+.exp-btn.go:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.exp-btn.running { background: #f59e0b; color: #1e293b; }
+
+/* EXPEDITION PROGRESS */
+.exp-progress {
+  background: #334155; border-radius: 12px; padding: 12px; margin-top: 12px;
+  display: none;
+}
+.exp-progress.active { display: block; }
+.exp-progress .ep-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+.exp-progress .ep-bar {
+  height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden;
+}
+.exp-progress .ep-fill {
+  height: 100%; background: linear-gradient(90deg, #6366f1, #f59e0b);
+  border-radius: 4px; transition: width 0.5s;
+  width: 0%;
+}
+.exp-progress .ep-log {
+  margin-top: 8px; font-size: 11px; color: #94a3b8;
+  max-height: 60px; overflow-y: auto;
+}
+.exp-progress .ep-log div { padding: 2px 0; }
+
+/* BUILDING DETAIL MODAL */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,0.6);
+  align-items: flex-end; justify-content: center;
+}
+.modal-overlay.active { display: flex; }
+.modal {
+  background: #1e293b; border-radius: 20px 20px 0 0;
+  width: 100%; max-width: 500px; padding: 24px;
+  animation: slideUp 0.2s ease;
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.modal h2 { font-size: 18px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.modal p { font-size: 13px; color: #94a3b8; margin-bottom: 8px; }
+.modal .stat-row { display: flex; gap: 16px; margin: 12px 0; }
+.modal .stat { text-align: center; flex: 1; background: #334155; border-radius: 10px; padding: 10px; }
+.modal .stat .num { font-size: 20px; font-weight: 700; }
+.modal .stat .label { font-size: 10px; color: #94a3b8; }
+.modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+.modal-actions button {
+  flex: 1; padding: 10px; border-radius: 10px; border: none;
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s;
+}
+.btn-primary { background: #6366f1; color: white; }
+.btn-primary:hover { background: #4f46e5; }
+.btn-secondary { background: #475569; color: white; }
+.btn-secondary:hover { background: #5b6e8a; }
+.btn-danger { background: #ef4444; color: white; }
+.btn-danger:hover { background: #dc2626; }
+.btn-gold { background: #f59e0b; color: #1e293b; }
+.btn-gold:hover { background: #d97706; }
+
+/* TOAST */
+.toast {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+  background: #22c55e; color: #1e293b;
+  padding: 10px 20px; border-radius: 20px; font-size: 13px; font-weight: 600;
+  z-index: 200; display: none; animation: fadeInOut 2s ease;
+  white-space: nowrap;
+}
+.toast.error { background: #ef4444; color: white; }
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+}
+
+/* REWARD ANIMATION */
+.coin-fly {
+  position: fixed; pointer-events: none; z-index: 300;
+  font-size: 24px; animation: coinFly 1s ease-out forwards;
+}
+@keyframes coinFly {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-80px) scale(0.5); }
+}
+
+/* STATS OVERVIEW */
+.stats-overview {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px;
+}
+.stat-card {
+  background: #334155; border-radius: 10px; padding: 12px; text-align: center;
+}
+.stat-card .big { font-size: 24px; font-weight: 700; }
+.stat-card .lbl { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+.stat-card .emoji { font-size: 18px; }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+<!-- Header -->
+<div class="header">
+  <h1>🏘️ Kids Town 2.0</h1>
+  <div class="header-resources">
+    <div class="resource"><span class="icon">🪙</span><span class="val" id="hdrGold">0</span></div>
+    <div class="resource"><span class="icon">⭐</span><span class="val" id="hdrExp">0</span></div>
+  </div>
+</div>
+
+<!-- Child Selector -->
+<div class="child-bar" id="childBar"></div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab-btn active" data-tab="town" onclick="switchTab('town')">🏘️ 城鎮</div>
+  <div class="tab-btn" data-tab="shop" onclick="switchTab('shop')">🏪 商店</div>
+  <div class="tab-btn" data-tab="explore" onclick="switchTab('explore')">🗺️ 探險</div>
+  <div class="tab-btn" data-tab="stats" onclick="switchTab('stats')">📊 統計</div>
+</div>
+
+<!-- Tab: Town -->
+<div class="tab-content active" id="tab-town">
+  <div class="stats-overview" id="townStats"></div>
+  <div class="town-grid" id="townGrid"></div>
+  <p style="font-size:11px; color:#64748b; text-align:center; margin-top:4px;">點擊空地起建築 • 點擊建築升級</p>
+</div>
+
+<!-- Tab: Shop -->
+<div class="tab-content" id="tab-shop">
+  <p style="font-size:12px; color:#94a3b8; margin-bottom:12px;">用金幣買建築物，放落城鎮增強能力</p>
+  <div class="building-shop" id="buildingShop"></div>
+</div>
+
+<!-- Tab: Explore -->
+<div class="tab-content" id="tab-explore">
+  <div class="exp-map" id="expMap"></div>
+</div>
+
+<!-- Tab: Stats -->
+<div class="tab-content" id="tab-stats">
+  <div id="statsContent"></div>
+</div>
+
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════
+
+const CHILDREN = [
+  { id: 'c1', name: '小明', avatar: '👦', color: '#6366f1', gold: 240, exp: 85, level: 1 },
+  { id: 'c2', name: '小華', avatar: '👧', color: '#ec4899', gold: 120, exp: 40, level: 1 },
+];
+
+const BUILDINGS = [
+  { id: 'b1', name: '圖書館', icon: '📚', cost: 100, effect: '任務 +2⭐', buff: { type: 'task_bonus', val: 2 }, desc: '每次完成任務多賺 2 經驗值' },
+  { id: 'b2', name: '健身室', icon: '🏋️', cost: 200, effect: '🔥 連續保護', buff: { type: 'streak_protect', val: true }, desc: '連續記錄唔會因為休息日而中斷' },
+  { id: 'b3', name: '農場', icon: '🌾', cost: 300, effect: '每日 +5🪙', buff: { type: 'daily_gold', val: 5 }, desc: '每日自動產生 5 金幣' },
+  { id: 'b4', name: '商店', icon: '🏪', cost: 500, effect: '獎勵 -10%', buff: { type: 'discount', val: 0.9 }, desc: '兌換獎勵所需積分打 9 折' },
+  { id: 'b5', name: '醫院', icon: '🏥', cost: 400, effect: '探險回復 x2', buff: { type: 'expedition_recovery', val: 2 }, desc: '探險隊體力回復速度 x2' },
+  { id: 'b6', name: '探險公會', icon: '🗺️', cost: 600, effect: '解鎖探險', buff: { type: 'unlock_explore', val: true }, desc: '解鎖探險功能，可以派隊伍出發' },
+  { id: 'b7', name: '工坊', icon: '🔨', cost: 350, effect: '建築速度 x2', buff: { type: 'build_speed', val: 2 }, desc: '新建築建造時間減半' },
+  { id: 'b8', name: '燈塔', icon: '🗼', cost: 800, effect: '探險範圍 +1', buff: { type: 'explore_range', val: 1 }, desc: '探險可以到達更遠嘅區域' },
+  { id: 'b9', name: '競技場', icon: '⚔️', cost: 1000, effect: '探險金幣 x2', buff: { type: 'expedition_gold', val: 2 }, desc: '探險獲得金幣翻倍' },
+  { id: 'b10', name: '天文台', icon: '🔭', cost: 1500, effect: '新區域發現率', buff: { type: 'discovery_rate', val: 1.5 }, desc: '探險時發現隱藏區域機率提高' },
+];
+
+const REGIONS = [
+  { id: 'r1', name: '🌲 靜謐森林', desc: '充滿神秘生物嘅古老森林', require: null, goldReward: 30, time: 2, unlockBuild: 'b7' },
+  { id: 'r2', name: '⛰️ 雪山山脈', desc: '終年積雪嘅險峻山嶺', require: 'r1', goldReward: 60, time: 4, unlockBuild: 'b5' },
+  { id: 'r3', name: '🏜️ 沙漠遺跡', desc: '古代文明嘅神秘遺址', require: 'r2', goldReward: 100, time: 6, unlockBuild: 'b8' },
+  { id: 'r4', name: '🌋 火山谷', desc: '熔岩流經嘅危險峽谷', require: 'r3', goldReward: 150, time: 8, unlockBuild: 'b9' },
+  { id: 'r5', name: '🌌 星輝高原', desc: '連接到天界嘅神秘高地', require: 'r4', goldReward: 250, time: 12, unlockBuild: 'b10' },
+];
+
+// ── State ──
+let currentChild = 0;
+const state = {
+  c1: {
+    plots: [null, null, null, null, null, null, null, null],
+    ownedBuildings: [],
+    explored: [],
+    expedition: null,
+  },
+  c2: {
+    plots: [null, null, null, null, null, null, null, null],
+    ownedBuildings: [],
+    explored: [],
+    expedition: null,
+  },
+};
+
+// ── Render ──
+function render() {
+  renderChildren();
+  renderTown();
+  renderShop();
+  renderExplore();
+  renderStats();
+  updateHeader();
+}
+
+function renderChildren() {
+  const bar = document.getElementById('childBar');
+  bar.innerHTML = CHILDREN.map((c, i) =>
+    `<div class="child-tab ${i === currentChild ? 'active' : ''}" onclick="selectChild(${i})">
+      <span class="avatar">${c.avatar}</span> ${c.name}
+    </div>`
+  ).join('');
+}
+
+function selectChild(idx) {
+  currentChild = idx;
+  render();
+}
+
+function updateHeader() {
+  const c = CHILDREN[currentChild];
+  document.getElementById('hdrGold').textContent = c.gold;
+  document.getElementById('hdrExp').textContent = c.exp;
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.tab-btn[data-tab="${name}"]`).classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+function renderTown() {
+  const cs = getState();
+  const c = CHILDREN[currentChild];
+  const grid = document.getElementById('townGrid');
+  const statsContainer = document.getElementById('townStats');
+
+  // Stats
+  const totalBuilt = cs.plots.filter(p => p !== null).length;
+  const activeBuffs = getActiveBuffs();
+  statsContainer.innerHTML = `
+    <div class="stat-card"><div class="emoji">🏗️</div><div class="big">${totalBuilt}/8</div><div class="lbl">建築物</div></div>
+    <div class="stat-card"><div class="emoji">⚡</div><div class="big">${activeBuffs.length}</div><div class="lbl">啟用 Buff</div></div>
+  `;
+
+  // Grid
+  grid.innerHTML = cs.plots.map((plot, idx) => {
+    if (!plot) {
+      return `<div class="plot" onclick="showShopForPlot(${idx})">
+        <div class="empty-icon">➕</div>
+        <span style="font-size:9px; color:#64748b;">空置</span>
+      </div>`;
+    }
+    const b = BUILDINGS.find(b => b.id === plot.id);
+    if (!b) return `<div class="plot">❓</div>`;
+    return `<div class="plot built" onclick="showBuildingDetail(${idx})">
+      <span class="building-icon">${b.icon}</span>
+      <span class="building-name">${b.name}</span>
+      ${plot.level > 1 ? `<span class="level-badge">${plot.level}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderShop() {
+  const cs = getState();
+  const c = CHILDREN[currentChild];
+  const container = document.getElementById('buildingShop');
+
+  container.innerHTML = BUILDINGS.map(b => {
+    const owned = cs.ownedBuildings.includes(b.id);
+    const canAfford = c.gold >= b.cost;
+    const maxOwned = 1; // can only own 1 of each type
+    return `<div class="shop-item ${owned ? 'owned' : ''} ${!canAfford || owned ? 'disabled' : ''}" onclick="${owned || !canAfford ? '' : `buyBuilding('${b.id}')`}">
+      <span class="s-icon">${b.icon}</span>
+      <span class="s-name">${b.name}</span>
+      ${owned ? `<span style="font-size:11px; color:#22c55e;">已擁有</span>` : `
+        <span class="s-price">🪙 ${b.cost}</span>
+        <span class="s-effect">${b.effect}</span>
+      `}
+    </div>`;
+  }).join('');
+}
+
+function renderExplore() {
+  const cs = getState();
+  const c = CHILDREN[currentChild];
+  const container = document.getElementById('expMap');
+
+  // Check if expedition guild is built
+  const hasGuild = cs.ownedBuildings.includes('b6');
+  if (!hasGuild) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:40px 20px; color:#94a3b8;">
+        <div style="font-size:48px; margin-bottom:12px;">🔒</div>
+        <p style="font-weight:600; margin-bottom:8px;">需要先建造探險公會</p>
+        <p style="font-size:12px;">去商店購買 🗺️ 探險公會（600🪙）</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Expedition in progress?
+  if (cs.expedition) {
+    renderExpeditionProgress(container, cs);
+    return;
+  }
+
+  // Show regions
+  let html = '<div class="exp-team-section">';
+
+  // Team
+  html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">';
+  html += '<span style="font-size:13px; font-weight:600;">👥 探險隊</span>';
+  html += '<span style="font-size:11px; color:#94a3b8;">揀選隊員出發</span></div>';
+
+  const teamSlots = [c.avatar, '🐶', '🦊'];
+  html += '<div class="exp-team">';
+  teamSlots.forEach((s, i) => {
+    html += `<div class="team-slot filled">${s}</div>`;
+  });
+  html += '</div>';
+  html += '</div>';
+
+  // Regions
+  html += '<div style="margin-top:16px;">';
+  const unlockedCount = cs.explored.length;
+  REGIONS.forEach((r, idx) => {
+    const unlocked = idx <= unlockedCount;
+    const explored = cs.explored.includes(r.id);
+    html += `
+      <div class="exp-region ${!unlocked ? 'locked' : ''}" onclick="${unlocked && !explored ? `startExpedition('${r.id}')` : ''}">
+        <span class="r-icon">${explored ? '✅' : r.name.split(' ')[0]}</span>
+        <div class="r-info">
+          <div class="r-name">${r.name} ${explored ? '✔️' : ''}</div>
+          <div class="r-desc">${r.desc}</div>
+          <div class="r-reward">🪙 ${r.goldReward} | ⏱️ ${r.time}h</div>
+        </div>
+        <div class="r-status ${unlocked ? 'unlocked' : 'locked'}">${explored ? '已完成' : unlocked ? '⚡ 出發' : '🔒 鎖定'}</div>
+      </div>
+    `;
+    if (idx < REGIONS.length - 1) {
+      html += '<div class="exp-arrow">↓</div>';
+    }
+  });
+  html += '</div>';
+
+  // Expedition button
+  container.innerHTML = html;
+}
+
+function renderExpeditionProgress(container, cs) {
+  const exp = cs.expedition;
+  const region = REGIONS.find(r => r.id === exp.regionId);
+  const elapsed = Math.min(100, ((Date.now() - exp.startTime) / (exp.totalTime * 3600000)) * 100);
+
+  container.innerHTML = `
+    <div class="exp-progress active">
+      <div class="ep-header">
+        <span>🗺️ ${region.name}</span>
+        <span>${Math.floor(elapsed)}%</span>
+      </div>
+      <div class="ep-bar">
+        <div class="ep-fill" style="width:${elapsed}%"></div>
+      </div>
+      <div class="ep-log">
+        <div>🚶 隊伍出發了...</div>
+        ${elapsed > 30 ? '<div>🌲 穿越森林...</div>' : ''}
+        ${elapsed > 60 ? '<div>⚔️ 發現寶藏！</div>' : ''}
+        ${elapsed > 90 ? '<div>🏃 回程中...</div>' : ''}
+      </div>
+      ${elapsed >= 100 ? `<button class="exp-btn go" onclick="claimExpedition()">🎁 領取獎勵！</button>` : ''}
+    </div>
+  `;
+
+  // Auto-refresh if running
+  if (elapsed < 100) {
+    setTimeout(renderExplore, 2000);
+  }
+}
+
+function renderStats() {
+  const cs = getState();
+  const c = CHILDREN[currentChild];
+  const container = document.getElementById('statsContent');
+  const activeBuffs = getActiveBuffs();
+
+  container.innerHTML = `
+    <div style="margin-bottom:16px;">
+      <h3 style="font-size:15px; margin-bottom:8px;">📊 ${c.avatar} ${c.name} 嘅城鎮</h3>
+      <div class="stats-overview">
+        <div class="stat-card"><div class="big">🪙 ${c.gold}</div><div class="lbl">金幣</div></div>
+        <div class="stat-card"><div class="big">⭐ ${c.exp}</div><div class="lbl">經驗</div></div>
+        <div class="stat-card"><div class="big">${cs.plots.filter(p=>p!==null).length}/8</div><div class="lbl">建築物</div></div>
+        <div class="stat-card"><div class="big">${cs.explored.length}/${REGIONS.length}</div><div class="lbl">探險進度</div></div>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <h3 style="font-size:13px; font-weight:600; margin-bottom:8px;">⚡ 啟用中嘅 Buff</h3>
+      ${activeBuffs.length === 0 ? '<p style="font-size:12px; color:#64748b;">未有建築物 buff</p>' :
+        activeBuffs.map(b => `<div style="padding:8px 12px; background:#334155; border-radius:8px; margin-bottom:4px; display:flex; align-items:center; gap:8px; font-size:13px;">
+          <span>${b.icon}</span> ${b.name}: <span style="color:#22c55e;">${b.effect}</span>
+        </div>`).join('')
+      }
+    </div>
+    <div>
+      <h3 style="font-size:13px; font-weight:600; margin-bottom:8px;">🏅 成就</h3>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        ${cs.plots.filter(p=>p!==null).length >= 1 ? '<span style="background:#334155; padding:4px 10px; border-radius:12px; font-size:11px;">🏗️ 第一步</span>' : ''}
+        ${cs.plots.filter(p=>p!==null).length >= 4 ? '<span style="background:#334155; padding:4px 10px; border-radius:12px; font-size:11px;">🌆 小鎮發展</span>' : ''}
+        ${cs.explored.length >= 1 ? '<span style="background:#334155; padding:4px 10px; border-radius:12px; font-size:11px;">🗺️ 初探者</span>' : ''}
+        ${cs.explored.length >= 3 ? '<span style="background:#334155; padding:4px 10px; border-radius:12px; font-size:11px;">🧭 探險家</span>' : ''}
+      </div>
+    </div>
+  `;
+}
+
+function getState() {
+  const id = CHILDREN[currentChild].id;
+  return state[id];
+}
+
+function getActiveBuffs() {
+  const cs = getState();
+  return cs.plots.filter(p => p !== null).map(p => {
+    const b = BUILDINGS.find(bi => bi.id === p.id);
+    return b;
+  }).filter(Boolean);
+}
+
+// ── Actions ──
+function buyBuilding(buildingId) {
+  const cs = getState();
+  const c = CHILDREN[currentChild];
+  const b = BUILDINGS.find(bi => bi.id === buildingId);
+  if (!b) return;
+  if (c.gold < b.cost) { showToast('金幣唔夠！', true); return; }
+  if (cs.ownedBuildings.includes(b.id)) { showToast('已經擁有', true); return; }
+
+  c.gold -= b.cost;
+  cs.ownedBuildings.push(b.id);
+  showToast(`✅ 買咗 ${b.icon} ${b.name}！去城鎮放低佢`);
+  render();
+}
+
+function showShopForPlot(plotIdx) {
+  const cs = getState();
+  const c = CHILDREN[currentChild];
+  const modal = document.getElementById('modalOverlay');
+  const content = document.getElementById('modalContent');
+
+  const available = BUILDINGS.filter(b => cs.ownedBuildings.includes(b.id) && !cs.plots.some(p => p && p.id === b.id));
+
+  if (available.length === 0) {
+    content.innerHTML = `
+      <h2>🏗️ 起建築物</h2>
+      <p>你未有可以放嘅建築物。去 🏪 商店買啦！</p>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal()">關閉</button>
+      </div>
+    `;
+  } else {
+    content.innerHTML = `
+      <h2>🏗️ 放建築物</h2>
+      <p>揀一個建築物放喺呢塊地</p>
+      ${available.map(b => `
+        <div style="padding:10px; background:#334155; border-radius:10px; margin-bottom:6px; display:flex; align-items:center; gap:10px; cursor:pointer;" onclick="placeBuilding('${b.id}', ${plotIdx})">
+          <span style="font-size:24px;">${b.icon}</span>
+          <div style="flex:1;">
+            <div style="font-weight:600; font-size:13px;">${b.name}</div>
+            <div style="font-size:11px; color:#94a3b8;">${b.effect}</div>
+          </div>
+          <span style="color:#22c55e;">➕ 放置</span>
+        </div>
+      `).join('')}
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal()">取消</button>
+      </div>
+    `;
+  }
+
+  modal.classList.add('active');
+}
+
+function placeBuilding(buildingId, plotIdx) {
+  const cs = getState();
+  cs.plots[plotIdx] = { id: buildingId, level: 1 };
+  closeModal();
+  showToast(`🏗️ ${BUILDINGS.find(b=>b.id===buildingId).icon} 建造完成！`);
+  render();
+}
+
+function showBuildingDetail(plotIdx) {
+  const cs = getState();
+  const plot = cs.plots[plotIdx];
+  if (!plot) return;
+  const b = BUILDINGS.find(bi => bi.id === plot.id);
+  if (!b) return;
+  const c = CHILDREN[currentChild];
+
+  const modal = document.getElementById('modalOverlay');
+  const content = document.getElementById('modalContent');
+
+  content.innerHTML = `
+    <h2>${b.icon} ${b.name} Lv.${plot.level}</h2>
+    <p>${b.desc}</p>
+    <div class="stat-row">
+      <div class="stat"><div class="num">${b.icon}</div><div class="label">${b.effect}</div></div>
+      <div class="stat"><div class="num">Lv.${plot.level}</div><div class="label">等級</div></div>
+      <div class="stat"><div class="num">🪙${Math.floor(b.cost * plot.level * 0.5)}</div><div class="label">升級費用</div></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-gold" onclick="upgradeBuilding(${plotIdx})">⬆️ 升級</button>
+      <button class="btn-danger" onclick="removeBuilding(${plotIdx})">🗑️ 移除</button>
+      <button class="btn-secondary" onclick="closeModal()">關閉</button>
+    </div>
+  `;
+
+  modal.classList.add('active');
+}
+
+function upgradeBuilding(plotIdx) {
+  const cs = getState();
+  const c = CHILDREN[currentChild];
+  const plot = cs.plots[plotIdx];
+  const b = BUILDINGS.find(bi => bi.id === plot.id);
+  const cost = Math.floor(b.cost * plot.level * 0.5);
+
+  if (c.gold < cost) { showToast('金幣唔夠升級', true); closeModal(); return; }
+  c.gold -= cost;
+  plot.level++;
+  closeModal();
+  showToast(`⬆️ ${b.icon} ${b.name} 升到 Lv.${plot.level}！`);
+  render();
+}
+
+function removeBuilding(plotIdx) {
+  const cs = getState();
+  cs.plots[plotIdx] = null;
+  closeModal();
+  showToast('🗑️ 建築物已移除');
+  render();
+}
+
+function startExpedition(regionId) {
+  const cs = getState();
+  const c = CHILDREN[currentChild];
+  const region = REGIONS.find(r => r.id === regionId);
+
+  if (!region) return;
+
+  // Check if prerequisite region is explored
+  if (region.require && !cs.explored.includes(region.require)) {
+    showToast('🔒 需要先探索前置區域', true);
+    return;
+  }
+
+  // Check if already exploring
+  if (cs.expedition) { showToast('探險進行中', true); return; }
+
+  cs.expedition = {
+    regionId: regionId,
+    startTime: Date.now(),
+    totalTime: region.time,
+  };
+
+  showToast(`🚶 ${region.name} 探險隊出發！`);
+  renderExplore();
+}
+
+function claimExpedition() {
+  const cs = getState();
+  const c = CHILDREN[currentChild];
+  const exp = cs.expedition;
+  const region = REGIONS.find(r => r.id === exp.regionId);
+
+  if (!region) return;
+
+  // Calculate rewards with buffs
+  let goldReward = region.goldReward;
+  const buffs = getActiveBuffs();
+  const goldMult = buffs.find(b => b.buff.type === 'expedition_gold');
+  if (goldMult) goldReward *= goldMult.buff.val;
+
+  c.gold += Math.floor(goldReward);
+  c.exp += Math.floor(region.time * 5);
+
+  // Mark region as explored
+  if (!cs.explored.includes(region.id)) {
+    cs.explored.push(region.id);
+  }
+
+  // Check if this region unlocks a building
+  if (region.unlockBuild) {
+    const unlockedB = BUILDINGS.find(b => b.id === region.unlockBuild);
+    if (unlockedB && !cs.ownedBuildings.includes(unlockedB.id)) {
+      cs.ownedBuildings.push(unlockedB.id);
+      showToast(`🎉 發現新建築設計圖：${unlockedB.icon} ${unlockedB.name}！`);
+    }
+  }
+
+  cs.expedition = null;
+  showToast(`🎉 探險完成！獲得 🪙${Math.floor(goldReward)} ⭐${Math.floor(region.time * 5)}`);
+  render();
+  renderExplore();
+}
+
+function showToast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast' + (isError ? ' error' : '');
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 2000);
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('active');
+}
+
+// ── Init ──
+render();
+
+// Auto tick for expedition
+setInterval(() => {
+  const cs = getState();
+  if (cs.expedition) {
+    renderExplore();
+  }
+}, 5000);
+</script>
+</body>
+</html>

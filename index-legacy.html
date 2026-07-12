@@ -1,0 +1,3325 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#f97316">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kids Town">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png">
+  <script src="/kids/audio.js?v=2"></script>
+<title>🌈 Kids Town 2.0 開羅小鎮</title>
+<style>
+/* ═══════════════════════════════════════
+   GLOBAL
+   ═══════════════════════════════════════ */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@400;600;700;800;900&display=swap');
+:root{
+  --warm-bg:#fef3c7;
+  --blue-accent:#dbeafe;
+  --pixel-font:'Press Start 2P','Courier New',monospace;
+  --body-font:'Nunito','Segoe UI',sans-serif;
+  --radius:14px;
+  --card-shadow:0 4px 16px rgba(0,0,0,0.08);
+}
+html{font-size:16px}
+body{
+  font-family:var(--body-font);
+  background:linear-gradient(160deg,#fef3c7 0%,#fde68a 40%,#dbeafe 100%);
+  min-height:100dvh;max-width:480px;margin:0 auto;
+  color:#1e293b;line-height:1.5;position:relative;
+  overflow-x:hidden;
+}
+
+/* ═══════════════════════════════════════
+   LOGIN SCREEN (v3 — role-based auth)
+   ═══════════════════════════════════════ */
+#loginScreen{
+  position:fixed;inset:0;z-index:999;
+  background:linear-gradient(160deg,#f97316,#ef4444);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:24px;
+}
+#loginScreen.hidden{display:none}
+.login-card{
+  background:rgba(255,255,255,0.12);backdrop-filter:blur(8px);
+  border-radius:20px;padding:32px 28px;width:100%;max-width:340px;
+  text-align:center;border:2px solid rgba(255,255,255,0.15);
+}
+.login-logo{font-size:48px;margin-bottom:4px}
+.login-card h1{
+  font-family:var(--pixel-font);font-size:clamp(1rem,5vw,1.5rem);
+  color:#fff;text-shadow:3px 3px 0 rgba(0,0,0,0.2);
+  margin-bottom:2px;
+}
+.login-card h2{
+  font-family:var(--pixel-font);font-size:clamp(0.6rem,3vw,0.85rem);
+  color:#fef3c7;margin-bottom:6px;
+}
+.login-sub{color:#fef3c7;font-size:13px;margin-bottom:20px;}
+.login-field{
+  display:flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.9);border-radius:12px;
+  padding:4px 12px;margin-bottom:10px;
+  border:2px solid transparent;transition:0.15s;
+}
+.login-field:focus-within{border-color:#2d3436;background:#fff}
+.login-field .lf-icon{font-size:18px}
+.login-field input{
+  flex:1;padding:12px 4px;border:none;background:transparent;
+  font-size:15px;font-family:var(--body-font);outline:none;
+  color:#1e293b;
+}
+.login-btn{
+  width:100%;padding:14px;border-radius:12px;border:3px solid #2d3436;
+  background:linear-gradient(135deg,#15803d,#16a34a);
+  color:#fff;font-size:16px;font-weight:800;cursor:pointer;
+  transition:0.15s;font-family:var(--pixel-font);margin-top:4px;
+}
+.login-btn:hover{transform:scale(1.02);background:linear-gradient(135deg,#166534,#15803d)}
+.login-btn:active{transform:scale(0.98)}
+.login-error{color:#fca5a5;font-size:12px;margin-top:8px;min-height:20px;}
+.login-footer{display:flex;justify-content:center;gap:16px;margin-top:16px;}
+.login-link{color:#fef3c7;font-size:12px;cursor:pointer;opacity:0.8;transition:0.15s;padding:6px 12px;border-radius:8px;}
+.login-link:hover{opacity:1;background:rgba(255,255,255,0.1)}
+.login-spinner{
+  display:inline-block;width:28px;height:28px;
+  border:3px solid rgba(255,255,255,0.3);border-top:3px solid #fff;
+  border-radius:50%;animation:spin 0.8s linear infinite;
+}
+
+/* ═══════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════ */
+.header{
+  background:linear-gradient(135deg,#f97316,#ef4444);
+  color:white;padding:12px 16px;
+  display:flex;justify-content:space-between;align-items:center;
+  position:sticky;top:0;z-index:100;
+  box-shadow:0 4px 16px rgba(249,115,22,0.3);
+}
+.header h1{
+  font-family:var(--pixel-font);font-size:clamp(0.7rem,3.5vw,1rem);
+  letter-spacing:1px;text-shadow:2px 2px 0 rgba(0,0,0,0.2);
+}
+.header .res{
+  display:flex;gap:12px;font-size:13px;font-weight:700;
+}
+.header .res span{display:flex;align-items:center;gap:3px}
+.header .gold{color:#ffd93d}
+.header .logout{
+  font-size:22px;cursor:pointer;opacity:0.8;transition:0.15s;padding:8px;
+}
+.header .logout:hover{opacity:1;transform:scale(1.1)}
+
+/* ═══════════════════════════════════════
+   TABS
+   ═══════════════════════════════════════ */
+.tabs{
+  display:flex;background:#fff;border-bottom:2px solid #e2e8f0;
+  position:sticky;top:52px;z-index:99;
+}
+.tab-btn{
+  flex:1;padding:14px 4px;text-align:center;font-size:12px;font-weight:600;
+  cursor:pointer;color:#64748b;transition:0.2s;
+  border-bottom:3px solid transparent;
+}
+.tab-btn.active{color:#dc2626;border-bottom-color:#dc2626;background:#fff5f5}
+.tab-btn:hover{color:#475569}
+.tab-content{display:none;padding:12px}
+.tab-content.active{display:block}
+
+/* ═══════════════════════════════════════
+   LEDGER (Transaction Records)
+   ═══════════════════════════════════════ */
+.ledger-summary{
+  background:linear-gradient(135deg,#fef3c7,#fde68a);
+  border-radius:14px;padding:16px;margin-bottom:12px;
+  border:2px solid #f59e0b;text-align:center;
+}
+.ledger-balance{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px}
+.ledger-balance-icon{font-size:28px}
+.ledger-balance-num{font-size:32px;font-weight:900;color:#1e293b}
+.ledger-balance-label{font-size:22px}
+.ledger-mini-stats{display:flex;justify-content:center;gap:20px;font-size:12px;color:#64748b;flex-wrap:wrap}
+.ledger-stat{display:flex;align-items:center;gap:3px}
+.ledger-stat-icon{font-size:14px}
+.ledger-stat strong{color:#1e293b}
+
+.ledger-filters{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.ledger-filter{
+  padding:8px 14px;border-radius:20px;border:2px solid #e2e8f0;
+  background:#fff;font-size:12px;font-weight:600;cursor:pointer;
+  font-family:var(--body-font);transition:0.15s;color:#64748b;
+}
+.ledger-filter:hover{border-color:#f97316;color:#f97316}
+.ledger-filter.active{background:#f97316;color:#fff;border-color:#f97316}
+
+.ledger-list{display:flex;flex-direction:column;gap:8px;min-height:200px}
+.ledger-item{
+  display:flex;align-items:center;gap:12px;padding:12px 14px;
+  background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);
+  border-left:4px solid #e2e8f0;transition:0.15s;
+}
+.ledger-item:hover{box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+.ledger-item.earned{border-left-color:#15803d}
+.ledger-item.task{border-left-color:#3b82f6}
+.ledger-item.spent{border-left-color:#dc2626}
+.ledger-item.building{border-left-color:#f59e0b}
+.ledger-item.expedition{border-left-color:#8b5cf6}
+.ledger-item.adjustment{border-left-color:#06b6d4}
+.ledger-item-icon{font-size:24px;width:36px;text-align:center}
+.ledger-item-info{flex:1;min-width:0}
+.ledger-item-reason{font-weight:700;font-size:14px;color:#1e293b}
+.ledger-item-meta{font-size:11px;color:#94a3b8;display:flex;gap:8px;margin-top:2px}
+.ledger-item-meta .cat-badge{
+  display:inline-block;padding:1px 8px;border-radius:10px;
+  background:#f1f5f9;font-size:10px;color:#64748b;
+}
+.ledger-item-amount{
+  font-size:18px;font-weight:800;white-space:nowrap;
+}
+.ledger-item.earned .ledger-item-amount{color:#15803d}
+.ledger-item.task .ledger-item-amount{color:#15803d}
+.ledger-item.expedition .ledger-item-amount{color:#15803d}
+.ledger-item.adjustment .ledger-item-amount{color:#15803d}
+.ledger-item.spent .ledger-item-amount{color:#dc2626}
+.ledger-item.building .ledger-item-amount{color:#dc2626}
+.ledger-item-date{font-size:11px;color:#94a3b8}
+
+.ledger-empty{text-align:center;padding:40px 20px;color:#94a3b8}
+.ledger-empty-icon{font-size:48px;margin-bottom:12px}
+.ledger-empty-text{font-size:14px;font-weight:600;color:#64748b}
+
+.ledger-pagination{
+  display:flex;align-items:center;justify-content:center;
+  gap:12px;margin-top:16px;padding:8px 0;
+}
+.ledger-page-btn{
+  padding:10px 18px;border-radius:20px;border:2px solid #e2e8f0;
+  background:#fff;font-size:13px;font-weight:600;cursor:pointer;
+  font-family:var(--body-font);transition:0.15s;color:#64748b;
+}
+.ledger-page-btn:hover{border-color:#f97316;color:#f97316}
+.ledger-page-btn:disabled{opacity:0.4;cursor:default}
+.ledger-page-info{font-size:12px;color:#94a3b8}
+
+/* Savings Goals */
+.savings-card{
+  background:#fff;border-radius:14px;padding:16px;margin-bottom:10px;
+  box-shadow:var(--card-shadow);border-left:4px solid #f97316;
+  transition:0.15s;
+}
+.savings-card:hover{box-shadow:0 4px 16px rgba(0,0,0,0.1)}
+.savings-card.completed{opacity:0.7;border-left-color:#15803d}
+.savings-card-head{
+  display:flex;align-items:center;gap:8px;margin-bottom:6px;
+}
+.savings-card-icon{font-size:24px}
+.savings-card-title{font-weight:700;font-size:14px;flex:1}
+.savings-card-title.done{text-decoration:line-through;color:#94a3b8}
+.savings-progress-wrap{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.savings-progress{
+  flex:1;height:12px;background:#f1f5f9;border-radius:6px;overflow:hidden;
+}
+.savings-progress-fill{
+  height:100%;border-radius:6px;transition:width 0.5s ease;min-width:0;
+}
+.savings-amount{font-size:13px;font-weight:700;white-space:nowrap}
+.savings-card-actions{display:flex;gap:6px;margin-top:6px}
+.savings-card-actions button{
+  flex:1;padding:8px;border-radius:8px;border:2px solid #e2e8f0;
+  background:#f8fafc;font-size:12px;font-weight:600;cursor:pointer;
+  font-family:var(--body-font);transition:0.15s;
+}
+.savings-card-actions button:hover{background:#fff;border-color:#f97316}
+.savings-card-actions .btn-contribute{background:#dcfce7;border-color:#86efac;color:#166534}
+.savings-card-actions .btn-contribute:hover{background:#bbf7d0}
+.savings-card-actions .btn-withdraw{background:#fef3c7;border-color:#fde68a;color:#92400e}
+.savings-card-actions .btn-withdraw:hover{background:#fde68a}
+.savings-card-actions .btn-delete{background:#fee2e2;border-color:#fecaca;color:#991b1b}
+.savings-card-actions .btn-delete:hover{background:#fecaca}
+.savings-stat-card{font-size:12px;color:#64748b}
+.savings-stat-card strong{font-size:18px;display:block;color:#1e293b;margin-top:2px}
+.savings-dialog-inputs{display:flex;flex-direction:column;gap:10px;margin:12px 0}
+.savings-dialog-inputs input,.savings-dialog-inputs select{
+  padding:12px;border-radius:10px;border:2px solid #e2e8f0;
+  font-size:14px;font-family:var(--body-font);
+}
+.savings-dialog-inputs input:focus{outline:none;border-color:#f97316}
+.savings-dialog-inputs .icon-row{display:flex;gap:4px;flex-wrap:wrap}
+.savings-dialog-inputs .icon-opt{
+  font-size:24px;padding:4px;border-radius:8px;cursor:pointer;
+  border:2px solid transparent;transition:0.1s;
+}
+.savings-dialog-inputs .icon-opt.selected{border-color:#f97316;background:#fef3c7}
+.savings-dialog-inputs .color-opt{
+  width:32px;height:32px;border-radius:50%;cursor:pointer;
+  border:3px solid transparent;transition:0.1s;
+}
+.savings-dialog-inputs .color-opt.selected{border-color:#1e293b}
+
+/* Task styles */
+.task-add-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.task-input{flex:1;min-width:120px;padding:12px 12px;border-radius:8px;border:2px solid #e2e8f0;font-size:14px;font-family:var(--body-font)}
+.task-input:focus{outline:none;border-color:#ef4444}
+.task-select{padding:8px;border-radius:8px;border:2px solid #e2e8f0;font-size:13px;font-family:var(--body-font);background:#fff}
+.task-btn{padding:12px 16px;border-radius:8px;border:none;background:#dc2626;color:#fff;font-weight:700;font-size:14px;cursor:pointer;transition:0.15s}
+.task-btn:hover{background:#b91c1c;transform:scale(1.03)}
+.task-list{display:flex;flex-direction:column;gap:8px}
+.task-card{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);transition:0.15s}
+.task-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.1)}
+.task-card.completed{opacity:0.6;background:#f1f5f9}
+.task-card.faded{opacity:0.45;pointer-events:none;filter:grayscale(0.3)}
+.task-card .task-icon{font-size:22px}
+.task-card .task-info{flex:1}
+.task-card .task-title{font-weight:700;font-size:14px;color:#1e293b}
+.task-card .task-meta{font-size:11px;color:#64748b;display:flex;gap:8px;margin-top:2px}
+.task-card .task-meta .task-points{color:#b45309;font-weight:600}
+.task-card .task-actions{display:flex;gap:6px}
+.task-card .task-complete-btn{padding:12px 16px;border-radius:8px;border:none;background:#15803d;color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:0.15s}
+.task-card .task-complete-btn:hover{background:#166534}
+.task-card .task-complete-btn:disabled{background:#64748b;cursor:default}
+.task-card .task-del-btn{padding:12px 14px;border-radius:8px;border:none;background:#fee2e2;color:#dc2626;font-size:14px;cursor:pointer;transition:0.15s}
+.task-card .task-del-btn:hover{background:#fecaca}
+
+/* ═══════════════════════════════════════
+   TOWN CANVAS
+   ═══════════════════════════════════════ */
+#townCanvasWrapper{
+  position:relative;background:#90d26d;
+  border-radius:12px;overflow:hidden;border:3px solid #2d3436;
+  margin-bottom:8px;touch-action:none;
+}
+#townCanvas{display:block;width:100%;height:340px;cursor:grab;touch-action:none}
+#townCanvas:active{cursor:grabbing}
+.town-bottom{
+  display:flex;gap:6px;overflow-x:auto;padding:4px 0;
+  scrollbar-width:none;
+}
+.town-bottom::-webkit-scrollbar{display:none}
+.town-bottom .plot-slot{
+  min-width:56px;height:56px;border-radius:8px;
+  border:2px dashed #64748b;background:#f1f5f9;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:9px;color:#64748b;cursor:pointer;position:relative;
+  flex-shrink:0;transition:0.15s;
+}
+.town-bottom .plot-slot:hover{border-color:#ef4444;background:#fef2f2}
+.town-bottom .plot-slot.built{
+  border:2px solid #3b82f6;background:linear-gradient(135deg,#dbeafe,#eff6ff);
+}
+.town-bottom .plot-slot .icon{font-size:22px;line-height:1}
+.town-bottom .plot-slot .lvl{
+  position:absolute;top:-4px;right:-4px;
+  background:#f59e0b;color:#1e293b;width:16px;height:16px;
+  border-radius:50%;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;
+}
+.town-bottom .plot-slot .name{font-size:8px;color:#475569;margin-top:1px}
+
+/* ═══════════════════════════════════════
+   BUILDINGS TAB
+   ═══════════════════════════════════════ */
+.section-title{
+  font-size:14px;font-weight:800;margin:12px 0 8px;
+  display:flex;align-items:center;gap:6px;
+}
+.buildings-list{display:flex;flex-direction:column;gap:8px}
+.building-card{
+  background:#fff;border-radius:12px;padding:12px;
+  border:2px solid #e2e8f0;display:flex;align-items:center;gap:12px;
+  transition:0.15s;
+}
+.building-card:hover{border-color:#cbd5e1}
+.building-card .b-icon{font-size:32px;width:48px;text-align:center}
+.building-card .b-info{flex:1;min-width:0}
+.building-card .b-name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px}
+.building-card .b-name .level-badge{
+  background:#b45309;color:#fff;padding:1px 8px;border-radius:10px;font-size:10px;
+}
+.building-card .b-effect{font-size:11px;color:#64748b;margin-top:2px}
+.building-card .b-mats{font-size:10px;color:#64748b;margin-top:2px}
+.building-card .b-actions{display:flex;gap:6px;flex-direction:column;align-items:flex-end}
+.building-card .btn-upgrade{
+  padding:12px 14px;border-radius:8px;border:none;
+  background:linear-gradient(135deg,#f97316,#ef4444);
+  color:#fff;font-weight:700;font-size:12px;cursor:pointer;transition:0.15s;
+}
+.building-card .btn-upgrade:hover{transform:scale(1.05)}
+.building-card .btn-upgrade:disabled{opacity:0.4;cursor:not-allowed;transform:none}
+.building-card .btn-upgrade.max{background:#64748b}
+
+/* ═══════════════════════════════════════
+   SHOP TAB
+   ═══════════════════════════════════════ */
+.shop-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.shop-item{
+  background:#fff;border-radius:12px;padding:14px;text-align:center;
+  border:2px solid #e2e8f0;cursor:pointer;transition:0.15s;
+}
+.shop-item:hover{transform:translateY(-2px);border-color:#cbd5e1}
+.shop-item .s-icon{font-size:32px;margin-bottom:4px}
+.shop-item .s-name{font-weight:700;font-size:13px}
+.shop-item .s-cost{font-size:11px;color:#b45309;font-weight:600;margin:2px 0}
+.shop-item .s-mats{font-size:9px;color:#64748b;margin-bottom:4px}
+.shop-item .s-effect{font-size:10px;color:#64748b}
+.shop-item.disabled{opacity:0.4;cursor:not-allowed}
+.shop-item.disabled:hover{transform:none}
+
+/* ═══════════════════════════════════════
+   EXPEDITION TAB
+   ═══════════════════════════════════════ */
+.expedition-area{display:flex;flex-direction:column;gap:10px}
+.exp-region-card{
+  background:#fff;border-radius:12px;padding:12px 14px;
+  border:2px solid #e2e8f0;display:flex;align-items:center;gap:10px;
+  transition:0.15s;
+}
+.exp-region-card:hover{border-color:#cbd5e1}
+.exp-region-card.locked{opacity:0.5;cursor:not-allowed}
+.exp-region-card .r-icon{font-size:28px}
+.exp-region-card .r-info{flex:1}
+.exp-region-card .r-name{font-weight:700;font-size:13px}
+.exp-region-card .r-desc{font-size:10px;color:#64748b}
+.exp-region-card .r-reward{font-size:10px;color:#b45309}
+.exp-region-card .r-status{
+  font-size:11px;padding:3px 10px;border-radius:10px;font-weight:600;
+}
+.exp-region-card .r-status.unlocked{background:#dcfce7;color:#16a34a}
+.exp-region-card .r-status.locked{background:#fef2f2;color:#ef4444}
+.exp-region-card .r-status.explored{background:#dbeafe;color:#2563eb}
+.exp-btn-area{
+  display:flex;gap:8px;margin-top:4px;
+}
+.exp-btn{
+  flex:1;padding:12px;border-radius:10px;border:none;
+  font-size:14px;font-weight:700;cursor:pointer;transition:0.15s;
+}
+.exp-btn.go{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
+.exp-btn.go:hover{transform:scale(1.02)}
+.exp-btn.go:disabled{opacity:0.4;cursor:not-allowed;transform:none}
+.exp-btn.claim{background:linear-gradient(135deg,#f59e0b,#d97706);color:#1e293b}
+.exp-btn.claim:hover{transform:scale(1.02)}
+.exp-progress-card{
+  background:#fff;border-radius:12px;padding:16px;
+  border:2px solid #e2e8f0;
+}
+.exp-progress-card .ep-header{display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:8px}
+.exp-progress-card .ep-bar{height:10px;background:#e2e8f0;border-radius:5px;overflow:hidden}
+.exp-progress-card .ep-fill{
+  height:100%;background:linear-gradient(90deg,#6366f1,#f59e0b);
+  border-radius:5px;transition:width 1s;width:0%;
+}
+.exp-progress-card .ep-log{font-size:11px;color:#64748b;margin-top:8px;max-height:80px;overflow-y:auto}
+.exp-progress-card .ep-log div{padding:2px 0}
+
+/* ═══════════════════════════════════════
+   INVENTORY TAB
+   ═══════════════════════════════════════ */
+.inv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.inv-item{
+  background:#fff;border-radius:10px;padding:10px;text-align:center;
+  border:2px solid #e2e8f0;
+}
+.inv-item .i-icon{font-size:24px;margin-bottom:2px}
+.inv-item .i-name{font-size:10px;font-weight:600;color:#475569}
+.inv-item .i-qty{font-size:16px;font-weight:800;color:#ef4444}
+
+/* ═══════════════════════════════════════
+   BUILD MODAL
+   ═══════════════════════════════════════ */
+.modal-overlay{
+  display:none;position:fixed;inset:0;z-index:200;
+  background:rgba(0,0,0,0.5);
+  align-items:flex-end;justify-content:center;
+}
+.modal-overlay.active{display:flex}
+.modal{
+  background:#fff;border-radius:20px 20px 0 0;
+  width:100%;max-width:480px;padding:24px;
+  animation:slideUp 0.2s ease;max-height:80vh;overflow-y:auto;
+}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal h2{font-size:16px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.modal p{font-size:13px;color:#64748b;margin-bottom:8px}
+.modal .build-list{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.modal .build-option{
+  display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;
+  border:2px solid #e2e8f0;cursor:pointer;transition:0.15s;
+}
+.modal .build-option:hover{border-color:#3b82f6;background:#f8faff}
+.modal .build-option .bo-icon{font-size:28px}
+.modal .build-option .bo-info{flex:1}
+.modal .build-option .bo-name{font-weight:700;font-size:13px}
+.modal .build-option .bo-cost{font-size:11px;color:#b45309}
+.modal .build-option .bo-effect{font-size:10px;color:#64748b}
+.modal .close-modal{
+  width:100%;padding:14px;border-radius:10px;border:2px solid #e2e8f0;
+  background:#f1f5f9;font-size:14px;font-weight:600;cursor:pointer;margin-top:12px;
+}
+
+/* ═══════════════════════════════════════
+   TOAST / REWARDS
+   ═══════════════════════════════════════ */
+#toast{
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+  background:#15803d;color:#1e293b;padding:10px 20px;border-radius:20px;
+  font-size:13px;font-weight:700;z-index:300;display:none;
+  animation:fadeInOut 2s ease;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.15);
+  max-width:90vw;overflow:hidden;text-overflow:ellipsis;
+}
+#toast.error{background:#ef4444;color:#fff}
+@keyframes fadeInOut{
+  0%{opacity:0;transform:translateX(-50%) translateY(10px)}
+  15%{opacity:1;transform:translateX(-50%) translateY(0)}
+  85%{opacity:1;transform:translateX(-50%) translateY(0)}
+  100%{opacity:0;transform:translateX(-50%) translateY(-10px)}
+}
+.reward-popup{
+  position:fixed;bottom:120px;left:50%;transform:translateX(-50%);
+  background:#fff;border-radius:16px;padding:16px 20px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.2);z-index:250;
+  border:3px solid #f59e0b;min-width:200px;text-align:center;
+  display:none;animation:slideUp 0.3s ease;
+}
+.reward-popup.show{display:block}
+.reward-popup h3{font-size:14px;margin-bottom:8px;color:#b45309}
+.reward-popup .reward-items{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:8px}
+.reward-popup .reward-item{background:#fef3c7;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600}
+.reward-popup .reward-events{font-size:11px;color:#64748b}
+.reward-popup button{margin-top:8px;padding:14px 20px;border-radius:8px;border:none;background:#6366f1;color:#fff;font-weight:700;cursor:pointer}
+
+/* ═══════════════════════════════════════
+   PLACEMENT MODE INDICATOR
+   ═══════════════════════════════════════ */
+.placement-bar{
+  display:none;background:#6366f1;color:#fff;padding:8px 14px;
+  border-radius:10px;text-align:center;font-size:12px;font-weight:600;
+  margin-bottom:8px;align-items:center;justify-content:space-between;
+}
+.placement-bar.active{display:flex}
+.placement-bar .cancel-place{
+  padding:4px 12px;border-radius:6px;border:none;
+  background:#ef4444;color:#fff;font-weight:700;cursor:pointer;font-size:11px;
+}
+
+/* ═══════════════════════════════════════
+   MANAGEMENT TAB
+   ═══════════════════════════════════════ */
+.mgmt-section{margin-bottom:16px}
+.mgmt-section .mgmt-title{font-size:13px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.mgmt-filters{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.mgmt-filters input,.mgmt-filters select{padding:12px 10px;border-radius:8px;border:2px solid #e2e8f0;font-size:12px;font-family:var(--body-font);background:#fff;flex:1;min-width:80px}
+.mgmt-filters input:focus,.mgmt-filters select:focus{outline:none;border-color:#ef4444}
+.mgmt-card{background:#fff;border-radius:10px;padding:10px 12px;border:2px solid #e2e8f0;display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;transition:0.15s}
+.mgmt-card:hover{border-color:#cbd5e1}
+.mgmt-card .mc-icon{font-size:20px;margin-top:2px}
+.mgmt-card .mc-info{flex:1;min-width:0}
+.mgmt-card .mc-title{font-weight:700;font-size:13px;color:#1e293b}
+.mgmt-card .mc-title input{font-size:13px;padding:4px 8px;border:2px solid #3b82f6;border-radius:6px;width:100%;font-family:var(--body-font)}
+.mgmt-card .mc-meta{font-size:10px;color:#64748b;display:flex;gap:8px;margin-top:2px;flex-wrap:wrap}
+.mgmt-card .mc-meta .mc-pts{color:#b45309;font-weight:600}
+.mgmt-card .mc-actions{display:flex;gap:4px;flex-shrink:0}
+.mgmt-card .mc-btn{padding:10px 14px;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;transition:0.15s}
+.mgmt-card .mc-btn.edit{background:#dbeafe;color:#2563eb}
+.mgmt-card .mc-btn.edit:hover{background:#bfdbfe}
+.mgmt-card .mc-btn.del{background:#fee2e2;color:#dc2626}
+.mgmt-card .mc-btn.del:hover{background:#fecaca}
+.mgmt-card .mc-badge{font-size:9px;padding:1px 6px;border-radius:8px;font-weight:600}
+.mgmt-card .mc-badge.category{background:#fef3c7;color:#d97706}
+.mgmt-card .mc-badge.kid{background:#dbeafe;color:#2563eb}
+.mgmt-card .mc-badge.recurring{background:#dcfce7;color:#16a34a}
+.mgmt-create-bar{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.mgmt-create-bar input,.mgmt-create-bar select{padding:12px 10px;border-radius:8px;border:2px solid #e2e8f0;font-size:13px;font-family:var(--body-font);background:#fff}
+.mgmt-create-bar input:focus,.mgmt-create-bar select:focus{outline:none;border-color:#ef4444}
+.mgmt-create-bar .create-btn{padding:12px 16px;border-radius:8px;border:none;background:#dc2626;color:#fff;font-weight:700;font-size:13px;cursor:pointer;transition:0.15s}
+.mgmt-create-bar .create-btn:hover{background:#b91c1c}
+.mgmt-create-bar .create-btn.quick{background:#6366f1}
+.mgmt-create-bar .create-btn.quick:hover{background:#4f46e5}
+.icon-pick{display:inline-flex;width:32px;height:32px;align-items:center;justify-content:center;border-radius:8px;border:2px solid #e2e8f0;cursor:pointer;font-size:16px;transition:0.1s;background:#fff}
+.icon-pick:hover{border-color:#f97316;background:#fef3c7;transform:scale(1.15)}
+.icon-pick.active{background:#f97316;color:#fff;border-color:#f97316}
+
+/* Edit modal for tasks */
+.edit-field{margin-bottom:8px}
+.edit-field label{display:block;font-size:11px;font-weight:600;color:#64748b;margin-bottom:2px}
+.edit-field input,.edit-field select,.edit-field textarea{width:100%;padding:8px 10px;border-radius:8px;border:2px solid #e2e8f0;font-size:13px;font-family:var(--body-font)}
+.edit-field input:focus,.edit-field select:focus,.edit-field textarea:focus{outline:none;border-color:#6366f1}
+.edit-row{display:flex;gap:8px}
+.edit-row .edit-field{flex:1}
+.edit-actions{display:flex;gap:8px;margin-top:10px}
+.edit-actions button{flex:1;padding:14px;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer}
+.edit-actions .save-btn{background:#15803d;color:#fff}
+.edit-actions .save-btn:hover{background:#166534}
+.edit-actions .cancel-btn{background:#f1f5f9;color:#64748b}
+.edit-actions .cancel-btn:hover{background:#e2e8f0}
+.edit-actions .delete-btn{background:#fee2e2;color:#dc2626}
+.edit-actions .delete-btn:hover{background:#fecaca}
+
+/* Point adjust */
+.adjust-bar{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.adjust-bar select{padding:7px 10px;border-radius:8px;border:2px solid #e2e8f0;font-size:12px;font-family:var(--body-font);background:#fff;min-width:100px}
+.adjust-bar input{padding:7px 10px;border-radius:8px;border:2px solid #e2e8f0;font-size:12px;font-family:var(--body-font);width:70px}
+.adjust-bar input:focus,.adjust-bar select:focus{outline:none;border-color:#f59e0b}
+.adjust-bar .adjust-btn{padding:12px 14px;border-radius:8px;border:none;font-weight:700;font-size:12px;cursor:pointer;transition:0.15s}
+.adjust-bar .adjust-btn.add{background:#15803d;color:#fff}
+.adjust-bar .adjust-btn.add:hover{background:#166534}
+.adjust-bar .adjust-btn.sub{background:#dc2626;color:#fff}
+.adjust-bar .adjust-btn.sub:hover{background:#b91c1c}
+
+/* Activity log */
+.activity-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;font-size:11px;color:#64748b;border-bottom:1px solid #f1f5f9}
+.activity-item .ai-pts{font-weight:700;min-width:50px;text-align:right}
+.activity-item .ai-pts.positive{color:#16a34a}
+.activity-item .ai-pts.negative{color:#dc2626}
+.activity-item .ai-time{color:#64748b;font-size:10px;min-width:70px}
+
+/* ═══════════════════════════════════════
+   LEADERBOARD / ACHIEVEMENTS TAB
+   ═══════════════════════════════════════ */
+.lb-period{display:flex;gap:4px;margin-bottom:10px}
+.lb-period .lb-btn{padding:12px 14px;border-radius:8px;border:2px solid #e2e8f0;font-size:12px;font-weight:600;cursor:pointer;background:#fff;transition:0.15s;color:#64748b}
+.lb-period .lb-btn.active{background:#dc2626;color:#fff;border-color:#dc2626}
+.lb-period .lb-btn:hover:not(.active){border-color:#cbd5e1}
+.lb-card{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;border-radius:12px;border:2px solid #e2e8f0;margin-bottom:6px;transition:0.15s}
+.lb-card:first-child{border-color:#f59e0b;background:linear-gradient(135deg,#fef3c7,#fff)}
+.lb-card .lb-rank{font-size:16px;font-weight:800;min-width:28px;text-align:center}
+.lb-card .lb-rank.gold{color:#b45309}
+.lb-card .lb-rank.silver{color:#64748b}
+.lb-card .lb-rank.bronze{color:#d97706}
+.lb-card .lb-info{flex:1}
+.lb-card .lb-name{font-weight:700;font-size:13px}
+.lb-card .lb-points{font-size:16px;font-weight:800;color:#b45309}
+.lb-card .lb-pts-label{font-size:10px;color:#64748b}
+
+/* Stats dashboard */
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}
+.stat-card{background:#fff;border-radius:10px;padding:12px;text-align:center;border:2px solid #e2e8f0}
+.stat-card .sc-num{font-size:24px;font-weight:800;color:#ef4444}
+.stat-card .sc-label{font-size:10px;color:#64748b;margin-top:2px}
+.stat-card .sc-icon{font-size:20px;margin-bottom:4px}
+
+/* Achievements grid */
+.ach-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ach-card{background:#fff;border-radius:10px;padding:10px;text-align:center;border:2px solid #e2e8f0;transition:0.15s}
+.ach-card.earned{border-color:#f59e0b;background:linear-gradient(135deg,#fef3c7,#fff)}
+.ach-card .ach-icon{font-size:24px;margin-bottom:4px}
+.ach-card .ach-title{font-size:10px;font-weight:600;color:#475569}
+.ach-card .ach-desc{font-size:9px;color:#64748b;line-height:1.2}
+.ach-card .ach-status{font-size:9px;margin-top:4px;padding:2px 6px;border-radius:8px;display:inline-block}
+.ach-card .ach-status.earned{background:#dcfce7;color:#16a34a}
+.ach-card .ach-status.locked{background:#f1f5f9;color:#64748b}
+
+/* Streak display */
+.streak-display{display:flex;align-items:center;gap:12px;padding:12px;background:#fff;border-radius:12px;border:2px solid #e2e8f0;margin-bottom:12px}
+.streak-display .s-fire{font-size:36px}
+.streak-display .s-info{flex:1}
+.streak-display .s-current{font-size:28px;font-weight:800;color:#ef4444}
+.streak-display .s-label{font-size:11px;color:#64748b}
+.streak-display .s-best{font-size:11px;color:#64748b}
+
+/* Kid stats per row */
+.kid-stats-row{display:flex;gap:8px;overflow-x:auto;padding:4px 0;scrollbar-width:none;margin-bottom:8px}
+.kid-stats-row::-webkit-scrollbar{display:none}
+.kid-stat-mini{min-width:100px;background:#fff;border-radius:10px;padding:8px 10px;border:2px solid #e2e8f0;text-align:center;flex-shrink:0}
+.kid-stat-mini .ks-avatar{font-size:20px}
+.kid-stat-mini .ks-name{font-size:10px;font-weight:600;color:#475569}
+.kid-stat-mini .ks-val{font-size:16px;font-weight:800;color:#ef4444}
+.kid-stat-mini .ks-label{font-size:9px;color:#64748b}
+
+/* Daily chart */
+.chart-bar-area{display:flex;align-items:flex-end;gap:4px;height:60px;padding:4px 0;margin-bottom:4px}
+.chart-bar{flex:1;background:linear-gradient(to top,#ef4444,#f97316);border-radius:3px 3px 0 0;min-height:4px;transition:0.3s;position:relative}
+.chart-bar:hover{opacity:0.8}
+.chart-bar .cb-val{position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:600;color:#ef4444;white-space:nowrap}
+.chart-labels{display:flex;gap:4px}
+.chart-labels .cl{flex:1;font-size:7px;color:#64748b;text-align:center}
+
+/* ═══════════════════════════════════════
+   MATERIAL ICON MAP
+   ═══════════════════════════════════════ */
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">🌈</div>
+    <h1>Kids Town</h1>
+    <h2>開羅小鎮</h2>
+    <p class="login-sub">⭐ 小朋友嘅開心小鎮 ⭐</p>
+    
+    <div id="loginForm">
+      <div class="login-field">
+        <span class="lf-icon">👤</span>
+        <input type="text" id="loginUsername" placeholder="登入名稱" maxlength="30"
+          autocomplete="username" onkeyup="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="login-field">
+        <span class="lf-icon">🔑</span>
+        <input type="password" id="loginPassword" placeholder="密碼" maxlength="30"
+          autocomplete="current-password" onkeyup="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="login-btn" onclick="doLogin()">🚪 登入</button>
+      <div class="login-error" id="loginError"></div>
+    </div>
+    
+    <div id="loginLoading" style="display:none;text-align:center;padding:20px;">
+      <div class="login-spinner"></div>
+      <p style="color:#fef3c7;font-size:13px;margin-top:8px;">登入中...</p>
+    </div>
+    
+    <div class="login-footer">
+      <span class="login-link" onclick="showParentLogin()">👨‍👩‍👧‍👦 家長登入</span>
+      <span class="login-link" onclick="showAdminLogin()">👑 管理員</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ MAIN APP ═══════════ -->
+<div id="app" style="display:none">
+
+<!-- Offline Banner -->
+<div id="offlineBanner" style="display:none;background:#ef4444;color:#fff;text-align:center;padding:6px 12px;font-size:12px;font-weight:700;position:sticky;top:0;z-index:101;">
+  📡 離線模式 — 資料將於恢復連線後自動同步
+</div>
+
+<!-- Sync Queue Indicator -->
+<div id="syncQueueBadge" style="display:none;background:#f59e0b;color:#1e293b;text-align:center;padding:4px 12px;font-size:11px;font-weight:600;position:sticky;top:32px;z-index:101;">
+  ⏳ 同步進行中...
+</div>
+
+<!-- Header -->
+<div class="header" id="appHeader">
+  <h1><span id="hdrKidName">👦 小明</span></h1>
+  <div class="res">
+    <span class="gold">🪙 <strong id="hdrGold">0</strong></span>
+    <span id="muteBtn" onclick="toggleAudioMute()" style="cursor:pointer;font-size:18px;opacity:0.8;transition:0.15s;" title="🔊 音效">🔊</span>
+  </div>
+  <div class="logout" onclick="logout()" title="登出">🚪</div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <div class="tab-btn active" data-tab="town" onclick="switchTab('town')">🏘️ 小鎮</div>
+  <div class="tab-btn" data-tab="buildings" onclick="switchTab('buildings')">🏗️ 建築</div>
+  <div class="tab-btn" data-tab="expedition" onclick="switchTab('expedition')">🗺️ 探險</div>
+  <div class="tab-btn" data-tab="shop" onclick="switchTab('shop')">🎒 背包</div>
+  <div class="tab-btn" data-tab="tasks" onclick="switchTab('tasks')">📋 任務</div>
+  <div class="tab-btn" data-tab="manage" onclick="switchTab('manage');renderManage()">⚙️ 管理</div>
+  <div class="tab-btn" data-tab="achievements" onclick="switchTab('achievements');renderAchievements()">🏆 成就</div>
+  <div class="tab-btn" data-tab="ledger" onclick="switchTab('ledger');loadLedger()">🏦 帳本</div>
+  <div class="tab-btn" data-tab="savings" onclick="switchTab('savings');loadSavingsGoals()">💰 儲蓄</div>
+  <div class="tab-btn" style="background:#fef3c7;border-color:#f97316" onclick="location.href='/stats.html'">📊 統計</div>
+</div>
+
+<!-- Tab: Town -->
+<div class="tab-content active" id="tab-town">
+  <div class="placement-bar" id="placementBar">
+    <span>📍 點擊地圖上空地放置建築</span>
+    <button class="cancel-place" onclick="cancelPlacement()">✕ 取消</button>
+  </div>
+  <div id="townCanvasWrapper">
+    <canvas id="townCanvas"></canvas>
+  </div>
+  <div class="town-bottom" id="townPlots"></div>
+  <p style="font-size:10px;color:#94a3b8;text-align:center;margin-top:6px;">👆 拖曳地圖 · 點擊下方空位起建築 · 已建建築可升級</p>
+</div>
+
+<!-- Tab: Buildings -->
+<div class="tab-content" id="tab-buildings">
+  <div class="section-title">🏗️ 已建建築</div>
+  <div class="buildings-list" id="buildingsList"></div>
+  <div class="section-title" style="margin-top:16px;">🏪 可建造建築</div>
+  <div class="buildings-list" id="availableBuildingsList"></div>
+</div>
+
+<!-- Tab: Expedition -->
+<div class="tab-content" id="tab-expedition">
+  <div class="expedition-area" id="expeditionArea">
+    <div class="exp-region-card" id="expStatusCard" style="display:none">
+      <div class="exp-progress-card" id="expProgressPanel" style="width:100%"></div>
+    </div>
+    <div class="section-title">🗺️ 探險區域</div>
+    <div id="expRegions"></div>
+  </div>
+</div>
+
+<!-- Tab: Shop / Inventory -->
+<div class="tab-content" id="tab-shop">
+  <div class="section-title">🎒 材料背包</div>
+  <div class="inv-grid" id="inventoryGrid"></div>
+  <div class="section-title" style="margin-top:16px;">🏪 建築商店</div>
+  <div class="shop-grid" id="shopGrid"></div>
+</div>
+
+<!-- Tab: Tasks -->
+<div class="tab-content" id="tab-tasks">
+  <div class="section-title">📋 今日任務</div>
+  <div style="font-size:11px;color:#94a3b8;text-align:center;padding:4px 0 8px;">👨‍👩‍👧‍👦 由家長喺管理頁面新增任務</div>
+  <div class="task-list" id="taskList"></div>
+</div>
+
+<!-- Tab: Manage (Parent) -->
+<div class="tab-content" id="tab-manage">
+  <div class="mgmt-section">
+    <div class="mgmt-title">📋 任務管理</div>
+    <div class="mgmt-summary" id="mgmtSummary" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+      <div class="stat-mini" style="flex:1;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:6px 8px;text-align:center;min-width:60px;">
+        <div style="font-size:18px;font-weight:800;" id="mSumActive">0</div>
+        <div style="font-size:9px;color:#92400e;">⏳ 進行中</div>
+      </div>
+      <div class="stat-mini" style="flex:1;background:#dcfce7;border:1px solid #22c55e;border-radius:8px;padding:6px 8px;text-align:center;min-width:60px;">
+        <div style="font-size:18px;font-weight:800;" id="mSumDone">0</div>
+        <div style="font-size:9px;color:#166534;">✅ 已完成</div>
+      </div>
+      <div class="stat-mini" style="flex:1;background:#dbeafe;border:1px solid #3b82f6;border-radius:8px;padding:6px 8px;text-align:center;min-width:60px;">
+        <div style="font-size:18px;font-weight:800;" id="mSumRecur">0</div>
+        <div style="font-size:9px;color:#1e40af;">🔄 重複</div>
+      </div>
+      <div class="stat-mini" style="flex:1;background:#fef2f2;border:1px solid #ef4444;border-radius:8px;padding:6px 8px;text-align:center;min-width:60px;">
+        <div style="font-size:18px;font-weight:800;" id="mSumOverdue">0</div>
+        <div style="font-size:9px;color:#991b1b;">⚠️ 逾期</div>
+      </div>
+    </div>
+    <div class="mgmt-filters">
+      <input id="mgmtSearch" placeholder="🔍 搜尋任務..." oninput="renderManageTasks()">
+      <select id="mgmtFilterKid" onchange="renderManageTasks()"><option value="">全部小朋友</option></select>
+      <select id="mgmtFilterStatus" onchange="renderManageTasks()">
+        <option value="">全部狀態</option>
+        <option value="0">⏳ 待完成</option>
+        <option value="1">✅ 已完成</option>
+        <option value="expired">⚠️ 已逾期</option>
+      </select>
+      <select id="mgmtFilterCategory" onchange="renderManageTasks()"><option value="">全部分類</option></select>
+    </div>
+    <div class="mgmt-create-bar">
+      <input id="mgmtNewTitle" placeholder="任務名稱..." maxlength="50" style="flex:2;min-width:100px">
+      <input id="mgmtNewPts" type="number" placeholder="分數" value="10" style="width:60px">
+      <select id="mgmtNewKid" style="flex:1;min-width:70px"><option value="">指定小朋友</option></select>
+      <input id="mgmtNewCat" placeholder="分類" maxlength="15" style="width:70px">
+      <button class="create-btn" onclick="mgmtAddTask()">＋ 新增</button>
+    </div>
+    <div class="mgmt-create-bar" style="margin-top:-4px">
+      <input id="mgmtNewDesc" placeholder="描述（可選）..." maxlength="200" style="flex:2;min-width:100px">
+      <input id="mgmtNewDue" type="date" style="width:120px">
+      <select id="mgmtNewRecurring" style="width:90px;padding:6px 4px;border-radius:6px;border:2px solid #e2e8f0;font-size:12px;">
+        <option value="">唔重複</option>
+        <option value="daily">每日</option>
+        <option value="weekly">每週</option>
+        <option value="weekdays">平日</option>
+      </select>
+      <button class="create-btn" onclick="mgmtAddTask()" style="background:#6366f1">＋ 新增</button>
+    </div>
+    <div class="mgmt-create-bar" style="margin-top:-4px;flex-wrap:wrap;gap:2px;">
+      <span style="font-size:11px;color:#94a3b8;margin-right:4px;">圖示：</span>
+      <span class="icon-pick" data-icon="📝" onclick="selectMgmtIcon('📝',this)" style="background:#f97316;color:#fff;border-color:#f97316">📝</span>
+      <span class="icon-pick" data-icon="📖" onclick="selectMgmtIcon('📖',this)">📖</span>
+      <span class="icon-pick" data-icon="🧹" onclick="selectMgmtIcon('🧹',this)">🧹</span>
+      <span class="icon-pick" data-icon="🦷" onclick="selectMgmtIcon('🦷',this)">🦷</span>
+      <span class="icon-pick" data-icon="🎹" onclick="selectMgmtIcon('🎹',this)">🎹</span>
+      <span class="icon-pick" data-icon="🎨" onclick="selectMgmtIcon('🎨',this)">🎨</span>
+      <span class="icon-pick" data-icon="🏃" onclick="selectMgmtIcon('🏃',this)">🏃</span>
+      <span class="icon-pick" data-icon="📚" onclick="selectMgmtIcon('📚',this)">📚</span>
+      <span class="icon-pick" data-icon="🎵" onclick="selectMgmtIcon('🎵',this)">🎵</span>
+      <span class="icon-pick" data-icon="🧩" onclick="selectMgmtIcon('🧩',this)">🧩</span>
+      <span class="icon-pick" data-icon="💪" onclick="selectMgmtIcon('💪',this)">💪</span>
+      <span class="icon-pick" data-icon="🎯" onclick="selectMgmtIcon('🎯',this)">🎯</span>
+      <span class="icon-pick" data-icon="🚲" onclick="selectMgmtIcon('🚲',this)">🚲</span>
+      <span class="icon-pick" data-icon="🐕" onclick="selectMgmtIcon('🐕',this)">🐕</span>
+      <span class="icon-pick" data-icon="🎮" onclick="selectMgmtIcon('🎮',this)">🎮</span>
+    </div>
+    <div class="mgmt-create-bar" style="margin-top:-4px">
+      <button class="create-btn quick" onclick="addQuickTask('📖 做功課',15)">📖 做功課</button>
+      <button class="create-btn quick" onclick="addQuickTask('🧹 收拾房間',10)">🧹 收拾</button>
+      <button class="create-btn quick" onclick="addQuickTask('🦷 刷牙洗臉',5)">🦷 刷牙</button>
+      <button class="create-btn quick" onclick="addQuickTask('📚 閱讀30分鐘',15)">📚 閱讀</button>
+      <button class="create-btn quick" onclick="addQuickTask('🎹 練琴',20)">🎹 練琴</button>
+    </div>
+    <div id="mgmtTaskList"></div>
+  </div>
+
+  <div class="mgmt-section">
+    <div class="mgmt-title">🪙 積分調整</div>
+    <div class="adjust-bar">
+      <select id="adjustKid"><option value="">選擇小朋友</option></select>
+      <input id="adjustAmount" type="number" value="10" min="1">
+      <input id="adjustReason" placeholder="原因..." maxlength="50" style="flex:1">
+      <button class="adjust-btn add" onclick="adjustPoints(1)">＋ 加分</button>
+      <button class="adjust-btn sub" onclick="adjustPoints(-1)">－ 扣分</button>
+    </div>
+  </div>
+
+  <div class="mgmt-section">
+    <div class="mgmt-title">📜 活動紀錄</div>
+    <div id="activityLog" style="max-height:300px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- Tab: Achievements -->
+<div class="tab-content" id="tab-achievements">
+  <div class="mgmt-section">
+    <div class="mgmt-title">📊 整體統計</div>
+    <div class="stats-grid" id="statsGrid">
+      <div class="stat-card"><div class="sc-icon">📋</div><div class="sc-num" id="statTotal">0</div><div class="sc-label">總任務</div></div>
+      <div class="stat-card"><div class="sc-icon">✅</div><div class="sc-num" id="statCompleted">0</div><div class="sc-label">已完成</div></div>
+      <div class="stat-card"><div class="sc-icon">📊</div><div class="sc-num" id="statRate">0%</div><div class="sc-label">完成率</div></div>
+      <div class="stat-card"><div class="sc-icon">⏳</div><div class="sc-num" id="statPending">0</div><div class="sc-label">進行中</div></div>
+    </div>
+  </div>
+
+  <div class="mgmt-section">
+    <div class="mgmt-title">🔥 連續記錄</div>
+    <div id="streakDisplay"></div>
+  </div>
+
+  <div class="mgmt-section">
+    <div class="mgmt-title">⬇️ 每日完成趨勢</div>
+    <div id="dailyChart"></div>
+  </div>
+
+  <div class="mgmt-section">
+    <div class="mgmt-title">🏆 排行榜</div>
+    <div class="lb-period">
+      <button class="lb-btn active" data-period="all" onclick="switchLeaderboard('all',this)">🏅 總分</button>
+      <button class="lb-btn" data-period="weekly" onclick="switchLeaderboard('weekly',this)">📅 本週</button>
+      <button class="lb-btn" data-period="monthly" onclick="switchLeaderboard('monthly',this)">📆 本月</button>
+    </div>
+    <div id="leaderboardList"></div>
+  </div>
+
+  <div class="mgmt-section">
+    <div class="mgmt-title">🎖️ 成就</div>
+    <div id="achievementsArea"></div>
+  </div>
+</div>
+
+<!-- 🏦 Ledger Tab -->
+<div class="tab-content" id="tab-ledger">
+  <!-- Balance Summary -->
+  <div class="ledger-summary">
+    <div class="ledger-balance">
+      <span class="ledger-balance-icon">💰</span>
+      <span class="ledger-balance-num" id="ledgerBalance">0</span>
+      <span class="ledger-balance-label">🪙</span>
+    </div>
+    <div class="ledger-mini-stats">
+      <div class="ledger-stat">
+        <span class="ledger-stat-icon">📈</span>
+        <span>本週 +</span><strong id="ledgerWeekEarned">0</strong>
+      </div>
+      <div class="ledger-stat">
+        <span class="ledger-stat-icon">📉</span>
+        <span>本週 -</span><strong id="ledgerWeekSpent">0</strong>
+      </div>
+      <div class="ledger-stat">
+        <span class="ledger-stat-icon">📊</span>
+        <strong id="ledgerWeekTx">0</strong><span> 筆</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Pills -->
+  <div class="ledger-filters" id="ledgerFilters">
+    <button class="ledger-filter active" data-type="all" onclick="switchLedgerFilter('all', this)">🪙 全部</button>
+    <button class="ledger-filter" data-type="task" onclick="switchLedgerFilter('task', this)">✅ 任務</button>
+    <button class="ledger-filter" data-type="building" onclick="switchLedgerFilter('building', this)">🏗️ 建築</button>
+    <button class="ledger-filter" data-type="expedition" onclick="switchLedgerFilter('expedition', this)">🗺️ 探險</button>
+    <button class="ledger-filter" data-type="earned" onclick="switchLedgerFilter('earned', this)">💰 收入</button>
+    <button class="ledger-filter" data-type="spent" onclick="switchLedgerFilter('spent', this)">💸 支出</button>
+  </div>
+
+  <!-- Transaction List -->
+  <div class="ledger-list" id="ledgerList">
+    <div class="ledger-empty" id="ledgerEmpty">
+      <div class="ledger-empty-icon">🌟</div>
+      <div class="ledger-empty-text">完成你的第一個任務來開始賺取金幣吧！</div>
+    </div>
+  </div>
+
+  <!-- Pagination -->
+  <div class="ledger-pagination" id="ledgerPagination">
+    <button class="ledger-page-btn" id="ledgerPrevBtn" onclick="ledgerPage('prev')">◀ 上一頁</button>
+    <span class="ledger-page-info" id="ledgerPageInfo">第 1 頁 / 共 1 頁</span>
+    <button class="ledger-page-btn" id="ledgerNextBtn" onclick="ledgerPage('next')">下一頁 ▶</button>
+  </div>
+</div>
+
+<!-- ═══════════ SAVINGS GOALS ═══════════ -->
+<div class="tab-content" id="tab-savings">
+  <div class="savings-header">
+    <h3 style="margin:0 0 8px;font-size:16px;">💰 儲蓄目標</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 12px;">設定目標，慢慢儲錢，達成夢想！</p>
+    <button class="btn-primary" onclick="showAddSavingsGoal()" style="width:100%;margin-bottom:12px;">🎯 新增目標</button>
+  </div>
+  <div id="savingsStats" style="display:flex;gap:8px;margin-bottom:12px;">
+    <div class="savings-stat-card" id="savStatActive" style="flex:1;text-align:center;background:#fff;border-radius:12px;padding:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">Active</div>
+    <div class="savings-stat-card" id="savStatCompleted" style="flex:1;text-align:center;background:#fff;border-radius:12px;padding:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">Done</div>
+    <div class="savings-stat-card" id="savStatTotal" style="flex:1;text-align:center;background:#fff;border-radius:12px;padding:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">Total</div>
+  </div>
+  <div id="savingsGoalList"></div>
+  <div id="savingsEmpty" style="display:none;text-align:center;padding:40px 20px;color:#94a3b8;">
+    <div style="font-size:48px;margin-bottom:12px;">🏦</div>
+    <div style="font-size:14px;font-weight:600;color:#64748b;">仲未有任何儲蓄目標</div>
+    <div style="font-size:12px;margin-top:4px;">點擊「新增目標」開始儲錢啦！</div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Reward Popup -->
+<div class="reward-popup" id="rewardPopup"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════
+const API = '';
+const PARENT_PASSWORD = '1234';
+
+// Material icon mapping
+const MAT_ICONS = {
+  wood:'🪵', brick:'🧱', iron:'🔩', gem:'💎', star_shard:'⭐',
+  dragon_scale:'🐉', star_stone:'🌟', mystery_box:'🎁'
+};
+const MAT_NAMES = {
+  wood:'木材', brick:'磚塊', iron:'鐵錠', gem:'寶石', star_shard:'星碎片',
+  dragon_scale:'龍鱗', star_stone:'星石', mystery_box:'神秘寶箱'
+};
+
+// Region definitions
+const REGIONS = [
+  {id:1,name:'🌲 靜謐森林',desc:'充滿神秘生物嘅古老森林',gold:30,time:2,required_building:null},
+  {id:2,name:'⛰️ 雪山山脈',desc:'終年積雪嘅險峻山嶺',gold:60,time:4,required_region:1},
+  {id:3,name:'🏜️ 沙漠遺跡',desc:'古代文明嘅神秘遺址',gold:100,time:6,required_region:2},
+  {id:4,name:'🌋 火山谷',desc:'熔岩流經嘅危險峽谷',gold:150,time:8,required_region:3},
+  {id:5,name:'🌌 星輝高原',desc:'連接到天界嘅神秘高地',gold:250,time:12,required_region:4},
+];
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let currentKidId = null;
+let kids = [];
+let tasks = [];
+let isParentSession = false; // parent PIN verified for current session
+let townData = {buildings:[], inventory:[], explored:[], expedition:null};
+let buildingDefs = [];
+let placementDefId = null; // building def being placed
+let expInterval = null;
+
+// ═══════════════════════════════════════════════════════════════
+// LOGIN (v3 — role-based auth)
+// ═══════════════════════════════════════════════════════════════
+let currentRole = null;
+let currentUser = null;
+
+async function doLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value.trim();
+  const err = document.getElementById('loginError');
+  
+  if (!username || !password) {
+    err.textContent = '請輸入登入名稱同密碼';
+    return;
+  }
+  
+  // Show loading
+  document.getElementById('loginForm').style.display = 'none';
+  document.getElementById('loginLoading').style.display = 'block';
+  err.textContent = '';
+  
+  try {
+    const res = await fetch(`${API}/api/auth/login`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    const data = await res.json();
+    
+    document.getElementById('loginForm').style.display = 'block';
+    document.getElementById('loginLoading').style.display = 'none';
+    
+    if (!res.ok) {
+      err.textContent = '❌ ' + (data.error || '登入失敗');
+      Audio.errorBuzzer();
+      return;
+    }
+    
+    // Login success
+    Audio.init();
+    Audio.buttonClick();
+    Audio.coinPickup(0.15);
+    
+    currentRole = data.role;
+    currentUser = data.user;
+    
+    if (data.role === 'kid') {
+      // Direct kid login — enter app
+      currentKidId = data.user.id;
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('app').style.display = 'block';
+      updateHeader();  // Show name immediately, don't wait for loadTown
+      Audio.startAmbient('town');
+      await loadTown();
+      initCanvas();
+    } else if (data.role === 'parent') {
+      // Parent login — go to management
+      isParentSession = true;
+      currentKidId = null;
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('app').style.display = 'block';
+      // Parent sees manage tab by default
+      switchTab('manage');
+    } else if (data.role === 'admin') {
+      // Admin login — go to admin dashboard
+      document.getElementById('loginScreen').classList.add('hidden');
+      // Simple redirect to dev dashboard for now
+      window.location.href = '/kids-dev';
+    }
+  } catch(e) {
+    document.getElementById('loginForm').style.display = 'block';
+    document.getElementById('loginLoading').style.display = 'none';
+    err.textContent = '⚠️ 無法連接伺服器 (' + e.message + ')';
+  }
+}
+
+function showParentLogin() {
+  // Pre-fill hint for parent login or just reset form
+  document.getElementById('loginUsername').placeholder = '家長登入名稱';
+  document.getElementById('loginPassword').placeholder = '家長密碼';
+  document.getElementById('loginUsername').focus();
+  document.getElementById('loginError').textContent = '💡 家長請用已註冊嘅帳號登入';
+}
+
+function showAdminLogin() {
+  document.getElementById('loginUsername').placeholder = '管理員名稱';
+  document.getElementById('loginPassword').placeholder = '管理員密碼';
+  document.getElementById('loginUsername').value = 'admin';
+  document.getElementById('loginPassword').value = 'admin123';
+  document.getElementById('loginError').textContent = '💡 管理員預設帳號: admin / admin123';
+}
+
+function logout() {
+  currentKidId = null;
+  isParentSession = false;
+  currentRole = null;
+  currentUser = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('loginUsername').placeholder = '登入名稱';
+  document.getElementById('loginPassword').placeholder = '密碼';
+  document.getElementById('loginError').textContent = '';
+  document.getElementById('loginForm').style.display = 'block';
+  document.getElementById('loginLoading').style.display = 'none';
+  if (expInterval) { clearInterval(expInterval); expInterval = null; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DATA LOADING
+// ═══════════════════════════════════════════════════════════════
+async function loadTown() {
+  if (!currentKidId) return;
+  try {
+    const [townRes, tasksRes] = await Promise.all([
+      fetch(`${API}/api/kids/${currentKidId}/town`),
+      fetch(`${API}/api/tasks`)
+    ]);
+    if (!townRes.ok) return;
+    townData = await townRes.json();
+    if (tasksRes.ok) tasks = await tasksRes.json();
+    // Refresh recurring tasks (daily/weekly)
+    await fetch(`${API}/api/tasks/refresh-recurring`, {method: 'POST'}).catch(()=>{});
+    // Reload tasks after refresh
+    const tasksRes2 = await fetch(`${API}/api/tasks`).catch(()=>null);
+    if (tasksRes2 && tasksRes2.ok) tasks = await tasksRes2.json();
+    updateHeader();
+    renderAll();
+  } catch(e) { console.error('loadTown error:', e); }
+}
+
+async function loadBuildingDefs() {
+  try {
+    const res = await fetch(`${API}/api/building-defs`);
+    if (res.ok) buildingDefs = await res.json();
+  } catch(e) {}
+}
+
+async function fetchAPI(path, options={}) {
+  const res = await fetch(`${API}${path}`, options);
+  if (!res.ok) { const err = await res.json().catch(()=>({})); throw new Error(err.error||'Request failed'); }
+  return res.json();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HEADER
+// ═══════════════════════════════════════════════════════════════
+function updateHeader() {
+  const kid = townData.kid || currentUser || {};
+  document.getElementById('hdrKidName').textContent = `${kid.avatar||'👦'} ${kid.name||'小朋友'}`;
+  document.getElementById('hdrGold').textContent = kid.points || 0;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════════════════════════
+function switchTab(name) {
+  Audio.buttonClick();
+  
+  // PIN gate for management tab (parent-only)
+  if (name === 'manage' && !isParentSession) {
+    const enteredPin = prompt('家長請輸入密碼：');
+    if (enteredPin === PARENT_PASSWORD) {
+      isParentSession = true;
+    } else {
+      if (enteredPin !== null) showToast('密碼錯誤', 'error');
+      return;
+    }
+  }
+  
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.tab-btn[data-tab="${name}"]`).classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  if (name === 'town') initCanvas(); // re-init canvas when switching to town
+  if (name === 'expedition') renderExpedition();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER ALL
+// ═══════════════════════════════════════════════════════════════
+function renderAll() {
+  renderPlots();
+  renderBuildingsTab();
+  renderShop();
+  renderInventory();
+  renderExpedition();
+  renderTasks();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CANVAS TOWN (Kairosoft style — true pixel sprites)
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('townCanvas');
+const ctx = canvas.getContext('2d');
+let W, H, camX = 0, camY = 0, zoom = 1;
+let isDragging = false, dragStartX, dragStartY, dragCamX, dragCamY;
+let lastPinchDist = 0;
+const TILE = 96;      // bigger foundation for bigger sprites
+const PX = 8;         // each game "pixel" = 8x8 screen pixels
+const COLS = 12, ROWS = 12;
+let animFrame = null;
+
+// ── Pixel sprite data ──
+// Each row is a string; each char maps to a color via lookup.
+
+// Tree sprite (14 tall x 18 wide — 2x detail)
+const TREE_DATA = [
+  '......GGGGGG......',
+  '......GGGGGG......',
+  '....GGGGGGGGGG....',
+  '....GGGGGGGGGG....',
+  '..GGGGGGGGGGGGGG..',
+  '..GGGGGGGGGGGGGG..',
+  'GGGGGGWWGGGGGGGG..',
+  'GGGGGGWWGGGGGGGG..',
+  '....TTTTTTTTTT....',
+  '....TTTTTTTTTT....',
+  '....TT......TT....',
+  '....TT......TT....',
+  '....TT......TT....',
+  '....TT......TT....',
+];
+const TREE_COLORS = {
+  G: '#2d7d2d', // leaves
+  W: '#5cb85c', // lighter leaf
+  T: '#5d4037', // trunk
+};
+
+// Building outline sprite (24 wide x 24 tall — 2x detail)
+const BUILDING_DATA = [
+  '........rrrrrrrr........',
+  '........rrrrrrrr........',
+  '......rrrrrrrrrrrr......',
+  '......rrrrrrrrrrrr......',
+  '....rrrrrrrrrrrrrrrr....',
+  '....rrrrrrrrrrrrrrrr....',
+  '..rrrrrrrrrrrrrrrrrrrr..',
+  '..rrrrrrrrrrrrrrrrrrrr..',
+  'rrrrrrrrrrrrrrrrrrrrrrrr',
+  'rrrrrrrrrrrrrrrrrrrrrrrr',
+  'wwwwwwwwwwwwwwwwwwwwwwww',
+  'wwwwwwwwwwwwwwwwwwwwwwww',
+  'wwwwWWwwwwwwwwWWwwwwww',
+  'wwwwWWwwwwwwwwWWwwwwww',
+  'wwwwWWwwwwwwwwWWwwwwww',
+  'wwwwWWwwwwwwwwWWwwwwww',
+  'wwwwwwwwwwwwwwwwwwwwwwww',
+  'wwwwwwwwwwwwwwwwwwwwwwww',
+  'wwwwwwwwddWWwwwwwwwwww',
+  'wwwwwwwwddWWwwwwwwwwww',
+  'wwwwwwwwddWWwwwwwwwwww',
+  'wwwwwwwwddWWwwwwwwwwww',
+  'wwwwwwwwwwwwwwwwwwwwwwww',
+  'wwwwwwwwwwwwwwwwwwwwwwww',
+];
+const BUILDING_COLORS = {
+  r: null,  // roof — filled at runtime
+  w: null,  // wall — filled at runtime
+  W: '#ffeaa7', // window glow
+  d: '#8B4513', // door
+};
+
+// Character sprite (24 tall x 24 wide — Chrono Trigger pixel art style)
+const CHAR_DATA = [
+  '.........oooooo.........',
+  '......oooHHhhHHo........',
+  '.....oHHHHhhhhHHooo.....',
+  '.....oHHHHhhhhHHHHo.....',
+  '.....oHHffhhhhffHHo.....',
+  '.....oHffffffffffHo.....',
+  '.....osffiiffiiffso.....',
+  '.....oHHfeisfeiHHHo.....',
+  '.....oHHfsffffsffHo.....',
+  '.....oHfffmfmmfffHo.....',
+  '......offffffffffo......',
+  '.......ofssssssfo.......',
+  '.......oBBrrrrBBo.......',
+  '.......oggBBBBggo.......',
+  '.......oBBggggBBo.......',
+  '.......oBBwwwwBBo.......',
+  '.......oBBwGGwBBo.......',
+  '.......oBbbbbbbBo.......',
+  '........oLlLLlLo........',
+  '........oLlLLlLo........',
+  '........oppppppo........',
+  '........opuppupo........',
+  '........oqppppqo........',
+  '.........oooooo.........',
+];
+const CHAR_COLORS = {
+  o: '#000000', // black outline
+  H: null,      // hair — filled at runtime
+  h: null,      // hair highlight — filled at runtime
+  B: null,      // body — filled at runtime
+  f: '#ffc896', // face/skin
+  s: '#e6aa78', // skin shadow
+  i: '#f0f0f0', // eye white
+  e: '#505050', // eye pupil
+  r: '#dc3c3c', // red accent
+  m: '#c86450', // mouth
+  b: '#285a5a', // body shadow
+  g: '#64a0ff', // body highlight
+  w: '#b47828', // belt
+  G: '#644614', // belt buckle
+  L: '#503c32', // legs/pants
+  l: '#37281e', // pants shadow
+  p: '#783c1e', // boots
+  q: '#502814', // boots shadow
+  u: '#a05028', // boot highlight
+};
+
+function px(pixelCount) { return pixelCount * PX; }
+
+function drawSprite(ctx, spriteData, colors, x, y, scale, runtimeColors) {
+  const s = scale || 1;
+  const ps = px(1) * s; // pixel size on screen
+  const colors_ = runtimeColors || {};
+  for (let row = 0; row < spriteData.length; row++) {
+    const line = spriteData[row];
+    for (let col = 0; col < line.length; col++) {
+      const ch = line[col];
+      if (ch === '.') continue;
+      let fill = colors_[ch] || colors[ch];
+      if (!fill) continue;
+      ctx.fillStyle = fill;
+      ctx.fillRect(x + col * ps + 0.5, y + row * ps + 0.5, ps, ps);
+    }
+  }
+}
+
+// ── Drawing helpers ──
+
+function drawPixelBuilding(ctx, x, y, color, roofColor, deco, lv) {
+  // Use the BUILDING_DATA sprite
+  const bColors = {
+    ...BUILDING_COLORS,
+    r: roofColor,
+    w: color,
+  };
+  drawSprite(ctx, BUILDING_DATA, BUILDING_COLORS, x, y - px(4), 1, bColors);
+
+  // Level stars (pixel-art stars) — building is 24 wide, stars centered at pixel 4,8,12...
+  if (lv > 0) {
+    ctx.fillStyle = '#ffd700';
+    for (let i = 0; i < Math.min(lv, 5); i++) {
+      const sx = x + px(4) + i * px(4);
+      const sy = y - px(3);
+      // 3x3 pixel star
+      ctx.fillRect(sx + px(1), sy, px(1), px(1));
+      ctx.fillRect(sx, sy + px(1), px(3), px(1));
+      ctx.fillRect(sx + px(1), sy + px(2), px(1), px(1));
+    }
+  }
+
+  // Deco badge — building 24 wide, centered 8px wide badge at pixels 8-15
+  const decoColors = {
+    '📚': '#e67e22', '🏋️': '#e74c3c', '🌾': '#27ae60',
+    '🏪': '#f39c12', '🏥': '#e74c3c', '🗺️': '#3498db',
+    '🔨': '#95a5a6', '🗼': '#f1c40f', '⚔️': '#e74c3c',
+    '🔭': '#9b59b6', '🏦': '#f1c40f', '🏠': '#e67e22',
+  };
+  const badgeColor = decoColors[deco] || '#e67e22';
+  ctx.fillStyle = badgeColor;
+  ctx.fillRect(x + px(8), y + px(10), px(8), px(5));
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(x + px(10), y + px(12), px(4), px(1));
+}
+
+function drawPixelTree(ctx, x, y) {
+  drawSprite(ctx, TREE_DATA, TREE_COLORS, x, y, 1);
+}
+
+function drawPixelCharacter(ctx, x, y, bodyColor, hairColor, emotion) {
+  const bob = Math.sin(Date.now() / 300 + x) * 1;
+  const cColors = {
+    ...CHAR_COLORS,
+    H: hairColor,
+    h: lightenColor(hairColor, 30),
+    B: bodyColor,
+  };
+  drawSprite(ctx, CHAR_DATA, CHAR_COLORS, x, y + bob, 1, cColors);
+  // Shadow — sprite 24 tall (new CT-style sprite)
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.fillRect(x + px(8), y + px(23) + bob, px(8), px(2));
+}
+
+function lightenColor(hex, amt) {
+  let r = parseInt(hex.slice(1,3), 16);
+  let g = parseInt(hex.slice(3,5), 16);
+  let b = parseInt(hex.slice(5,7), 16);
+  r = Math.min(255, r + amt);
+  g = Math.min(255, g + amt);
+  b = Math.min(255, b + amt);
+  return `rgb(${r},${g},${b})`;
+}
+
+// ── Canvas setup ──
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * devicePixelRatio;
+  canvas.height = rect.height * devicePixelRatio;
+  W = canvas.width; H = canvas.height;
+  ctx.imageSmoothingEnabled = false;
+}
+
+function initCanvas() {
+  resizeCanvas();
+  if (animFrame) cancelAnimationFrame(animFrame);
+  renderCanvas();
+}
+
+window.addEventListener('resize', resizeCanvas);
+
+// Tile map
+const tileTypes = ['#90d26d','#7fc45d','#6db840','#d4a574','#82ccdd','#5cb85c'];
+
+function isOccupied(col, row) {
+  return (townData.buildings||[]).some(b => b.plot_idx === row*COLS + col);
+}
+
+function renderCanvas() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(W/2 + camX, H/2 + camY);
+  ctx.scale(zoom, zoom);
+  ctx.imageSmoothingEnabled = false;
+
+  // Ground tiles — drawn as pixel grid (each TILE = 8x8 game pixels)
+  for(let r = 0; r < ROWS; r++) {
+    for(let c = 0; c < COLS; c++) {
+      const x = (c - COLS/2) * TILE;
+      const y = (r - ROWS/2) * TILE;
+      const isPlot = (r >= 2 && r < 10 && c >= 2 && c < 10);
+      ctx.fillStyle = isPlot ? '#b8d4a0' : ((r+c)%2===0 ? '#90d26d' : '#7fc45d');
+      ctx.fillRect(x, y, TILE, TILE);
+      ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, y, TILE, TILE);
+    }
+  }
+
+  // Paths
+  ctx.fillStyle = '#d4a574';
+  ctx.strokeStyle = '#c49565';
+  ctx.lineWidth = 2;
+  ctx.fillRect(-COLS/2*TILE, (3*TILE), COLS*TILE, TILE-4);
+  ctx.strokeRect(-COLS/2*TILE, (3*TILE), COLS*TILE, TILE-4);
+  ctx.fillRect((5*TILE), -ROWS/2*TILE, TILE-4, ROWS*TILE);
+  ctx.strokeRect((5*TILE), -ROWS/2*TILE, TILE-4, ROWS*TILE);
+
+  // Trees around edges
+  const treePositions = [
+    [0,0],[0,1],[0,2],[0,9],[0,10],[0,11],
+    [1,0],[1,11],[2,0],[2,11],
+    [9,0],[9,11],[10,0],[10,11],
+    [11,0],[11,1],[11,2],[11,9],[11,10],[11,11],
+    [3,0],[4,0],[7,0],[8,0],
+    [3,11],[4,11],[7,11],[8,11],
+    [0,4],[0,5],[0,6],[0,7],
+    [11,4],[11,5],[11,6],[11,7],
+  ];
+  treePositions.forEach(([c,r]) => {
+    const x = (c - COLS/2) * TILE;
+    const y = (r - ROWS/2) * TILE;
+    drawPixelTree(ctx, x, y);
+  });
+
+  // Buildings from backend
+  (townData.buildings||[]).forEach(b => {
+    const plotIdx = b.plot_idx;
+    const col = plotIdx % COLS;
+    const row = Math.floor(plotIdx / COLS);
+    const x = (col - COLS/2) * TILE;
+    const y = (row - ROWS/2) * TILE;
+    const wallColor = getWallColor(b.def_id || b.def_id);
+    const roofColor = getRoofColor(b.def_id || b.def_id);
+    drawPixelBuilding(ctx, x, y, wallColor, roofColor, b.icon||'🏠', b.level||1);
+  });
+
+  // Characters walking around
+  const time = Date.now() / 2000;
+  const characters = [
+    {body:'#ff6b6b', hair:'#4a3728', emoji:'😊', cx:1, cy:3},
+    {body:'#74b9ff', hair:'#d4a017', emoji:'😄', cx:10, cy:3},
+    {body:'#a29bfe', hair:'#2d3436', emoji:'😆', cx:5, cy:1},
+    {body:'#fd79a8', hair:'#4a3728', emoji:'🥰', cx:5, cy:10},
+    {body:'#fdcb6e', hair:'#8B4513', emoji:'😎', cx:1, cy:9},
+  ];
+  characters.forEach((ch, i) => {
+    const walkX = Math.sin(time + i*2) * 20;
+    const walkY = Math.cos(time*0.7 + i*3) * 16;
+    const cx = (ch.cx - COLS/2)*TILE + walkX;
+    const cy = (ch.cy - ROWS/2)*TILE + walkY;
+    drawPixelCharacter(ctx, cx, cy, ch.body, ch.hair, ch.emoji);
+  });
+
+  // Placement ghost
+  if (placementDefId !== null) {
+    ctx.globalAlpha = 0.4;
+    for(let r = 2; r < 10; r++) {
+      for(let c = 2; c < 10; c++) {
+        const idx = r*COLS + c;
+        if (!isOccupied(c, r)) {
+          const x = (c - COLS/2)*TILE;
+          const y = (r - ROWS/2)*TILE;
+          ctx.fillStyle = '#6366f1';
+          ctx.fillRect(x+2, y+2, TILE-4, TILE-4);
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+  animFrame = requestAnimationFrame(renderCanvas);
+}
+
+function getWallColor(defId) {
+  const colors = ['#ffeaa7','#dfe6e9','#ffeaa7','#dfe6e9','#ffeaa7','#ffeaa7','#dfe6e9','#ffeaa7','#dfe6e9','#ffeaa7'];
+  return colors[(defId||1)-1] || '#ffeaa7';
+}
+function getRoofColor(defId) {
+  const colors = ['#ff6b6b','#74b9ff','#a29bfe','#55efc4','#fdcb6e','#fab1a0','#fd79a8','#00cec9','#ff6b6b','#a29bfe'];
+  return colors[(defId||1)-1] || '#ff6b6b';
+}
+
+// Canvas drag
+canvas.addEventListener('mousedown', e => {
+  if(e.button !== 0 || placementDefId !== null) return;
+  isDragging = true;
+  dragStartX = e.clientX; dragStartY = e.clientY;
+  dragCamX = camX; dragCamY = camY;
+  canvas.style.cursor = 'grabbing';
+});
+document.addEventListener('mousemove', e => {
+  if(!isDragging) return;
+  camX = dragCamX + (e.clientX - dragStartX) * devicePixelRatio;
+  camY = dragCamY + (e.clientY - dragStartY) * devicePixelRatio;
+});
+document.addEventListener('mouseup', () => {
+  isDragging = false;
+  canvas.style.cursor = placementDefId ? 'crosshair' : 'grab';
+});
+
+// Canvas click for placement
+canvas.addEventListener('click', e => {
+  if (placementDefId === null) return;
+  // Calculate which grid cell was clicked
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+
+  // Transform to world coordinates
+  const worldX = (mx - W/2 - camX) / zoom;
+  const worldY = (my - H/2 - camY) / zoom;
+
+  const col = Math.round(worldX / TILE + COLS/2);
+  const row = Math.round(worldY / TILE + ROWS/2);
+
+  if (col >= 2 && col < 10 && row >= 2 && row < 10) {
+    const idx = row * COLS + col;
+    if (!isOccupied(col, row)) {
+      placeBuilding(placementDefId, idx);
+    } else {
+      Audio.errorBuzzer();
+      showToast('該位置已有建築', 'error');
+    }
+  } else {
+    Audio.errorBuzzer();
+    showToast('請在城鎮區域內放置', 'error');
+  }
+});
+
+// Touch handlers — drag (1 finger) + pinch zoom (2 fingers)
+canvas.addEventListener('touchstart', e => {
+  if(e.touches.length === 1 && placementDefId === null) {
+    // One-finger drag
+    isDragging = true;
+    const t = e.touches[0];
+    dragStartX = t.clientX; dragStartY = t.clientY;
+    dragCamX = camX; dragCamY = camY;
+  } else if(e.touches.length === 2) {
+    // Two-finger pinch — start tracking
+    isDragging = false;
+    const t1 = e.touches[0], t2 = e.touches[1];
+    lastPinchDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+  }
+}, {passive:true});
+
+canvas.addEventListener('touchmove', e => {
+  if(e.touches.length === 1 && isDragging) {
+    // One-finger drag (pan)
+    const t = e.touches[0];
+    camX = dragCamX + (t.clientX - dragStartX) * devicePixelRatio;
+    camY = dragCamY + (t.clientY - dragStartY) * devicePixelRatio;
+  } else if(e.touches.length === 2 && lastPinchDist > 0) {
+    // Two-finger pinch zoom
+    e.preventDefault(); // prevent browser zoom
+    const t1 = e.touches[0], t2 = e.touches[1];
+    const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+    const scale = dist / lastPinchDist;
+    zoom = Math.max(0.3, Math.min(5, zoom * scale));
+    lastPinchDist = dist;
+  }
+}, {passive:false});
+
+canvas.addEventListener('touchend', e => {
+  if(e.touches.length < 2) {
+    lastPinchDist = 0; // pinch ended
+  }
+  if(e.touches.length === 0) {
+    isDragging = false;
+  }
+}, {passive:true});
+
+// ═══════════════════════════════════════════════════════════════
+// PLOTS (bottom bar)
+// ═══════════════════════════════════════════════════════════════
+function renderPlots() {
+  const container = document.getElementById('townPlots');
+  const buildings = townData.buildings || [];
+  const plotCount = 12; // 6x6 inner region = 36 plots, show first 12
+
+  let html = '';
+  for(let idx = 0; idx < plotCount; idx++) {
+    const b = buildings.find(b => b.plot_idx === idx + 2*COLS + 2);
+    // Actually, plot_idx should match. Our grid has plots at positions within the 6x6 inner area
+    // Let's map: plot 0 = (2,2), 1 = (3,2), 2 = (4,2), ... up to 35 = (7,7)
+    // For bottom bar, show a sub-set
+    const bld = buildings.find(b => b.plot_idx === idx);
+    if (bld) {
+      html += `<div class="plot-slot built" onclick="showBuildingUpgrade(${bld.id})">
+        <span class="icon">${bld.icon||'🏠'}</span>
+        ${bld.level > 1 ? `<span class="lvl">${bld.level}</span>` : ''}
+        <span class="name">${bld.name||''}</span>
+      </div>`;
+    } else {
+      html += `<div class="plot-slot" onclick="showBuildModal(${idx})">
+        <span style="font-size:20px;opacity:0.4">➕</span>
+      </div>`;
+    }
+  }
+  container.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUILD MODAL (choose what to build)
+// ═══════════════════════════════════════════════════════════════
+async function showBuildModal(plotIdx) {
+  await loadBuildingDefs();
+  const modal = document.getElementById('modalContent');
+  const defs = buildingDefs;
+  const kid = townData.kid || {};
+  const gold = kid.points || 0;
+  const inventory = townData.inventory || [];
+
+  modal.innerHTML = `
+    <h2>🏗️ 選擇建築</h2>
+    <p style="font-size:12px;color:#94a3b8;">位置 #${plotIdx+1} · 🪙 ${gold}</p>
+    <div class="build-list">
+      ${defs.map(d => {
+        const cost = d.cost_gold || 0;
+        const canAfford = gold >= cost;
+        const mats = JSON.parse(d.materials||'{}');
+        const hasMats = Object.entries(mats).every(([k,v]) => {
+          const inv = inventory.find(i => i.item_type === k);
+          return inv && inv.quantity >= v;
+        });
+        const canBuild = canAfford && hasMats;
+        return `<div class="build-option ${canBuild?'':'disabled'}" onclick="${canBuild ? `startPlacement(${d.id},${plotIdx})` : ''}">
+          <div class="bo-icon">${d.icon||'🏠'}</div>
+          <div class="bo-info">
+            <div class="bo-name">${d.name}</div>
+            <div class="bo-cost">🪙 ${cost} ${Object.entries(mats).map(([k,v]) => `${(MAT_ICONS[k]||k)} ${v}`).join(' ')}</div>
+            <div class="bo-effect">${d.effect||''}</div>
+          </div>
+          ${canBuild ? '' : '🔒'}
+        </div>`;
+      }).join('')}
+    </div>
+    <button class="close-modal" onclick="closeModal()">取消</button>
+  `;
+  document.getElementById('modalOverlay').classList.add('active');
+}
+
+function startPlacement(defId, plotIdx) {
+  Audio.buttonClick();
+  placementDefId = defId;
+  closeModal();
+  document.getElementById('placementBar').classList.add('active');
+  canvas.style.cursor = 'crosshair';
+  showToast('點擊地圖上嘅空地放置建築 🎯');
+}
+
+function cancelPlacement() {
+  Audio.buttonClick();
+  placementDefId = null;
+  document.getElementById('placementBar').classList.remove('active');
+  canvas.style.cursor = 'grab';
+}
+
+async function placeBuilding(defId, plotIdx) {
+  try {
+    Audio.buildingPlace();
+    const data = await fetchAPI(`/api/kids/${currentKidId}/buildings`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({def_id: defId, plot_idx: plotIdx})
+    });
+    placementDefId = null;
+    document.getElementById('placementBar').classList.remove('active');
+    canvas.style.cursor = 'grab';
+    showToast('✅ 建築完成！');
+    await loadTown();
+  } catch(e) {
+    Audio.errorBuzzer();
+    showToast('❌ '+e.message, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUILDING UPGRADE MODAL
+// ═══════════════════════════════════════════════════════════════
+async function showBuildingUpgrade(bId) {
+  const b = (townData.buildings||[]).find(b => b.id === bId);
+  if (!b) return;
+  const def = buildingDefs.find(d => d.id === b.def_id) || {};
+  const inventory = townData.inventory || [];
+  const kid = townData.kid || {};
+  const gold = kid.points || 0;
+  const maxLevel = def.max_level || 5;
+  const isMax = b.level >= maxLevel;
+
+  let upgradeMats = {};
+  let upgradeCost = b.level * 100;
+  try {
+    const baseMats = JSON.parse(def.materials||'{}');
+    // Scale materials for next level
+    for (const [k,v] of Object.entries(baseMats)) {
+      upgradeMats[k] = v * (b.level + 1);
+    }
+  } catch(e) {}
+
+  const modal = document.getElementById('modalContent');
+  modal.innerHTML = `
+    <h2>${b.icon||'🏠'} ${b.name} Lv.${b.level}</h2>
+    <p>效果: ${b.effect||def.effect||''}</p>
+    <div style="margin:12px 0;">
+      ${isMax ? '<p style="color:#f59e0b;font-weight:700;">🌟 已達最高等級！</p>' : `
+        <p style="font-weight:600;margin-bottom:4px;">升級至 Lv.${b.level+1}</p>
+        <p style="font-size:12px;">需要材料:</p>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0;">
+          <span style="background:#fef3c7;padding:2px 8px;border-radius:6px;font-size:12px;">🪙 ${upgradeCost}</span>
+          ${Object.entries(upgradeMats).map(([k,v]) => {
+            const inv = inventory.find(i => i.item_type === k);
+            const have = inv ? inv.quantity : 0;
+            const ok = have >= v;
+            return `<span style="background:${ok?'#dcfce7':'#fef2f2'};padding:2px 8px;border-radius:6px;font-size:12px;">${MAT_ICONS[k]||k} ${have}/${v}</span>`;
+          }).join('')}
+        </div>
+        <button class="btn-upgrade" onclick="doUpgrade(${b.id}, ${upgradeCost})" ${(gold<upgradeCost)?'disabled':''}>
+          ⬆️ 升級 (🪙${upgradeCost})
+        </button>
+      `}
+    </div>
+    <button class="close-modal" onclick="closeModal()">關閉</button>
+  `;
+  document.getElementById('modalOverlay').classList.add('active');
+}
+
+async function doUpgrade(bId, cost) {
+  try {
+    Audio.buildingUpgrade();
+    const data = await fetchAPI(`/api/kids/${currentKidId}/buildings/${bId}/upgrade`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'}
+    });
+    showToast(`⬆️ 升級成功！${data.name} Lv.${data.level}`);
+    closeModal();
+    await loadTown();
+  } catch(e) {
+    showToast('❌ '+e.message, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUILDINGS TAB
+// ═══════════════════════════════════════════════════════════════
+async function renderBuildingsTab() {
+  await loadBuildingDefs();
+  const buildings = townData.buildings || [];
+  const inventory = townData.inventory || [];
+  const kid = townData.kid || {};
+  const gold = kid.points || 0;
+
+  // Owned buildings
+  const ownedContainer = document.getElementById('buildingsList');
+  if (buildings.length === 0) {
+    ownedContainer.innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;">還沒有建築，去小鎮建造吧！🏗️</div>';
+  } else {
+    ownedContainer.innerHTML = buildings.map(b => {
+      const def = buildingDefs.find(d => d.id === b.def_id) || {};
+      const maxLevel = def.max_level || 5;
+      const isMax = b.level >= maxLevel;
+      const upgradeCost = b.level * 100;
+      const canAfford = gold >= upgradeCost;
+
+      let matsNeeded = '';
+      try {
+        const baseMats = JSON.parse(def.materials||'{}');
+        const scaled = {};
+        for (const [k,v] of Object.entries(baseMats)) {
+          scaled[k] = v * (b.level + 1);
+        }
+        matsNeeded = Object.entries(scaled).map(([k,v]) => {
+          const inv = inventory.find(i => i.item_type === k);
+          const have = inv ? inv.quantity : 0;
+          return `${MAT_ICONS[k]||k}${have}/${v}`;
+        }).join(' ');
+      } catch(e) {}
+
+      return `<div class="building-card">
+        <div class="b-icon">${b.icon||'🏠'}</div>
+        <div class="b-info">
+          <div class="b-name">
+            ${b.name}
+            <span class="level-badge">Lv.${b.level}</span>
+          </div>
+          <div class="b-effect">${b.effect||def.effect||''}</div>
+          <div class="b-mats">📦 ${matsNeeded || '無需材料'}</div>
+        </div>
+        <div class="b-actions">
+          ${isMax
+            ? `<button class="btn-upgrade max" disabled>MAX</button>`
+            : `<button class="btn-upgrade" onclick="showBuildingUpgrade(${b.id})" ${!canAfford?'disabled':''}>
+                ⬆️ Lv.${b.level+1}<br><span style="font-size:9px;">🪙${upgradeCost}</span>
+              </button>`
+          }
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Available buildings (not yet built)
+  const builtDefIds = new Set(buildings.map(b => b.def_id));
+  const availContainer = document.getElementById('availableBuildingsList');
+  const available = buildingDefs.filter(d => !builtDefIds.has(d.id));
+  if (available.length === 0) {
+    availContainer.innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;">全部建築已建造！🎉</div>';
+  } else {
+    availContainer.innerHTML = available.map(d => {
+      const cost = d.cost_gold || 0;
+      const canAfford = gold >= cost;
+      const mats = JSON.parse(d.materials||'{}');
+      const hasMats = Object.entries(mats).every(([k,v]) => {
+        const inv = inventory.find(i => i.item_type === k);
+        return inv && inv.quantity >= v;
+      });
+      const canBuild = canAfford && hasMats;
+      return `<div class="building-card" style="opacity:${canBuild?1:0.6}">
+        <div class="b-icon">${d.icon||'🏠'}</div>
+        <div class="b-info">
+          <div class="b-name">${d.name}</div>
+          <div class="b-effect">${d.effect||''}</div>
+          <div class="b-mats">🪙${cost} ${Object.entries(mats).map(([k,v])=>`${MAT_ICONS[k]||k}${v}`).join(' ')}</div>
+        </div>
+        <div class="b-actions">
+          <button class="btn-upgrade" onclick="switchTab('town');showToast('點擊下方空地放置 ${d.icon||'🏠'}')"
+            ${canBuild?'':'disabled'}>
+            🏗️ 建造
+          </button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SHOP / INVENTORY
+// ═══════════════════════════════════════════════════════════════
+function renderInventory() {
+  const inv = townData.inventory || [];
+  const container = document.getElementById('inventoryGrid');
+  if (inv.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;grid-column:1/-1;">背包空空如也，去探險吧！🗺️</div>';
+    return;
+  }
+  container.innerHTML = inv.map(i => `
+    <div class="inv-item">
+      <div class="i-icon">${MAT_ICONS[i.item_type]||'📦'}</div>
+      <div class="i-name">${MAT_NAMES[i.item_type]||i.item_type}</div>
+      <div class="i-qty">${i.quantity}</div>
+    </div>
+  `).join('');
+}
+
+async function renderShop() {
+  await loadBuildingDefs();
+  const buildings = townData.buildings || [];
+  const builtDefIds = new Set(buildings.map(b => b.def_id));
+  const kid = townData.kid || {};
+  const gold = kid.points || 0;
+  const inventory = townData.inventory || [];
+
+  const container = document.getElementById('shopGrid');
+  container.innerHTML = buildingDefs.map(d => {
+    const owned = builtDefIds.has(d.id);
+    const cost = d.cost_gold || 0;
+    const canAfford = gold >= cost;
+    const mats = JSON.parse(d.materials||'{}');
+    const hasMats = Object.entries(mats).every(([k,v]) => {
+      const inv = inventory.find(i => i.item_type === k);
+      return inv && inv.quantity >= v;
+    });
+    const canBuild = canAfford && hasMats;
+
+    return `<div class="shop-item ${owned?'disabled':''}" onclick="${owned?'':`switchTab('town');showToast('點擊下方空地放置 ${d.icon||'🏠'}')`}">
+      <div class="s-icon">${d.icon||'🏠'}</div>
+      <div class="s-name">${d.name}</div>
+      <div class="s-cost">${owned?'✅ 已擁有':`🪙 ${cost}`}</div>
+      <div class="s-mats">${Object.entries(mats).length ? Object.entries(mats).map(([k,v])=>`${MAT_ICONS[k]||k}${v}`).join(' ') : ''}</div>
+      <div class="s-effect">${d.effect||''}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TASKS
+// ═══════════════════════════════════════════════════════════════
+async function renderTasks() {
+  const container = document.getElementById('taskList');
+
+  if (!tasks || tasks.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;">未有任務，等家長新增任務比你啦！👨‍👩‍👧‍👦</div>';
+    return;
+  }
+
+  const completed = tasks.filter(t => t.completed);
+  const pending = tasks.filter(t => !t.completed);
+
+  let html = '';
+
+  // Pending tasks
+  if (pending.length > 0) {
+    html += '<div style="font-size:11px;color:#94a3b8;margin-bottom:4px;">⏳ 進行中</div>';
+    html += pending.map(t => {
+      const canComplete = t.kid_id === null || t.kid_id === currentKidId;
+      const kidInfo = kids.find(k => k.id === t.kid_id);
+      const kidLabel = kidInfo ? `${kidInfo.avatar||'👦'} ${kidInfo.name}` : '';
+      const recurLabel = t.recurring === 'daily' ? '🔄每日' : t.recurring === 'weekly' ? '🔄每週' : t.recurring === 'weekdays' ? '🔄平日' : '';
+      const isOverdue = t.due_date && new Date(t.due_date+'T23:59:59') < new Date();
+      return `<div class="task-card ${!canComplete ? 'faded' : ''}">
+        <div class="task-icon" style="font-size:22px">${t.icon||'✅'}</div>
+        <div class="task-info">
+          <div class="task-title">${t.title}</div>
+          ${t.description ? `<div style="font-size:11px;color:#64748b;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;">${t.description.substring(0,40)}${t.description.length>40?'…':''}</div>` : ''}
+          <div class="task-meta">
+            <span class="task-points">🪙 +${t.points||10}</span>
+            ${recurLabel ? `<span class="mc-badge recurring" style="font-size:10px;padding:1px 6px;">${recurLabel}</span>` : ''}
+            ${kidLabel ? `<span style="font-size:11px">👤 ${kidLabel}</span>` : ''}
+            ${t.due_date ? `<span style="color:${isOverdue ? '#ef4444' : '#94a3b8'};font-weight:${isOverdue ? '700' : '400'};font-size:11px">📅 ${new Date(t.due_date+'T00:00:00').toLocaleDateString('zh-TW',{month:'short',day:'numeric'})}${isOverdue ? ' ⚠️' : ''}</span>` : ''}
+          </div>
+        </div>
+        <div class="task-actions">
+          ${canComplete ? `<button class="task-complete-btn" onclick="completeTask(${t.id})">✅ 完成</button>` : `<span style="font-size:10px;color:#94a3b8">👤 ${kidLabel}</span>`}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Completed tasks
+  if (completed.length > 0) {
+    html += '<div style="font-size:11px;color:#94a3b8;margin-top:12px;margin-bottom:4px;">✅ 已完成</div>';
+    html += completed.slice(0, 20).map(t => {
+      const kidInfo = kids.find(k => k.id === t.kid_id);
+      const kidLabel = kidInfo ? `${kidInfo.avatar||'👦'} ${kidInfo.name}` : '';
+      return `<div class="task-card completed">
+        <div class="task-icon" style="font-size:22px">${t.icon||'✅'}</div>
+        <div class="task-info">
+          <div class="task-title" style="text-decoration:line-through;opacity:0.7">${t.title}</div>
+          <div class="task-meta">
+            <span class="task-points">🪙 +${t.points||10}</span>
+            ${kidLabel ? `<span style="font-size:11px">👤 ${kidLabel}</span>` : ''}
+            ${t.completed_at ? `<span style="font-size:11px">🕐 ${new Date(t.completed_at).toLocaleDateString()}</span>` : ''}
+          </div>
+        </div>
+        <div class="task-actions">
+          <span style="font-size:14px">✅</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  container.innerHTML = html;
+}
+
+async function addTask() {
+  const input = document.getElementById('taskInput');
+  const title = input.value.trim();
+  if (!title) { Audio.errorBuzzer(); showToast('請輸入任務名稱', 'error'); return; }
+  // Default to the logged-in kid if no explicit selection
+  const kidSelect = document.getElementById('taskKidSelect');
+  const kidId = kidSelect.value ? parseInt(kidSelect.value) : (currentKidId || null);
+
+  try {
+    const data = await fetchAPI('/api/tasks', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        title: title,
+        kid_id: kidId,
+        points: 10,
+        icon: '📝'
+      })
+    });
+    input.value = '';
+    showToast('✅ 任務已新增！');
+    await loadTown();
+  } catch(e) {
+    showToast('❌ '+e.message, 'error');
+  }
+}
+
+async function completeTask(taskId) {
+  try {
+    const data = await fetchAPI(`/api/tasks/${taskId}/complete`, {method: 'POST'});
+    if (data.points_awarded) {
+      Audio.taskComplete();
+      // Celebration for larger rewards
+      if (data.points_awarded >= 15) {
+        setTimeout(() => Audio.celebration(0.2), 300);
+      }
+      showToast(`🎉 任務完成！獲得 🪙${data.points_awarded}`);
+    } else {
+      Audio.taskComplete();
+      showToast('✅ 任務完成！');
+    }
+    await loadTown();
+  } catch(e) {
+    Audio.errorBuzzer();
+    showToast('❌ '+e.message, 'error');
+  }
+}
+
+async function deleteTask(taskId) {
+  try {
+    await fetchAPI(`/api/tasks/${taskId}`, {method: 'DELETE'});
+    Audio.buttonClick();
+    showToast('🗑️ 任務已刪除');
+    await loadTown();
+  } catch(e) {
+    showToast('❌ '+e.message, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PARENT MANAGEMENT
+// ═══════════════════════════════════════════════════════════════
+
+async function renderManage() {
+  await populateMgmtSelects();
+  await renderManageTasks();
+  await loadActivity();
+}
+
+async function populateMgmtSelects() {
+  try {
+    const res = await fetch(`${API}/api/kids`);
+    const kids = await res.json();
+    
+    ['mgmtNewKid', 'mgmtFilterKid', 'adjustKid'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const currentVal = sel.value;
+      let html = `<option value="">${id === 'adjustKid' ? '選擇小朋友' : '全部小朋友'}</option>`;
+      kids.forEach(k => {
+        html += `<option value="${k.id}">${k.avatar||'👦'} ${k.name} (${k.points}🪙)</option>`;
+      });
+      sel.innerHTML = html;
+      sel.value = currentVal;
+    });
+    
+    // Populate category filter
+    try {
+      const stats = await fetchAPI('/api/tasks/stats');
+      const catSel = document.getElementById('mgmtFilterCategory');
+      if (catSel && stats.categories && stats.categories.length) {
+        const cur = catSel.value;
+        catSel.innerHTML = '<option value="">全部分類</option>' + 
+          stats.categories.map(c => `<option value="${c.category}">${c.category} (${c.count})</option>`).join('');
+        catSel.value = cur;
+      }
+    } catch(e) {}
+  } catch(e) { console.error('populateMgmtSelects error:', e); }
+}
+
+async function renderManageTasks() {
+  const container = document.getElementById('mgmtTaskList');
+  if (!container) return;
+  
+  try {
+    // Build query params
+    const params = new URLSearchParams();
+    const search = document.getElementById('mgmtSearch')?.value?.trim();
+    const kidId = document.getElementById('mgmtFilterKid')?.value;
+    const status = document.getElementById('mgmtFilterStatus')?.value;
+    const cat = document.getElementById('mgmtFilterCategory')?.value;
+    
+    if (search) params.set('search', search);
+    if (kidId) params.set('kid_id', kidId);
+    if (status === '0' || status === '1') params.set('completed', status);
+    if (cat) params.set('category', cat);
+    
+    const qs = params.toString();
+    const res = await fetch(`${API}/api/tasks${qs ? '?'+qs : ''}`);
+    let tasks = await res.json();
+    
+    // Client-side expired filter
+    if (status === 'expired') {
+      tasks = tasks.filter(t => {
+        if (t.completed === 1 || t.completed === '1' || t.completed === true) return false;
+        if (!t.due_date) return false;
+        return new Date(t.due_date + 'T23:59:59') < new Date();
+      });
+    }
+    
+    // Update dashboard summary (use all tasks before client filter)
+    const allTasks = await (async () => {
+      const r = await fetch(`${API}/api/tasks`).catch(()=>null);
+      return r && r.ok ? await r.json() : tasks;
+    })();
+    const active = allTasks.filter(t => !(t.completed === 1 || t.completed === '1' || t.completed === true));
+    const done = allTasks.filter(t => t.completed === 1 || t.completed === '1' || t.completed === true);
+    const recur = allTasks.filter(t => t.recurring);
+    const overdue = active.filter(t => t.due_date && new Date(t.due_date + 'T23:59:59') < new Date());
+    document.getElementById('mSumActive').textContent = active.length;
+    document.getElementById('mSumDone').textContent = done.length;
+    document.getElementById('mSumRecur').textContent = recur.length;
+    document.getElementById('mSumOverdue').textContent = overdue.length;
+    
+    if (!tasks || tasks.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;">📭 搵唔到任務</div>';
+      return;
+    }
+    
+    const cats = {};
+    tasks.forEach(t => {
+      const c = t.category || '未分類';
+      if (!cats[c]) cats[c] = [];
+      cats[c].push(t);
+    });
+    
+    let html = '';
+    Object.entries(cats).forEach(([cat, ctasks]) => {
+      html += `<div style="font-size:11px;color:#94a3b8;margin:8px 0 4px;font-weight:600;">${cat}</div>`;
+      ctasks.forEach(t => {
+        const isDone = t.completed === 1 || t.completed === '1' || t.completed === true;
+        html += `<div class="mgmt-card ${isDone ? 'completed' : ''}" style="${isDone ? 'opacity:0.65' : ''}">
+          <div class="mc-icon">${t.icon||'✅'}</div>
+          <div class="mc-info">
+            <div class="mc-title">${t.title}</div>
+            ${t.description ? `<div style="font-size:11px;color:#64748b;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;">${t.description.substring(0,50)}${t.description.length>50?'…':''}</div>` : ''}
+            <div class="mc-meta">
+              <span class="mc-pts">🪙 ${t.points||10}</span>
+              ${t.kid_name ? `<span>${t.kid_avatar||'👤'} ${t.kid_name}</span>` : '<span>👤 未指定</span>'}
+              ${t.recurring ? '<span class="mc-badge recurring">🔄 重複</span>' : ''}
+              ${t.due_date ? `<span style="color:${!isDone && new Date(t.due_date+'T23:59:59') < new Date() ? '#ef4444' : '#94a3b8'};font-weight:${!isDone && new Date(t.due_date+'T23:59:59') < new Date() ? '700' : '400'}">📅 ${new Date(t.due_date+'T00:00:00').toLocaleDateString('zh-TW',{month:'short',day:'numeric'})}${!isDone && new Date(t.due_date+'T23:59:59') < new Date() ? ' ⚠️逾期' : ''}</span>` : ''}
+              ${isDone ? `<span>✅ ${t.completed_at ? new Date(t.completed_at).toLocaleDateString() : ''}</span>` : ''}
+            </div>
+          </div>
+          <div class="mc-actions">
+            <button class="mc-btn edit" onclick="editTask(${t.id})">✏️</button>
+            <button class="mc-btn del" onclick="deleteManageTask(${t.id})">🗑️</button>
+          </div>
+        </div>`;
+      });
+    });
+    
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:#ef4444;">⚠️ 載入失敗</div>';
+    console.error('renderManageTasks error:', e);
+  }
+}
+
+async function mgmtAddTask() {
+  const title = document.getElementById('mgmtNewTitle').value.trim();
+  if (!title) { Audio.errorBuzzer(); showToast('請輸入任務名稱', 'error'); return; }
+  const points = parseInt(document.getElementById('mgmtNewPts').value) || 10;
+  const kidId = document.getElementById('mgmtNewKid').value || null;
+  const cat = document.getElementById('mgmtNewCat').value.trim();
+  const desc = document.getElementById('mgmtNewDesc').value.trim();
+  const dueDate = document.getElementById('mgmtNewDue').value || null;
+  const recurring = document.getElementById('mgmtNewRecurring').value;
+  const icon = window._mgmtSelectedIcon || '📝';
+  
+  try {
+    await fetchAPI('/api/tasks', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title, points: Math.max(1, points), kid_id: kidId, icon, category: cat, description: desc, due_date: dueDate, recurring})
+    });
+    document.getElementById('mgmtNewTitle').value = '';
+    document.getElementById('mgmtNewPts').value = '10';
+    document.getElementById('mgmtNewCat').value = '';
+    document.getElementById('mgmtNewDesc').value = '';
+    document.getElementById('mgmtNewDue').value = '';
+    document.getElementById('mgmtNewRecurring').value = '';
+    // Reset icon picker
+    window._mgmtSelectedIcon = '📝';
+    document.querySelectorAll('.icon-pick').forEach(el => el.classList.remove('active'));
+    const firstIcon = document.querySelector('.icon-pick[data-icon="📝"]');
+    if (firstIcon) firstIcon.classList.add('active');
+    showToast('✅ 任務已新增！');
+    await renderManageTasks();
+    await loadTown();
+  } catch(e) {
+    showToast('❌ '+e.message, 'error');
+  }
+}
+
+async function addQuickTask(title, pts) {
+  try {
+    await fetchAPI('/api/tasks', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title, points: pts, kid_id: null, icon: '📝', category: '日常'})
+    });
+    showToast(`✅ ${title} (+${pts}⭐)`);
+    await renderManageTasks();
+    await loadTown();
+  } catch(e) {
+    showToast('❌ '+e.message, 'error');
+  }
+}
+
+// Edit task modal
+async function editTask(taskId) {
+  try {
+    const res = await fetch(`${API}/api/tasks?search=&completed=`);
+    // Fetch specific task from all tasks
+    const tasks = await res.json();
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) { showToast('找不到任務', 'error'); return; }
+    
+    // Load kids for select
+    const kidsRes = await fetch(`${API}/api/kids`);
+    const kids = await kidsRes.json();
+    
+    const modal = document.getElementById('modalContent');
+    modal.innerHTML = `
+      <h2>✏️ 編輯任務</h2>
+      <div class="edit-field">
+        <label>任務名稱</label>
+        <input id="editTitle" value="${task.title.replace(/"/g,'&quot;')}" maxlength="50">
+      </div>
+      <div class="edit-field">
+        <label>描述（可選）</label>
+        <textarea id="editDesc" maxlength="200" style="resize:vertical;min-height:50px;">${(task.description||'').replace(/"/g,'&quot;')}</textarea>
+      </div>
+      <div class="edit-row">
+        <div class="edit-field">
+          <label>🪙 分數</label>
+          <input id="editPoints" type="number" value="${task.points||10}" min="1">
+        </div>
+        <div class="edit-field">
+          <label>📅 截止日期</label>
+          <input id="editDueDate" type="date" value="${task.due_date||''}">
+        </div>
+      </div>
+      <div class="edit-row">
+        <div class="edit-field">
+          <label>👤 指定小朋友</label>
+          <select id="editKid">
+            <option value="">唔指定</option>
+            ${kids.map(k => `<option value="${k.id}" ${k.id === task.kid_id ? 'selected' : ''}>${k.avatar||'👦'} ${k.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="edit-field">
+          <label>📂 分類</label>
+          <input id="editCategory" value="${(task.category||'').replace(/"/g,'&quot;')}" maxlength="15">
+        </div>
+      </div>
+      <div class="edit-row">
+        <div class="edit-field">
+          <label>🔄 重複</label>
+          <select id="editRecurring">
+            <option value="" ${!task.recurring ? 'selected' : ''}>唔重複</option>
+            <option value="daily" ${task.recurring === 'daily' ? 'selected' : ''}>每日</option>
+            <option value="weekly" ${task.recurring === 'weekly' ? 'selected' : ''}>每週</option>
+            <option value="weekdays" ${task.recurring === 'weekdays' ? 'selected' : ''}>平日</option>
+          </select>
+        </div>
+      </div>
+      <div class="edit-field">
+        <label>🎨 圖示</label>
+        <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px;">
+          ${['📝','📖','🧹','🦷','🎹','📚','🎨','🏃','🎵','🧩','💪','🎯','🚲','🐕','🎮'].map(ic => 
+            `<span class="icon-pick ${ic === (task.icon||'✅') ? 'active' : ''}" onclick="document.getElementById('editIcon').value='${ic}';document.querySelectorAll('#modalContent .icon-pick').forEach(e=>e.classList.remove('active'));this.classList.add('active')">${ic}</span>`
+          ).join('')}
+        </div>
+        <input type="hidden" id="editIcon" value="${task.icon||'✅'}">
+      </div>
+      <div class="edit-actions">
+        <button class="save-btn" onclick="saveTaskEdit(${task.id})">💾 儲存</button>
+        <button class="cancel-btn" onclick="closeModal()">取消</button>
+        <button class="delete-btn" onclick="deleteManageTask(${task.id});closeModal()">🗑️ 刪除</button>
+      </div>
+    `;
+    document.getElementById('modalOverlay').classList.add('active');
+  } catch(e) {
+    showToast('❌ '+e.message, 'error');
+  }
+}
+
+async function saveTaskEdit(taskId) {
+  const title = document.getElementById('editTitle').value.trim();
+  if (!title) { showToast('任務名稱不能空白', 'error'); return; }
+  
+  try {
+    await fetchAPI(`/api/tasks/${taskId}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        title,
+        points: parseInt(document.getElementById('editPoints').value) || 10,
+        kid_id: document.getElementById('editKid').value || null,
+        category: document.getElementById('editCategory').value.trim(),
+        recurring: document.getElementById('editRecurring').value,
+        description: document.getElementById('editDesc').value.trim(),
+        due_date: document.getElementById('editDueDate').value || null,
+        icon: document.getElementById('editIcon')?.value || '📝',
+      })
+    });
+    closeModal();
+    showToast('✅ 任務已更新');
+    await renderManageTasks();
+    await loadTown();
+  } catch(e) {
+    showToast('❌ '+e.message, 'error');
+  }
+}
+
+async function deleteManageTask(taskId) {
+  try {
+    await fetchAPI(`/api/tasks/${taskId}`, {method: 'DELETE'});
+    showToast('🗑️ 任務已刪除');
+    await renderManageTasks();
+    await loadTown();
+  } catch(e) {
+    showToast('❌ '+e.message, 'error');
+  }
+}
+
+// Icon picker for task creation
+function selectMgmtIcon(icon, el) {
+  window._mgmtSelectedIcon = icon;
+  document.querySelectorAll('.icon-pick').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// Point adjustment
+async function adjustPoints(dir) {
+  const kidId = document.getElementById('adjustKid').value;
+  if (!kidId) { Audio.errorBuzzer(); showToast('請選擇小朋友', 'error'); return; }
+  const amount = parseInt(document.getElementById('adjustAmount').value) || 10;
+  const reason = document.getElementById('adjustReason').value.trim();
+  if (!reason) { Audio.errorBuzzer(); showToast('請輸入原因', 'error'); return; }
+  
+  try {
+    await fetchAPI(`/api/kids/${kidId}/points/adjust`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({amount: amount * dir, reason})
+    });
+    document.getElementById('adjustReason').value = '';
+    Audio.coinPickup(0.2);
+    showToast(`${dir > 0 ? '➕' : '➖'} 積分已調整 (${reason})`);
+    await loadActivity();
+    await populateMgmtSelects();
+    await loadTown();
+  } catch(e) {
+    showToast('❌ '+e.message, 'error');
+  }
+}
+
+// Activity log
+async function loadActivity() {
+  const container = document.getElementById('activityLog');
+  if (!container) return;
+  
+  try {
+    const res = await fetch(`${API}/api/activity?limit=30`);
+    const items = await res.json();
+    
+    if (!items.length) {
+      container.innerHTML = '<div style="text-align:center;padding:12px;color:#94a3b8;font-size:12px;">還沒有活動紀錄</div>';
+      return;
+    }
+    
+    container.innerHTML = items.map(item => {
+      const amt = item.amount;
+      const cls = amt > 0 ? 'positive' : (amt < 0 ? 'negative' : '');
+      return `<div class="activity-item">
+        <span>${item.kid_avatar||'👤'}</span>
+        <span style="flex:1">${item.kid_name||''}: ${(item.reason||'').substring(0,30)}</span>
+        <span class="ai-pts ${cls}">${amt > 0 ? '+' : ''}${amt}</span>
+        <span class="ai-time">${new Date(item.created_at).toLocaleDateString()}</span>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = '<div style="text-align:center;padding:12px;color:#ef4444;font-size:12px;">⚠️ 載入失敗</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ACHIEVEMENTS / LEADERBOARD / STATS
+// ═══════════════════════════════════════════════════════════════
+
+async function renderAchievements() {
+  Audio.randomMelody(0.12);
+  await loadStats();
+  await renderStreaks();
+  await renderDailyChart();
+  await renderLeaderboard('all');
+  await renderAchievementsGrid();
+}
+
+async function loadStats() {
+  try {
+    const stats = await fetchAPI('/api/tasks/stats');
+    const o = stats.overall || {};
+    document.getElementById('statTotal').textContent = o.total || 0;
+    document.getElementById('statCompleted').textContent = o.completed || 0;
+    document.getElementById('statRate').textContent = (o.completion_rate || 0) + '%';
+    document.getElementById('statPending').textContent = o.pending || 0;
+  } catch(e) { console.error('loadStats error:', e); }
+}
+
+async function renderStreaks() {
+  const container = document.getElementById('streakDisplay');
+  if (!container) return;
+  
+  try {
+    const res = await fetch(`${API}/api/kids`);
+    const kids = await res.json();
+    
+    let html = '<div class="kid-stats-row">';
+    
+    for (const kid of kids) {
+      try {
+        const sRes = await fetch(`${API}/api/kids/${kid.id}/streak`);
+        const s = await sRes.json();
+        html += `<div class="kid-stat-mini">
+          <div class="ks-avatar">${kid.avatar||'👦'}</div>
+          <div class="ks-name">${kid.name}</div>
+          <div class="ks-val" style="color:${s.current_streak >= 7 ? '#ef4444' : (s.current_streak >= 3 ? '#f59e0b' : '#64748b')}">${s.current_streak||0}🔥</div>
+          <div class="ks-label">最高: ${s.best_streak||0}日</div>
+        </div>`;
+      } catch(e) {}
+    }
+    
+    html += '</div>';
+    container.innerHTML = kids.length ? html : '<div style="text-align:center;padding:12px;color:#94a3b8;font-size:12px;">未有小朋友</div>';
+  } catch(e) {
+    container.innerHTML = '<div style="text-align:center;padding:12px;color:#ef4444;font-size:12px;">⚠️ 載入失敗</div>';
+  }
+}
+
+async function renderDailyChart() {
+  const container = document.getElementById('dailyChart');
+  if (!container) return;
+  
+  try {
+    const stats = await fetchAPI('/api/tasks/stats');
+    const chart = stats.daily_chart || [];
+    
+    if (!chart.length) {
+      container.innerHTML = '<div style="text-align:center;padding:12px;color:#94a3b8;font-size:12px;">未有完成記錄</div>';
+      return;
+    }
+    
+    const maxCount = Math.max(...chart.map(d => d.count), 1);
+    const last14 = chart.slice(-14);
+    const barHtml = last14.map(d => {
+      const pct = (d.count / maxCount) * 100;
+      return `<div class="chart-bar" style="height:${Math.max(4, pct)}%">
+        <span class="cb-val">${d.count}</span>
+      </div>`;
+    }).join('');
+    
+    const labelHtml = last14.map(d => {
+      const date = new Date(d.date + 'T00:00:00');
+      return `<span class="cl">${date.getMonth()+1}/${date.getDate()}</span>`;
+    }).join('');
+    
+    container.innerHTML = `<div class="chart-bar-area">${barHtml}</div><div class="chart-labels">${labelHtml}</div>`;
+  } catch(e) {
+    container.innerHTML = '<div style="text-align:center;padding:12px;color:#ef4444;">⚠️</div>';
+  }
+}
+
+async function renderLeaderboard(period) {
+  const container = document.getElementById('leaderboardList');
+  if (!container) return;
+  
+  try {
+    const res = await fetch(`${API}/api/leaderboard?period=${period}`);
+    const kids = await res.json();
+    
+    if (!kids.length) {
+      container.innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;font-size:12px;">未有排名資料</div>';
+      return;
+    }
+    
+    const rankEmojis = ['🥇', '🥈', '🥉'];
+    const rankClasses = ['gold', 'silver', 'bronze'];
+    
+    container.innerHTML = kids.map((k, i) => {
+      const rank = i < 3 ? rankEmojis[i] : `#${i+1}`;
+      const cls = i < 3 ? rankClasses[i] : '';
+      const pts = period === 'all' ? (k.points || 0) : (k.points_earned || 0);
+      return `<div class="lb-card">
+        <div class="lb-rank ${cls}">${rank}</div>
+        <div class="lb-info">
+          <div class="lb-name">${k.avatar||'👦'} ${k.name}</div>
+          <div class="lb-pts-label">${period === 'all' ? '累積積分' : (period === 'weekly' ? '本週得分' : '本月得分')}</div>
+        </div>
+        <div class="lb-points">${pts}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:#ef4444;">⚠️ 載入失敗</div>';
+  }
+}
+
+function switchLeaderboard(period, btn) {
+  document.querySelectorAll('.lb-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderLeaderboard(period);
+}
+
+async function renderAchievementsGrid() {
+  const container = document.getElementById('achievementsArea');
+  if (!container) return;
+  
+  try {
+    // Get all possible achievements
+    const defsRes = await fetch(`${API}/api/achievements/all`);
+    const allDefs = await defsRes.json();
+    
+    // Get kids
+    const kidsRes = await fetch(`${API}/api/kids`);
+    const kids = await kidsRes.json();
+    
+    if (!kids.length) {
+      container.innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;font-size:12px;">未有小朋友</div>';
+      return;
+    }
+    
+    // For each kid, show their achievements
+    let html = '';
+    for (const kid of kids) {
+      let achRes, achievements;
+      try {
+        achRes = await fetch(`${API}/api/kids/${kid.id}/achievements`);
+        achievements = await achRes.json();
+      } catch(e) { achievements = []; }
+      
+      const earnedSet = new Set(achievements.map(a => a.title));
+      
+      html += `<div style="margin-bottom:12px;">
+        <div style="font-weight:700;font-size:13px;margin-bottom:6px;">${kid.avatar||'👦'} ${kid.name} (${achievements.length}/${allDefs.length})</div>
+        <div class="ach-grid">
+          ${allDefs.map(a => {
+            const earned = earnedSet.has(a.title);
+            return `<div class="ach-card ${earned?'earned':''}">
+              <div class="ach-icon">${a.icon}</div>
+              <div class="ach-title">${a.title}</div>
+              <div class="ach-desc">${a.description}</div>
+              <div class="ach-status ${earned?'earned':'locked'}">${earned ? '✅' : '🔒'}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+    
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:#ef4444;">⚠️ 載入失敗</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EXPEDITION
+// ═══════════════════════════════════════════════════════════════
+async function renderExpedition() {
+  const container = document.getElementById('expRegions');
+  const statusCard = document.getElementById('expStatusCard');
+  const progressPanel = document.getElementById('expProgressPanel');
+
+  // Check if expedition guild exists
+  const hasGuild = (townData.buildings||[]).some(b => b.def_id === 6);
+  if (!hasGuild) {
+    container.innerHTML = `
+      <div style="text-align:center;padding:30px 20px;color:#94a3b8;">
+        <div style="font-size:48px;margin-bottom:8px;">🔒</div>
+        <p style="font-weight:600;">需要先建造探險公會</p>
+        <p style="font-size:12px;">去商店購買 🗺️ 探險公會（600🪙）</p>
+      </div>
+    `;
+    statusCard.style.display = 'none';
+    return;
+  }
+
+  // Show running expedition
+  const exp = townData.expedition;
+  if (exp && exp.status === 'running') {
+    statusCard.style.display = 'block';
+    progressPanel.innerHTML = renderExpeditionProgress(exp);
+    // Start polling
+    if (!expInterval) {
+      expInterval = setInterval(async () => {
+        await loadTown();
+        renderExpedition();
+      }, 3000);
+    }
+  } else {
+    statusCard.style.display = 'none';
+    if (expInterval) { clearInterval(expInterval); expInterval = null; }
+  }
+
+  // Regions
+  const explored = (townData.explored||[]).map(e => e.region_id);
+  const isExploring = exp && exp.status === 'running';
+
+  container.innerHTML = REGIONS.map(r => {
+    const unlocked = !r.required_region || explored.includes(r.required_region) || r.id === 1;
+    const exploredFlag = explored.includes(r.id);
+    return `<div class="exp-region-card ${!unlocked?'locked':''}">
+      <div class="r-icon">${r.name.split(' ')[0]}</div>
+      <div class="r-info">
+        <div class="r-name">${r.name}</div>
+        <div class="r-desc">${r.desc} · ⏱️ ${r.time}小時</div>
+        <div class="r-reward">🪙 ${r.gold} · 隨機材料</div>
+      </div>
+      <div class="r-status ${exploredFlag?'explored':(unlocked?'unlocked':'locked')}">
+        ${exploredFlag?'✅ 已完成':(unlocked?'🔓 可探險':'🔒 未解鎖')}
+      </div>
+      ${unlocked && !exploredFlag && !isExploring
+        ? `<button class="exp-btn go" onclick="startExpedition(${r.id},${r.time})" style="flex:none;padding:6px 14px;font-size:11px;">出發</button>`
+        : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderExpeditionProgress(exp) {
+  // Ensure UTC parsing — append 'Z' if missing (DB may have old records without it)
+  const start = new Date(exp.start_time.includes('Z') ? exp.start_time : exp.start_time + 'Z');
+  const end = new Date(exp.end_time.includes('Z') ? exp.end_time : exp.end_time + 'Z');
+  const now = new Date();
+  const total = end - start;
+  const elapsed = now - start;
+  const pct = Math.min(100, Math.round((elapsed/total)*100));
+  const remaining = Math.max(0, Math.round((end-now)/1000/60));
+
+  let statusText = `⏳ 探險中... 剩餘 ${remaining} 分鐘`;
+  let fillClass = '';
+  if (remaining <= 0) {
+    statusText = '🎉 探險完成！點擊領取獎勵';
+    fillClass = 'ep-fill complete';
+  }
+
+  return `
+    <div class="ep-header">
+      <span>${remaining <= 0 ? '🎉 探險完成' : '🗺️ 探險中'}</span>
+      <span>${statusText}</span>
+    </div>
+    <div class="ep-bar">
+      <div class="ep-fill ${fillClass}" style="width:${pct}%"></div>
+    </div>
+    ${remaining <= 0 ? '<button class="exp-btn claim" onclick="claimExpedition()" style="margin-top:8px;">🎁 領取獎勵</button>' : ''}
+  `;
+}
+
+async function startExpedition(regionId, hours) {
+  try {
+    Audio.expBoost();
+    const data = await fetchAPI(`/api/kids/${currentKidId}/expedition/start`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({region_id: regionId, duration_hours: hours})
+    });
+    showToast('🗺️ 探險隊出發！');
+    await loadTown();
+  } catch(e) {
+    showToast('❌ '+e.message, 'error');
+  }
+}
+
+async function claimExpedition() {
+  try {
+    Audio.celebration(0.25);
+    const data = await fetchAPI(`/api/kids/${currentKidId}/expedition/claim`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'}
+    });
+    showRewardPopup(data);
+    if (expInterval) { clearInterval(expInterval); expInterval = null; }
+    await loadTown();
+  } catch(e) {
+    showToast('❌ '+e.message, 'error');
+  }
+}
+
+function showRewardPopup(data) {
+  Audio.coinPickup(0.2);
+  setTimeout(() => Audio.celebration(0.2), 400);
+  const popup = document.getElementById('rewardPopup');
+  let matsHtml = '';
+  if (data.materials) {
+    matsHtml = Object.entries(data.materials).map(([k,v]) =>
+      `<span class="reward-item">${MAT_ICONS[k]||k} ${MAT_NAMES[k]||k} x${v}</span>`
+    ).join('');
+  }
+  let eventsHtml = '';
+  if (data.events && data.events.length) {
+    eventsHtml = `<div class="reward-events">${data.events.map(e => '✨ '+e).join('<br>')}</div>`;
+  }
+  popup.innerHTML = `
+    <h3>🎉 探險歸來！</h3>
+    <div style="font-size:20px;font-weight:800;margin-bottom:8px;">🪙 +${data.gold||0}</div>
+    <div class="reward-items">${matsHtml}</div>
+    ${eventsHtml}
+    <button onclick="closeRewardPopup()">✕ 收下</button>
+  `;
+  popup.classList.add('show');
+}
+
+function closeRewardPopup() {
+  document.getElementById('rewardPopup').classList.remove('show');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODAL / TOAST HELPERS
+// ═══════════════════════════════════════════════════════════════
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('active');
+}
+
+function showToast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = type === 'error' ? 'error' : '';
+  el.style.display = 'block';
+  el.style.animation = 'none';
+  void el.offsetHeight;
+  el.style.animation = 'fadeInOut 2s ease';
+  setTimeout(() => { el.style.display = 'none'; }, 2000);
+}
+
+// Close modal on overlay click
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+// Preload building defs
+loadBuildingDefs();
+
+// ═══════════════════════════════════════
+// AUDIO INTEGRATION
+// ═══════════════════════════════════════
+
+// Restore mute state from localStorage
+(function initAudioState() {
+  const muted = localStorage.getItem('kids_town_muted') === 'true';
+  if (muted) {
+    Audio.setMuted(true);
+    const btn = document.getElementById('muteBtn');
+    if (btn) btn.textContent = '🔇';
+  }
+})();
+
+function toggleAudioMute() {
+  const muted = Audio.toggleMute();
+  const btn = document.getElementById('muteBtn');
+  if (btn) btn.textContent = muted ? '🔇' : '🔊';
+  localStorage.setItem('kids_town_muted', muted);
+  // Play click feedback when unmuting
+  if (!muted) Audio.buttonClick();
+}
+
+// ═══════════════════════════════════════
+// OFFLINE / ONLINE DETECTION
+// ═══════════════════════════════════════
+function updateOnlineStatus() {
+  const banner = document.getElementById('offlineBanner');
+  if (!navigator.onLine) {
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+window.addEventListener('online', updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+updateOnlineStatus();
+
+// Track sync queue via periodic check
+async function checkSyncQueue() {
+  if (!navigator.onLine) return;
+  // We can't read IndexedDB from the page context easily without shared code,
+  // but the SW will notify us via message when sync is done
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LEDGER (Transaction Records)
+// ═══════════════════════════════════════════════════════════════
+let ledgerState = { page: 1, filter: 'all', totalPages: 1 };
+
+function formatRelativeDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'Z');
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  
+  const diffDays = Math.floor((today - target) / 86400000);
+  if (diffDays === 0) return '今日';
+  if (diffDays === 1) return '昨天';
+  if (diffDays <= 6) {
+    const days = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+    return days[d.getDay()];
+  }
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+async function loadLedger() {
+  if (!currentKidId) return;
+  const listEl = document.getElementById('ledgerList');
+  
+  try {
+    const summary = await fetchAPI(`/api/transactions/summary?kid_id=${currentKidId}`).catch(() => ({}));
+    document.getElementById('ledgerBalance').textContent = summary.current_balance ?? 0;
+    document.getElementById('ledgerWeekEarned').textContent = summary.week_earned ?? 0;
+    document.getElementById('ledgerWeekSpent').textContent = summary.week_spent ?? 0;
+    document.getElementById('ledgerWeekTx').textContent = summary.week_transactions ?? 0;
+    
+    const data = await fetchAPI(`/api/transactions?kid_id=${currentKidId}&page=${ledgerState.page}&type=${ledgerState.filter}`).catch(() => null);
+    if (!data || !data.items) {
+      listEl.innerHTML = '<div class="ledger-empty"><div class="ledger-empty-icon">😵</div><div class="ledger-empty-text">無法載入交易記錄</div></div>';
+      return;
+    }
+    
+    ledgerState.totalPages = data.pagination.total_pages;
+    
+    if (!data.items || data.items.length === 0) {
+      let emptyMsg = '🌟 完成你的第一個任務來開始賺取金幣吧！';
+      if (ledgerState.filter !== 'all') {
+        emptyMsg = '沒有符合條件的交易記錄，試試其他分類吧！';
+      }
+      listEl.innerHTML = `<div class="ledger-empty"><div class="ledger-empty-icon">🔍</div><div class="ledger-empty-text">${emptyMsg}</div></div>`;
+    } else {
+      listEl.innerHTML = data.items.map(item => renderLedgerItem(item)).join('');
+    }
+    
+    document.getElementById('ledgerPrevBtn').disabled = ledgerState.page <= 1;
+    document.getElementById('ledgerNextBtn').disabled = ledgerState.page >= ledgerState.totalPages;
+    document.getElementById('ledgerPageInfo').textContent = `第 ${ledgerState.page} 頁 / 共 ${ledgerState.totalPages} 頁`;
+  } catch (err) {
+    console.error('Ledger error:', err);
+    listEl.innerHTML = '<div class="ledger-empty"><div class="ledger-empty-icon">😵</div><div class="ledger-empty-text">載入失敗，請稍後再試</div></div>';
+  }
+}
+
+function renderLedgerItem(item) {
+  const isPositive = item.amount > 0;
+  const sign = isPositive ? '+' : '';
+  const typeClass = item.type || (isPositive ? 'earned' : 'spent');
+  const reason = item.reason || (isPositive ? '獲得金幣' : '使用金幣');
+  const dateStr = formatRelativeDate(item.created_at);
+  
+  return `<div class="ledger-item ${typeClass}">
+    <div class="ledger-item-icon">${item.icon || (isPositive ? '💰' : '💸')}</div>
+    <div class="ledger-item-info">
+      <div class="ledger-item-reason">${reason}</div>
+      <div class="ledger-item-meta">
+        <span class="cat-badge">${item.category || (isPositive ? '收入' : '支出')}</span>
+        <span class="ledger-item-date">${dateStr}</span>
+      </div>
+    </div>
+    <div class="ledger-item-amount">${sign}${item.amount}🪙</div>
+  </div>`;
+}
+
+function switchLedgerFilter(type, btn) {
+  document.querySelectorAll('.ledger-filter').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  ledgerState.filter = type;
+  ledgerState.page = 1;
+  loadLedger();
+}
+
+function ledgerPage(dir) {
+  if (dir === 'prev' && ledgerState.page > 1) {
+    ledgerState.page--;
+  } else if (dir === 'next' && ledgerState.page < ledgerState.totalPages) {
+    ledgerState.page++;
+  }
+  loadLedger();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SAVINGS GOALS
+// ═══════════════════════════════════════════════════════════════
+
+const SAVINGS_ICONS = ['🎯','🚗','🎮','📱','🧸','👟','🎸','📚','🎨','🏀','🛴','🐶','🎪','🏰','🪁','🌈','⭐','💎','🍦','🎪'];
+
+const SAVINGS_COLORS = ['#f97316','#ef4444','#3b82f6','#10b981','#8b5cf6','#ec4899','#14b8a6','#f59e0b','#6366f1','#84cc16'];
+
+let _savingsSelectedIcon = '🎯';
+let _savingsSelectedColor = '#f97316';
+
+async function loadSavingsGoals() {
+  if (!currentKidId) return;
+  try {
+    const res = await fetch(`${API}/api/savings-goals?kid_id=${currentKidId}`);
+    const goals = await res.json();
+    renderSavingsGoals(goals);
+  } catch (e) {
+    console.error('loadSavingsGoals error:', e);
+  }
+}
+
+function renderSavingsGoals(goals) {
+  const list = document.getElementById('savingsGoalList');
+  const empty = document.getElementById('savingsEmpty');
+  if (!goals || goals.length === 0) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    document.getElementById('savingsStats').style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  document.getElementById('savingsStats').style.display = 'flex';
+
+  const active = goals.filter(g => !g.completed);
+  const done = goals.filter(g => g.completed);
+  const totalSaved = goals.reduce((s, g) => s + g.saved_coins, 0);
+  const totalTarget = goals.reduce((s, g) => s + g.target_coins, 0);
+
+  document.getElementById('savStatActive').innerHTML =
+    `<div>⏳ 進行中</div><strong>${active.length}</strong>`;
+  document.getElementById('savStatCompleted').innerHTML =
+    `<div>✅ 已完成</div><strong>${done.length}</strong>`;
+  document.getElementById('savStatTotal').innerHTML =
+    `<div>💰 已儲</div><strong>${totalSaved}🪙</strong>`;
+
+  let html = '';
+  // Active goals first
+  for (const g of active) {
+    html += renderGoalCard(g);
+  }
+  // Completed goals
+  for (const g of done) {
+    html += renderGoalCard(g);
+  }
+  list.innerHTML = html;
+}
+
+function renderGoalCard(g) {
+  const pct = g.target_coins > 0 ? Math.min(100, Math.round(g.saved_coins / g.target_coins * 100)) : 0;
+  const isDone = g.completed;
+  const cls = isDone ? 'savings-card completed' : 'savings-card';
+  const titleCls = isDone ? 'savings-card-title done' : 'savings-card-title';
+  const barColor = g.color || '#f97316';
+  const pts = g.target_coins || 100;
+
+  let actions = '';
+  if (!isDone) {
+    actions = `
+      <div class="savings-card-actions">
+        <button class="btn-contribute" onclick="savingsContribute(${g.id})">➕ 儲錢</button>
+        <button class="btn-withdraw" onclick="savingsWithdraw(${g.id})">🔙 提取</button>
+        <button class="btn-delete" onclick="savingsDelete(${g.id})">🗑️</button>
+      </div>`;
+  } else {
+    const dateStr = g.completed_at ? new Date(g.completed_at).toLocaleDateString('zh-TW', {month:'short',day:'numeric'}) : '';
+    actions = `<div style="font-size:12px;color:#15803d;margin-top:4px;">✅ 達成於 ${dateStr}</div>`;
+  }
+
+  return `<div class="${cls}">
+    <div class="savings-card-head">
+      <span class="savings-card-icon">${g.icon || '🎯'}</span>
+      <span class="${titleCls}">${g.title}</span>
+    </div>
+    <div class="savings-progress-wrap">
+      <div class="savings-progress">
+        <div class="savings-progress-fill" style="width:${pct}%;background:${barColor};"></div>
+      </div>
+      <span class="savings-amount">${g.saved_coins}/${pts}🪙</span>
+      <span style="font-size:11px;color:#94a3b8;font-weight:600;min-width:36px;text-align:right;">${pct}%</span>
+    </div>
+    ${actions}
+  </div>`;
+}
+
+async function showAddSavingsGoal() {
+  _savingsSelectedIcon = '🎯';
+  _savingsSelectedColor = '#f97316';
+  
+  let iconOpts = SAVINGS_ICONS.map(ic =>
+    `<span class="icon-opt ${ic === '🎯' ? 'selected' : ''}" onclick="selectSavingsIcon('${ic}')">${ic}</span>`
+  ).join('');
+  
+  let colorOpts = SAVINGS_COLORS.map(c =>
+    `<span class="color-opt ${c === '#f97316' ? 'selected' : ''}" style="background:${c}" onclick="selectSavingsColor('${c}')"></span>`
+  ).join('');
+
+  document.getElementById('modalContent').innerHTML = `
+    <div style="text-align:center;">
+      <h3 style="margin-bottom:4px;">🎯 新增儲蓄目標</h3>
+      <p style="font-size:12px;color:#64748b;margin-bottom:12px;">你想儲錢買咩呢？</p>
+      <div class="savings-dialog-inputs">
+        <input id="sgTitle" placeholder="目標名稱（例如：買玩具車）" maxlength="30" autofocus>
+        <input id="sgTarget" type="number" placeholder="目標金額（🪙）" min="10" value="100">
+        <div>
+          <div style="font-size:11px;color:#64748b;margin-bottom:4px;">揀個圖示</div>
+          <div class="icon-row">${iconOpts}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:#64748b;margin-bottom:4px;">揀個顏色</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">${colorOpts}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="modal-btn modal-cancel" onclick="closeModal()">取消</button>
+        <button class="modal-btn modal-confirm" onclick="createSavingsGoal()">✅ 建立目標</button>
+      </div>
+    </div>`;
+  document.getElementById('modalOverlay').classList.add('active');
+}
+
+function selectSavingsIcon(ic) {
+  _savingsSelectedIcon = ic;
+  document.querySelectorAll('.icon-opt').forEach(el => el.classList.remove('selected'));
+  event.target.classList.add('selected');
+}
+
+function selectSavingsColor(c) {
+  _savingsSelectedColor = c;
+  document.querySelectorAll('.color-opt').forEach(el => el.classList.remove('selected'));
+  event.target.classList.add('selected');
+}
+
+async function createSavingsGoal() {
+  const title = document.getElementById('sgTitle').value.trim();
+  const targetStr = document.getElementById('sgTarget').value;
+  const target = parseInt(targetStr);
+
+  if (!title) { showToast('請輸入目標名稱', 'error'); return; }
+  if (!target || target < 10) { showToast('目標金額最少 10 🪙', 'error'); return; }
+
+  try {
+    const res = await fetch(`${API}/api/savings-goals`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        kid_id: currentKidId,
+        title,
+        target_coins: target,
+        icon: _savingsSelectedIcon,
+        color: _savingsSelectedColor,
+      })
+    });
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+    closeModal();
+    showToast('🎯 新目標建立成功！', 'success');
+    loadSavingsGoals();
+    Audio.coinPickup();
+  } catch (e) {
+    showToast('⚠️ ' + e.message, 'error');
+  }
+}
+
+async function savingsContribute(goalId) {
+  // Quick contribute dialog — choose amount
+  const kid = await fetch(`${API}/api/kids/${currentKidId}`).then(r => r.json());
+  const maxCoins = kid.points || 0;
+  if (maxCoins <= 0) { showToast('你未有錢可以儲 😅', 'error'); return; }
+
+  document.getElementById('modalContent').innerHTML = `
+    <div style="text-align:center;">
+      <h3 style="margin-bottom:4px;">💰 儲錢</h3>
+      <p style="font-size:12px;color:#64748b;margin-bottom:12px;">你有 ${maxCoins} 🪙，想儲幾多？</p>
+      <div class="savings-dialog-inputs" style="flex-direction:row;gap:6px;">
+        <button class="modal-btn modal-confirm" style="flex:1" onclick="doContribute(${goalId}, ${Math.min(10, maxCoins)})">10🪙</button>
+        <button class="modal-btn modal-confirm" style="flex:1" onclick="doContribute(${goalId}, ${Math.min(50, maxCoins)})">50🪙</button>
+        <button class="modal-btn modal-confirm" style="flex:1" onclick="doContribute(${goalId}, ${Math.min(100, maxCoins)})">100🪙</button>
+        <button class="modal-btn modal-confirm" style="flex:1" onclick="doContribute(${goalId}, ${maxCoins})">全部🪙</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button class="modal-btn modal-cancel" style="flex:1" onclick="closeModal()">取消</button>
+      </div>
+    </div>`;
+  document.getElementById('modalOverlay').classList.add('active');
+}
+
+async function doContribute(goalId, amount) {
+  try {
+    const res = await fetch(`${API}/api/savings-goals/${goalId}/contribute`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ kid_id: currentKidId, amount })
+    });
+    const data = await res.json();
+    if (!res.ok) { throw new Error(data.error); }
+    closeModal();
+    if (data.auto_completed) {
+      showToast(`🎉 目標達成！儲夠 ${data.goal.target_coins} 🪙！`, 'success');
+      Audio.celebration();
+    } else {
+      showToast(`💰 儲咗 ${amount} 🪙！`, 'success');
+      Audio.coinPickup();
+    }
+    updateHeader();
+    loadSavingsGoals();
+  } catch (e) {
+    showToast('⚠️ ' + e.message, 'error');
+  }
+}
+
+async function savingsWithdraw(goalId) {
+  document.getElementById('modalContent').innerHTML = `
+    <div style="text-align:center;">
+      <h3 style="margin-bottom:4px;">🔙 提取儲蓄</h3>
+      <p style="font-size:12px;color:#ef4444;margin-bottom:8px;">⚠️ 提取會有 10% 罰金（最少 1 🪙）</p>
+      <p style="font-size:12px;color:#64748b;margin-bottom:12px;">你真係要提取？</p>
+      <div style="display:flex;gap:8px;">
+        <button class="modal-btn modal-cancel" style="flex:1" onclick="closeModal()">唔提取</button>
+        <button class="modal-btn" style="flex:1;background:#fef3c7;color:#92400e;border-color:#fde68a;" onclick="doWithdrawAll(${goalId})">提取全部</button>
+      </div>
+    </div>`;
+  document.getElementById('modalOverlay').classList.add('active');
+}
+
+async function doWithdrawAll(goalId) {
+  try {
+    // First get the goal to know saved amount
+    const gRes = await fetch(`${API}/api/savings-goals?kid_id=${currentKidId}`);
+    const goals = await gRes.json();
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal || goal.saved_coins <= 0) {
+      showToast('冇錢可以提取', 'error');
+      closeModal();
+      return;
+    }
+    const res = await fetch(`${API}/api/savings-goals/${goalId}/withdraw`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ kid_id: currentKidId, amount: goal.saved_coins })
+    });
+    const data = await res.json();
+    if (!res.ok) { throw new Error(data.error); }
+    closeModal();
+    showToast(`🔙 提取咗 ${data.returned} 🪙（罰金 ${data.penalty} 🔒）`, 'info');
+    updateHeader();
+    loadSavingsGoals();
+  } catch (e) {
+    showToast('⚠️ ' + e.message, 'error');
+  }
+}
+
+async function savingsDelete(goalId) {
+  if (!confirm('🗑️ 確定刪除？儲咗嘅錢會冇晒㗎！')) return;
+  try {
+    const res = await fetch(`${API}/api/savings-goals/${goalId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    showToast('🗑️ 目標已刪除', 'info');
+    loadSavingsGoals();
+  } catch (e) {
+    showToast('⚠️ ' + e.message, 'error');
+  }
+}
+
+window.loginParent = loginParent;
+window.loadKids = loadKids;
+window.renderKidSelector = renderKidSelector;
+window.selectKid = selectKid;
+window.addKid = addKid;
+window.logout = logout;
+window.loadTown = loadTown;
+window.loadBuildingDefs = loadBuildingDefs;
+window.fetchAPI = fetchAPI;
+window.updateHeader = updateHeader;
+window.switchTab = switchTab;
+window.renderAll = renderAll;
+window.resizeCanvas = resizeCanvas;
+window.initCanvas = initCanvas;
+window.p = p;
+window.drawPixelBuilding = drawPixelBuilding;
+window.drawPixelTree = drawPixelTree;
+window.drawPixelCharacter = drawPixelCharacter;
+window.isOccupied = isOccupied;
+window.renderCanvas = renderCanvas;
+window.getWallColor = getWallColor;
+window.getRoofColor = getRoofColor;
+window.renderPlots = renderPlots;
+window.showBuildModal = showBuildModal;
+window.startPlacement = startPlacement;
+window.cancelPlacement = cancelPlacement;
+window.placeBuilding = placeBuilding;
+window.showBuildingUpgrade = showBuildingUpgrade;
+window.doUpgrade = doUpgrade;
+window.renderBuildingsTab = renderBuildingsTab;
+window.renderInventory = renderInventory;
+window.renderShop = renderShop;
+window.renderTasks = renderTasks;
+window.addTask = addTask;
+window.completeTask = completeTask;
+window.deleteTask = deleteTask;
+window.renderManage = renderManage;
+window.populateMgmtSelects = populateMgmtSelects;
+window.renderManageTasks = renderManageTasks;
+window.mgmtAddTask = mgmtAddTask;
+window.addQuickTask = addQuickTask;
+window.editTask = editTask;
+window.saveTaskEdit = saveTaskEdit;
+window.deleteManageTask = deleteManageTask;
+window.adjustPoints = adjustPoints;
+window.loadActivity = loadActivity;
+window.renderAchievements = renderAchievements;
+window.loadStats = loadStats;
+window.renderStreaks = renderStreaks;
+window.renderDailyChart = renderDailyChart;
+window.renderLeaderboard = renderLeaderboard;
+window.switchLeaderboard = switchLeaderboard;
+window.renderAchievementsGrid = renderAchievementsGrid;
+window.renderExpedition = renderExpedition;
+window.renderExpeditionProgress = renderExpeditionProgress;
+window.startExpedition = startExpedition;
+window.claimExpedition = claimExpedition;
+window.showRewardPopup = showRewardPopup;
+window.closeRewardPopup = closeRewardPopup;
+window.loadLedger = loadLedger;
+window.switchLedgerFilter = switchLedgerFilter;
+window.ledgerPage = ledgerPage;
+window.closeModal = closeModal;
+window.showToast = showToast;
+window.toggleAudioMute = toggleAudioMute;
+window.updateOnlineStatus = updateOnlineStatus;
+window.checkSyncQueue = checkSyncQueue;
+
+// ═══════════════════════════════════════════════════════════════
+// SERVICE WORKER REGISTRATION
+// ═══════════════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const registration = await navigator.serviceWorker.register('/kids/service-worker.js', {
+        scope: '/kids/'
+      });
+      console.log('[PWA] Service Worker registered:', registration.scope);
+
+      // Check for updates on page load
+      registration.addEventListener('updatefound', () => {
+        const installing = registration.installing;
+        if (installing) {
+          installing.addEventListener('statechange', () => {
+            if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+              // New version available — show update toast
+              showToast('🔄 新版本已準備好，請關閉後重新開啟', 6000);
+            }
+          });
+        }
+      });
+    } catch (err) {
+      console.warn('[PWA] Service Worker registration failed:', err.message);
+    }
+  });
+
+  // Listen for controller change (new SW activated)
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
+  });
+} else {
+  console.log('[PWA] Service Worker not supported');
+}
+</script>
+</body>
+</html>

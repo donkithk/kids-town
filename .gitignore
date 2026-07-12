@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+# Test scripts (keep only essential ones)
+check_*.py
+playwright_*.py
+frontend_*.py
+e2e_*.py
+
+# Temp files
+screenshot.png
+*.excalidraw
+generate_buildings.py
+generate_remaining.py
+create_*.py
+
+# Sketches
+sketches/
+refs/
+character_styles_preview.png
