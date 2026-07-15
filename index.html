@@ -299,7 +299,8 @@ body{
   #townCanvasWrapper{max-height:800px}
 }
 #townCanvas{display:none}
-.town-scene{position:absolute;inset:0;}
+.town-scene{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.town-scene-inner{position:relative;width:100%;aspect-ratio:3/2;max-height:100%;flex-shrink:0}
 .grass-overlay{
   position:absolute;inset:0;pointer-events:none;z-index:1;
   background:rgba(0,0,0,0.05);mix-blend-mode:multiply;
@@ -922,11 +923,13 @@ body{
        ontouchmove="touchMove(event)"
        ontouchend="touchEnd(event)">
     <div class="town-scene" id="townScene">
-      <div class="grass-overlay"></div>
-      <div id="townBuildings"></div>
-      <div class="character" id="townCharacter">
+      <div class="town-scene-inner">
+        <div class="grass-overlay"></div>
+        <div id="townBuildings"></div>
+        <div class="character" id="townCharacter">
         <img class="sprite" id="charSprite" src="assets-c/boy.png" alt="">
         <div class="bubble" id="charBubble">嗨！👋</div>
+      </div>
       </div>
     </div>
   </div>
