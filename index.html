@@ -382,6 +382,14 @@ body{
 }
 .building-card .b-effect{font-size:11px;color:#64748b;margin-top:2px}
 .building-card .b-mats{font-size:10px;color:#64748b;margin-top:2px}
+/* Material progress bars */
+.b-mat-bar{display:flex;align-items:center;gap:4px;margin-top:4px;flex-wrap:wrap}
+.b-mat-bar .mb-item{display:flex;align-items:center;gap:3px;font-size:10px}
+.b-mat-bar .mb-track{width:40px;height:5px;background:#e2e8f0;border-radius:999px;overflow:hidden}
+.b-mat-bar .mb-fill{height:100%;background:linear-gradient(90deg,#22c55e,#16a34a);border-radius:999px;transition:width 0.3s}
+.b-mat-bar .mb-fill.half{background:linear-gradient(90deg,#f59e0b,#d97706)}
+.b-mat-bar .mb-fill.low{background:linear-gradient(90deg,#ef4444,#dc2626)}
+.b-mat-bar .mb-count{font-size:9px;color:#64748b;white-space:nowrap}
 .building-card .b-actions{display:flex;gap:6px;flex-direction:column;align-items:flex-end}
 .building-card .btn-upgrade{
   padding:12px 14px;border-radius:8px;border:none;
@@ -397,16 +405,20 @@ body{
    ═══════════════════════════════════════ */
 .shop-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .shop-item{
-  background:#fff;border-radius:12px;padding:14px;text-align:center;
-  border:2px solid #e2e8f0;cursor:pointer;transition:0.15s;
+  background:#fff;border-radius:12px;padding:14px;
+  border:2px solid #e2e8f0;cursor:default;transition:0.15s;
 }
 .shop-item:hover{transform:translateY(-2px);border-color:#cbd5e1}
-.shop-item .s-icon{font-size:32px;margin-bottom:4px}
+.shop-item .s-icon{font-size:32px;margin-bottom:4px;text-align:center}
+.shop-item .s-info{text-align:left}
 .shop-item .s-name{font-weight:700;font-size:13px}
-.shop-item .s-cost{font-size:11px;color:#b45309;font-weight:600;margin:2px 0}
-.shop-item .s-mats{font-size:9px;color:#64748b;margin-bottom:4px}
-.shop-item .s-effect{font-size:10px;color:#64748b}
-.shop-item.disabled{opacity:0.4;cursor:not-allowed}
+.shop-item .s-effect{font-size:10px;color:#64748b;margin-bottom:4px}
+.shop-item .s-owned{font-size:11px;color:#22c55e;font-weight:600;text-align:center;margin-top:4px}
+.shop-item .s-mat-bar{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:4px}
+.shop-item .s-mat-bar .mb-item{font-size:10px;display:flex;align-items:center;gap:2px}
+.shop-item .s-btn-row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:4px}
+.shop-item .s-gold{font-size:12px;font-weight:700;color:#b45309}
+.shop-item.disabled{opacity:0.4;cursor:default}
 .shop-item.disabled:hover{transform:none}
 
 /* ═══════════════════════════════════════
@@ -579,6 +591,42 @@ body{
   padding:4px 12px;border-radius:6px;border:none;
   background:#ef4444;color:#fff;font-weight:700;cursor:pointer;font-size:11px;
 }
+/* Zoom controls */
+.zoom-controls{position:absolute;top:8px;right:8px;z-index:20;display:flex;gap:4px;align-items:center;pointer-events:none}
+.zoom-controls button{width:28px;height:28px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:0.15s;pointer-events:auto}
+.zoom-controls button:hover{background:#f1f5f9;border-color:#94a3b8}
+.zoom-label{font-size:10px;color:#64748b;min-width:36px;text-align:center}
+/* Empty plot on town scene */
+.empty-plot{opacity:0;background:rgba(255,255,255,0.15);border:2px dashed rgba(255,255,255,0.3)}
+.empty-plot:hover{opacity:1 !important;background:rgba(34,197,94,0.2);border-color:#22c55e}
+.empty-plot .ep-tip{font-size:18px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);opacity:0.5;pointer-events:none}
+#placementBar.active ~ #townCanvasWrapper .empty-plot{opacity:0.8}/* 1×1 empty cell for roads/deco */
+.empty-cell{opacity:0;background:rgba(255,255,255,0.05);z-index:5}
+.empty-cell:hover{opacity:1 !important;background:rgba(148,163,184,0.15);border-radius:2px}
+/* Valid 2×2 building placement zone */
+.valid-plot{opacity:0.5;background:rgba(34,197,94,0.25);border:2px dashed rgba(34,197,94,0.6);border-radius:4px;transition:0.15s}
+.valid-plot:hover{opacity:1;background:rgba(34,197,94,0.35);border-color:#22c55e}
+.valid-plot.selected{opacity:1;background:rgba(34,197,94,0.45);border-color:#16a34a;border-style:solid}
+.vp-tip{font-size:10px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#166534;font-weight:700;pointer-events:none;text-shadow:0 0 4px white}
+/* Town tiles */
+.town-tile{display:flex;align-items:center;justify-content:center;pointer-events:none}
+.town-tile.road{background:transparent}
+.town-tile.tree{font-size:80%}
+/* Road auto-tiling: seamless connection + capped edges */
+.road-bg{position:relative;width:100%;height:100%;background:#94a3b8;border-radius:2px;overflow:hidden}
+/* Cap pieces for edges with no neighbor (rounded road end) */
+.road-cap{position:absolute;width:100%;height:100%;z-index:2}
+.road-cap-n{top:-20%;left:-10%;width:120%;height:40%;border-radius:50%;background:inherit}
+.road-cap-s{bottom:-20%;left:-10%;width:120%;height:40%;border-radius:50%;background:inherit}
+.road-cap-e{right:-20%;top:-10%;height:120%;width:40%;border-radius:50%;background:inherit}
+.road-cap-w{left:-20%;top:-10%;height:120%;width:40%;border-radius:50%;background:inherit}
+/* Dead-end stretch: cap extends to look like a rounded dead end */
+.mask-1 .road-cap-n{background:#94a3b8;top:-30%;left:25%;width:50%;height:70%}
+.mask-2 .road-cap-e{background:#94a3b8;right:-30%;top:25%;height:50%;width:70%}
+.mask-4 .road-cap-s{background:#94a3b8;bottom:-30%;left:25%;width:50%;height:70%}
+.mask-8 .road-cap-w{background:#94a3b8;left:-30%;top:25%;height:50%;width:70%}
+/* Add building-like outline */
+.road-bg::after{content:'';position:absolute;inset:0;border-radius:2px;border:1px solid rgba(0,0,0,0.1);pointer-events:none}
 
 /* ═══════════════════════════════════════
    MANAGEMENT TAB
@@ -744,6 +792,25 @@ body{
 .gh{background:linear-gradient(90deg,#4a6a8a,#5a7a9a);padding:6px 8px;display:flex;align-items:center;gap:5px;color:#f0f8ff}
 .gh .av{width:30px;height:30px;background:rgba(255,255,255,.15);border:2px solid #f0f8ff;border-radius:5px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0}
 .gh .av img{width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
+/* Ability tooltip */
+.gh .av{
+  position:relative;cursor:pointer;
+}
+.av-tip{
+  display:none;
+  position:fixed;z-index:999;
+  background:rgba(0,0,0,0.88);backdrop-filter:blur(6px);
+  color:#fff;border-radius:10px;padding:10px 12px;
+  font-size:11px;line-height:1.6;min-width:150px;
+  box-shadow:0 4px 20px rgba(0,0,0,0.3);
+  pointer-events:none;
+}
+.av-tip.show{display:block}
+.av-tip .tl{font-size:9px;font-family:var(--pixel-font);color:#ffeaa7;margin-bottom:3px}
+.av-tip .rl{display:flex;justify-content:space-between;gap:8px}
+.av-tip .rl .c{color:#94a3b8}
+.av-tip .rl .v{color:#fff;font-weight:700}
+.av-tip .bl{color:#22c55e;font-size:10px}
 .gh .in{flex:1;min-width:0}
 .gh .nm{font-size:9px;font-weight:800;font-family:var(--pixel-font);margin-bottom:1px}
 .gh .rw{display:flex;align-items:center;gap:3px}
@@ -809,6 +876,7 @@ body{
     <div class="gs">
       <div class="gh">
         <div class="av" id="hudAv">🐱</div>
+        <div class="av-tip" id="hudTip"></div>
         <div class="in">
           <div class="nm" id="hudNm">小強 Lv.5</div>
           <div class="rw">
@@ -846,38 +914,19 @@ body{
     <span>📍 點擊地圖上空地放置建築</span>
     <button class="cancel-place" onclick="cancelPlacement()">✕ 取消</button>
   </div>
-  <div id="townCanvasWrapper">
-    <div class="town-scene">
+  <div id="townCanvasWrapper"
+       ontouchstart="touchStart(event)"
+       ontouchmove="touchMove(event)"
+       ontouchend="touchEnd(event)">
+    <div class="town-scene" id="townScene">
       <div class="grass-overlay"></div>
-
-      <div class="road road-h" style="bottom:30%"></div>
-      <div class="road road-h" style="bottom:8%"></div>
-      <div class="road road-v" style="left:20%"></div>
-      <div class="road road-v" style="left:48%"></div>
-      <div class="road road-v" style="right:15%"></div>
-
-      <div class="tree" style="bottom:46%;left:1%;width:14%;z-index:3"><img src="assets-c/tree.png" onerror="this.style.display='none'" alt=""></div>
-      <div class="tree" style="bottom:46%;left:68%;width:14%;z-index:3"><img src="assets-c/tree.png" onerror="this.style.display='none'" alt=""></div>
-      <div class="tree" style="bottom:38%;left:88%;width:12%;z-index:3"><img src="assets-c/tree.png" onerror="this.style.display='none'" alt=""></div>
-      <div class="tree" style="bottom:18%;left:1%;width:14%;z-index:3"><img src="assets-c/tree.png" onerror="this.style.display='none'" alt=""></div>
-      <div class="tree" style="bottom:18%;left:68%;width:14%;z-index:3"><img src="assets-c/tree.png" onerror="this.style.display='none'" alt=""></div>
-      <div class="tree" style="bottom:46%;left:40%;width:15%;z-index:5"><img src="assets-c/tree-cherry.png" onerror="this.style.display='none'" alt=""></div>
-      <div class="tree" style="bottom:18%;left:40%;width:14%;z-index:3"><img src="assets-c/tree-cherry.png" onerror="this.style.display='none'" alt=""></div>
-
-      <div class="tree" style="bottom:25%;left:36%;width:10%;z-index:3"><img src="assets-c/fence.png" onerror="this.style.display='none'" alt=""></div>
-
-      <!-- Player's buildings rendered by JS -->
       <div id="townBuildings"></div>
-      
-      <!-- Player character on map -->
       <div class="character" id="townCharacter">
         <img class="sprite" id="charSprite" src="assets-c/boy.png" alt="">
         <div class="bubble" id="charBubble">嗨！👋</div>
       </div>
     </div>
   </div>
-  <div class="town-bottom" id="townPlots"></div>
-  <p style="font-size:10px;color:#94a3b8;text-align:center;margin-top:6px;">👆 點擊下方空位起建築 · 已建建築可升級</p>
 </div>
 </div>
 
@@ -1010,6 +1059,12 @@ body{
     <div class="mgmt-title">📜 活動紀錄</div>
     <div id="activityLog" style="max-height:300px;overflow-y:auto"></div>
   </div>
+</div>
+
+<!-- Tab: Store (Stored Buildings) -->
+<div class="tab-content" id="tab-store" style="padding:12px">
+  <div class="section-title">🏪 存倉</div>
+  <div id="storedBuildings" class="build-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:8px"></div>
 </div>
 
 <!-- Tab: Achievements -->
@@ -1146,6 +1201,7 @@ body{
       <div class="dh"><h3>📋 主目錄</h3><button class="dc" onclick="td()">✕</button></div>
       <button class="di" onclick="st('town');td()"><span class="ic">🏘️</span> 小鎮地圖</button>
       <button class="di" onclick="st('buildings');td()"><span class="ic">🧱</span> 建築管理</button>
+      <button class="di" onclick="st('store');td()"><span class="ic">🏪</span> 存倉</button>
       <button class="di" onclick="st('expedition');td()"><span class="ic">🗺️</span> 探索</button>
       <button class="di" onclick="st('tasks');td()"><span class="ic">📋</span> 任務</button>
       <button class="di" onclick="st('shop');td()"><span class="ic">🎒</span> 背包</button>
@@ -1192,13 +1248,16 @@ const PARENT_PASSWORD = '1234';
 // Material icon mapping
 const MAT_ICONS = {
   wood:'🪵', brick:'🧱', iron:'🔩', gem:'💎', star_shard:'⭐',
-  dragon_scale:'🐉', star_stone:'🌟', mystery_box:'🎁'
+  dragon_scale:'🐉', star_stone:'🌟', mystery_box:'🎁',
+  glass:'🪟', gear:'⚙️'
 };
 const MAT_NAMES = {
-  wood:'木材', brick:'磚塊', iron:'鐵錠', gem:'寶石', star_shard:'星碎片',
-  dragon_scale:'龍鱗', star_stone:'星石', mystery_box:'神秘寶箱'
+  wood:'木材', brick:'磚頭', iron:'鐵', gem:'寶石', star_shard:'星碎片',
+  dragon_scale:'龍鱗', star_stone:'星石', mystery_box:'神秘寶箱',
+  glass:'玻璃', gear:'齒輪'
 };
 
+// ═══ REGIONS ═══
 // Region definitions
 const REGIONS = [
   {id:1,name:'🌲 靜謐森林',desc:'充滿神秘生物嘅古老森林',gold:30,time:2,required_building:null},
@@ -1225,6 +1284,8 @@ let isParentSession = false; // parent PIN verified for current session
 let townData = {buildings:[], inventory:[], explored:[], expedition:null};
 let buildingDefs = [];
 let placementDefId = null; // building def being placed
+let selectedPlaceX = -1, selectedPlaceY = -1; // selected 2×2 position for building
+let isRoadMode = false;
 let expInterval = null;
 
 // ═══════════════════════════════════════════════════════════════
@@ -1405,6 +1466,60 @@ function updateHeader() {
   }
 }
 
+// ── HUD Avatar Ability Tooltip ──
+let tipTimeout = null;
+const TIP_ICONS = {str:'❤️',atk:'💪',int:'📖',spd:'💨',crt:'🎨',brv:'⚔️'};
+const TIP_NAMES = {str:'體力',atk:'臂力',int:'知識',spd:'速度',crt:'創意',brv:'勇氣'};
+
+document.addEventListener('mouseover', function(e){
+  const av = e.target.closest('#hudAv');
+  if(!av){ hideTip(); return; }
+  showTip(e);
+});
+document.addEventListener('mousemove', function(e){
+  const tip = document.getElementById('hudTip');
+  if(tip.classList.contains('show')) positionTip(e, tip);
+});
+
+async function showTip(e){
+  const tip = document.getElementById('hudTip');
+  const kid = townData.kid || currentUser || {};
+  if(!kid.id) return;
+  
+  clearTimeout(tipTimeout);
+  try {
+    const res = await fetch(`/api/kids/${kid.id}/abilities`);
+    const d = await res.json();
+    let html = '<div class="tl">'+kid.name+' Lv.'+d.level+' 能力</div>';
+    Object.entries(d.total||{}).forEach(([k,v])=>{
+      const b = (d.base||{})[k]||0;
+      const bu = (d.buffs||{})[k]||0;
+      html += '<div class="rl"><span class="c">'+TIP_ICONS[k]+' '+TIP_NAMES[k]+'</span><span class="v">'+v+'</span></div>';
+    });
+    if(Object.values(d.buffs||{}).some(v=>v>0)){
+      html += '<div class="bl">🏛️ 建築 +'+Object.entries(d.buffs).filter(([,v])=>v>0).map(([k,v])=>TIP_ICONS[k]+'+'+v).join(' ')+'</div>';
+    }
+    tip.innerHTML = html;
+    tip.classList.add('show');
+    positionTip(e, tip);
+  } catch(_){}
+}
+
+function positionTip(e, tip){
+  let x = e.clientX + 12, y = e.clientY - 10;
+  const r = tip.getBoundingClientRect();
+  if(x + r.width > window.innerWidth - 8) x = e.clientX - r.width - 12;
+  if(y + r.height > window.innerHeight - 8) y = window.innerHeight - r.height - 8;
+  if(y < 8) y = 8;
+  tip.style.left = x + 'px';
+  tip.style.top = y + 'px';
+}
+
+function hideTip(){
+  const tip = document.getElementById('hudTip');
+  tipTimeout = setTimeout(() => tip.classList.remove('show'), 200);
+}
+
 // ═══════════════════════════════════════════════════════════════
 // TAB SWITCHING
 // ═══════════════════════════════════════════════════════════════
@@ -1426,6 +1541,7 @@ function st(name) {
   document.getElementById(`tab-${name}`).classList.add('active');
   if (name === 'town') {} // town scene is static HTML now
   if (name === 'expedition') renderExpedition();
+  if (name === 'store') renderStoredBuildings();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1439,9 +1555,10 @@ function renderAll() {
   renderInventory();
   renderExpedition();
   renderTasks();
+  renderAchievements();
+  renderLedger();
+  renderStoredBuildings();
 }
-
-// ═══════════════════════════════════════════════════════════════
 // TOWN SCENE (no-op - town is static HTML)
 // ═══════════════════════════════════════════════════════════════
 function initCanvas() {}
@@ -1475,34 +1592,267 @@ function renderTownBuildings() {
     return 'assets-c/building.png'; // generic fallback
   }
 
-  // Now render buildings
+  // Now render buildings on a 24×16 grid (cells 4× finer)
   const buildings = townData.buildings || [];
-  // 4 columns x 4 rows = 16 max positions on grass
-  const POSITIONS = [
-    // Top zone (above 30% road)
-    {left:5,  bottom:44}, {left:30, bottom:44}, {left:58, bottom:44}, {left:86, bottom:44},
-    // Upper-middle zone (above 30% road)
-    {left:5,  bottom:35}, {left:30, bottom:35}, {left:58, bottom:35}, {left:86, bottom:35},
-    // Middle zone (between roads)
-    {left:5,  bottom:24}, {left:30, bottom:24}, {left:58, bottom:24}, {left:86, bottom:24},
-    // Lower-middle zone (between roads)
-    {left:5,  bottom:15}, {left:30, bottom:15}, {left:58, bottom:15}, {left:86, bottom:15},
-  ];
+  const tiles = townData.tiles || [];
+  const COLS = 24, ROWS = 16;
+  
+  // Build occupancy grid
+  const occupied = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+  const cellContent = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+  
+  // Mark building cells (2×2) — each plot_idx maps to a 4×4 block, building uses 2×2 inside it
+  buildings.forEach(b => {
+    const plot_idx = b.plot_idx || 0;
+    const grid_x = (plot_idx % 6) * 4;
+    const grid_y = Math.floor(plot_idx / 6) * 4;
+    // Building occupies cells [1..2, 1..2] within the 4×4 block
+    for (let dy = 1; dy < 3; dy++) {
+      for (let dx = 1; dx < 3; dx++) {
+        if (grid_y + dy < ROWS && grid_x + dx < COLS) {
+          occupied[grid_y + dy][grid_x + dx] = true;
+          cellContent[grid_y + dy][grid_x + dx] = 'building';
+        }
+      }
+    }
+  });
+  
+  // Mark tile cells (1×1)
+  tiles.forEach(t => {
+    if (t.cell_y < ROWS && t.cell_x < COLS) {
+      occupied[t.cell_y][t.cell_x] = true;
+      cellContent[t.cell_y][t.cell_x] = t.tile_type;
+    }
+  });
+  
+  // Map plot_idx to grid coords (2×2 block inside 4×4 zone)
+  function plotToGrid(plotIdx) {
+    return {x: (plotIdx % 6) * 4 + 1, y: Math.floor(plotIdx / 6) * 4 + 1};
+  }
+  
+  const CELL_W = 100 / COLS;  // 4.17%
+  const CELL_H = 100 / ROWS;  // 6.25%
+  
+  // Check if a 2×2 block is free
+  function isBlockFree(gx, gy) {
+    for (let dy = 0; dy < 2; dy++)
+      for (let dx = 0; dx < 2; dx++)
+        if (gy + dy >= ROWS || gx + dx >= COLS || occupied[gy + dy][gx + dx]) return false;
+    return true;
+  }
   
   let html = '';
-  buildings.forEach((b, i) => {
-    const pos = POSITIONS[i % POSITIONS.length];
-    if (!pos) return;
+  
+  // Render grid background (subtle)
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      html += `<div style="position:absolute;left:${col * CELL_W}%;bottom:${(ROWS - 1 - row) * CELL_H}%;width:${CELL_W}%;height:${CELL_H}%;z-index:1;pointer-events:none"></div>`;
+    }
+  }
+  
+  // Mark building cells (2×2) — skip if this building is being moved
+  const skipMoving = new Set();
+  if (movingBldId !== null) skipMoving.add(movingBldId);
+  buildings.forEach(b => {
+    if (skipMoving.has(b.id)) return;
+    const cx = b.cell_x || 0;
+    const cy = b.cell_y || 0;
     const img = buildingImage(b.name);
-    const width = (img && (img.includes('school') || img.includes('building'))) ? 22 : 16;
-    
-    html += `<div class="town-building" style="position:absolute;left:${pos.left}%;bottom:${pos.bottom}%;width:${width}%;z-index:4">
-      <img src="${img}" style="width:100%;height:auto;display:block" onerror="this.style.display='none'" alt="${b.name}">
-      <div style="font-size:9px;text-align:center;color:#4a3a2a;background:rgba(255,255,255,0.75);border-radius:4px;padding:0 6px;margin-top:-2px;white-space:nowrap">${b.name||''}</div>
+    const scale = 1.5; // slightly larger than 2×2
+    html += `<div class="town-building" style="position:absolute;left:${(cx + 1 - scale) * CELL_W}%;bottom:${(ROWS - 1 - cy - scale) * CELL_H}%;width:${CELL_W * 2 * scale}%;height:${CELL_H * 2 * scale}%;z-index:7;cursor:pointer" onclick="showBuildingUpgrade(${b.id})">
+      <img src="${img}" style="width:100%;height:100%;object-fit:contain;display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2))" onerror="this.style.display='none'" alt="${b.name}">
     </div>`;
   });
   
+  // Render tiles with auto-tiling (roads connect to neighbors)
+  // Build a quick lookup for road positions
+  const roadSet = new Set();
+  tiles.forEach(t => {
+    if (t.tile_type === 'road') roadSet.add(t.cell_x + ',' + t.cell_y);
+  });
+  
+  tiles.forEach(t => {
+    if (t.tile_type === 'road') {
+      // Bitmask: N=1, E=2, S=4, W=8 — which sides have no neighbor
+      let missing = 0;
+      if (!roadSet.has(t.cell_x + ',' + (t.cell_y - 1))) missing |= 1;  // N missing
+      if (!roadSet.has((t.cell_x + 1) + ',' + t.cell_y)) missing |= 2;  // E missing
+      if (!roadSet.has(t.cell_x + ',' + (t.cell_y + 1))) missing |= 4;  // S missing
+      if (!roadSet.has((t.cell_x - 1) + ',' + t.cell_y)) missing |= 8;  // W missing
+      
+      // Connected sides (inverse of missing)
+      const connected = (~missing) & 0xF;
+      
+      html += `<div class="town-tile road mask-${connected}" style="position:absolute;left:${t.cell_x * CELL_W}%;bottom:${(ROWS - 1 - t.cell_y) * CELL_H}%;width:${CELL_W}%;height:${CELL_H}%;z-index:3">
+        <div class="road-bg">
+          ${!(missing & 1) ? '' : '<div class="road-cap road-cap-n"></div>'}
+          ${!(missing & 2) ? '' : '<div class="road-cap road-cap-e"></div>'}
+          ${!(missing & 4) ? '' : '<div class="road-cap road-cap-s"></div>'}
+          ${!(missing & 8) ? '' : '<div class="road-cap road-cap-w"></div>'}
+        </div>
+      </div>`;
+    } else {
+      const icon = {tree:'🌳', fence:'🚧'}[t.tile_type] || '•';
+      html += `<div class="town-tile ${t.tile_type}" style="position:absolute;left:${t.cell_x * CELL_W}%;bottom:${(ROWS - 1 - t.cell_y) * CELL_H}%;width:${CELL_W}%;height:${CELL_H}%;z-index:3">
+        <span style="font-size:60%;opacity:0.7">${icon}</span>
+      </div>`;
+    }
+  });
+  
+  // Render clickable cells — all unoccupied cells are 1×1
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      if (!occupied[row][col]) {
+        html += `<div class="empty-cell" data-x="${col}" data-y="${row}" onclick="clickEmptyCell(${col},${row})"
+          style="position:absolute;left:${col * CELL_W}%;bottom:${(ROWS - 1 - row) * CELL_H}%;width:${CELL_W}%;height:${CELL_H}%;z-index:5;">
+        </div>`;
+      }
+    }
+  }
+  
+  // In placement or move mode, overlay valid 2×2 building zones
+  if (placementDefId !== null || movingBldId !== null) {
+    for (let py = 0; py <= ROWS - 2; py++) {
+      for (let px = 0; px <= COLS - 2; px++) {
+        let free = true;
+        for (let dy = 0; dy < 2 && free; dy++)
+          for (let dx = 0; dx < 2 && free; dx++)
+            if (py + dy >= ROWS || px + dx >= COLS || occupied[py + dy][px + dx]) free = false;
+        if (free) {
+          const isMoving = movingBldId !== null;
+          const isSelected = isMoving
+            ? (moveTargetX === px && moveTargetY === py)
+            : (selectedPlaceX === px && selectedPlaceY === py);
+          const onClick = isMoving ? `selectMovePos(${px},${py})` : `selectPlacePos(${px},${py})`;
+          html += `<div class="valid-plot ${isSelected ? 'selected' : ''}" data-px="${px}" data-py="${py}"
+            onclick="${onClick}"
+            style="position:absolute;left:${px * CELL_W}%;bottom:${(ROWS - 2 - py) * CELL_H}%;width:${CELL_W * 2}%;height:${CELL_H * 2}%;z-index:6;">
+            <div class="vp-tip">${isSelected ? '✅ 按確認' : '↘️'}</div>
+          </div>`;
+        }
+      }
+    }
+  }
+  
   container.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOWN ZOOM
+// ═══════════════════════════════════════════════════════════════
+let zoomLevel = 1.0;
+const ZOOM_MIN = 0.4;
+const ZOOM_MAX = 2.0;
+const ZOOM_STEP = 0.2;
+
+function zoomIn() {
+  zoomLevel = Math.min(ZOOM_MAX, zoomLevel + ZOOM_STEP);
+  applyTransform();
+}
+function zoomOut() {
+  zoomLevel = Math.max(ZOOM_MIN, zoomLevel - ZOOM_STEP);
+  applyTransform();
+}
+function zoomReset() {
+  zoomLevel = 1.0;
+  panX = 0; panY = 0;
+  applyTransform();
+}
+function applyZoom() { applyTransform(); }
+
+// ═══ TOUCH: PAN + PINCH ZOOM + ROAD DRAG ═══
+let touchDist = 0;
+let panX = 0, panY = 0;
+let lastPanX = 0, lastPanY = 0;
+let touchStartX = 0, touchStartY = 0;
+let roadDragCells = new Set();
+
+function enterRoadMode() {
+  closeModal();
+  isRoadMode = true;
+  showToast('👆 拖曳鋪設道路，完成後按「取消」離開');
+  document.getElementById('placementBar').classList.add('active');
+  document.querySelector('#placementBar span').textContent = '🛤️ 拖曳鋪設道路中...';
+}
+function exitRoadMode() {
+  isRoadMode = false;
+  roadDragCells.clear();
+  placementDefId = null;
+  document.getElementById('placementBar').classList.remove('active');
+  document.querySelector('#placementBar span').textContent = '📍 點擊地圖上空地放置建築';
+}
+
+function touchStart(e) {
+  if (e.touches.length === 1) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    lastPanX = panX;
+    lastPanY = panY;
+    roadDragCells.clear();
+  } else if (e.touches.length === 2) {
+    touchDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+  }
+}
+
+function touchMove(e) {
+  if (e.touches.length === 1) {
+    if (isRoadMode) {
+      // Drag to place roads
+      e.preventDefault();
+      const el = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+      if (el && el.classList.contains('empty-cell')) {
+        const x = parseInt(el.getAttribute('data-x'));
+        const y = parseInt(el.getAttribute('data-y'));
+        const key = x + ',' + y;
+        if (!roadDragCells.has(key)) {
+          roadDragCells.add(key);
+          placeTile(x, y, 'road', true); // silent=true, no toast
+        }
+      }
+    } else {
+      // Pan map
+      panX = lastPanX + (e.touches[0].clientX - touchStartX);
+      panY = lastPanY + (e.touches[0].clientY - touchStartY);
+      applyTransform();
+    }
+  } else if (e.touches.length === 2) {
+    e.preventDefault();
+    const dist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    if (touchDist > 0) {
+      const delta = (dist - touchDist) / touchDist;
+      zoomLevel = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoomLevel + delta));
+      applyTransform();
+    }
+    touchDist = dist;
+  }
+}
+
+function touchEnd(e) {
+  touchDist = 0;
+  if (e.changedTouches.length === 1 && !isRoadMode && roadDragCells.size === 0) {
+    // Single tap — restore any accumulated drag offset
+    // Small movement threshold: if barely moved, treat as tap
+    const dx = Math.abs(e.changedTouches[0].clientX - touchStartX);
+    const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
+    if (dx < 8 && dy < 8) {
+      // Let the click handler of the underlying element fire naturally
+      return;
+    }
+  }
+}
+
+function applyTransform() {
+  const scene = document.getElementById('townScene');
+  if (scene) {
+    scene.style.transform = 'translate(' + panX + 'px, ' + panY + 'px) scale(' + zoomLevel + ')';
+    scene.style.transformOrigin = '0 0';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1510,8 +1860,7 @@ function renderTownBuildings() {
 // ═══════════════════════════════════════════════════════════════
 function renderPlots() {
   const container = document.getElementById('townPlots');
-  const buildings = townData.buildings || [];
-  const plotCount = 12; // 6x6 inner region = 36 plots, show first 12
+  if (!container) return; // town-bottom removed in new grid layout
 
   let html = '';
   for(let idx = 0; idx < plotCount; idx++) {
@@ -1556,7 +1905,7 @@ async function showBuildModal(plotIdx) {
           return inv && inv.quantity >= v;
         });
         const canBuild = canAfford && hasMats;
-        return `<div class="build-option ${canBuild?'':'disabled'}" onclick="${canBuild ? `startPlacement(${d.id},${plotIdx})` : ''}">
+        return `<div class="build-option ${canBuild?'':'disabled'}" onclick="${canBuild ? `startPlacement(${d.id})` : ''}">
           <div class="bo-icon">${d.icon||'🏠'}</div>
           <div class="bo-info">
             <div class="bo-name">${d.name}</div>
@@ -1572,18 +1921,350 @@ async function showBuildModal(plotIdx) {
   document.getElementById('modalOverlay').classList.add('active');
 }
 
-function startPlacement(defId, plotIdx) {
+function startPlacement(defId) {
   Audio.buttonClick();
   placementDefId = defId;
+  selectedPlaceX = -1;
+  selectedPlaceY = -1;
   closeModal();
   document.getElementById('placementBar').classList.add('active');
-  showToast('點擊下方空地放置建築 🎯');
+  document.querySelector('#placementBar span').textContent = '📍 點擊地圖上綠色區域選擇位置';
+  showToast('先揀位置，再按「確認」建造 🎯');
+  loadTown(); // re-render to show valid 2×2 zones
+}
+
+function selectPlacePos(px, py) {
+  selectedPlaceX = px;
+  selectedPlaceY = py;
+  loadTown(); // re-render with selected highlight
+  document.querySelector('#placementBar span').textContent = '✅ 在 (' + (px+1) + ',' + (py+1) + ') 建造？按「確認」';
+  // Show confirm button
+  var bar = document.getElementById('placementBar');
+  if (!bar.querySelector('.confirm-btn')) {
+    var btn = document.createElement('button');
+    btn.className = 'confirm-btn';
+    btn.textContent = '✅ 確認建造';
+    btn.onclick = confirmPlaceBuilding;
+    bar.appendChild(btn);
+  }
+}
+
+async function confirmPlaceBuilding() {
+  if (selectedPlaceX < 0 || selectedPlaceY < 0 || !placementDefId) {
+    showToast('請先選擇位置', 'error');
+    return;
+  }
+  try {
+    Audio.buildingPlace();
+    const data = await fetchAPI('/api/kids/' + currentKidId + '/buildings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({def_id: placementDefId, cell_x: selectedPlaceX, cell_y: selectedPlaceY})
+    });
+    placementDefId = null;
+    selectedPlaceX = -1;
+    selectedPlaceY = -1;
+    document.getElementById('placementBar').classList.remove('active');
+    showToast('✅ 建築完成！');
+    await loadTown();
+  } catch(e) {
+    Audio.errorBuzzer();
+    showToast('❌ ' + e.message, 'error');
+  }
+}
+
+// ═══ MOVE BUILDING ═══
+let movingBldId = null; // building being moved
+let moveTargetX = -1, moveTargetY = -1;
+
+function startMoveBuilding(bId) {
+  Audio.buttonClick();
+  movingBldId = bId;
+  moveTargetX = -1;
+  moveTargetY = -1;
+  closeModal();
+  document.getElementById('placementBar').classList.add('active');
+  document.querySelector('#placementBar span').textContent = '📍 選擇新位置移動建築物';
+  showToast('點擊地圖上綠色區域選擇新位置');
+  loadTown();
+}
+
+function selectMovePos(px, py) {
+  moveTargetX = px;
+  moveTargetY = py;
+  loadTown();
+  document.querySelector('#placementBar span').textContent = '📍 移到 (' + (px+1) + ',' + (py+1) + ')？按「確認」';
+  var bar = document.getElementById('placementBar');
+  if (!bar.querySelector('.confirm-btn')) {
+    var btn = document.createElement('button');
+    btn.className = 'confirm-btn';
+    btn.textContent = '✅ 確認移動';
+    btn.onclick = confirmMoveBuilding;
+    bar.appendChild(btn);
+  }
+}
+
+async function confirmMoveBuilding() {
+  if (moveTargetX < 0 || moveTargetY < 0 || !movingBldId) return;
+  try {
+    const data = await fetchAPI('/api/kids/' + currentKidId + '/buildings/' + movingBldId + '/move', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({cell_x: moveTargetX, cell_y: moveTargetY})
+    });
+    movingBldId = null;
+    moveTargetX = -1;
+    moveTargetY = -1;
+    document.getElementById('placementBar').classList.remove('active');
+    showToast('📍 建築物已移動');
+    await loadTown();
+  } catch(e) {
+    Audio.errorBuzzer();
+    showToast('❌ ' + e.message, 'error');
+  }
+}
+
+// ═══ STORE BUILDING ═══
+async function storeBuilding(bId) {
+  if (!confirm('📦 確定收起呢棟建築物？')) return;
+  try {
+    closeModal();
+    await fetchAPI('/api/kids/' + currentKidId + '/buildings/' + bId + '/store', {method:'POST'});
+    showToast('📦 已存入存倉');
+    await loadTown();
+  } catch(e) {
+    showToast('❌ ' + e.message, 'error');
+  }
+}
+
+// ═══ UNSTORE (place from storage) ═══
+function startUnstoreBuilding(bId) {
+  Audio.buttonClick();
+  placementDefId = 'unstored_' + bId; // hack: prefix to trigger placement mode
+  selectedPlaceX = -1;
+  selectedPlaceY = -1;
+  closeModal();
+  document.getElementById('placementBar').classList.add('active');
+  document.querySelector('#placementBar span').textContent = '📍 選擇位置放置倉庫建築';
+  showToast('點擊地圖上綠色區域');
+  loadTown();
+}
+
+// Override confirmPlaceBuilding to handle unstore
+const origConfirm = confirmPlaceBuilding;
+confirmPlaceBuilding = async function() {
+  if (placementDefId && typeof placementDefId === 'string' && placementDefId.startsWith('unstored_')) {
+    if (selectedPlaceX < 0 || selectedPlaceY < 0) { showToast('請先選擇位置', 'error'); return; }
+    const bId = parseInt(placementDefId.replace('unstored_', ''));
+    try {
+      Audio.buildingPlace();
+      await fetchAPI('/api/kids/' + currentKidId + '/buildings/' + bId + '/unstored', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({cell_x: selectedPlaceX, cell_y: selectedPlaceY})
+      });
+      placementDefId = null; selectedPlaceX = -1; selectedPlaceY = -1;
+      document.getElementById('placementBar').classList.remove('active');
+      showToast('✅ 建築物已放好！');
+      await loadTown();
+    } catch(e) {
+      Audio.errorBuzzer();
+      showToast('❌ ' + e.message, 'error');
+    }
+    return;
+  }
+  await origConfirm.call(this);
+};
+
+// ═══ RENDER STORED BUILDINGS TAB ═══
+async function renderStoredBuildings() {
+  try {
+    const res = await fetch('/api/kids/' + currentKidId + '/stored-buildings');
+    const list = await res.json();
+    const container = document.getElementById('storedBuildings');
+    if (!container) return;
+    if (!list || list.length === 0) {
+      container.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:24px">📦 存倉吉咗，未有建築物</p>';
+      return;
+    }
+    container.innerHTML = list.map(b => `
+      <div class="build-card" style="background:#f8fafc;border-radius:10px;padding:8px;text-align:center;cursor:pointer;border:1px solid #e2e8f0" onclick="startUnstoreBuilding(${b.id})">
+        <div style="font-size:32px;margin:4px 0">${b.icon||'🏠'}</div>
+        <div style="font-size:12px;font-weight:600">${b.name} Lv.${b.level}</div>
+        <div style="font-size:10px;color:#94a3b8">按此放置</div>
+      </div>
+    `).join('');
+  } catch(e) {
+    console.error('renderStoredBuildings error:', e);
+  }
 }
 
 function cancelPlacement() {
   Audio.buttonClick();
+  if (isRoadMode) {
+    exitRoadMode();
+    return;
+  }
+  if (movingBldId !== null) {
+    movingBldId = null;
+    moveTargetX = -1;
+    moveTargetY = -1;
+    var bar = document.getElementById('placementBar');
+    bar.classList.remove('active');
+    var confirmBtn = bar.querySelector('.confirm-btn');
+    if (confirmBtn) confirmBtn.remove();
+    document.querySelector('#placementBar span').textContent = '📍 點擊地圖上空地放置建築';
+    loadTown();
+    return;
+  }
   placementDefId = null;
-  document.getElementById('placementBar').classList.remove('active');
+  selectedPlaceX = -1;
+  selectedPlaceY = -1;
+  var bar = document.getElementById('placementBar');
+  bar.classList.remove('active');
+  var confirmBtn = bar.querySelector('.confirm-btn');
+  if (confirmBtn) confirmBtn.remove();
+  document.querySelector('#placementBar span').textContent = '📍 點擊地圖上空地放置建築';
+  loadTown();
+}
+function shopBuild(defId) {
+  st('town');
+  // Go directly to placement mode
+  startPlacement(defId);
+}
+
+function clickEmptyPlot(plotIdx) {
+  if (placementDefId !== null) {
+    // Placement mode — place the selected building here
+    placeBuilding(placementDefId, plotIdx);
+  } else {
+    // Normal mode — open build modal
+    showBuildModal(plotIdx);
+  }
+}
+
+function clickEmptyCell(col, row) {
+  if (placementDefId !== null) {
+    // In placement mode — cells are handled by valid-plot zones
+    return;
+  }
+  showDecoModal(col, row);
+}
+
+async function showStoredBuildingsModal() {
+  try {
+    const res = await fetch('/api/kids/' + currentKidId + '/stored-buildings');
+    const list = await res.json();
+    if (!list || list.length === 0) {
+      showToast('📦 存倉吉咗');
+      return;
+    }
+    const modal = document.getElementById('modalContent');
+    modal.innerHTML = `
+      <h2>📦 從存倉取出</h2>
+      <p style="font-size:12px;color:#94a3b8;margin-bottom:12px;">㩒要放返出嚟嘅建築物</p>
+      <div class="build-list">
+        ${list.map(b => `
+          <div class="build-option" onclick="closeModal();startUnstoreBuilding(${b.id})">
+            <div class="bo-icon">${b.icon||'🏠'}</div>
+            <div class="bo-info">
+              <div class="bo-name">${b.name} Lv.${b.level}</div>
+              <div class="bo-cost">㩒此放置</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <button class="close-modal" onclick="closeModal()">取消</button>
+    `;
+    document.getElementById('modalOverlay').classList.add('active');
+  } catch(e) {
+    showToast('❌ ' + e.message, 'error');
+  }
+}
+
+function showDecoModal(cellX, cellY) {
+  const modal = document.getElementById('modalContent');
+  // Check if there are stored buildings
+  fetch('/api/kids/' + currentKidId + '/stored-buildings').then(r => r.json()).then(stored => {
+    const hasStored = stored && stored.length > 0;
+    modal.innerHTML = `
+    <h2>🌿 裝飾小鎮</h2>
+    <p style="font-size:12px;color:#94a3b8;margin-bottom:12px;">位置 (${cellX+1}, ${cellY+1})</p>
+    <div class="build-list">
+      ${hasStored ? `<div class="build-option" onclick="showStoredBuildingsModal()" style="border-color:#f59e0b">
+        <div class="bo-icon">📦</div>
+        <div class="bo-info">
+          <div class="bo-name">從存倉取出 (${stored.length})</div>
+          <div class="bo-cost">㩒入去揀建築物放返出嚟</div>
+        </div>
+      </div>` : ''}
+      <div class="build-option" onclick="closeModal();showBuildModal(0)" style="border-color:#f59e0b">
+        <div class="bo-icon">🏗️</div>
+        <div class="bo-info">
+          <div class="bo-name">建造建築物</div>
+          <div class="bo-cost">選擇要起嘅建築</div>
+        </div>
+      </div>
+      <div class="build-option" onclick="placeTile(${cellX},${cellY},'road')">
+        <div class="bo-icon">🛤️</div>
+        <div class="bo-info">
+          <div class="bo-name">道路</div>
+          <div class="bo-cost">🪙10</div>
+        </div>
+      </div>
+      <div class="build-option" onclick="enterRoadMode()" style="border-color:#22c55e">
+        <div class="bo-icon">✋</div>
+        <div class="bo-info">
+          <div class="bo-name">拖曳鋪設道路</div>
+          <div class="bo-cost">🪙10/格 · 用手指拖過空地</div>
+        </div>
+      </div>
+      <div class="build-option" onclick="placeTile(${cellX},${cellY},'tree')">
+        <div class="bo-icon">🌳</div>
+        <div class="bo-info">
+          <div class="bo-name">樹木</div>
+          <div class="bo-cost">🪙5</div>
+        </div>
+      </div>
+      <div class="build-option" onclick="placeTile(${cellX},${cellY},'fence')">
+        <div class="bo-icon">🚧</div>
+        <div class="bo-info">
+          <div class="bo-name">圍欄</div>
+          <div class="bo-cost">🪙15</div>
+        </div>
+      </div>
+    </div>
+    <button class="close-modal" onclick="closeModal()">取消</button>
+  `;
+  document.getElementById('modalOverlay').classList.add('active');
+  }).catch(() => {
+    // Fallback: no stored data, show basic modal
+    modal.innerHTML = `<h2>🌿 裝飾小鎮</h2><p>...</p>`;
+  });
+}
+
+async function placeTile(cellX, cellY, tileType, silent) {
+  try {
+    const res = await fetch('/api/kids/' + currentKidId + '/tiles', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({cell_x: cellX, cell_y: cellY, tile_type: tileType})
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (!silent) showToast('❌ ' + (data.error || '放置失敗'), 'error');
+      return;
+    }
+    if (!silent) {
+      if (data.action === 'removed') {
+        showToast('🗑️ 已移除裝飾');
+      } else {
+        showToast('✅ 放置成功 (🪙' + data.cost + ')');
+      }
+    }
+    await loadTown();
+  } catch(e) {
+    if (!silent) showToast('❌ ' + e.message, 'error');
+  }
 }
 
 async function placeBuilding(defId, plotIdx) {
@@ -1649,7 +2330,11 @@ async function showBuildingUpgrade(bId) {
         </button>
       `}
     </div>
-    <button class="close-modal" onclick="closeModal()">關閉</button>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn-move" onclick="startMoveBuilding(${b.id})" style="flex:1;padding:8px;border:none;border-radius:8px;background:#e0f2fe;color:#0369a1;font-size:13px;font-weight:600;cursor:pointer">📍 移動</button>
+      <button class="btn-store" onclick="storeBuilding(${b.id})" style="flex:1;padding:8px;border:none;border-radius:8px;background:#fef3c7;color:#92400e;font-size:13px;font-weight:600;cursor:pointer">📦 收起</button>
+    </div>
+    <button class="close-modal" onclick="closeModal()" style="margin-top:8px">關閉</button>
   `;
   document.getElementById('modalOverlay').classList.add('active');
 }
@@ -1748,7 +2433,13 @@ async function renderBuildingsTab() {
         <div class="b-info">
           <div class="b-name">${d.name}</div>
           <div class="b-effect">${d.effect||''}</div>
-          <div class="b-mats">🪙${cost} ${Object.entries(mats).map(([k,v])=>`${MAT_ICONS[k]||k}${v}`).join(' ')}</div>
+          <div class="b-mat-bar"><span class="mb-item">🪙<span class="mb-count">${cost}</span></span>${Object.entries(mats).map(([k,v])=>{
+            const inv = inventory.find(i => i.item_type === k);
+            const have = inv ? inv.quantity : 0;
+            const pct = Math.min(100, Math.round((have/v)*100));
+            const cls = pct >= 100 ? '' : (pct >= 50 ? 'half' : 'low');
+            return '<span class="mb-item">'+MAT_ICONS[k]+'<span class="mb-track"><span class="mb-fill '+cls+'" style="width:'+pct+'%"></span></span><span class="mb-count">'+have+'/'+v+'</span></span>';
+          }).join('')}</div>
         </div>
         <div class="b-actions">
           <button class="btn-upgrade" onclick="st('town');showToast('點擊下方空地放置 ${d.icon||'🏠'}')"
@@ -1799,13 +2490,28 @@ async function renderShop() {
       return inv && inv.quantity >= v;
     });
     const canBuild = canAfford && hasMats;
+    const usedPlot = buildings.filter(b => b.def_id === d.id).length;
+    const maxPlots = 1;  // 1 per building type
 
-    return `<div class="shop-item ${owned?'disabled':''}" onclick="${owned?'':`st('town');showToast('點擊下方空地放置 ${d.icon||'🏠'}')`}">
+    return `<div class="shop-item ${owned?'disabled':''}">
       <div class="s-icon">${d.icon||'🏠'}</div>
-      <div class="s-name">${d.name}</div>
-      <div class="s-cost">${owned?'✅ 已擁有':`🪙 ${cost}`}</div>
-      <div class="s-mats">${Object.entries(mats).length ? Object.entries(mats).map(([k,v])=>`${MAT_ICONS[k]||k}${v}`).join(' ') : ''}</div>
-      <div class="s-effect">${d.effect||''}</div>
+      <div class="s-info">
+        <div class="s-name">${d.name}</div>
+        <div class="s-effect">${d.effect||''}</div>
+        ${owned ? '<div class="s-owned">✅ 已擁有</div>'
+          : `<div class="s-mat-bar">${Object.entries(mats).map(([k,v])=>{
+            const inv = inventory.find(i => i.item_type === k);
+            const have = inv ? inv.quantity : 0;
+            const pct = Math.min(100, Math.round((have/v)*100));
+            const cls = pct >= 100 ? '' : (pct >= 50 ? 'half' : 'low');
+            return '<span class="mb-item">'+MAT_ICONS[k]+'<span class="mb-track"><span class="mb-fill '+cls+'" style="width:'+pct+'%"></span></span><span class="mb-count">'+have+'/'+v+'</span></span>';
+          }).join('')}</div>
+          <div class="s-btn-row">
+            <span class="s-gold">🪙 ${cost}</span>
+            <button class="btn-upgrade" onclick="shopBuild(${d.id})" ${canBuild?'':'disabled'} style="padding:8px 14px;font-size:11px;">🏗️ 建造</button>
+          </div>`
+        }
+      </div>
     </div>`;
   }).join('');
 }

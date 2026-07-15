@@ -21,3 +21,14 @@ create_*.py
 sketches/
 refs/
 character_styles_preview.png
+
+# Generated / experiment scripts
+gen_*.py
+gen_*.png
+analyze_*.py
+fix_*.py
+find_*.py
+
+# Backups
+assets-c-backup-*/
+templates/

@@ -125,6 +125,47 @@ def migrate_db():
         )
     """)
     
+    # Migrate old building materials (iron→gear, gem→glass, star_shard→glass)
+    defs_migrated = False
+    bdefs = db.execute("SELECT id, materials FROM building_defs").fetchall()
+    OLD_TO_NEW = {'iron':'gear', 'gem':'glass', 'star_shard':'glass'}
+    for bd in bdefs:
+        try:
+            mats = json.loads(bd['materials'])
+            changed = False
+            for old_key, new_key in OLD_TO_NEW.items():
+                if old_key in mats:
+                    mats[new_key] = mats.get(new_key, 0) + mats[old_key]
+                    del mats[old_key]
+                    changed = True
+            if changed:
+                db.execute("UPDATE building_defs SET materials=? WHERE id=?", (json.dumps(mats), bd['id']))
+                defs_migrated = True
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if defs_migrated:
+        db.commit()
+    
+    # Character stats (experience, level, abilities)
+    if 'experience' not in kid_cols:
+        db.execute("ALTER TABLE kids ADD COLUMN experience INTEGER DEFAULT 0")
+    if 'level' not in kid_cols:
+        db.execute("ALTER TABLE kids ADD COLUMN level INTEGER DEFAULT 1")
+    if 'stat_points' not in kid_cols:
+        db.execute("ALTER TABLE kids ADD COLUMN stat_points INTEGER DEFAULT 0")
+    if 'ability_str' not in kid_cols:
+        db.execute("ALTER TABLE kids ADD COLUMN ability_str INTEGER DEFAULT 0")   # 體力 ❤️
+    if 'ability_atk' not in kid_cols:
+        db.execute("ALTER TABLE kids ADD COLUMN ability_atk INTEGER DEFAULT 0")   # 臂力 💪
+    if 'ability_int' not in kid_cols:
+        db.execute("ALTER TABLE kids ADD COLUMN ability_int INTEGER DEFAULT 0")   # 知識 📖
+    if 'ability_spd' not in kid_cols:
+        db.execute("ALTER TABLE kids ADD COLUMN ability_spd INTEGER DEFAULT 0")   # 速度 💨
+    if 'ability_crt' not in kid_cols:
+        db.execute("ALTER TABLE kids ADD COLUMN ability_crt INTEGER DEFAULT 0")   # 創意 🎨
+    if 'ability_brv' not in kid_cols:
+        db.execute("ALTER TABLE kids ADD COLUMN ability_brv INTEGER DEFAULT 0")   # 勇氣 ⚔️
+    
     db.commit()
     db.close()
 
@@ -244,6 +285,15 @@ def init_db():
             title       TEXT    NOT NULL,
             description TEXT,
             earned_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (kid_id) REFERENCES kids(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS town_tiles (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            kid_id      INTEGER NOT NULL,
+            cell_x      INTEGER NOT NULL,
+            cell_y      INTEGER NOT NULL,
+            tile_type   TEXT    NOT NULL DEFAULT 'road',
             FOREIGN KEY (kid_id) REFERENCES kids(id) ON DELETE CASCADE
         );
 
@@ -684,6 +734,262 @@ def adjust_points(kid_id):
     updated = db.execute("SELECT * FROM kids WHERE id = ?", (kid_id,)).fetchone()
     return jsonify(row_to_dict(updated)), 200
 
+# -- Experience & Level --
+
+EXP_PER_LEVEL = 100  # base exp needed per level
+
+def calc_level(exp):
+    """Calculate level from total experience. Lv.1 = 0exp, Lv.2 = 100exp, Lv.3 = 300exp, Lv.4 = 600exp..."""
+    level = 1
+    while exp >= level * EXP_PER_LEVEL:
+        exp -= level * EXP_PER_LEVEL
+        level += 1
+    return level, exp  # (level, exp_in_current_level)
+
+def exp_for_next_level(level):
+    """How much exp needed to go from this level to next."""
+    return level * EXP_PER_LEVEL
+
+@app.route('/api/kids/<int:kid_id>/experience', methods=['GET'])
+def get_experience(kid_id):
+    db = get_db()
+    kid = db.execute("SELECT * FROM kids WHERE id = ?", (kid_id,)).fetchone()
+    if not kid:
+        return jsonify({'error': 'Kid not found'}), 404
+    current_level = kid['level']
+    current_exp = kid['experience']
+    _, exp_in_level = calc_level(current_exp)
+    return jsonify({
+        'id': kid['id'],
+        'name': kid['name'],
+        'level': current_level,
+        'experience': current_exp,
+        'experience_in_level': exp_in_level,
+        'experience_for_next': exp_for_next_level(current_level),
+        'stat_points': kid['stat_points'],
+        'abilities': {
+            'str': kid['ability_str'],
+            'atk': kid['ability_atk'],
+            'int': kid['ability_int'],
+            'spd': kid['ability_spd'],
+            'crt': kid['ability_crt'],
+            'brv': kid['ability_brv'],
+        }
+    })
+
+@app.route('/api/kids/<int:kid_id>/experience', methods=['POST'])
+def add_experience(kid_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        amount = int(data.get('amount', 0))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'amount must be an integer'}), 400
+    if amount <= 0:
+        return jsonify({'error': 'amount must be positive'}), 400
+    
+    db = get_db()
+    kid = db.execute("SELECT * FROM kids WHERE id = ?", (kid_id,)).fetchone()
+    if not kid:
+        return jsonify({'error': 'Kid not found'}), 404
+    
+    new_exp = kid['experience'] + amount
+    new_level, _ = calc_level(new_exp)
+    stat_gained = 0
+    if new_level > kid['level']:
+        stat_gained = new_level - kid['level']  # 1 stat point per level
+    
+    db.execute(
+        "UPDATE kids SET experience = ?, level = ?, stat_points = stat_points + ? WHERE id = ?",
+        (new_exp, new_level, stat_gained, kid_id)
+    )
+    db.execute(
+        "INSERT INTO points_log (kid_id, amount, reason) VALUES (?, ?, ?)",
+        (kid_id, amount, 'experience_gained')
+    )
+    db.commit()
+    
+    updated = db.execute("SELECT * FROM kids WHERE id = ?", (kid_id,)).fetchone()
+    _, exp_in_level = calc_level(updated['experience'])
+    return jsonify({
+        'id': updated['id'],
+        'name': updated['name'],
+        'level': updated['level'],
+        'experience': updated['experience'],
+        'experience_in_level': exp_in_level,
+        'experience_for_next': exp_for_next_level(updated['level']),
+        'stat_points': updated['stat_points'],
+        'leveled_up': new_level > kid['level'],
+        'levels_gained': new_level - kid['level'],
+        'abilities': {
+            'str': updated['ability_str'],
+            'atk': updated['ability_atk'],
+            'int': updated['ability_int'],
+            'spd': updated['ability_spd'],
+            'crt': updated['ability_crt'],
+            'brv': updated['ability_brv'],
+        }
+    })
+
+# -- Ability Points Assignment --
+
+ABILITY_FIELDS = {
+    'str': 'ability_str',  # 體力 ❤️
+    'atk': 'ability_atk',  # 臂力 💪
+    'int': 'ability_int',  # 知識 📖
+    'spd': 'ability_spd',  # 速度 💨
+    'crt': 'ability_crt',  # 創意 🎨
+    'brv': 'ability_brv',  # 勇氣 ⚔️
+}
+
+@app.route('/api/kids/<int:kid_id>/abilities/assign', methods=['POST'])
+def assign_ability(kid_id):
+    data = request.get_json(silent=True) or {}
+    ability = data.get('ability', '')
+    try:
+        points = int(data.get('points', 1))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'points must be an integer'}), 400
+    
+    if ability not in ABILITY_FIELDS:
+        return jsonify({'error': f'Invalid ability. Valid: {",".join(ABILITY_FIELDS.keys())}'}), 400
+    if points < 1:
+        return jsonify({'error': 'points must be positive'}), 400
+    
+    db = get_db()
+    kid = db.execute("SELECT * FROM kids WHERE id = ?", (kid_id,)).fetchone()
+    if not kid:
+        return jsonify({'error': 'Kid not found'}), 404
+    
+    if kid['stat_points'] < points:
+        return jsonify({'error': f'Not enough stat points. Available: {kid["stat_points"]}, needed: {points}'}), 400
+    
+    col = ABILITY_FIELDS[ability]
+    db.execute(f"UPDATE kids SET stat_points = stat_points - ?, {col} = {col} + ? WHERE id = ?",
+               (points, points, kid_id))
+    db.commit()
+    
+    updated = db.execute("SELECT * FROM kids WHERE id = ?", (kid_id,)).fetchone()
+    return jsonify({
+        'id': updated['id'],
+        'name': updated['name'],
+        'stat_points': updated['stat_points'],
+        'abilities': {
+            'str': updated['ability_str'],
+            'atk': updated['ability_atk'],
+            'int': updated['ability_int'],
+            'spd': updated['ability_spd'],
+            'crt': updated['ability_crt'],
+            'brv': updated['ability_brv'],
+        }
+    })
+
+# -- Ability Buffs from Buildings --
+
+BUILDING_ABILITY_MAP = {
+    '健身室': 'str',    # Gym → +體力 ❤️
+    '競技場': 'atk',    # Arena → +臂力 💪
+    '圖書館': 'int',    # Library → +知識 📖
+    '天文台': 'int',    # Observatory → +知識 📖
+    '工坊':   'crt',    # Workshop → +創意 🎨
+    '探險公會': 'brv',  # Expedition Guild → +勇氣 ⚔️
+}
+
+def calc_ability_buffs(db, kid_id):
+    """Calculate bonus ability points from owned buildings."""
+    buffs = {'str': 0, 'atk': 0, 'int': 0, 'spd': 0, 'crt': 0, 'brv': 0}
+    rows = db.execute("""
+        SELECT bd.name, b.level FROM buildings b
+        JOIN building_defs bd ON b.def_id = bd.id
+        WHERE b.kid_id = ?
+    """, (kid_id,)).fetchall()
+    for row in rows:
+        ability = BUILDING_ABILITY_MAP.get(row['name'])
+        if ability:
+            buffs[ability] = buffs.get(ability, 0) + row['level'] * 2  # +2 per level
+    # Speed buff from Arena also gives +1 per level
+    for row in rows:
+        if row['name'] == '競技場':
+            buffs['spd'] = buffs.get('spd', 0) + row['level']  # +1 speed per level
+    return buffs
+
+@app.route('/api/kids/<int:kid_id>/abilities', methods=['GET'])
+def get_abilities(kid_id):
+    db = get_db()
+    kid = db.execute("SELECT * FROM kids WHERE id = ?", (kid_id,)).fetchone()
+    if not kid:
+        return jsonify({'error': 'Kid not found'}), 404
+    
+    base = {
+        'str': kid['ability_str'],
+        'atk': kid['ability_atk'],
+        'int': kid['ability_int'],
+        'spd': kid['ability_spd'],
+        'crt': kid['ability_crt'],
+        'brv': kid['ability_brv'],
+    }
+    buffs = calc_ability_buffs(db, kid_id)
+    total = {k: base[k] + buffs.get(k, 0) for k in base}
+    
+    return jsonify({
+        'id': kid['id'],
+        'name': kid['name'],
+        'level': kid['level'],
+        'base': base,
+        'buffs': buffs,
+        'total': total,
+        'stat_points': kid['stat_points'],
+    })
+
+# -- Task Material Drops --
+
+MATERIAL_POOLS = {
+    'common': ['wood', 'brick'],
+    'uncommon': ['glass'],
+    'rare': ['gear'],
+}
+
+def award_task_drops(kid_id, task_points, db, source='task'):
+    """Award random materials and experience when completing a task or expedition."""
+    import random
+    drops = {'materials': [], 'experience': 0}
+    
+    # Experience: 5 exp per point of the task
+    exp_amount = max(5, task_points // 2)
+    kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
+    if kid:
+        new_exp = kid['experience'] + exp_amount
+        new_level, _ = calc_level(new_exp)
+        stat_gained = 0
+        if new_level > kid['level']:
+            stat_gained = new_level - kid['level']
+        db.execute(
+            "UPDATE kids SET experience=?, level=?, stat_points=stat_points+? WHERE id=?",
+            (new_exp, new_level, stat_gained, kid_id)
+        )
+        drops['experience'] = exp_amount
+    
+    # Materials: 1-2 random items based on task value
+    num_drops = 1 if task_points < 20 else random.randint(1, 2)
+    for _ in range(num_drops):
+        pool = 'common'
+        if task_points >= 50:
+            pool = random.choices(['common', 'uncommon', 'rare'], weights=[3, 2, 1])[0]
+        elif task_points >= 20:
+            pool = random.choices(['common', 'uncommon'], weights=[3, 1])[0]
+        mat_type = random.choice(MATERIAL_POOLS[pool])
+        
+        existing = db.execute(
+            "SELECT * FROM inventory WHERE kid_id=? AND item_type=?", (kid_id, mat_type)
+        ).fetchone()
+        if existing:
+            db.execute("UPDATE inventory SET quantity=quantity+1 WHERE id=?", (existing['id'],))
+        else:
+            db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?, ?, 1)", (kid_id, mat_type))
+        
+        drops['materials'].append(mat_type)
+    
+    return drops
+
 # -- Tasks --
 
 @app.route('/api/tasks', methods=['GET'])
@@ -811,6 +1117,13 @@ def complete_task(task_id):
             if new_achs:
                 result['achievements'] = new_achs
         
+        # Award material drops + experience
+        drops = award_task_drops(kid_id, task['points'], db)
+        if drops['materials']:
+            result['material_drops'] = drops['materials']
+        if drops['experience'] > 0:
+            result['experience_gained'] = drops['experience']
+        
         db.commit()
         result['task'] = row_to_dict(db.execute("SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar FROM tasks t LEFT JOIN kids k ON t.kid_id=k.id WHERE t.id=?", (task_id,)).fetchone())
         return jsonify(result), 200
@@ -842,6 +1155,13 @@ def complete_task(task_id):
             new_achs = check_achievements(kid_id, db)
             if new_achs:
                 result['achievements'] = new_achs
+            
+            # Award material drops + experience
+            drops = award_task_drops(kid_id, task['points'], db)
+            if drops['materials']:
+                result['material_drops'] = drops['materials']
+            if drops['experience'] > 0:
+                result['experience_gained'] = drops['experience']
 
     db.commit()
     result['task'] = row_to_dict(db.execute("SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar FROM tasks t LEFT JOIN kids k ON t.kid_id=k.id WHERE t.id=?", (task_id,)).fetchone())
@@ -1458,13 +1778,30 @@ def list_buildings(kid_id):
 def place_building(kid_id):
     data = request.get_json(silent=True) or {}
     def_id = data.get('def_id')
-    plot_idx = data.get('plot_idx')
-    if not def_id:
-        return jsonify({'error': 'def_id is required'}), 400
+    cell_x = data.get('cell_x')
+    cell_y = data.get('cell_y')
+    if not def_id or cell_x is None or cell_y is None:
+        return jsonify({'error': 'def_id, cell_x, cell_y required'}), 400
+    if cell_x < 0 or cell_x > 22 or cell_y < 0 or cell_y > 14:
+        return jsonify({'error': 'Building position out of range (0-22, 0-14)'}), 400
     db = get_db()
-    existing = db.execute("SELECT id FROM buildings WHERE kid_id=? AND plot_idx=?", (kid_id, plot_idx)).fetchone()
-    if existing:
-        return jsonify({'error': 'Plot already occupied'}), 400
+    # Limit: only 1 of each building type per kid
+    dup = db.execute("SELECT id FROM buildings WHERE kid_id=? AND def_id=?", (kid_id, def_id)).fetchone()
+    if dup:
+        return jsonify({'error': '你已經興建咗呢種建築物'}), 400
+    
+    # Check 2×2 block is free (no building or tile occupies any of the 4 cells)
+    for dy in range(2):
+        for dx in range(2):
+            cx, cy = cell_x + dx, cell_y + dy
+            # Check buildings
+            existing_bld = db.execute("SELECT id FROM buildings WHERE kid_id=? AND cell_x=? AND cell_y=?", (kid_id, cx, cy)).fetchone()
+            if existing_bld:
+                return jsonify({'error': '該位置已被建築物佔用'}), 400
+            # Check tiles
+            existing_tile = db.execute("SELECT id FROM town_tiles WHERE kid_id=? AND cell_x=? AND cell_y=?", (kid_id, cx, cy)).fetchone()
+            if existing_tile:
+                return jsonify({'error': '該位置已被裝飾佔用'}), 400
 
     bdef = db.execute("SELECT * FROM building_defs WHERE id=?", (def_id,)).fetchone()
     if not bdef:
@@ -1493,10 +1830,91 @@ def place_building(kid_id):
         db.execute("UPDATE inventory SET quantity = quantity - ? WHERE kid_id=? AND item_type=?",
                    (qty, kid_id, item_type))
 
-    cur = db.execute("INSERT INTO buildings (kid_id, def_id, plot_idx, level) VALUES (?, ?, ?, 1)", (kid_id, def_id, plot_idx))
+    cur = db.execute("INSERT INTO buildings (kid_id, def_id, cell_x, cell_y, plot_idx, level) VALUES (?, ?, ?, ?, 0, 1)", (kid_id, def_id, cell_x, cell_y))
     db.commit()
     row = db.execute("SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect FROM buildings b JOIN building_defs bd ON b.def_id=bd.id WHERE b.id=?", (cur.lastrowid,)).fetchone()
     return jsonify(row_to_dict(row)), 201
+
+@app.route('/api/kids/<int:kid_id>/buildings/<int:b_id>/move', methods=['POST'])
+def move_building(kid_id, b_id):
+    data = request.get_json(silent=True) or {}
+    cell_x = data.get('cell_x')
+    cell_y = data.get('cell_y')
+    if cell_x is None or cell_y is None:
+        return jsonify({'error': 'cell_x, cell_y required'}), 400
+    if cell_x < 0 or cell_x > 22 or cell_y < 0 or cell_y > 14:
+        return jsonify({'error': 'Position out of range (0-22, 0-14)'}), 400
+    db = get_db()
+    b = db.execute("SELECT id, kid_id, stored FROM buildings WHERE id=? AND kid_id=?", (b_id, kid_id)).fetchone()
+    if not b:
+        return jsonify({'error': 'Building not found'}), 404
+    if b['stored']:
+        return jsonify({'error': 'Cannot move a stored building'}), 400
+    # Check 2×2 block is free (ignore the building itself)
+    for dy in range(2):
+        for dx in range(2):
+            cx, cy = cell_x + dx, cell_y + dy
+            existing = db.execute("SELECT id FROM buildings WHERE kid_id=? AND cell_x=? AND cell_y=? AND id!=?", (kid_id, cx, cy, b_id)).fetchone()
+            if existing:
+                return jsonify({'error': '該位置已被佔用'}), 400
+            tile = db.execute("SELECT id FROM town_tiles WHERE kid_id=? AND cell_x=? AND cell_y=?", (kid_id, cx, cy)).fetchone()
+            if tile:
+                return jsonify({'error': '該位置已被裝飾佔用'}), 400
+    db.execute("UPDATE buildings SET cell_x=?, cell_y=? WHERE id=?", (cell_x, cell_y, b_id))
+    db.commit()
+    return jsonify({'ok': True, 'cell_x': cell_x, 'cell_y': cell_y}), 200
+
+@app.route('/api/kids/<int:kid_id>/buildings/<int:b_id>/store', methods=['POST'])
+def store_building(kid_id, b_id):
+    db = get_db()
+    b = db.execute("SELECT id, stored FROM buildings WHERE id=? AND kid_id=?", (b_id, kid_id)).fetchone()
+    if not b:
+        return jsonify({'error': 'Building not found'}), 404
+    if b['stored']:
+        return jsonify({'error': 'Already stored'}), 400
+    db.execute("UPDATE buildings SET stored=1 WHERE id=?", (b_id,))
+    db.commit()
+    return jsonify({'ok': True}), 200
+
+@app.route('/api/kids/<int:kid_id>/buildings/<int:b_id>/unstored', methods=['POST'])
+def unstored_building(kid_id, b_id):
+    data = request.get_json(silent=True) or {}
+    cell_x = data.get('cell_x')
+    cell_y = data.get('cell_y')
+    if cell_x is None or cell_y is None:
+        return jsonify({'error': 'cell_x, cell_y required'}), 400
+    if cell_x < 0 or cell_x > 22 or cell_y < 0 or cell_y > 14:
+        return jsonify({'error': 'Position out of range (0-22, 0-14)'}), 400
+    db = get_db()
+    b = db.execute("SELECT id, stored FROM buildings WHERE id=? AND kid_id=?", (b_id, kid_id)).fetchone()
+    if not b:
+        return jsonify({'error': 'Building not found'}), 404
+    if not b['stored']:
+        return jsonify({'error': 'Building is not stored'}), 400
+    # Check 2×2 free
+    for dy in range(2):
+        for dx in range(2):
+            cx, cy = cell_x + dx, cell_y + dy
+            existing = db.execute("SELECT id FROM buildings WHERE kid_id=? AND cell_x=? AND cell_y=? AND id!=?", (kid_id, cx, cy, b_id)).fetchone()
+            if existing:
+                return jsonify({'error': '該位置已被佔用'}), 400
+            tile = db.execute("SELECT id FROM town_tiles WHERE kid_id=? AND cell_x=? AND cell_y=?", (kid_id, cx, cy)).fetchone()
+            if tile:
+                return jsonify({'error': '該位置已被裝飾佔用'}), 400
+    db.execute("UPDATE buildings SET stored=0, cell_x=?, cell_y=? WHERE id=?", (cell_x, cell_y, b_id))
+    db.commit()
+    row = db.execute("SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect FROM buildings b JOIN building_defs bd ON b.def_id=bd.id WHERE b.id=?", (b_id,)).fetchone()
+    return jsonify(row_to_dict(row)), 200
+
+@app.route('/api/kids/<int:kid_id>/stored-buildings', methods=['GET'])
+def get_stored_buildings(kid_id):
+    db = get_db()
+    rows = db.execute("""
+        SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect, bd.materials, bd.max_level
+        FROM buildings b JOIN building_defs bd ON b.def_id=bd.id
+        WHERE b.kid_id=? AND b.stored=1
+    """, (kid_id,)).fetchall()
+    return jsonify(rows_to_list(rows))
 
 @app.route('/api/kids/<int:kid_id>/buildings/<int:b_id>/upgrade', methods=['POST'])
 def upgrade_building(kid_id, b_id):
@@ -1568,6 +1986,60 @@ def add_to_inventory(kid_id):
     db.commit()
     updated = db.execute("SELECT * FROM inventory WHERE kid_id=?", (kid_id,)).fetchall()
     return jsonify(rows_to_list(updated))
+
+@app.route('/api/kids/<int:kid_id>/inventory/consume', methods=['POST'])
+def consume_materials(kid_id):
+    """Deduct materials from inventory. Returns 400 if insufficient."""
+    data = request.get_json(silent=True) or {}
+    items = data.get('items', {})  # e.g. {"wood":5,"brick":3}
+    if not items:
+        return jsonify({'error': 'items required'}), 400
+    
+    db = get_db()
+    # Check availability
+    for item_type, qty in items.items():
+        row = db.execute("SELECT quantity FROM inventory WHERE kid_id=? AND item_type=?", (kid_id, item_type)).fetchone()
+        if not row or row['quantity'] < qty:
+            return jsonify({'error': f'Insufficient {item_type}: have {row["quantity"] if row else 0}, need {qty}'}), 400
+    
+    # Deduct
+    for item_type, qty in items.items():
+        db.execute("UPDATE inventory SET quantity=quantity-? WHERE kid_id=? AND item_type=?", (qty, kid_id, item_type))
+    db.commit()
+    
+    updated = db.execute("SELECT * FROM inventory WHERE kid_id=?", (kid_id,)).fetchall()
+    return jsonify(rows_to_list(updated))
+
+@app.route('/api/building-recipes', methods=['GET'])
+def get_building_recipes():
+    """Return building defs with expanded material info (name + icon)."""
+    db = get_db()
+    rows = db.execute("SELECT * FROM building_defs ORDER BY cost_gold ASC").fetchall()
+    MAT_ICONS = {'wood': '🪵', 'brick': '🧱', 'glass': '🪟', 'gear': '⚙️'}
+    MAT_NAMES = {'wood': '木材', 'brick': '磚頭', 'glass': '玻璃', 'gear': '齒輪'}
+    result = []
+    for r in rows:
+        d = dict(r)
+        try:
+            mats = json.loads(d.get('materials', '{}'))
+        except (json.JSONDecodeError, TypeError):
+            mats = {}
+        d['materials_detail'] = [
+            {'id': k, 'name': MAT_NAMES.get(k, k), 'icon': MAT_ICONS.get(k, '📦'), 'qty': v}
+            for k, v in sorted(mats.items())
+        ]
+        d['materials'] = mats  # keep original dict for compatibility
+        result.append(d)
+    return jsonify(result)
+
+@app.route('/api/materials/defs', methods=['GET'])
+def get_material_defs():
+    return jsonify([
+        {'id':'wood', 'name':'木材', 'icon':'🪵'},
+        {'id':'brick', 'name':'磚頭', 'icon':'🧱'},
+        {'id':'glass', 'name':'玻璃', 'icon':'🪟'},
+        {'id':'gear', 'name':'齒輪', 'icon':'⚙️'},
+    ])
 
 # -- Expeditions --
 
@@ -1649,6 +2121,16 @@ def claim_expedition(kid_id):
         # Log expedition gold in points_log so it appears in transaction records
         db.execute("INSERT INTO points_log (kid_id, amount, reason) VALUES (?, ?, ?)", 
                    (kid_id, gold_reward, f"Expedition claim (Region {exp['region_id']})"))
+        # Award experience for expedition
+        exp_amount = random.randint(10, 30) * (exp['region_id'] or 1)
+        new_exp = kid['experience'] + exp_amount
+        new_level, _ = calc_level(new_exp)
+        stat_gained = max(0, new_level - kid['level'])
+        db.execute(
+            "UPDATE kids SET experience=?, level=?, stat_points=stat_points+? WHERE id=?",
+            (new_exp, new_level, stat_gained, kid_id)
+        )
+        events.append(f'⭐ +{exp_amount}EXP')
     db.execute("INSERT OR IGNORE INTO explored_regions (kid_id, region_id) VALUES (?, ?)", (kid_id, exp['region_id']))
     result_json = json.dumps({'gold': gold_reward, 'materials': rewards, 'events': events})
     db.execute("UPDATE expeditions SET status='completed', rewards=? WHERE id=?", (result_json, exp['id']))
@@ -1715,15 +2197,16 @@ def get_town_state(kid_id):
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
     if not kid:
         return jsonify({'error': 'Kid not found'}), 404
-    buildings = db.execute("""
+    buildings = db.execute('''
         SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect, bd.materials, bd.max_level
-        FROM buildings b JOIN building_defs bd ON b.def_id=bd.id WHERE b.kid_id=?
-    """, (kid_id,)).fetchall()
+        FROM buildings b JOIN building_defs bd ON b.def_id=bd.id WHERE b.kid_id=? AND b.stored=0
+    ''', (kid_id,)).fetchall()
     inventory = db.execute("SELECT * FROM inventory WHERE kid_id=?", (kid_id,)).fetchall()
     explored = db.execute("SELECT * FROM explored_regions WHERE kid_id=?", (kid_id,)).fetchall()
     running_exp = db.execute("SELECT * FROM expeditions WHERE kid_id=? AND status='running' ORDER BY start_time DESC LIMIT 1", (kid_id,)).fetchone()
     achievements = db.execute("SELECT * FROM achievements WHERE kid_id=? ORDER BY earned_at DESC", (kid_id,)).fetchall()
     streak = db.execute("SELECT * FROM streaks WHERE kid_id=?", (kid_id,)).fetchone()
+    tiles = db.execute("SELECT cell_x, cell_y, tile_type FROM town_tiles WHERE kid_id=?", (kid_id,)).fetchall()
     return jsonify({
         'kid': row_to_dict(kid),
         'buildings': rows_to_list(buildings),
@@ -1731,8 +2214,68 @@ def get_town_state(kid_id):
         'explored': rows_to_list(explored),
         'expedition': row_to_dict(running_exp) if running_exp else None,
         'achievements': rows_to_list(achievements),
-        'streak': row_to_dict(streak) if streak else {'current_streak': 0, 'best_streak': 0},
+        'streak': row_to_dict(streak) if streak else None,
+        'tiles': [dict(t) for t in tiles],
     })
+
+# -- Town Tiles API --
+
+@app.route('/api/kids/<int:kid_id>/tiles', methods=['POST'])
+def place_town_tile(kid_id):
+    """Place a decoration tile (road, tree, fence) on the town map."""
+    data = request.get_json(silent=True) or {}
+    cell_x = data.get('cell_x')
+    cell_y = data.get('cell_y')
+    tile_type = data.get('tile_type', 'road')
+    
+    if cell_x is None or cell_y is None:
+        return jsonify({'error': 'cell_x and cell_y required'}), 400
+    if not isinstance(cell_x, int) or not isinstance(cell_y, int):
+        return jsonify({'error': 'cell_x and cell_y must be integers'}), 400
+    if cell_x < 0 or cell_x > 23 or cell_y < 0 or cell_y > 15:
+        return jsonify({'error': 'cell out of range (0-23, 0-15)'}), 400
+    if tile_type not in ('road', 'tree', 'fence'):
+        return jsonify({'error': 'invalid tile_type'}), 400
+    
+    db = get_db()
+    kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
+    if not kid:
+        return jsonify({'error': 'Kid not found'}), 404
+    
+    # Check no building occupies this cell (buildings occupy center 2×2 of 4×4 plot)
+    building_plot_x = cell_x // 4
+    building_plot_y = cell_y // 4
+    # Center 2×2 of 4×4 block = cells [1,2] within the block
+    cell_in_block_x = cell_x % 4
+    cell_in_block_y = cell_y % 4
+    if 1 <= cell_in_block_x <= 2 and 1 <= cell_in_block_y <= 2:
+        plot_idx = building_plot_y * 6 + building_plot_x
+        existing_bld = db.execute(
+            "SELECT id FROM buildings WHERE kid_id=? AND plot_idx=?", (kid_id, plot_idx)
+        ).fetchone()
+        if existing_bld:
+            return jsonify({'error': 'Cell occupied by a building'}), 409
+    
+    # Check no existing tile at this cell
+    existing_tile = db.execute(
+        "SELECT id FROM town_tiles WHERE kid_id=? AND cell_x=? AND cell_y=?",
+        (kid_id, cell_x, cell_y)
+    ).fetchone()
+    if existing_tile:
+        # Remove tile (free placement)
+        db.execute("DELETE FROM town_tiles WHERE id=?", (existing_tile['id'],))
+        db.commit()
+        return jsonify({'action': 'removed', 'cell_x': cell_x, 'cell_y': cell_y})
+    
+    # Place tile - cost small gold
+    cost = {'road': 10, 'tree': 5, 'fence': 15}.get(tile_type, 10)
+    if kid['points'] < cost:
+        return jsonify({'error': f'Not enough gold ({cost} needed)'}), 400
+    db.execute("UPDATE kids SET points=points-? WHERE id=?", (cost, kid_id))
+    db.execute("INSERT INTO town_tiles (kid_id, cell_x, cell_y, tile_type) VALUES (?, ?, ?, ?)",
+               (kid_id, cell_x, cell_y, tile_type))
+    db.commit()
+    return jsonify({'action': 'placed', 'cell_x': cell_x, 'cell_y': cell_y, 'tile_type': tile_type, 'cost': cost})
 
 # -- Stats Enhancements (v2.2) --
 
@@ -2299,6 +2842,22 @@ def serve_dashboard_static(filename):
 @app.route('/kanban/')
 def redirect_kanban():
     return '<script>window.location.href="/dashboard/?tab=kanban"</script><a href="/dashboard/?tab=kanban">Kanban Board</a>'
+
+@app.route('/mock-horizontal')
+@app.route('/mock-horizontal/')
+def serve_mock_horizontal():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates', 'mock-horizontal.html')
+    if os.path.isfile(path):
+        return open(path, encoding='utf-8').read()
+    return '<h1>mock page not found</h1>', 404
+
+@app.route('/character-panel')
+@app.route('/character-panel/')
+def serve_character_panel():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates', 'character-panel.html')
+    if os.path.isfile(path):
+        return open(path, encoding='utf-8').read()
+    return '<h1>character panel not found</h1>', 404
 
 @app.route('/health')
 @app.route('/health/')
