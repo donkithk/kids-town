@@ -768,17 +768,49 @@ body{
    MATERIAL ICON MAP
    ═══════════════════════════════════════ */
 /* ── Game Screen ── */
-.gsw{background:#1a1a2e;border-radius:16px;overflow:hidden;margin:0 auto;max-width:480px;transition:background .3s}
-.gs{background:var(--theme-bg,#c8e0f8);margin:6px;border-radius:10px;overflow:hidden;border:3px solid #2d3436;box-shadow:inset 0 0 0 2px rgba(255,255,255,.08);transition:background .4s,color .3s}
+.gsw{background:var(--theme-bg,#8B5E3C);border-radius:16px;overflow:hidden;margin:0 auto;max-width:480px;transition:background .3s;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0px,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0px,
+      transparent 40px,
+      rgba(0,0,0,0.02) 40px,
+      rgba(0,0,0,0.02) 42px
+    ),
+    linear-gradient(
+      180deg,
+      #C49A6C 0%,
+      #A67B4F 8%,
+      #8B5E3C 15%,
+      #7A4E2E 25%,
+      #8B5E3C 35%,
+      #A67B4F 42%,
+      #7A4E2E 50%,
+      #8B5E3C 58%,
+      #A67B4F 65%,
+      #6B3F1F 75%,
+      #8B5E3C 82%,
+      #A67B4F 90%,
+      #C49A6C 100%
+    )
+}
+.gs{background:var(--theme-bg,rgba(200,224,248,0.85));margin:6px;border-radius:10px;overflow:hidden;border:3px solid #5a3a1a;box-shadow:inset 0 0 0 2px rgba(255,255,255,.08);transition:background .4s,color .3s}
 .mp{margin:0 5px 5px;border:3px solid #5a3a1a;border-radius:6px;overflow:hidden;box-shadow:inset 0 0 0 2px #8a7a5a,0 0 0 2px #3a2a1a}
 .dbx{margin:5px 6px;background:linear-gradient(135deg,#ffeaa7,#f8d880);border:3px solid #5a3a1a;border-radius:8px;padding:8px 10px;position:relative;box-shadow:inset 0 0 0 2px #fff3bf,0 2px 0 #5a3a1a}
 .dbx::before{content:'';position:absolute;top:-3px;left:18px;width:0;height:0;border:0 5px 6px;border-color:transparent transparent #5a3a1a;border-style:solid}
 .dbt{font-size:12px;color:#3a2a1a;line-height:1.5;font-weight:600}
 .dbt .h{color:#e17055;font-weight:800}
-.act{display:flex;gap:5px;padding:5px 6px 6px}
-.act button{flex:1;padding:7px 5px;border-radius:7px;border:none;font-family:var(--pixel-font);font-size:7px;cursor:pointer;text-align:center;transition:all .12s;box-shadow:0 2px 0 rgba(0,0,0,.12);position:relative;top:0}
+.act{display:flex;gap:6px;padding:6px 6px 8px}
+.act button{flex:1;padding:10px 14px;border-radius:12px;border:none;font-family:var(--pixel-font);font-size:15px;font-weight:700;cursor:pointer;text-align:center;transition:all .12s;box-shadow:0 2px 0 rgba(0,0,0,.12);position:relative;top:0;display:flex;flex-direction:row;align-items:center;gap:8px;justify-content:center}
 .act button:active{top:1px;box-shadow:0 1px 0}
-.act button .i{font-size:15px;display:block;margin-bottom:1px}
+.btn-icon{width:48px;height:48px;display:block;object-fit:contain}
 .act .e{background:linear-gradient(180deg,#74b9ff,#5a9adf);color:#fff}
 .act .q{background:linear-gradient(180deg,#55efc4,#3dd9a0);color:#2d3436}
 .act .b{background:linear-gradient(180deg,#fab1a0,#e8866a);color:#fff}
@@ -792,40 +824,29 @@ body{
 .di:active{background:var(--theme-tab-active-bg,#d0e0f0)}
 .di .ic{font-size:15px;width:22px;text-align:center;flex-shrink:0}
 .di .sb{font-size:6px;font-family:var(--pixel-font);color:var(--theme-text-secondary,#6a8aaa);margin-left:auto;opacity:.6}
-.gh{background:linear-gradient(90deg,#4a6a8a,#5a7a9a);padding:6px 8px;display:flex;align-items:center;gap:5px;color:#f0f8ff}
-.gh .av{width:30px;height:30px;background:rgba(255,255,255,.15);border:2px solid #f0f8ff;border-radius:5px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0}
+/* ── Header (Wood style) ── */
+.gh{background:linear-gradient(90deg,#3a2a1a,#5a3a1a);padding:4px 6px;display:flex;align-items:center;gap:5px;color:#f0e8d0;flex-wrap:wrap}
+.gh .av{width:32px;height:32px;background:rgba(255,255,255,.12);border:2px solid #f0e8d0;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;position:relative;cursor:pointer}
 .gh .av img{width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
 /* Ability tooltip */
-.gh .av{
-  position:relative;cursor:pointer;
-}
-.av-tip{
-  display:none;
-  position:fixed;z-index:999;
-  background:rgba(0,0,0,0.88);backdrop-filter:blur(6px);
-  color:#fff;border-radius:10px;padding:10px 12px;
-  font-size:11px;line-height:1.6;min-width:150px;
-  box-shadow:0 4px 20px rgba(0,0,0,0.3);
-  pointer-events:none;
-}
+.av-tip{display:none;position:fixed;z-index:999;background:rgba(0,0,0,0.88);backdrop-filter:blur(6px);color:#fff;border-radius:10px;padding:10px 12px;font-size:11px;line-height:1.6;min-width:150px;box-shadow:0 4px 20px rgba(0,0,0,0.3);pointer-events:none}
 .av-tip.show{display:block}
 .av-tip .tl{font-size:9px;font-family:var(--pixel-font);color:#ffeaa7;margin-bottom:3px}
 .av-tip .rl{display:flex;justify-content:space-between;gap:8px}
 .av-tip .rl .c{color:#94a3b8}
 .av-tip .rl .v{color:#fff;font-weight:700}
 .av-tip .bl{color:#22c55e;font-size:10px}
-.gh .in{flex:1;min-width:0}
-.gh .nm{font-size:9px;font-weight:800;font-family:var(--pixel-font);margin-bottom:1px}
+.gh .in{display:flex;flex-direction:column;gap:0;flex-shrink:0}
+.gh .nm{font-size:11px;font-weight:800;font-family:var(--pixel-font);color:#f0e8d0;line-height:1.2}
+.gh .nm-lv{font-size:8px;color:#c4a060;font-family:var(--pixel-font)}
+.gh .hdr-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .gh .rw{display:flex;align-items:center;gap:3px}
-.gh .xp{flex:1;height:5px;background:rgba(0,0,0,.25);border-radius:2px;overflow:hidden;border:1px solid rgba(255,255,255,.15)}
-.gh .xf{height:100%;width:60%;background:linear-gradient(90deg,#a29bfe,#6c5ce7);border-radius:2px}
-.gh .lv{font-size:6px;font-family:var(--pixel-font);color:#ffeaa7;white-space:nowrap}
-.gh .ic{display:flex;align-items:center;gap:4px;flex-shrink:0}
-.gh .ic .i{display:flex;align-items:center;gap:1px;font-size:10px;font-weight:700}
-.gh .ic .i .n{font-family:var(--pixel-font);font-size:7px;color:#f8e8a0}
-.gh .ic .i.st .n{color:#ffd700}
-.gh .mb{background:none;border:2px solid rgba(255,255,255,.3);color:#f0f8ff;font-size:7px;font-family:var(--pixel-font);padding:4px 5px;border-radius:4px;cursor:pointer;flex-shrink:0}
-.gh .mb:active{background:rgba(255,255,255,.1)}
+.gh .xp{height:5px;width:60px;background:rgba(0,0,0,.3);border-radius:3px;overflow:hidden;border:1px solid rgba(255,255,255,.1)}
+.gh .xf{height:100%;width:0%;background:linear-gradient(90deg,#a29bfe,#6c5ce7);border-radius:3px;transition:width .3s}
+.hdr-res{display:flex;gap:2px;flex-wrap:wrap;align-items:center}
+.hdr-res span{font-size:8px;display:flex;align-items:center;gap:1px;background:rgba(0,0,0,.15);padding:1px 4px;border-radius:3px;color:#f0e8d0}
+.hdr-res span .n{font-family:var(--pixel-font);font-size:7px;color:#f8e8a0}
+.gh .mb{background:none;border:2px solid rgba(255,255,255,.2);color:#f0e8d0;font-size:16px;padding:2px 6px;border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1}
 /* ── Set Screen ── */
 .ss{padding:12px}
 .ss .s{margin-bottom:10px}
@@ -881,17 +902,23 @@ body{
         <div class="av" id="hudAv">🐱</div>
         <div class="av-tip" id="hudTip"></div>
         <div class="in">
-          <div class="nm" id="hudNm">小強 Lv.5</div>
+          <div class="nm" id="hudNm">小強</div>
+          <div class="nm-lv" id="hudLv">Lv.1</div>
+        </div>
+        <div class="hdr-mid">
           <div class="rw">
             <div class="xp"><div class="xf" id="hudXp"></div></div>
-            <span class="lv">EXP</span>
+          </div>
+          <div class="hdr-res" id="hdrRes">
+            <span>💰<span class="n" id="hudCo">0</span></span>
+            <span>⭐<span class="n" id="hudSt">0</span></span>
+            <span class="mat" data-mat="wood">🪵<span class="n">0</span></span>
+            <span class="mat" data-mat="brick">🧱<span class="n">0</span></span>
+            <span class="mat" data-mat="glass">🪟<span class="n">0</span></span>
+            <span class="mat" data-mat="gear">⚙️<span class="n">0</span></span>
           </div>
         </div>
-        <div class="ic">
-          <span class="i">💰 <span class="n" id="hudCo">0</span></span>
-          <span class="i st">⭐ <span class="n" id="hudSt">0</span></span>
-        </div>
-        <button class="mb" onclick="td()">MENU</button>
+        <button class="mb" onclick="td()">☰</button>
       </div>
 
 
@@ -1191,9 +1218,9 @@ body{
         <div class="dbt" id="dbt">🌟 歡迎返嚟！今日有 <span class="h">新任務</span> 等緊你！</div>
       </div>
       <div class="act">
-        <button class="e" onclick="st('expedition')"><span class="i">🗺️</span>探索</button>
-        <button class="q" onclick="st('tasks')"><span class="i">📋</span>任務</button>
-        <button class="b" onclick="st('shop')"><span class="i">🎒</span>背包</button>
+        <button class="e" onclick="st('expedition')"><img src="assets-c/btn-explore.png" class="btn-icon" alt="">探索</button>
+        <button class="q" onclick="st('tasks')"><img src="assets-c/btn-tasks.png" class="btn-icon" alt="">任務</button>
+        <button class="b" onclick="st('shop')"><img src="assets-c/btn-backpack.png" class="btn-icon" alt="">背包</button>
       </div>
     </div>
     <div class="dov" id="dov" onclick="td()"></div>
@@ -1439,16 +1466,38 @@ function characterImage(avatar) {
 
 function updateHeader() {
   const kid = townData.kid || currentUser || {};
+  // Name + Level
   const nmEl = document.getElementById('hudNm');
-  if (nmEl) nmEl.textContent = `${kid.name||'小朋友'}`;
-  const coEl = document.getElementById('hudCo');
-  if (coEl) coEl.textContent = kid.points || 0;
+  if (nmEl) nmEl.textContent = kid.name||'小朋友';
+  const lvEl = document.getElementById('hudLv');
+  if (lvEl) lvEl.textContent = 'Lv.' + (kid.level||1);
+  // Avatar
   const avEl = document.getElementById('hudAv');
   if (avEl) {
     const imgSrc = characterImage(kid.avatar);
     avEl.innerHTML = `<img src="${imgSrc}" onerror="this.style.display='none';this.parentElement.textContent='${kid.avatar||'🐱'}'" alt="${kid.name||''}">`;
   }
-  // Update town map character sprite
+  // Coins & Stars
+  const coEl = document.getElementById('hudCo');
+  if (coEl) coEl.textContent = kid.points || 0;
+  const stEl = document.getElementById('hudSt');
+  if (stEl) stEl.textContent = kid.stars || 0;
+  // EXP bar
+  const xfEl = document.getElementById('hudXp');
+  if (xfEl) {
+    const exp = kid.experience || 0;
+    const needed = (kid.level||1) * 100;
+    const pct = Math.min(100, Math.round(exp / needed * 100));
+    xfEl.style.width = pct + '%';
+  }
+  // Materials inventory
+  const inv = townData.inventory || [];
+  document.querySelectorAll('#hdrRes .mat .n').forEach(el => {
+    const mat = el.closest('.mat').dataset.mat;
+    const item = inv.find(i => i.item_type === mat);
+    el.textContent = item ? item.quantity : 0;
+  });
+  // Town character sprite (unchanged)
   const charSprite = document.getElementById('charSprite');
   if (charSprite) {
     const imgSrc = characterImage(kid.avatar);
