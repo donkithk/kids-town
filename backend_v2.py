@@ -70,6 +70,25 @@ def serve_kids_static(filename):
         return resp
     return jsonify({'error': 'not found'}), 404
 
+@app.route('/assets-c/<path:filename>')
+def serve_assets(filename):
+    html_dir = os.path.join(os.path.dirname(__file__), '')
+    path = os.path.join(html_dir, 'assets-c', filename)
+    # Prevent directory traversal
+    path = os.path.normpath(path)
+    if not path.startswith(os.path.normpath(os.path.join(html_dir, 'assets-c'))):
+        return jsonify({'error': 'forbidden'}), 403
+    if os.path.isfile(path):
+        ext = os.path.splitext(filename)[1]
+        mime_map = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.ico': 'image/x-icon'}
+        ct = mime_map.get(ext, 'application/octet-stream')
+        with open(path, 'rb') as f:
+            resp = make_response(f.read())
+        resp.headers['Content-Type'] = ct
+        resp.headers['Cache-Control'] = 'public, max-age=86400'
+        return resp
+    return jsonify({'error': 'not found'}), 404
+
 @app.route('/')
 def serve_root():
     # Root serves dashboard index
