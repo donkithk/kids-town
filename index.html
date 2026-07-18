@@ -832,10 +832,10 @@ body{
 }
 .gs{background:var(--theme-bg,rgba(200,224,248,0.85));margin:6px;border-radius:10px;overflow:hidden;border:3px solid #5a3a1a;box-shadow:inset 0 0 0 2px rgba(255,255,255,.08);transition:background .4s,color .3s}
 .mp{margin:0 5px 5px;border:3px solid #5a3a1a;border-radius:6px;overflow:hidden;box-shadow:inset 0 0 0 2px #8a7a5a,0 0 0 2px #3a2a1a}
-.dbx{margin:5px 6px;background:linear-gradient(135deg,#ffeaa7,#f8d880);border:3px solid #5a3a1a;border-radius:8px;padding:8px 10px;position:relative;box-shadow:inset 0 0 0 2px #fff3bf,0 2px 0 #5a3a1a}
-.dbx::before{content:'';position:absolute;top:-3px;left:18px;width:0;height:0;border:0 5px 6px;border-color:transparent transparent #5a3a1a;border-style:solid}
-.dbt{font-size:12px;color:#3a2a1a;line-height:1.5;font-weight:600}
-.dbt .h{color:#e17055;font-weight:800}
+.dbx{margin:5px 6px;background:#1a1a2e;border:2px solid #fff;border-radius:8px;padding:10px 12px;position:relative;min-height:44px;display:flex;align-items:center;cursor:pointer}
+.dbx::before{display:none}
+.dbt{font-size:13px;color:#fff;line-height:1.6;font-weight:500;width:100%}
+.dbt .h{color:#fbbf24;font-weight:800}
 .act{display:flex;gap:6px;padding:6px 6px 8px}
 .act button{flex:1;padding:10px 14px;border-radius:12px;border:none;font-family:var(--pixel-font);font-size:15px;font-weight:700;cursor:pointer;text-align:center;transition:all .12s;box-shadow:0 2px 0 rgba(0,0,0,.12);position:relative;top:0;display:flex;flex-direction:row;align-items:center;gap:8px;justify-content:center}
 .act button:active{top:1px;box-shadow:0 1px 0}
@@ -3524,11 +3524,11 @@ async function battleAction(action) {
           rew.push(`${MAT_ICONS[k]||'📦'} x${v}`);
         });
       }
-      showDbt(`🎉 戰鬥勝利！擊敗 ${data.monster_name||'怪物'} 獲得 ${rew.join(' · ')} ✨`);
+      showDbt(`🎉 戰鬥勝利！擊敗 ${data.monster_name||'怪物'} 獲得 ${rew.join(' · ')} ✨`, 0);
     } else if (data.status === 'lost' || data.battle_result === 'lost') {
-      showDbt(`💀 被 ${data.monster_name||'怪物'} 打敗了...`);
+      showDbt(`💀 被 ${data.monster_name||'怪物'} 打敗了...`, 0);
     } else if (data.status === 'fled' || data.battle_result === 'fled') {
-      showDbt(`🏃 逃走了！`);
+      showDbt(`🏃 逃走了！`, 0);
     }
   } catch(e) { showToast('⚠️ 網絡錯誤', 'error'); }
 }
@@ -3760,8 +3760,16 @@ function showDbt(msg, duration) {
   el.style.animation = 'none';
   void el.offsetHeight;
   el.style.animation = 'fadeInOut 3s ease';
-  if (duration !== 0) {
-    setTimeout(() => { el.innerHTML = WELCOME_MSG; }, duration || 4000);
+  // Clear any pending auto-restore
+  if (window._dbtTimer) { clearTimeout(window._dbtTimer); window._dbtTimer = null; }
+  if (duration === 0) {
+    // Persistent — stays until user clicks
+    el.style.cursor = 'pointer';
+    el.parentElement.style.cursor = 'pointer';
+  } else {
+    el.style.cursor = 'default';
+    el.parentElement.style.cursor = 'pointer';
+    window._dbtTimer = setTimeout(() => { el.innerHTML = WELCOME_MSG; }, duration || 4000);
   }
 }
 
@@ -3791,6 +3799,14 @@ function showToast(msg, type) {
 // Close modal on overlay click
 document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal();
+});
+
+// Click footer message box to restore welcome
+document.querySelector('.dbx')?.addEventListener('click', () => {
+  const dbt = document.getElementById('dbt');
+  if (dbt && dbt.innerHTML !== WELCOME_MSG) {
+    dbt.innerHTML = WELCOME_MSG;
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════
