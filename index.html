@@ -3442,25 +3442,43 @@ function renderBattleMode(exp) {
       ${fleeBtn}
     </div>`;
   } else {
+    // ── Battle End: show rewards & result ──
+    const rewards = [];
+    if (bd.gold_reward > 0) rewards.push(`🪙 ${bd.gold_reward}`);
+    if (bd.mat_reward) {
+      Object.entries(bd.mat_reward).forEach(([k,v]) => {
+        const icon = MAT_ICONS[k] || '📦';
+        rewards.push(`${icon} x${v}`);
+      });
+    }
+    const rewHtml = rewards.length ? `<div style="font-size:12px;margin-top:4px;opacity:0.8">${rewards.join(' · ')}</div>` : '';
     if (result === 'won') {
-      resultHtml = `<div class="bt-result win">🎉 勝利！獲得獎勵！</div>`;
+      resultHtml = `<div class="bt-result win">🎉 勝利！${rewHtml}</div>`;
     } else if (result === 'lost' || result === 'fled') {
       resultHtml = `<div class="bt-result ${result === 'lost' ? 'lose' : 'flee'}">${result === 'lost' ? '💀 戰敗...' : '🏃 逃走了'}</div>`;
     }
     actionHtml = `<button class="exp-btn go" onclick="closeExpedition()" style="margin-top:8px;">返回</button>`;
   }
 
+  // Monster generated art
+  const MONSTER_ART = {
+    1:'https://image.pollinations.ai/prompt/cute%20chibi%20wolf%20pixel%20art%20game%20sprite%20woodland',
+    2:'https://image.pollinations.ai/prompt/cute%20chibi%20polar%20bear%20pixel%20art%20game%20sprite%20snow',
+    3:'https://image.pollinations.ai/prompt/cute%20chibi%20scorpion%20pixel%20art%20game%20sprite%20desert',
+  };
+  const monsterArt = MONSTER_ART[bd.monster_id] || MONSTER_ART[1];
+
   return `<div class="battle-scene">
     <div class="bt-vs">
       <div class="bt-side">
-        <div class="bt-icon">${bd.monster_icon||'🐺'}</div>
+        <div class="bt-icon"><img src="${monsterArt}" style="width:48px;height:48px;border-radius:50%;border:2px solid rgba(255,255,255,.3);object-fit:cover;" onerror="this.style.display='none';this.nextSibling&&(this.nextSibling.style.display='')"><span style="display:none">${bd.monster_icon||'🐺'}</span></div>
         <div class="bt-name">${bd.monster_name||'怪物'}</div>
         <div class="bt-hp-bar"><div class="bt-hp-fill monster" style="width:${mHpPct}%"></div></div>
         <div class="bt-hp-text">HP ${mHp}/${mMax}</div>
       </div>
       <div class="bt-vs-text">VS</div>
       <div class="bt-side">
-        <div class="bt-icon">${characterImage() ? '<img src="'+characterImage(townData?.kid?.avatar)+'" style="width:40px;height:40px;object-fit:cover;border-radius:50%;">' : '🧑'}</div>
+        <div class="bt-icon" style="font-size:40px">${townData?.kid?.avatar||'🧑'}</div>
         <div class="bt-name">${townData?.kid?.name||'你'}</div>
         <div class="bt-hp-bar"><div class="bt-hp-fill player" style="width:${pHpPct}%"></div></div>
         <div class="bt-hp-text">HP ${pHp}/${pMax}</div>
