@@ -3457,25 +3457,8 @@ function renderBattleMode(exp) {
     </div>
     <button class="exp-btn danger" onclick="abandonBattle()" style="margin-top:4px;font-size:10px;width:100%;padding:4px;background:#475569;">↩️ 放棄探險（返回）</button>`;
   } else {
-    // ── Battle End: show rewards modal ──
-    const rewards = [];
-    if (bd.gold_reward > 0) rewards.push(`🪙 ${bd.gold_reward}`);
-    if (bd.mat_reward) {
-      Object.entries(bd.mat_reward).forEach(([k,v]) => {
-        const icon = MAT_ICONS[k] || '📦';
-        rewards.push(`${icon} x${v}`);
-      });
-    }
+    // ── Battle End ──
     if (result === 'won') {
-      // Show reward modal
-      if (rewards.length) {
-        setTimeout(() => showModal(`
-          <h2>🎉 戰鬥勝利！</h2>
-          <p>擊敗了 ${bd.monster_name||'怪物'}！</p>
-          <div class="modal-items">${rewards.map(r => `<span class="modal-item">${r}</span>`).join('')}</div>
-          <button onclick="closeModal();closeExpedition()" style="background:#f59e0b;color:#fff;">👍 太好了！</button>
-        `), 500);
-      }
       resultHtml = `<div class="bt-result win">🎉 勝利！</div>`;
     } else if (result === 'lost' || result === 'fled') {
       resultHtml = `<div class="bt-result ${result === 'lost' ? 'lose' : 'flee'}">${result === 'lost' ? '💀 戰敗...' : '🏃 逃走了'}</div>`;
@@ -3525,6 +3508,26 @@ async function battleAction(action) {
     if (data.error) { showToast('⚠️ '+data.error, 'error'); return; }
     townData.expedition = data;
     renderExpedition();
+    // Show rewards in footer message box if won
+    if (data.status === 'won' || data.battle_result === 'won') {
+      const rew = [];
+      if (data.gold_reward > 0) rew.push(`🪙 ${data.gold_reward}`);
+      if (data.mat_reward) {
+        Object.entries(data.mat_reward).forEach(([k,v]) => {
+          rew.push(`${MAT_ICONS[k]||'📦'} x${v}`);
+        });
+      }
+      const el = document.getElementById('dbt');
+      if (el) {
+        el.innerHTML = `🎉 戰鬥勝利！擊敗 ${data.monster_name||'怪物'} 獲得 ${rew.join(' · ')} ✨`;
+        el.style.animation = 'none';
+        void el.offsetHeight;
+        el.style.animation = 'fadeInOut 3s ease';
+        setTimeout(() => {
+          el.innerHTML = '🌟 歡迎返嚟！今日有 <span class="h">新任務</span> 等緊你！';
+        }, 4000);
+      }
+    }
   } catch(e) { showToast('⚠️ 網絡錯誤', 'error'); }
 }
 
