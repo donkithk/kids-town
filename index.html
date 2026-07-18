@@ -600,6 +600,15 @@ body{
 .reward-popup .reward-items{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:8px}
 .reward-popup .reward-item{background:#fef3c7;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:600}
 .reward-popup .reward-events{font-size:11px;color:#64748b}
+/* Modal overlay */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:300;display:none;align-items:center;justify-content:center}
+.modal-overlay.active{display:flex}
+.modal{background:#fff;border-radius:16px;padding:20px 24px;min-width:260px;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.25);text-align:center;animation:slideUp 0.3s ease}
+.modal h2{font-size:18px;margin-bottom:10px}
+.modal p{font-size:13px;color:#64748b;margin-bottom:12px}
+.modal .modal-items{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:10px 0}
+.modal .modal-item{background:#fef3c7;padding:6px 12px;border-radius:10px;font-size:14px;font-weight:700}
+.modal button{margin-top:8px;padding:8px 20px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer}
 .reward-popup button{margin-top:8px;padding:14px 20px;border-radius:8px;border:none;background:#6366f1;color:#fff;font-weight:700;cursor:pointer}
 
 /* ═══════════════════════════════════════
@@ -1259,6 +1268,11 @@ body{
     </div>
   </div>
 <div id="toast"></div>
+
+<!-- Modal Overlay -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalContent"></div>
+</div>
 
 <!-- Reward Popup -->
 <div class="reward-popup" id="rewardPopup"></div>
@@ -3443,7 +3457,7 @@ function renderBattleMode(exp) {
     </div>
     <button class="exp-btn danger" onclick="abandonBattle()" style="margin-top:4px;font-size:10px;width:100%;padding:4px;background:#475569;">↩️ 放棄探險（返回）</button>`;
   } else {
-    // ── Battle End: show rewards & result ──
+    // ── Battle End: show rewards modal ──
     const rewards = [];
     if (bd.gold_reward > 0) rewards.push(`🪙 ${bd.gold_reward}`);
     if (bd.mat_reward) {
@@ -3452,9 +3466,17 @@ function renderBattleMode(exp) {
         rewards.push(`${icon} x${v}`);
       });
     }
-    const rewHtml = rewards.length ? `<div style="font-size:12px;margin-top:4px;opacity:0.8">${rewards.join(' · ')}</div>` : '';
     if (result === 'won') {
-      resultHtml = `<div class="bt-result win">🎉 勝利！${rewHtml}</div>`;
+      // Show reward modal
+      if (rewards.length) {
+        setTimeout(() => showModal(`
+          <h2>🎉 戰鬥勝利！</h2>
+          <p>擊敗了 ${bd.monster_name||'怪物'}！</p>
+          <div class="modal-items">${rewards.map(r => `<span class="modal-item">${r}</span>`).join('')}</div>
+          <button onclick="closeModal();closeExpedition()" style="background:#f59e0b;color:#fff;">👍 太好了！</button>
+        `), 500);
+      }
+      resultHtml = `<div class="bt-result win">🎉 勝利！</div>`;
     } else if (result === 'lost' || result === 'fled') {
       resultHtml = `<div class="bt-result ${result === 'lost' ? 'lose' : 'flee'}">${result === 'lost' ? '💀 戰敗...' : '🏃 逃走了'}</div>`;
     }
@@ -3479,7 +3501,7 @@ function renderBattleMode(exp) {
       </div>
       <div class="bt-vs-text">VS</div>
       <div class="bt-side">
-        <div class="bt-icon">${kidAvatarImg()}</div>
+        <div class="bt-icon"><img src="${characterImage(townData?.kid?.avatar)}" style="width:48px;height:48px;border-radius:50%;border:2px solid rgba(255,255,255,.3);object-fit:cover;"></div>
         <div class="bt-name">${townData?.kid?.name||'你'}</div>
         <div class="bt-hp-bar"><div class="bt-hp-fill player" style="width:${pHpPct}%"></div></div>
         <div class="bt-hp-text">HP ${pHp}/${pMax}</div>
@@ -3719,6 +3741,14 @@ function closeRewardPopup() {
 // ═══════════════════════════════════════════════════════════════
 // MODAL / TOAST HELPERS
 // ═══════════════════════════════════════════════════════════════
+function showModal(html) {
+  const overlay = document.getElementById('modalOverlay');
+  const content = document.getElementById('modalContent');
+  if (!overlay || !content) return;
+  content.innerHTML = html;
+  overlay.classList.add('active');
+}
+
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('active');
 }
