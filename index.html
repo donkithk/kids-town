@@ -3440,7 +3440,8 @@ function renderBattleMode(exp) {
       <button class="exp-btn" onclick="battleAction('defend')" style="flex:1;font-size:11px;background:#6366f1;">🛡️ 防禦</button>
       <button class="exp-btn" onclick="battleAction('special')" ${brvDisabled} style="flex:1;font-size:11px;background:#f59e0b;">💥 必殺技</button>
       ${fleeBtn}
-    </div>`;
+    </div>
+    <button class="exp-btn danger" onclick="abandonBattle()" style="margin-top:4px;font-size:10px;width:100%;padding:4px;background:#475569;">↩️ 放棄探險（返回）</button>`;
   } else {
     // ── Battle End: show rewards & result ──
     const rewards = [];
@@ -3478,7 +3479,7 @@ function renderBattleMode(exp) {
       </div>
       <div class="bt-vs-text">VS</div>
       <div class="bt-side">
-        <div class="bt-icon" style="font-size:40px">${townData?.kid?.avatar||'🧑'}</div>
+        <div class="bt-icon">${kidAvatarImg()}</div>
         <div class="bt-name">${townData?.kid?.name||'你'}</div>
         <div class="bt-hp-bar"><div class="bt-hp-fill player" style="width:${pHpPct}%"></div></div>
         <div class="bt-hp-text">HP ${pHp}/${pMax}</div>
@@ -3506,8 +3507,37 @@ async function battleAction(action) {
 }
 
 function closeExpedition() {
+  // Clean up running expedition in DB
+  const kidId = currentUser?.id || townData?.kid?.id;
+  if (kidId) {
+    fetch(`${API}/api/kids/${kidId}/expedition/claim`, {method:'POST'}).catch(()=>{});
+  }
   townData.expedition = null;
   renderExpedition();
+}
+
+async function abandonBattle() {
+  // Flee and clean up in one go
+  const kidId = currentUser?.id || townData?.kid?.id;
+  if (!kidId) return;
+  try {
+    await fetch(`${API}/api/kids/${kidId}/expedition/battle-action`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'flee'})
+    });
+  } catch(e) {}
+  try {
+    await fetch(`${API}/api/kids/${kidId}/expedition/claim`, {method:'POST'});
+  } catch(e) {}
+  townData.expedition = null;
+  renderExpedition();
+}
+
+function kidAvatarImg() {
+  const avatar = townData?.kid?.avatar || '🧒';
+  // Generated character image
+  const pollUrl = `https://image.pollinations.ai/prompt/cute%20chibi%20${encodeURIComponent(townData?.kid?.name||'kid')}%20pixel%20art%20game%20avatar`;
+  return `<img src="${pollUrl}" style="width:48px;height:48px;border-radius:50%;border:2px solid rgba(255,255,255,.3);object-fit:cover;" onerror="this.style.display='none';this.nextSibling.style.display=''" loading="lazy"><span style="display:none;font-size:40px">${avatar}</span>`;
 }
 
 function renderQuizMode(exp) {
