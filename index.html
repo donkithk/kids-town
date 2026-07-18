@@ -3412,7 +3412,9 @@ async function startBattle(regionId) {
 }
 
 function renderBattleMode(exp) {
-  const bd = exp.expedition_data || exp;
+  const bd = (typeof exp.expedition_data === 'string')
+    ? JSON.parse(exp.expedition_data)
+    : (exp.expedition_data || exp);
   if (typeof bd === 'string') return renderBattleLobby();
   const pMax = bd.player_max_hp || 30;
   const pHp = bd.player_hp || 0;
