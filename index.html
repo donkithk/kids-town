@@ -3418,6 +3418,11 @@ function renderBattleLobby() {
 async function startBattle(regionId) {
   const kidId = currentUser?.id || townData?.kid?.id;
   if (!kidId) return;
+  // Auto-clean stale expedition
+  if (townData.expedition && (townData.expedition.status === 'running' || townData.expedition.status === 'fighting')) {
+    try { await fetch(`${API}/api/kids/${kidId}/expedition/claim`, {method:'POST'}); } catch(e) {}
+    townData.expedition = null;
+  }
   try {
     const r = await fetch(`${API}/api/kids/${kidId}/expedition/battle-start`, {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -3434,7 +3439,7 @@ async function startBattle(regionId) {
       dbtEl.style.color = '#fff';
       dbtEl.style.whiteSpace = 'pre-wrap';
     }
-  } catch(e) { showToast('⚠️ 網絡錯誤', 'error'); }
+  } catch(e) { showToast('⚠️ 網絡錯誤: '+e.message, 'error'); }
 }
 
 function renderBattleMode(exp) {
