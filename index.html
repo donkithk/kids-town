@@ -3530,7 +3530,7 @@ async function battleAction(action) {
     const turns = data.turns || [];
     const lastTurn = turns[turns.length - 1];
     if (lastTurn && lastTurn.log && lastTurn.log.length && dbtEl) {
-      dbtEl.innerHTML = lastTurn.log[0];
+      dbtEl.innerHTML = lastTurn.log.join('<br>');
       dbtEl.style.color = '#fff';
       dbtEl.style.whiteSpace = 'pre-wrap';
     }
