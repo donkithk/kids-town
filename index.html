@@ -3422,6 +3422,7 @@ async function startBattle(regionId) {
     if (data.error) { showToast('⚠️ '+data.error, 'error'); return; }
     townData.expedition = data;
     renderExpedition();
+    showDbt(`⚔️ 進入戰鬥！vs ${data.monster_name||'怪物'}`, 0);
   } catch(e) { showToast('⚠️ 網絡錯誤', 'error'); }
 }
 
@@ -3437,7 +3438,6 @@ function renderBattleMode(exp) {
   const result = bd.battle_result || bd.status;
   const turns = bd.turns || [];
   const lastTurn = turns.length > 0 ? turns[turns.length-1] : null;
-  const logHtml = lastTurn ? lastTurn.log.map(l => `<div class="bt-log-line">${l}</div>`).join('') : '';
 
   const pHpPct = Math.max(0, Math.round(pHp / pMax * 100));
   const mHpPct = Math.max(0, Math.round(mHp / mMax * 100));
@@ -3490,7 +3490,6 @@ function renderBattleMode(exp) {
         <div class="bt-hp-text">HP ${pHp}/${pMax}</div>
       </div>
     </div>
-    ${logHtml ? `<div class="bt-log">${logHtml}</div>` : ''}
     ${resultHtml}
     ${actionHtml}
   </div>`;
@@ -3508,7 +3507,15 @@ async function battleAction(action) {
     if (data.error) { showToast('⚠️ '+data.error, 'error'); return; }
     townData.expedition = data;
     renderExpedition();
-    // Show rewards in footer message box if won
+
+    // Show last turn log in footer
+    const turns = data.turns || [];
+    const lastTurn = turns[turns.length - 1];
+    if (lastTurn && lastTurn.log && lastTurn.log.length) {
+      showDbt(lastTurn.log[0], 0);
+    }
+
+    // Battle ended — show result in footer
     if (data.status === 'won' || data.battle_result === 'won') {
       const rew = [];
       if (data.gold_reward > 0) rew.push(`🪙 ${data.gold_reward}`);
@@ -3517,16 +3524,11 @@ async function battleAction(action) {
           rew.push(`${MAT_ICONS[k]||'📦'} x${v}`);
         });
       }
-      const el = document.getElementById('dbt');
-      if (el) {
-        el.innerHTML = `🎉 戰鬥勝利！擊敗 ${data.monster_name||'怪物'} 獲得 ${rew.join(' · ')} ✨`;
-        el.style.animation = 'none';
-        void el.offsetHeight;
-        el.style.animation = 'fadeInOut 3s ease';
-        setTimeout(() => {
-          el.innerHTML = '🌟 歡迎返嚟！今日有 <span class="h">新任務</span> 等緊你！';
-        }, 4000);
-      }
+      showDbt(`🎉 戰鬥勝利！擊敗 ${data.monster_name||'怪物'} 獲得 ${rew.join(' · ')} ✨`);
+    } else if (data.status === 'lost' || data.battle_result === 'lost') {
+      showDbt(`💀 被 ${data.monster_name||'怪物'} 打敗了...`);
+    } else if (data.status === 'fled' || data.battle_result === 'fled') {
+      showDbt(`🏃 逃走了！`);
     }
   } catch(e) { showToast('⚠️ 網絡錯誤', 'error'); }
 }
@@ -3539,6 +3541,9 @@ function closeExpedition() {
   }
   townData.expedition = null;
   renderExpedition();
+  // Restore footer
+  const dbt = document.getElementById('dbt');
+  if (dbt) dbt.innerHTML = WELCOME_MSG;
 }
 
 async function abandonBattle() {
@@ -3556,6 +3561,8 @@ async function abandonBattle() {
   } catch(e) {}
   townData.expedition = null;
   renderExpedition();
+  const dbt = document.getElementById('dbt');
+  if (dbt) dbt.innerHTML = WELCOME_MSG;
 }
 
 function kidAvatarImg() {
@@ -3742,8 +3749,22 @@ function closeRewardPopup() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// MODAL / TOAST HELPERS
+// FOOTER / TOAST HELPERS
 // ═══════════════════════════════════════════════════════════════
+const WELCOME_MSG = '🌟 歡迎返嚟！今日有 <span class="h">新任務</span> 等緊你！';
+
+function showDbt(msg, duration) {
+  const el = document.getElementById('dbt');
+  if (!el) return;
+  el.innerHTML = msg;
+  el.style.animation = 'none';
+  void el.offsetHeight;
+  el.style.animation = 'fadeInOut 3s ease';
+  if (duration !== 0) {
+    setTimeout(() => { el.innerHTML = WELCOME_MSG; }, duration || 4000);
+  }
+}
+
 function showModal(html) {
   const overlay = document.getElementById('modalOverlay');
   const content = document.getElementById('modalContent');
