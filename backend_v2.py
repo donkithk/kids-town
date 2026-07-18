@@ -405,6 +405,18 @@ def init_db():
     db4.close()
 
 
+def _clean_stale_expeditions():
+    """Mark running expeditions past their end_time as completed (auto-timeout)."""
+    try:
+        db = sqlite3.connect(DB_PATH)
+        cur = db.execute("UPDATE expeditions SET status='completed' WHERE status='running' AND end_time < datetime('now')")
+        if cur.rowcount > 0:
+            print(f'   Cleaned {cur.rowcount} stale expedition(s)')
+        db.commit()
+        db.close()
+    except Exception as e:
+        print(f'   [warn] _clean_stale_expeditions: {e}')
+
 def seed_building_defs():
     """Insert default building definitions if empty."""
     db = sqlite3.connect(DB_PATH)
@@ -3111,6 +3123,10 @@ if __name__ == '__main__':
     migrate_db()
     migrate_db_v3()
     seed_building_defs()
+
+    # Auto‑clean stale expeditions (status='running' but past end_time)
+    _clean_stale_expeditions()
+    
     print(f'🎮 Kids Town 3.0 Backend (Role-based Auth) on http://0.0.0.0:9123')
     print(f'   Default admin: admin / admin123')
     app.run(host='0.0.0.0', port=9123, debug=False)
