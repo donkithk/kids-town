@@ -3427,7 +3427,13 @@ async function startBattle(regionId) {
     if (data.error) { showToast('⚠️ '+data.error, 'error'); return; }
     townData.expedition = data;
     renderExpedition();
-    showDbt(`⚔️ 進入戰鬥！vs ${data.monster_name||'怪物'}`, 0);
+    // Directly update footer
+    const dbtEl = document.getElementById('dbt');
+    if (dbtEl) {
+      dbtEl.innerHTML = `⚔️ 進入戰鬥！vs ${data.monster_name||'怪物'}`;
+      dbtEl.style.color = '#fff';
+      dbtEl.style.whiteSpace = 'pre-wrap';
+    }
   } catch(e) { showToast('⚠️ 網絡錯誤', 'error'); }
 }
 
@@ -3513,11 +3519,15 @@ async function battleAction(action) {
     townData.expedition = data;
     renderExpedition();
 
+    const dbtEl = document.getElementById('dbt');
+
     // Show last turn log in footer
     const turns = data.turns || [];
     const lastTurn = turns[turns.length - 1];
-    if (lastTurn && lastTurn.log && lastTurn.log.length) {
-      showDbt(lastTurn.log[0], 0);
+    if (lastTurn && lastTurn.log && lastTurn.log.length && dbtEl) {
+      dbtEl.innerHTML = lastTurn.log[0];
+      dbtEl.style.color = '#fff';
+      dbtEl.style.whiteSpace = 'pre-wrap';
     }
 
     // Battle ended — show result in footer
@@ -3529,11 +3539,11 @@ async function battleAction(action) {
           rew.push(`${MAT_ICONS[k]||'📦'} x${v}`);
         });
       }
-      showDbt(`🎉 戰鬥勝利！擊敗 ${data.monster_name||'怪物'} 獲得 ${rew.join(' · ')} ✨`, 0);
+      if (dbtEl) { dbtEl.innerHTML = `🎉 戰鬥勝利！擊敗 ${data.monster_name||'怪物'} 獲得 ${rew.join(' · ')} ✨`; }
     } else if (data.status === 'lost' || data.battle_result === 'lost') {
-      showDbt(`💀 被 ${data.monster_name||'怪物'} 打敗了...`, 0);
+      if (dbtEl) { dbtEl.innerHTML = `💀 被 ${data.monster_name||'怪物'} 打敗了...`; }
     } else if (data.status === 'fled' || data.battle_result === 'fled') {
-      showDbt(`🏃 逃走了！`, 0);
+      if (dbtEl) { dbtEl.innerHTML = `🏃 逃走了！`; }
     }
   } catch(e) { showToast('⚠️ 網絡錯誤', 'error'); }
 }
