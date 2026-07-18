@@ -588,6 +588,11 @@ body{
   85%{opacity:1;transform:translateX(-50%) translateY(0)}
   100%{opacity:0;transform:translateX(-50%) translateY(-10px)}
 }
+@keyframes fadeIn{
+  0%{opacity:0}
+  20%{opacity:1}
+  100%{opacity:1}
+}
 .reward-popup{
   position:fixed;bottom:120px;left:50%;transform:translateX(-50%);
   background:#fff;border-radius:16px;padding:16px 20px;
@@ -3761,11 +3766,12 @@ function showDbt(msg, duration) {
   el.innerHTML = msg;
   el.style.animation = 'none';
   void el.offsetHeight;
-  el.style.animation = 'fadeInOut 3s ease';
+  // Persistent (click to dismiss) — fade in only, stays visible
+  // Auto-dismiss — fade in, hold, fade out
+  el.style.animation = (duration === 0 ? 'fadeIn' : 'fadeInOut') + ' 1.5s ease';
   // Clear any pending auto-restore
   if (window._dbtTimer) { clearTimeout(window._dbtTimer); window._dbtTimer = null; }
   if (duration === 0) {
-    // Persistent — stays until user clicks
     el.style.cursor = 'pointer';
     el.parentElement.style.cursor = 'pointer';
   } else {
