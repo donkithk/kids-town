@@ -297,6 +297,19 @@ def init_db():
             FOREIGN KEY (kid_id) REFERENCES kids(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS monsters (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL,
+            icon        TEXT NOT NULL,
+            hp          INTEGER NOT NULL,
+            atk         INTEGER NOT NULL,
+            def         INTEGER NOT NULL,
+            region_id   INTEGER NOT NULL,
+            gold_reward INTEGER DEFAULT 20,
+            mat_reward  TEXT DEFAULT '{}',
+            created_at  TEXT DEFAULT (datetime('now'))
+        );
+
         CREATE TABLE IF NOT EXISTS achievements (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             kid_id      INTEGER NOT NULL,
@@ -381,6 +394,15 @@ def init_db():
             db3.execute("INSERT INTO quiz_questions (subject, question, options, correct_idx, points) VALUES (?,?,?,?,?)", q)
         db3.commit()
     db3.close()
+
+    # Seed monsters if empty
+    db4 = sqlite3.connect(DB_PATH)
+    if db4.execute("SELECT COUNT(*) FROM monsters").fetchone()[0] == 0:
+        db4.execute("INSERT INTO monsters (id,name,icon,hp,atk,def,region_id,gold_reward,mat_reward) VALUES (1,'野狼','🐺',30,5,0,1,20,'{\"wood\":2}')")
+        db4.execute("INSERT INTO monsters (id,name,icon,hp,atk,def,region_id,gold_reward,mat_reward) VALUES (2,'白熊','🐻‍❄️',60,10,2,2,40,'{\"brick\":2,\"fur\":1}')")
+        db4.execute("INSERT INTO monsters (id,name,icon,hp,atk,def,region_id,gold_reward,mat_reward) VALUES (3,'巨蠍','🦂',100,15,5,3,80,'{\"gear\":1,\"gem\":1}')")
+        db4.commit()
+    db4.close()
 
 
 def seed_building_defs():
@@ -2186,6 +2208,203 @@ def answer_quiz(kid_id):
     db.execute("UPDATE expeditions SET expedition_data=? WHERE id=?", (json.dumps(exp_data), exp['id']))
     db.commit()
     return jsonify({'correct': correct, 'correct_idx': q['correct_idx'], 'points': q['points'] if correct else 0, 'score': exp_data['score'], 'total': len(exp_data.get('questions', []))})
+
+
+# -- Battle --
+
+
+def calc_battle_stats(kid):
+    """Calculate player battle stats from kid attributes."""
+    return {
+        'hp': (kid['ability_str'] or 0) * 10 + (kid['level'] or 1) * 5,
+        'atk': (kid['ability_atk'] or 0) * 2,
+        'crt': (kid['ability_crt'] or 0) * 3,  # crit %
+        'spd': (kid['ability_spd'] or 0),
+        'brv': (kid['ability_brv'] or 0),  # for special
+    }
+
+
+@app.route('/api/kids/<int:kid_id>/expedition/battle-start', methods=['POST'])
+def battle_start(kid_id):
+    """Start a battle expedition: player vs monster."""
+    data = request.get_json(silent=True) or {}
+    region_id = data.get('region_id', 1)
+    db = get_db()
+
+    # Check no running expedition
+    running = db.execute("SELECT id FROM expeditions WHERE kid_id=? AND status='running'", (kid_id,)).fetchone()
+    if running:
+        return jsonify({'error': 'Expedition already running'}), 400
+
+    # Get monster for this region
+    monster = db.execute("SELECT * FROM monsters WHERE region_id=?", (region_id,)).fetchone()
+    if not monster:
+        return jsonify({'error': 'No monster for this region'}), 404
+
+    # Get kid stats
+    kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
+    if not kid:
+        return jsonify({'error': 'Kid not found'}), 404
+
+    p_stats = calc_battle_stats(kid)
+    p_hp = p_stats['hp']
+
+    battle_data = {
+        'monster_id': monster['id'],
+        'monster_name': monster['name'],
+        'monster_icon': monster['icon'],
+        'monster_max_hp': monster['hp'],
+        'monster_hp': monster['hp'],
+        'monster_atk': monster['atk'],
+        'monster_def': monster['def'],
+        'player_max_hp': p_hp,
+        'player_hp': p_hp,
+        'player_atk': p_stats['atk'],
+        'player_crt': p_stats['crt'],
+        'player_spd': p_stats['spd'],
+        'player_brv': p_stats['brv'],
+        'brv_used': False,
+        'turns': [],
+        'status': 'fighting',
+        'gold_reward': monster['gold_reward'],
+        'mat_reward': json.loads(monster['mat_reward'] or '{}'),
+    }
+
+    now = datetime.utcnow()
+    cur = db.execute(
+        "INSERT INTO expeditions (kid_id, region_id, expedition_type, start_time, end_time, status, expedition_data) VALUES (?,?,'battle',?,?,'running',?)",
+        (kid_id, region_id, now.isoformat() + 'Z', (now + timedelta(hours=1)).isoformat() + 'Z', json.dumps(battle_data))
+    )
+    db.commit()
+    battle_data['expedition_id'] = cur.lastrowid
+    return jsonify(battle_data), 201
+
+
+@app.route('/api/kids/<int:kid_id>/expedition/battle-action', methods=['POST'])
+def battle_action(kid_id):
+    """Execute one battle turn: player chooses action, monster counter-attacks."""
+    data = request.get_json(silent=True) or {}
+    action = data.get('action', 'attack')  # attack, defend, special, flee
+    db = get_db()
+
+    exp = db.execute("SELECT * FROM expeditions WHERE kid_id=? AND status='running' AND expedition_type='battle' ORDER BY start_time DESC LIMIT 1", (kid_id,)).fetchone()
+    if not exp:
+        return jsonify({'error': 'No running battle'}), 400
+
+    bd = json.loads(exp['expedition_data'] or '{}')
+    if bd.get('status') != 'fighting':
+        return jsonify({'error': 'Battle already ended'}), 400
+
+    log = []
+    player_atk = bd['player_atk']
+    player_crt = bd['player_crt']
+    monster_atk = bd['monster_atk']
+    monster_def = bd['monster_def']
+    defending = False
+
+    # --- Player action ---
+    if action == 'attack':
+        dmg = max(1, player_atk - monster_def + random.randint(0, 2))
+        if random.randint(1, 100) <= player_crt:
+            dmg *= 2
+            log.append('💥 爆擊！')
+        bd['monster_hp'] -= dmg
+        log.append(f'⚔️ 造成 {dmg} 點傷害')
+    elif action == 'defend':
+        defending = True
+        log.append('🛡️ 防禦姿態')
+    elif action == 'special':
+        if bd.get('brv_used'):
+            log.append('❌ 必殺技已使用')
+        else:
+            dmg = max(3, player_atk + bd['player_brv'] * 2 + random.randint(1, 5))
+            bd['monster_hp'] -= dmg
+            bd['brv_used'] = True
+            log.append(f'💥 必殺技！造成 {dmg} 點傷害')
+    elif action == 'flee':
+        bd['status'] = 'fled'
+        log.append('🏃 逃跑成功！')
+        # Save and exit
+        bd['turns'].append({'action': action, 'log': log})
+        db.execute("UPDATE expeditions SET expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
+        db.commit()
+        bd['battle_result'] = 'fled'
+        return jsonify(bd)
+
+    # Check monster defeated
+    if bd['monster_hp'] <= 0:
+        bd['monster_hp'] = 0
+        bd['status'] = 'won'
+        log.append('🎉 擊敗怪物！')
+        bd['turns'].append({'action': action, 'log': log})
+        # Reward
+        _award_battle_rewards(db, kid_id, bd)
+        db.execute("UPDATE expeditions SET expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
+        db.commit()
+        bd['battle_result'] = 'won'
+        return jsonify(bd)
+
+    # --- Monster counter-attack ---
+    if defending:
+        dmg = max(0, monster_atk // 2 - random.randint(0, 1))
+    else:
+        dmg = max(0, monster_atk + random.randint(0, 2))
+    if dmg > 0:
+        bd['player_hp'] -= dmg
+        log.append(f'🐾 怪物反擊 {dmg} 點傷害')
+    else:
+        log.append('🛡️ 擋住攻擊！')
+
+    # Check player defeated
+    if bd['player_hp'] <= 0:
+        bd['player_hp'] = 0
+        bd['status'] = 'lost'
+        log.append('💀 你被打敗了...')
+        bd['turns'].append({'action': action, 'log': log})
+        db.execute("UPDATE expeditions SET expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
+        db.commit()
+        bd['battle_result'] = 'lost'
+        return jsonify(bd)
+
+    bd['turns'].append({'action': action, 'log': log})
+    db.execute("UPDATE expeditions SET expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
+    db.commit()
+    bd['battle_result'] = 'fighting'
+    return jsonify(bd)
+
+
+def _award_battle_rewards(db, kid_id, bd):
+    """Award gold + materials + EXP for a won battle."""
+    gold = bd.get('gold_reward', 20)
+    mats = bd.get('mat_reward', {})
+
+    # Gold
+    kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
+    if kid:
+        db.execute("UPDATE kids SET points=points+? WHERE id=?", (gold, kid_id))
+        db.execute("INSERT INTO points_log (kid_id, amount, reason) VALUES (?,?,?)",
+                   (kid_id, gold, f"Battle win (region {bd.get('monster_name','?')})"))
+
+    # Materials
+    for item_type, qty in mats.items():
+        existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type=?", (kid_id, item_type)).fetchone()
+        if existing:
+            db.execute("UPDATE inventory SET quantity=quantity+? WHERE id=?", (qty, existing['id']))
+        else:
+            db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,?,?)", (kid_id, item_type, qty))
+
+    # EXP
+    if kid:
+        exp_amount = random.randint(15, 30) * bd.get('monster_id', 1)
+        new_exp = kid['experience'] + exp_amount
+        new_level, _ = calc_level(new_exp)
+        stat_gained = max(0, new_level - kid['level'])
+        db.execute("UPDATE kids SET experience=?, level=?, stat_points=stat_points+? WHERE id=?",
+                   (new_exp, new_level, stat_gained, kid_id))
+
+    # Mark region explored
+    db.execute("INSERT OR IGNORE INTO explored_regions (kid_id, region_id) VALUES (?,?)",
+               (kid_id, bd.get('region_id', 1)))
 
 
 @app.route('/api/quiz-questions/<int:qid>', methods=['GET'])

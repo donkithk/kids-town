@@ -500,11 +500,31 @@ body{
 .quiz-score strong{color:#1e293b;font-size:14px}
 
 /* Battle placeholder */
-.battle-placeholder{
-  text-align:center;padding:40px 20px;color:#94a3b8;
-}
-.battle-placeholder .bp-icon{font-size:64px;margin-bottom:12px}
-.battle-placeholder .bp-title{font-size:16px;font-weight:700;color:#64748b;margin-bottom:6px}
+.battle-placeholder{text-align:center;padding:30px 20px}
+.battle-placeholder .bp-icon{font-size:48px;margin-bottom:8px}
+.battle-placeholder .bp-title{font-weight:700;font-size:15px;color:#64748b;margin-bottom:4px}
+
+/* ── Battle Scene ── */
+.battle-scene{display:flex;flex-direction:column;gap:10px}
+.bt-vs{display:flex;align-items:center;justify-content:center;gap:16px;padding:16px;background:linear-gradient(135deg,#1e1b4b,#312e81);border-radius:14px;color:#fff}
+.bt-side{text-align:center;min-width:100px}
+.bt-icon{font-size:40px;margin-bottom:4px}
+.bt-icon img{width:40px;height:40px;border-radius:50%;border:2px solid rgba(255,255,255,.3)}
+.bt-name{font-size:13px;font-weight:700;margin-bottom:6px}
+.bt-hp-bar{width:100%;height:8px;background:rgba(255,255,255,.15);border-radius:4px;overflow:hidden;margin-bottom:2px}
+.bt-hp-fill{height:100%;border-radius:4px;transition:width .4s}
+.bt-hp-fill.monster{background:linear-gradient(90deg,#ef4444,#dc2626)}
+.bt-hp-fill.player{background:linear-gradient(90deg,#22c55e,#16a34a)}
+.bt-hp-text{font-size:9px;color:rgba(255,255,255,.7)}
+.bt-vs-text{font-size:20px;font-weight:900;color:#fbbf24;text-shadow:0 0 10px rgba(251,191,36,.4)}
+.bt-actions{display:flex;gap:6px;flex-wrap:wrap}
+.bt-log{background:#1e293b;color:#cbd5e1;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.6;max-height:80px;overflow-y:auto}
+.bt-log-line{padding:1px 0}
+.bt-result{text-align:center;padding:14px;border-radius:10px;font-weight:700;font-size:15px}
+.bt-result.win{background:#dcfce7;color:#16a34a}
+.bt-result.lose{background:#fef2f2;color:#ef4444}
+.bt-result.flee{background:#fef9c3;color:#a16207}
+.exp-btn.danger{background:linear-gradient(135deg,#64748b,#475569);color:#fff}
 
 /* ═══════════════════════════════════════
    INVENTORY TAB
@@ -836,16 +856,16 @@ body{
 .av-tip .rl .c{color:#94a3b8}
 .av-tip .rl .v{color:#fff;font-weight:700}
 .av-tip .bl{color:#22c55e;font-size:10px}
-.gh .in{display:flex;flex-direction:column;gap:0;flex-shrink:0}
-.gh .nm{font-size:11px;font-weight:800;font-family:var(--pixel-font);color:#f0e8d0;line-height:1.2}
+.gh .in{display:flex;flex-direction:row;align-items:baseline;gap:4px;flex-shrink:0}
+.gh .nm{font-size:12px;font-weight:800;font-family:var(--pixel-font);color:#f0e8d0;line-height:1.2}
 .gh .nm-lv{font-size:8px;color:#c4a060;font-family:var(--pixel-font)}
 .gh .hdr-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .gh .rw{display:flex;align-items:center;gap:3px}
 .gh .xp{height:5px;width:60px;background:rgba(0,0,0,.3);border-radius:3px;overflow:hidden;border:1px solid rgba(255,255,255,.1)}
 .gh .xf{height:100%;width:0%;background:linear-gradient(90deg,#a29bfe,#6c5ce7);border-radius:3px;transition:width .3s}
 .hdr-res{display:flex;gap:2px;flex-wrap:wrap;align-items:center}
-.hdr-res span{font-size:8px;display:flex;align-items:center;gap:1px;background:rgba(0,0,0,.15);padding:1px 4px;border-radius:3px;color:#f0e8d0}
-.hdr-res span .n{font-family:var(--pixel-font);font-size:7px;color:#f8e8a0}
+.hdr-res span{font-size:8px;display:flex;align-items:center;gap:1px;background:rgba(0,0,0,.15);padding:1px 4px;border-radius:3px;color:#fff}
+.hdr-res span .n{font-family:var(--pixel-font);font-size:7px;color:#fff;font-weight:700}
 .gh .mb{background:none;border:2px solid rgba(255,255,255,.2);color:#f0e8d0;font-size:16px;padding:2px 6px;border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1}
 /* ── Set Screen ── */
 .ss{padding:12px}
@@ -3285,6 +3305,10 @@ async function renderExpedition() {
     if (exp.expedition_type === 'quiz') {
       progressPanel.innerHTML = renderExpeditionProgress(exp);
       container.innerHTML = renderQuizMode(exp);
+    } else if (exp.expedition_type === 'battle') {
+      progressPanel.innerHTML = '';
+      statusCard.style.display = 'none';
+      container.innerHTML = renderBattleMode(exp);
     } else {
       progressPanel.innerHTML = renderExpeditionProgress(exp);
       container.innerHTML = renderExploreMode(exp);
@@ -3307,7 +3331,7 @@ async function renderExpedition() {
   } else if (currentExpType === 'quiz') {
     container.innerHTML = renderQuizLobby();
   } else if (currentExpType === 'battle') {
-    container.innerHTML = renderBattlePlaceholder();
+    container.innerHTML = renderBattleLobby();
   }
 }
 
@@ -3347,12 +3371,123 @@ function renderQuizLobby() {
   </div>`;
 }
 
-function renderBattlePlaceholder() {
-  return `<div class="battle-placeholder">
-    <div class="bp-icon">⚔️</div>
-    <div class="bp-title">戰鬥模式 — 即將開放</div>
-    <p style="font-size:12px;">挑戰怪物，贏取稀有材料！</p>
+function renderBattleLobby() {
+  const explored = (townData.explored||[]).map(e => e.region_id);
+  return `<div class="section-title">⚔️ 戰鬥挑戰</div>
+    <p style="font-size:12px;color:#64748b;margin-bottom:10px;">擊敗每個區域嘅怪物，贏取稀有材料！</p>
+    ${REGIONS.map(r => {
+      const unlocked = !r.required_region || explored.includes(r.required_region) || r.id === 1;
+      const exploredFlag = explored.includes(r.id);
+      return `<div class="exp-region-card ${!unlocked?'locked':''}">
+        <div class="r-icon">${r.name.split(' ')[0]}</div>
+        <div class="r-info">
+          <div class="r-name">${r.name}</div>
+          <div class="r-desc">${r.desc}</div>
+          ${!exploredFlag ? '<div class="r-reward">⚠️ 未探索</div>'
+            : `<div class="r-reward">🐺 區域怪物 · 🪙 金幣獎勵</div>`}
+        </div>
+        <div class="r-status ${unlocked?'unlocked':'locked'}">
+          ${unlocked ? '🔓 可挑戰' : '🔒 未解鎖'}
+        </div>
+        ${unlocked && !(townData.expedition && townData.expedition.status === 'running')
+          ? `<button class="exp-btn go" onclick="startBattle(${r.id})" style="flex:none;padding:6px 14px;font-size:11px;">⚔️ 戰鬥</button>`
+          : ''}
+      </div>`;
+    }).join('')}</div>`;
+}
+
+async function startBattle(regionId) {
+  const kidId = currentUser?.id || townData?.kid?.id;
+  if (!kidId) return;
+  try {
+    const r = await fetch(`${API}/api/kids/${kidId}/expedition/battle-start`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({region_id: regionId})
+    });
+    const data = await r.json();
+    if (data.error) { showToast('⚠️ '+data.error, 'error'); return; }
+    townData.expedition = data;
+    renderExpedition();
+  } catch(e) { showToast('⚠️ 網絡錯誤', 'error'); }
+}
+
+function renderBattleMode(exp) {
+  const bd = exp.expedition_data || exp;
+  if (typeof bd === 'string') return renderBattleLobby();
+  const pMax = bd.player_max_hp || 30;
+  const pHp = bd.player_hp || 0;
+  const mMax = bd.monster_max_hp || 30;
+  const mHp = bd.monster_hp || 0;
+  const result = bd.battle_result || bd.status;
+  const turns = bd.turns || [];
+  const lastTurn = turns.length > 0 ? turns[turns.length-1] : null;
+  const logHtml = lastTurn ? lastTurn.log.map(l => `<div class="bt-log-line">${l}</div>`).join('') : '';
+
+  const pHpPct = Math.max(0, Math.round(pHp / pMax * 100));
+  const mHpPct = Math.max(0, Math.round(mHp / mMax * 100));
+
+  let actionHtml = '';
+  let resultHtml = '';
+  let fleeBtn = '';
+
+  if (result === 'fighting') {
+    const brvDisabled = bd.brv_used ? 'disabled style="opacity:0.5"' : '';
+    fleeBtn = `<button class="exp-btn danger" onclick="battleAction('flee')" style="flex:1;font-size:11px;">🏃 逃跑</button>`;
+    actionHtml = `<div class="bt-actions">
+      <button class="exp-btn go" onclick="battleAction('attack')" style="flex:1;font-size:11px;">⚔️ 攻擊</button>
+      <button class="exp-btn" onclick="battleAction('defend')" style="flex:1;font-size:11px;background:#6366f1;">🛡️ 防禦</button>
+      <button class="exp-btn" onclick="battleAction('special')" ${brvDisabled} style="flex:1;font-size:11px;background:#f59e0b;">💥 必殺技</button>
+      ${fleeBtn}
+    </div>`;
+  } else {
+    if (result === 'won') {
+      resultHtml = `<div class="bt-result win">🎉 勝利！獲得獎勵！</div>`;
+    } else if (result === 'lost' || result === 'fled') {
+      resultHtml = `<div class="bt-result ${result === 'lost' ? 'lose' : 'flee'}">${result === 'lost' ? '💀 戰敗...' : '🏃 逃走了'}</div>`;
+    }
+    actionHtml = `<button class="exp-btn go" onclick="closeExpedition()" style="margin-top:8px;">返回</button>`;
+  }
+
+  return `<div class="battle-scene">
+    <div class="bt-vs">
+      <div class="bt-side">
+        <div class="bt-icon">${bd.monster_icon||'🐺'}</div>
+        <div class="bt-name">${bd.monster_name||'怪物'}</div>
+        <div class="bt-hp-bar"><div class="bt-hp-fill monster" style="width:${mHpPct}%"></div></div>
+        <div class="bt-hp-text">HP ${mHp}/${mMax}</div>
+      </div>
+      <div class="bt-vs-text">VS</div>
+      <div class="bt-side">
+        <div class="bt-icon">${characterImage() ? '<img src="'+characterImage(townData?.kid?.avatar)+'" style="width:40px;height:40px;object-fit:cover;border-radius:50%;">' : '🧑'}</div>
+        <div class="bt-name">${townData?.kid?.name||'你'}</div>
+        <div class="bt-hp-bar"><div class="bt-hp-fill player" style="width:${pHpPct}%"></div></div>
+        <div class="bt-hp-text">HP ${pHp}/${pMax}</div>
+      </div>
+    </div>
+    ${logHtml ? `<div class="bt-log">${logHtml}</div>` : ''}
+    ${resultHtml}
+    ${actionHtml}
   </div>`;
+}
+
+async function battleAction(action) {
+  const kidId = currentUser?.id || townData?.kid?.id;
+  if (!kidId) return;
+  try {
+    const r = await fetch(`${API}/api/kids/${kidId}/expedition/battle-action`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action})
+    });
+    const data = await r.json();
+    if (data.error) { showToast('⚠️ '+data.error, 'error'); return; }
+    townData.expedition = data;
+    renderExpedition();
+  } catch(e) { showToast('⚠️ 網絡錯誤', 'error'); }
+}
+
+function closeExpedition() {
+  townData.expedition = null;
+  renderExpedition();
 }
 
 function renderQuizMode(exp) {
