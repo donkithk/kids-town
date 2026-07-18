@@ -3300,7 +3300,7 @@ async function renderExpedition() {
 
   // Show running expedition
   const exp = townData.expedition;
-  if (exp && exp.status === 'running') {
+  if (exp && (exp.status === 'running' || exp.status === 'fighting')) {
     statusCard.style.display = 'block';
     if (exp.expedition_type === 'quiz') {
       progressPanel.innerHTML = renderExpeditionProgress(exp);
@@ -3389,7 +3389,7 @@ function renderBattleLobby() {
         <div class="r-status ${unlocked?'unlocked':'locked'}">
           ${unlocked ? '🔓 可挑戰' : '🔒 未解鎖'}
         </div>
-        ${unlocked && !(townData.expedition && townData.expedition.status === 'running')
+        ${unlocked && !(townData.expedition && (townData.expedition.status === 'running' || townData.expedition.status === 'fighting'))
           ? `<button class="exp-btn go" onclick="startBattle(${r.id})" style="flex:none;padding:6px 14px;font-size:11px;">⚔️ 戰鬥</button>`
           : ''}
       </div>`;
@@ -3765,6 +3765,8 @@ function formatRelativeDate(dateStr) {
   return `${d.getMonth()+1}/${d.getDate()}`;
 }
 
+function renderLedger() { loadLedger(); }
+
 async function loadLedger() {
   if (!currentKidId) return;
   const listEl = document.getElementById('ledgerList');
@@ -4113,6 +4115,8 @@ async function savingsDelete(goalId) {
     showToast('⚠️ ' + e.message, 'error');
   }
 }
+
+async function loadKids() { return window.location.reload(); }
 
 window.loadKids = loadKids;
 window.renderKidSelector = renderKidSelector;

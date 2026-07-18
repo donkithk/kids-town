@@ -2248,8 +2248,8 @@ def battle_start(kid_id):
 
     p_stats = calc_battle_stats(kid)
     p_hp = p_stats['hp']
-
     battle_data = {
+        'expedition_id': None,
         'monster_id': monster['id'],
         'monster_name': monster['name'],
         'monster_icon': monster['icon'],
@@ -2266,6 +2266,8 @@ def battle_start(kid_id):
         'brv_used': False,
         'turns': [],
         'status': 'fighting',
+        'expedition_type': 'battle',
+        'expedition_data': None,
         'gold_reward': monster['gold_reward'],
         'mat_reward': json.loads(monster['mat_reward'] or '{}'),
     }
@@ -2326,7 +2328,7 @@ def battle_action(kid_id):
         log.append('🏃 逃跑成功！')
         # Save and exit
         bd['turns'].append({'action': action, 'log': log})
-        db.execute("UPDATE expeditions SET expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
+        db.execute("UPDATE expeditions SET status='completed', expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
         db.commit()
         bd['battle_result'] = 'fled'
         return jsonify(bd)
@@ -2339,7 +2341,7 @@ def battle_action(kid_id):
         bd['turns'].append({'action': action, 'log': log})
         # Reward
         _award_battle_rewards(db, kid_id, bd)
-        db.execute("UPDATE expeditions SET expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
+        db.execute("UPDATE expeditions SET status='completed', expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
         db.commit()
         bd['battle_result'] = 'won'
         return jsonify(bd)
@@ -2361,7 +2363,7 @@ def battle_action(kid_id):
         bd['status'] = 'lost'
         log.append('💀 你被打敗了...')
         bd['turns'].append({'action': action, 'log': log})
-        db.execute("UPDATE expeditions SET expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
+        db.execute("UPDATE expeditions SET status='completed', expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
         db.commit()
         bd['battle_result'] = 'lost'
         return jsonify(bd)
