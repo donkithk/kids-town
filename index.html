@@ -1001,20 +1001,24 @@ body{
 #whiteFlash.active{animation:flashBurst .25s ease forwards}
 @keyframes flashBurst{0%{opacity:.9}30%{opacity:.5}100%{opacity:0}}
 
-/* Shake */
+/* Shake - light */
 @keyframes shake{0%,100%{transform:translate(0,0)}10%{transform:translate(-6px,3px)}20%{transform:translate(6px,-2px)}30%{transform:translate(-4px,4px)}45%{transform:translate(4px,-3px)}60%{transform:translate(-2px,1px)}80%{transform:translate(2px,0)}}
 .shake{animation:shake .5s ease}
+/* Shake - heavy */
 @keyframes heavyShake{0%,100%{transform:translate(0,0)}5%{transform:translate(-8px,5px)}15%{transform:translate(8px,-4px)}25%{transform:translate(-6px,6px)}35%{transform:translate(6px,-5px)}50%{transform:translate(-4px,3px)}65%{transform:translate(4px,-2px)}80%{transform:translate(-2px,1px)}}
 .heavy-shake{animation:heavyShake .6s ease}
 
-/* Hit effects */
+/* Monster hit + shrink */
 @keyframes monsterHit{0%{transform:scale(1) translateX(0)}10%{transform:scale(.85) translateX(-8px)}25%{transform:scale(.9) translateX(6px)}40%{transform:scale(.92) translateX(-5px)}55%{transform:scale(.95) translateX(3px)}70%{transform:scale(.97) translateX(-2px)}100%{transform:scale(1) translateX(0)}}
 .monster-hit{animation:monsterHit .5s ease}
+/* Heavy monster hit */
 @keyframes heavyMonsterHit{0%{transform:scale(1) translateX(0) rotate(0)}8%{transform:scale(.75) translateX(-12px) rotate(-5deg)}20%{transform:scale(.82) translateX(8px) rotate(3deg)}35%{transform:scale(.88) translateX(-6px) rotate(-2deg)}50%{transform:scale(.92) translateX(4px) rotate(1deg)}70%{transform:scale(.96) translateX(-2px) rotate(0)}100%{transform:scale(1) translateX(0) rotate(0)}}
 .monster-heavy{animation:heavyMonsterHit .6s ease}
 
+/* Hit flash */
 @keyframes hitFlash{0%{filter:brightness(1)}15%{filter:brightness(4) saturate(0)}30%{filter:brightness(2)}100%{filter:brightness(1)}}
 .hit{animation:hitFlash .35s ease}
+/* Heavy hit flash */
 @keyframes heavyHit{0%{filter:brightness(1);transform:scale(1)}10%{filter:brightness(5) saturate(0);transform:scale(1.1)}30%{filter:brightness(2)}100%{filter:brightness(1);transform:scale(1)}}
 .heavy-hit{animation:heavyHit .4s ease}
 
@@ -1022,15 +1026,15 @@ body{
 @keyframes deathDramatic{0%{opacity:1;transform:scale(1)}20%{transform:scale(1.2) rotate(8deg);opacity:.8}40%{transform:scale(.3) rotate(-15deg);opacity:.5;filter:brightness(2)}100%{opacity:0;transform:scale(.1) translateY(40px);filter:brightness(0)}}
 .monster-card.dead{animation:deathDramatic .7s forwards}
 
-/* Slash mark */
-@keyframes slashAnim{0%{opacity:0;transform:translate(-50%,-50%) scaleX(0) rotate(-30deg)}20%{opacity:1;transform:translate(-50%,-50%) scaleX(1) rotate(-30deg)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scaleX(0) rotate(-30deg)}}
-.slash{position:absolute;top:50%;left:50%;width:100px;height:4px;background:linear-gradient(90deg,transparent,#fff,#ffcc44,transparent);border-radius:2px;transform:translate(-50%,-50%) rotate(-30deg);z-index:9;pointer-events:none;box-shadow:0 0 15px rgba(255,200,68,.6);animation:slashAnim .3s ease forwards}
+/* Slash */
+@keyframes slashAnim{0%{opacity:0;transform:translate(-50%,-50%) scaleX(0) rotate(-30deg)}20%{opacity:1;transform:translate(-50%,-50%) scaleX(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scaleX(0)}}
+.slash{position:absolute;top:50%;left:50%;width:100px;height:4px;background:linear-gradient(90deg,transparent,#fff,#ffcc44,transparent);border-radius:2px;z-index:9;pointer-events:none;box-shadow:0 0 15px rgba(255,200,68,.6);animation:slashAnim .3s ease forwards}
 
 /* Sparks */
 @keyframes sparkBurst{0%{opacity:1;transform:translate(-50%,-50%) scale(0)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.5)}100%{opacity:0;transform:translate(-50%,-50%) scale(2)}}
-.spark-burst{position:absolute;top:50%;left:50%;width:80px;height:80px;border-radius:50%;background:radial-gradient(circle,rgba(255,200,50,.8),rgba(255,100,0,.3),transparent);transform:translate(-50%,-50%);z-index:8;pointer-events:none;animation:sparkBurst .35s ease forwards}
+.spark-burst{position:absolute;top:50%;left:50%;width:80px;height:80px;border-radius:50%;background:radial-gradient(circle,rgba(255,200,50,.8),rgba(255,100,0,.3),transparent);z-index:8;pointer-events:none;animation:sparkBurst .35s ease forwards}
 @keyframes heavySpark{0%{opacity:1;transform:translate(-50%,-50%) scale(0)}30%{opacity:1;transform:translate(-50%,-50%) scale(1.8)}60%{opacity:.6;transform:translate(-50%,-50%) scale(2.5)}100%{opacity:0;transform:translate(-50%,-50%) scale(3)}}
-.heavy-spark{position:absolute;top:50%;left:50%;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.9),rgba(255,200,0,.5),rgba(255,80,0,.2),transparent);transform:translate(-50%,-50%);z-index:8;pointer-events:none;animation:heavySpark .4s ease forwards}
+.heavy-spark{position:absolute;top:50%;left:50%;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.9),rgba(255,200,0,.5),rgba(255,80,0,.2),transparent);z-index:8;pointer-events:none;animation:heavySpark .4s ease forwards}
 
 /* Damage popup */
 .dmg-popup{position:absolute;top:-20px;left:50%;z-index:10;pointer-events:none;font-weight:bold;text-align:center}
@@ -1038,9 +1042,10 @@ body{
 .dmg-popup.heavy .num{font-size:36px;color:#ff8800;text-shadow:0 0 25px rgba(255,136,0,.8),4px 4px 0 #000,-2px -2px 0 #000}
 @keyframes dmgBounce{0%{opacity:0;transform:translate(-50%,0) scale(.3)}20%{opacity:1;transform:translate(-50%,-10px) scale(1.3)}40%{transform:translate(-50%,-25px) scale(1)}60%{transform:translate(-50%,-35px) scale(1.05)}100%{opacity:1;transform:translate(-50%,-50px) scale(1)}}
 
-/* Heal effects */
+/* Heal glow */
 @keyframes healGlow{0%{box-shadow:inset 0 0 0 rgba(102,238,136,0)}30%{box-shadow:inset 0 0 40px rgba(102,238,136,.5)}70%{box-shadow:inset 0 0 20px rgba(102,238,136,.3)}100%{box-shadow:inset 0 0 0 rgba(102,238,136,0)}}
 .heal-glow{animation:healGlow .8s ease}
+/* Heal sparkles */
 .heal-sparkle{position:absolute;width:6px;height:6px;border-radius:50%;background:#66ee88;z-index:11;pointer-events:none}
 .heal-sparkle.s1{left:30%;top:40%;animation:sparkle1 .8s ease forwards}
 .heal-sparkle.s2{left:55%;top:35%;animation:sparkle2 .9s ease forwards;width:4px;height:4px}
@@ -1050,6 +1055,7 @@ body{
 @keyframes sparkle1{0%{opacity:0;transform:translateY(0) scale(0)}20%{opacity:1;transform:translateY(-10px) scale(1)}100%{opacity:0;transform:translateY(-50px) scale(.3)}}
 @keyframes sparkle2{0%{opacity:0;transform:translateY(0) scale(0)}20%{opacity:1;transform:translateY(-5px) scale(1)}100%{opacity:0;transform:translateY(-45px) scale(.2)}}
 @keyframes sparkle3{0%{opacity:0;transform:translateY(0) scale(0)}20%{opacity:1;transform:translateY(-15px) scale(.8)}100%{opacity:0;transform:translateY(-55px) scale(.2)}}
+/* Heal number */
 .heal-num{position:absolute;top:-5px;left:50%;z-index:12;font-size:26px;font-weight:bold;color:#66ee88;text-shadow:0 0 15px rgba(102,238,136,.5),2px 2px 0 #000;pointer-events:none;animation:healFloat .9s cubic-bezier(.28,.84,.42,1) forwards}
 @keyframes healFloat{0%{opacity:0;transform:translate(-50%,0) scale(.3)}20%{opacity:1;transform:translate(-50%,-10px) scale(1.3)}100%{opacity:1;transform:translate(-50%,-40px) scale(1)}}
 
