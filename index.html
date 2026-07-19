@@ -3504,7 +3504,7 @@ async function renderExpedition() {
 
   // Show running expedition
   const exp = townData.expedition;
-  if (exp && (exp.status === 'running' || exp.status === 'fighting')) {
+  if (exp && (exp.status === 'running' || exp.status === 'fighting' || exp.status === 'won' || exp.status === 'lost' || exp.status === 'fled')) {
     statusCard.style.display = 'block';
     if (exp.expedition_type === 'quiz') {
       progressPanel.innerHTML = renderExpeditionProgress(exp);
@@ -3600,7 +3600,7 @@ function renderBattleLobby() {
 }
 
 async function startBattle(regionId) {
-  const kidId = currentUser?.id || townData?.kid?.id;
+  const kidId = currentKidId || currentUser?.id || townData?.kid?.id;
   if (!kidId) return;
   if (townData.expedition && (townData.expedition.status === 'running' || townData.expedition.status === 'fighting')) {
     try { await fetch(`${API}/api/kids/${kidId}/expedition/claim`, {method:'POST'}); } catch(e) {}
@@ -3659,7 +3659,7 @@ function renderBattleMode(exp) {
     const pct = Math.max(0, Math.round(m.hp / m.max_hp * 100));
     const bc = pct > 50 ? '#44cc44' : pct > 25 ? '#ffaa44' : '#ff4444';
     const mImg = MONSTER_ART[m.monster_id] || MONSTER_ART[1];
-    return `<div class="monster-card${showMonsterTarget?' targetable':''}" data-idx="${m.id}" onclick="onMonsterClick(${m.id})">
+    return `<div class="monster-card${m.hp <= 0 ? ' dead' : ''}${showMonsterTarget && m.hp > 0 ? ' targetable' : ''}" data-idx="${m.id}" onclick="${m.hp > 0 ? 'onMonsterClick('+m.id+')' : ''}">
       <div class="target-arrow">▼</div>
       <div class="m-img">
         <img src="${mImg}" onerror="this.outerHTML='<span style=font-size:36px>${m.icon||'🐺'}</span>'">
@@ -3774,7 +3774,7 @@ function renderBattleMode(exp) {
 }
 
 async function battleAction(action, skillId, targetIdx) {
-  const kidId = currentUser?.id || townData?.kid?.id;
+  const kidId = currentKidId || currentUser?.id || townData?.kid?.id;
   if (!kidId) return;
   window._battleTargetMode = null;
   window._pendingSkill = null;
