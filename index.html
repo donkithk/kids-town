@@ -3511,15 +3511,13 @@ async function renderExpedition() {
     }
     if (!expInterval) {
       expInterval = setInterval(async () => {
+        if (townData.expedition?.expedition_type === 'battle') return; // don't re-render battle (overlay breaks)
         await loadTown();
         renderExpedition();
       }, 3000);
     }
     return;
   } else {
-    statusCard.style.display = 'none';
-    if (expInterval) { clearInterval(expInterval); expInterval = null; }
-  }
 
   // Show type-specific content when no expedition running
   if (currentExpType === 'explore') {
@@ -3781,19 +3779,11 @@ async function battleAction(action, skillId, targetIdx) {
     if (data.error) { showToast('⚠️ '+data.error, 'error'); return; }
     townData.expedition = data;
     renderExpedition();
-
-    const dbtEl = document.getElementById('dbt');
     const turns = data.turns || [];
     const lastTurn = turns[turns.length - 1];
 
-    // Show last turn log in dbt
-    if (lastTurn && lastTurn.log && lastTurn.log.length && dbtEl) {
-      dbtEl.innerHTML = lastTurn.log.join('<br>');
-      dbtEl.style.color = '#fff';
-      dbtEl.style.whiteSpace = 'pre-wrap';
-    }
-
-    // Battle ended — show result in footer
+    // Battle ended — restore main footer
+    const dbtEl = document.getElementById('dbt');
     if (data.status === 'won' || data.battle_result === 'won') {
       const rew = [];
       if (data.gold_reward > 0) rew.push(`🪙 ${data.gold_reward}`);
@@ -3941,13 +3931,14 @@ function selectSkill(skillId) {
   const bd = getBattleData();
   if (!bd) return;
   const skills = bd.skills || [];
-  const sk = skills.find(s => s.id === skillId);
+  // Use == to handle string vs number mismatch
+  const sk = skills.find(s => s.id == skillId);
   if (!sk) return;
   window._pendingSkill = sk;
   window._battleTargetMode = null;
   if (sk.target === 'self') {
     // Use immediately on self
-    battleAction('skill', skillId, 0);
+    battleAction('skill', sk.id, 0);
     return;
   }
   renderExpedition();
