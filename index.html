@@ -1595,10 +1595,13 @@ async function doLogin() {
       // Parent sees manage tab by default
       st('manage');
     } else if (data.role === 'admin') {
-      // Admin login — go to admin dashboard
+      // Admin login — enter app like kid/parent
+      currentKidId = null;
       document.getElementById('loginScreen').classList.add('hidden');
-      // Simple redirect to dev dashboard for now
-      window.location.href = '/kids-dev';
+      document.getElementById('app').style.display = 'block';
+      updateHeader();
+      await loadTown();
+      initCanvas();
     }
   } catch(e) {
     document.getElementById('loginForm').style.display = 'block';
