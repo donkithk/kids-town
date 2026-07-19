@@ -548,7 +548,7 @@ body{
 .monster-card.targetable{border-color:#ffcc44;background:rgba(255,204,68,.08);animation:glow .6s infinite alternate}
 .monster-card.monster-hit{animation:monsterHit .5s ease}
 .monster-card.monster-heavy{animation:heavyMonsterHit .6s ease}
-.monster-card.dead{animation:deathDramatic .7s forwards}
+.monster-card.dead{animation:deathDramatic .7s forwards;pointer-events:none}
 .monster-card .m-img{width:56px;height:56px;margin:0 auto;position:relative}
 .monster-card .m-img img{width:100%;height:100%;object-fit:contain;display:block}
 .monster-card .m-name{color:#ffe0bb;font-size:10px;font-weight:bold;margin-top:1px;text-shadow:0 1px 4px #000;line-height:1.2}
@@ -1024,7 +1024,7 @@ body{
 
 /* Death */
 @keyframes deathDramatic{0%{opacity:1;transform:scale(1)}20%{transform:scale(1.2) rotate(8deg);opacity:.8}40%{transform:scale(.3) rotate(-15deg);opacity:.5;filter:brightness(2)}100%{opacity:0;transform:scale(.1) translateY(40px);filter:brightness(0)}}
-.monster-card.dead{animation:deathDramatic .7s forwards}
+.monster-card.dead{animation:deathDramatic .7s forwards;pointer-events:none}
 
 /* Slash */
 @keyframes slashAnim{0%{opacity:0;transform:translate(-50%,-50%) scaleX(0) rotate(-30deg)}20%{opacity:1;transform:translate(-50%,-50%) scaleX(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scaleX(0)}}
@@ -3639,7 +3639,7 @@ function renderBattleMode(exp) {
   const pHp = bd.player_hp || 0;
   const pMpMax = bd.player_max_mp || 20;
   const pMp = bd.player_mp || 0;
-  const result = bd.battle_result || bd.status;
+  const result = bd.battle_result || bd.status || exp.battle_result || exp.status;
   const turns = bd.turns || [];
   const lastTurn = turns.length > 0 ? turns[turns.length-1] : null;
   const skills = bd.skills || [];
@@ -3728,9 +3728,11 @@ function renderBattleMode(exp) {
   let resultHtml = '';
   if (result !== 'fighting') {
     if (result === 'won') {
+      const expRewardGold = exp.gold_reward || bd.gold_reward || 0;
+      const expRewardMats = exp.mat_reward || bd.mat_reward || {};
       const rew = [];
-      if (bd.gold_reward > 0) rew.push(`<span class="r-item">🪙 ${bd.gold_reward}</span>`);
-      if (bd.mat_reward) Object.entries(bd.mat_reward).forEach(([k,v]) => rew.push(`<span class="r-item">${MAT_ICONS[k]||'📦'} x${v}</span>`));
+      if (expRewardGold > 0) rew.push('<span class="r-item">🪙 '+expRewardGold+'</span>');
+      if (expRewardMats) Object.entries(expRewardMats).forEach(([k,v]) => rew.push('<span class="r-item">'+(MAT_ICONS[k]||'📦')+' x'+v+'</span>'));
       resultHtml = `<div class="result-overlay active">
         <div class="ro-icon">🎉</div><div class="ro-title">戰鬥勝利！</div>
         <div class="rewards">${rew.join('')}</div>
