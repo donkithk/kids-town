@@ -248,6 +248,22 @@ def init_db():
             unlock_region TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS skill_defs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            name            TEXT    NOT NULL,
+            icon            TEXT    DEFAULT '💥',
+            mp_cost         INTEGER DEFAULT 3,
+            bldg_def_id     INTEGER NOT NULL,
+            level_required  INTEGER DEFAULT 1,
+            target          TEXT    DEFAULT 'enemy',
+            description     TEXT    DEFAULT '',
+            base_value      REAL    DEFAULT 0,
+            per_level       REAL    DEFAULT 0,
+            attr_scale      TEXT    DEFAULT 'none',
+            effect_type     TEXT    DEFAULT 'damage',
+            FOREIGN KEY (bldg_def_id) REFERENCES building_defs(id) ON DELETE CASCADE
+        );
+
         CREATE TABLE IF NOT EXISTS buildings (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             kid_id      INTEGER NOT NULL,
@@ -439,6 +455,44 @@ def seed_building_defs():
         db.execute(
             "INSERT INTO building_defs (icon, name, cost_gold, materials, effect, buff_type, buff_vals, max_level, unlock_region) VALUES (?,?,?,?,?,?,?,?,?)",
             (d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8])
+        )
+    db.commit()
+    db.close()
+
+def seed_skill_defs():
+    """Insert default skill definitions if empty."""
+    db = sqlite3.connect(DB_PATH)
+    if db.execute("SELECT COUNT(*) FROM skill_defs").fetchone()[0] > 0:
+        db.close()
+        return
+    # bldg_def_id: 1=圖書館,2=健身室,3=農場,4=商店,5=醫院,6=探險公會,7=工坊,8=燈塔,9=競技場,10=天文台
+    defs = [
+        # 健身室 (2)
+        ('蓄力', '🔥', 3, 2, 1, 'self', '下次攻擊 1.5 倍', 0, 0, 'none', 'buff'),
+        ('重擊', '💪', 5, 2, 2, 'enemy', '強力物理攻擊', 8, 3, 'str', 'damage'),
+        ('連擊', '⚡', 7, 2, 4, 'enemy', '連續攻擊 2 次', 5, 2, 'str', 'damage'),
+        # 醫院 (5)
+        ('繃帶', '🩹', 3, 5, 1, 'ally', '小回復', 5, 2, 'int', 'heal'),
+        ('急救', '💚', 8, 5, 3, 'ally', '中回復', 10, 4, 'int', 'heal'),
+        ('全體治療', '🌿', 14, 5, 5, 'all_allies', '全體回復', 8, 3, 'int', 'heal'),
+        # 競技場 (9)
+        ('橫掃', '🗡️', 6, 9, 2, 'all_enemies', '全體物理攻擊', 6, 2, 'str', 'damage'),
+        ('挑釁', '🛡️', 4, 9, 4, 'self', '強制敵方攻擊自己', 0, 0, 'none', 'buff'),
+        ('必殺', '💥', 10, 9, 5, 'enemy', '對低血量敵人特大傷害', 12, 5, 'str', 'damage'),
+        # 圖書館 (1)
+        ('火球', '🔥', 6, 1, 2, 'enemy', '魔法攻擊', 10, 3, 'int', 'damage'),
+        ('冰凍', '❄️', 8, 1, 4, 'enemy', '魔法攻擊 + 減速', 14, 4, 'int', 'damage'),
+        # 探險公會 (6)
+        ('偵察', '👁️', 2, 6, 2, 'enemy', '查看怪物弱點', 0, 0, 'none', 'utility'),
+        ('迴避', '🏃', 3, 6, 4, 'self', '完全回避下次攻擊', 0, 0, 'none', 'buff'),
+        # 工坊 (7)
+        ('修復', '🔧', 4, 7, 2, 'ally', '回復 MP', 5, 2, 'int', 'heal'),
+        ('強化', '🛡️', 5, 7, 4, 'ally', '提升防禦力', 3, 1, 'none', 'buff'),
+    ]
+    for d in defs:
+        db.execute(
+            "INSERT INTO skill_defs (name, icon, mp_cost, bldg_def_id, level_required, target, description, base_value, per_level, attr_scale, effect_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            d
         )
     db.commit()
     db.close()
@@ -2230,10 +2284,45 @@ def calc_battle_stats(kid):
     return {
         'hp': (kid['ability_str'] or 0) * 10 + (kid['level'] or 1) * 5,
         'atk': (kid['ability_atk'] or 0) * 2,
+        'def': (kid['ability_str'] or 0) // 2 + (kid['level'] or 1),
         'crt': (kid['ability_crt'] or 0) * 3,  # crit %
         'spd': (kid['ability_spd'] or 0),
         'brv': (kid['ability_brv'] or 0),  # for special
     }
+
+
+@app.route('/api/kids/<int:kid_id>/skills', methods=['GET'])
+def get_kid_skills(kid_id):
+    """Return skills available based on buildings owned and their levels."""
+    db = get_db()
+    buildings = db.execute(
+        "SELECT b.level, bd.id as bldg_def_id, bd.name as bldg_name "
+        "FROM buildings b JOIN building_defs bd ON b.def_id=bd.id "
+        "WHERE b.kid_id=? AND b.stored=0",
+        (kid_id,)
+    ).fetchall()
+    skills = []
+    for bldg in buildings:
+        bldg_skills = db.execute(
+            "SELECT * FROM skill_defs WHERE bldg_def_id=? AND level_required<=?",
+            (bldg['bldg_def_id'], bldg['level'])
+        ).fetchall()
+        for sk in bldg_skills:
+            skills.append({
+                'id': sk['id'],
+                'name': sk['name'],
+                'icon': sk['icon'],
+                'mp_cost': sk['mp_cost'],
+                'bldg': bldg['bldg_name'],
+                'bldg_level': bldg['level'],
+                'target': sk['target'],
+                'description': sk['description'],
+                'base_value': sk['base_value'],
+                'per_level': sk['per_level'],
+                'attr_scale': sk['attr_scale'],
+                'effect_type': sk['effect_type'],
+            })
+    return jsonify(skills)
 
 
 @app.route('/api/kids/<int:kid_id>/expedition/battle-start', methods=['POST'])
@@ -2258,27 +2347,55 @@ def battle_start(kid_id):
     if not kid:
         return jsonify({'error': 'Kid not found'}), 404
 
+    # Get available skills
+    buildings = db.execute(
+        "SELECT b.level, bd.id as bldg_def_id FROM buildings b JOIN building_defs bd ON b.def_id=bd.id "
+        "WHERE b.kid_id=? AND b.stored=0", (kid_id,)
+    ).fetchall()
+    skills = []
+    for bldg in buildings:
+        bldg_skills = db.execute(
+            "SELECT id, name, icon, mp_cost, target, description, base_value, per_level, attr_scale, effect_type, bldg_def_id, level_required "
+            "FROM skill_defs WHERE bldg_def_id=? AND level_required<=?",
+            (bldg['bldg_def_id'], bldg['level'])
+        ).fetchall()
+        for s in bldg_skills:
+            skills.append(dict(s))
+
     p_stats = calc_battle_stats(kid)
     p_hp = p_stats['hp']
+    p_mp = 10 + kid['level'] * 3  # Base MP: 10 + 3/level
+    # Multiple monsters (1-3)
+    num_monsters = random.randint(1, 3)
+    monsters = []
+    for mi in range(num_monsters):
+        hp_var = random.randint(-5, 5)
+        monsters.append({
+            'id': mi,
+            'monster_id': monster['id'],
+            'name': monster['name'],
+            'icon': monster['icon'],
+            'max_hp': max(1, monster['hp'] + hp_var),
+            'hp': max(1, monster['hp'] + hp_var),
+            'atk': monster['atk'],
+            'def': monster['def'],
+        })
     battle_data = {
         'expedition_id': None,
-        'monster_id': monster['id'],
-        'monster_name': monster['name'],
-        'monster_icon': monster['icon'],
-        'monster_max_hp': monster['hp'],
-        'monster_hp': monster['hp'],
-        'monster_atk': monster['atk'],
-        'monster_def': monster['def'],
+        'monsters': monsters,
         'player_max_hp': p_hp,
         'player_hp': p_hp,
+        'player_max_mp': p_mp,
+        'player_mp': p_mp,
         'player_atk': p_stats['atk'],
+        'player_def': p_stats.get('def', p_stats['atk'] // 2),
         'player_crt': p_stats['crt'],
         'player_spd': p_stats['spd'],
         'player_brv': p_stats['brv'],
-        'brv_used': False,
         'turns': [],
         'status': 'fighting',
         'expedition_type': 'battle',
+        'skills': skills,
         'expedition_data': None,
         'gold_reward': monster['gold_reward'],
         'mat_reward': json.loads(monster['mat_reward'] or '{}'),
@@ -2296,9 +2413,11 @@ def battle_start(kid_id):
 
 @app.route('/api/kids/<int:kid_id>/expedition/battle-action', methods=['POST'])
 def battle_action(kid_id):
-    """Execute one battle turn: player chooses action, monster counter-attacks."""
+    """Execute one battle turn: player attacks or uses a skill, monster counter-attacks."""
     data = request.get_json(silent=True) or {}
-    action = data.get('action', 'attack')  # attack, defend, special, flee
+    action = data.get('action', 'attack')
+    target_idx = data.get('target_idx', 0)  # which monster to hit
+    skill_id = data.get('skill_id')
     db = get_db()
 
     exp = db.execute("SELECT * FROM expeditions WHERE kid_id=? AND status='running' AND expedition_type='battle' ORDER BY start_time DESC LIMIT 1", (kid_id,)).fetchone()
@@ -2309,95 +2428,178 @@ def battle_action(kid_id):
     if bd.get('status') != 'fighting':
         return jsonify({'error': 'Battle already ended'}), 400
 
-    log = []
+    monsters = bd.get('monsters', [])
     player_atk = bd['player_atk']
     player_crt = bd['player_crt']
-    monster_atk = bd['monster_atk']
-    monster_def = bd['monster_def']
+    player_def = bd.get('player_def', 5)
+    log = []
     defending = False
+
+    # Find a valid target
+    alive_targets = [m for m in monsters if m['hp'] > 0]
+    if not alive_targets:
+        return jsonify({'error': 'No alive targets'}), 400
+
+    target_monster = None
+    for m in monsters:
+        if m['id'] == target_idx and m['hp'] > 0:
+            target_monster = m
+            break
+    if not target_monster:
+        target_monster = alive_targets[0]
+        target_idx = target_monster['id']
 
     # --- Player action ---
     if action == 'attack':
-        dmg = max(1, player_atk - monster_def + random.randint(0, 2))
+        dmg = max(1, player_atk - target_monster['def'] + random.randint(0, 2))
+        crit = False
         if random.randint(1, 100) <= player_crt:
             dmg *= 2
+            crit = True
             log.append('💥 爆擊！')
-        bd['monster_hp'] -= dmg
-        log.append(f'⚔️ 造成 {dmg} 點傷害')
+        target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        log.append(f'⚔️ 對 {target_monster["name"]} 造成 {dmg} 點傷害')
+
+    elif action == 'skill' and skill_id:
+        skill = next((s for s in bd.get('skills', []) if s['id'] == skill_id), None)
+        if not skill:
+            return jsonify({'error': 'Skill not found'}), 400
+        # Check MP
+        if bd['player_mp'] < skill['mp_cost']:
+            log.append(f'❌ MP 不足！需要 {skill["mp_cost"]} MP')
+            bd['turns'].append({'action': action, 'skill_id': skill_id, 'log': log, 'target_idx': target_idx, 'mp_used': 0})
+            db.execute("UPDATE expeditions SET expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
+            db.commit()
+            bd['battle_result'] = 'fighting'
+            return jsonify(bd)
+        bd['player_mp'] -= skill['mp_cost']
+
+        target = skill.get('target', 'enemy')
+        base = skill.get('base_value', 0)
+        per_lv = skill.get('per_level', 0)
+        attr_scale = skill.get('attr_scale', 'none')
+
+        # Get building level for this skill
+        bldg_level = 1
+        bldg_skills = db.execute(
+            "SELECT b.level FROM buildings b JOIN building_defs bd ON b.def_id=bd.id "
+            "WHERE b.kid_id=? AND bd.id=? AND b.stored=0", (kid_id, skill['bldg_def_id'])
+        ).fetchone()
+        if bldg_skills:
+            bldg_level = bldg_skills['level']
+
+        if target == 'self':
+            log.append(f'🔥 {skill["name"]}！')
+
+        elif target == 'enemy':
+            dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+            target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+            log.append(f'{skill["icon"]} {skill["name"]}！造成 {dmg} 點傷害！')
+
+        elif target == 'all_enemies':
+            for m in monsters:
+                if m['hp'] <= 0: continue
+                dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd, 0.7)
+                m['hp'] = max(0, m['hp'] - dmg)
+            log.append(f'{skill["icon"]} {skill["name"]}！全體 {len([m for m in monsters if m["hp"]>0])} 隻受到傷害！')
+
+        elif target == 'ally' or target == 'all_allies':
+            heal = _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale)
+            if target == 'ally':
+                # Heal player
+                bd['player_hp'] = min(bd['player_max_hp'], bd['player_hp'] + heal)
+                log.append(f'{skill["icon"]} {skill["name"]}！回復 {heal} HP')
+            else:
+                bd['player_hp'] = min(bd['player_max_hp'], bd['player_hp'] + heal)
+                log.append(f'{skill["icon"]} {skill["name"]}！回復 {heal} HP')
+
     elif action == 'defend':
         defending = True
         log.append('🛡️ 防禦姿態')
-    elif action == 'special':
-        if bd.get('brv_used'):
-            log.append('❌ 必殺技已使用')
-        else:
-            dmg = max(3, player_atk + bd['player_brv'] * 2 + random.randint(1, 5))
-            bd['monster_hp'] -= dmg
-            bd['brv_used'] = True
-            log.append(f'💥 必殺技！造成 {dmg} 點傷害')
+
     elif action == 'flee':
         bd['status'] = 'fled'
         log.append('🏃 逃跑成功！')
-        # Save and exit
         bd['turns'].append({'action': action, 'log': log})
         db.execute("UPDATE expeditions SET status='completed', expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
         db.commit()
         bd['battle_result'] = 'fled'
         return jsonify(bd)
 
-    # Check monster defeated
-    if bd['monster_hp'] <= 0:
-        bd['monster_hp'] = 0
+    # Check all monsters defeated
+    if all(m['hp'] <= 0 for m in monsters):
         bd['status'] = 'won'
-        log.append('🎉 擊敗怪物！')
-        bd['turns'].append({'action': action, 'log': log})
-        # Reward
-        _award_battle_rewards(db, kid_id, bd)
+        log.append('🎉 擊敗所有怪物！')
+        bd['turns'].append({'action': action, 'log': log, 'target_idx': target_idx, 'mp_used': 0 if action != 'skill' else (skill['mp_cost'] if skill_id else 0)})
+        _award_battle_rewards(db, kid_id, bd, monsters)
         db.execute("UPDATE expeditions SET status='completed', expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
         db.commit()
         bd['battle_result'] = 'won'
         return jsonify(bd)
 
-    # --- Monster counter-attack ---
-    if defending:
-        dmg = max(0, monster_atk // 2 - random.randint(0, 1))
-    else:
-        dmg = max(0, monster_atk + random.randint(0, 2))
-    if dmg > 0:
-        bd['player_hp'] -= dmg
-        log.append(f'🐾 怪物反擊 {dmg} 點傷害')
-    else:
-        log.append('🛡️ 擋住攻擊！')
+    # --- Monster counter-attack (first alive monster attacks) ---
+    if not defending:
+        attacker = alive_targets[0]
+        dmg = max(0, attacker['atk'] - player_def + random.randint(0, 2))
+        if dmg > 0:
+            bd['player_hp'] -= dmg
+            log.append(f'🐾 {attacker["name"]} 反擊 {dmg} 點傷害')
+        else:
+            log.append('🛡️ 擋住攻擊！')
 
     # Check player defeated
     if bd['player_hp'] <= 0:
         bd['player_hp'] = 0
         bd['status'] = 'lost'
         log.append('💀 你被打敗了...')
-        bd['turns'].append({'action': action, 'log': log})
+        bd['turns'].append({'action': action, 'log': log, 'target_idx': target_idx, 'mp_used': 0 if action != 'skill' else (skill['mp_cost'] if skill_id else 0)})
         db.execute("UPDATE expeditions SET status='completed', expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
         db.commit()
         bd['battle_result'] = 'lost'
         return jsonify(bd)
 
-    bd['turns'].append({'action': action, 'log': log})
+    bd['turns'].append({'action': action, 'log': log, 'target_idx': target_idx, 'mp_used': 0 if action != 'skill' else (skill['mp_cost'] if skill_id else 0)})
     db.execute("UPDATE expeditions SET expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
     db.commit()
     bd['battle_result'] = 'fighting'
     return jsonify(bd)
 
 
-def _award_battle_rewards(db, kid_id, bd):
+def _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd, mult=1.0):
+    """Calculate skill damage based on building level and attributes."""
+    attr_bonus = 0
+    if attr_scale == 'str':
+        attr_bonus = bd.get('player_atk', 0) // 2
+    elif attr_scale == 'int':
+        attr_bonus = bd.get('player_brv', 0) // 2
+    dmg = int((base + per_lv * bldg_level + attr_bonus) * mult)
+    return max(1, dmg + random.randint(0, 3))
+
+
+def _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale):
+    """Calculate skill heal amount."""
+    attr_bonus = 0
+    if attr_scale == 'int':
+        attr_bonus = 5  # simplified; real int would come from kid stats
+    heal = int(base + per_lv * bldg_level + attr_bonus)
+    return max(1, heal + random.randint(0, 2))
+
+
+def _award_battle_rewards(db, kid_id, bd, monsters=None):
     """Award gold + materials + EXP for a won battle."""
     gold = bd.get('gold_reward', 20)
     mats = bd.get('mat_reward', {})
+
+    # Gold (scale with number of monsters)
+    num_monsters = len(monsters) if monsters else 1
+    gold = gold * num_monsters
 
     # Gold
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
     if kid:
         db.execute("UPDATE kids SET points=points+? WHERE id=?", (gold, kid_id))
         db.execute("INSERT INTO points_log (kid_id, amount, reason) VALUES (?,?,?)",
-                   (kid_id, gold, f"Battle win (region {bd.get('monster_name','?')})"))
+                   (kid_id, gold, "Battle win"))
 
     # Materials
     for item_type, qty in mats.items():
@@ -3123,6 +3325,7 @@ if __name__ == '__main__':
     migrate_db()
     migrate_db_v3()
     seed_building_defs()
+    seed_skill_defs()
 
     # Auto‑clean stale expeditions (status='running' but past end_time)
     _clean_stale_expeditions()
