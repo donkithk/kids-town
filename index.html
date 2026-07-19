@@ -1595,10 +1595,15 @@ async function doLogin() {
       // Parent sees manage tab by default
       st('manage');
     } else if (data.role === 'admin') {
-      // Admin login — enter app like kid/parent
-      currentKidId = null;
+      // Admin login — auto-select first kid
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('app').style.display = 'block';
+      // Find first kid and load their town
+      try {
+        const kids = await (await fetch(`${API}/api/kids/`)).json();
+        currentKidId = kids?.[0]?.id || null;
+      } catch(e) { currentKidId = null; }
+      if (!currentKidId) currentKidId = 4; // fallback
       updateHeader();
       await loadTown();
       initCanvas();
