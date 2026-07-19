@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>DQ Battle Mock v4</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a0a2e;font-family:'Courier New',monospace;display:flex;justify-content:center;align-items:center;min-height:100dvh}
+
+/* Main phone frame */
+.phone{width:100%;max-width:420px;min-height:100dvh;display:flex;flex-direction:column;position:relative;overflow:hidden;border-radius:0;padding:0 0 env(safe-area-inset-bottom,0)}
+
+/* Battle background */
+.battle-bg{position:absolute;inset:0;z-index:0}
+.battle-bg .sky{position:absolute;inset:0;background:linear-gradient(180deg,#12082a 0%,#1e0e3a 30%,#2d1b4e 50%,#3a2050 70%,#2a1535 100%)}
+.battle-bg .mountains{position:absolute;bottom:28%;left:0;right:0;height:18%;background:radial-gradient(ellipse 120px 60px at 10% 100%,rgba(60,35,90,.5),transparent),radial-gradient(ellipse 100px 50px at 30% 100%,rgba(50,25,80,.4),transparent),radial-gradient(ellipse 140px 70px at 50% 100%,rgba(70,45,100,.45),transparent),radial-gradient(ellipse 90px 45px at 70% 100%,rgba(40,30,70,.35),transparent),radial-gradient(ellipse 110px 55px at 88% 100%,rgba(60,35,90,.4),transparent)}
+.battle-bg .ground{position:absolute;bottom:0;left:0;right:0;height:30%;background:linear-gradient(0deg,#1a2a18 0%,#1e2e1c 30%,#2a3a28 60%,transparent 100%)}
+.battle-bg .star{position:absolute;width:2px;height:2px;background:#fff;border-radius:50%;opacity:.4}
+.battle-bg .star:nth-child(1){top:6%;left:12%;animation:twinkle 3s ease-in-out infinite}
+.battle-bg .star:nth-child(2){top:10%;left:72%;animation:twinkle 3s ease-in-out infinite 1s}
+.battle-bg .star:nth-child(3){top:4%;left:42%;animation:twinkle 3s ease-in-out infinite 2s}
+.battle-bg .star:nth-child(4){top:14%;left:88%;animation:twinkle 3s ease-in-out infinite .5s}
+.battle-bg .star:nth-child(5){top:2%;left:28%;animation:twinkle 3s ease-in-out infinite 1.5s}
+@keyframes twinkle{0%,100%{opacity:.3}50%{opacity:.7}}
+
+/* Content */
+.content{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;padding-bottom:enviroment(safe-area-inset-bottom)}
+
+/* Monster zone */
+.monster-zone{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:12px 10px 4px;gap:2px;min-height:180px}
+.monster-row{display:flex;justify-content:center;gap:4px;width:100%;flex-wrap:wrap;align-items:flex-end}
+.monster-card{width:64px;text-align:center}
+.monster-card .m-img{width:48px;height:48px;margin:0 auto;position:relative}
+.monster-card .m-img img{width:100%;height:100%;object-fit:contain;display:block;filter:drop-shadow(0 3px 8px rgba(255,80,0,.2))}
+.monster-card .m-name{color:#eec;font-size:8px;font-weight:bold;margin-top:1px;text-shadow:0 1px 3px #000}
+.monster-card .m-hp-bar{height:4px;background:rgba(0,0,0,.5);border-radius:2px;overflow:hidden;margin:1px 6px 0;border:1px solid rgba(255,255,255,.08)}
+.monster-card .m-hp-fill{height:100%;border-radius:2px}
+.monster-card .m-hp-text{color:#ccc;font-size:7px;text-shadow:0 1px 2px #000}
+
+/* Player zone */
+.player-zone{padding:2px 10px 4px;display:flex;justify-content:center;gap:6px;flex-wrap:wrap}
+.player-card{display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:3px 5px;width:auto;min-width:90px;max-width:120px}
+.player-card .p-img{width:24px;height:24px;border-radius:3px;overflow:hidden;flex-shrink:0}
+.player-card .p-img img{width:100%;height:100%;object-fit:cover}
+.player-card .p-info{flex:1;min-width:0}
+.player-card .p-name{color:#fff;font-size:8px;font-weight:bold;text-shadow:0 1px 2px #000}
+.player-card .p-bars{display:flex;gap:2px;align-items:center;margin-top:1px}
+.player-card .p-hp{flex:1;height:3px;background:rgba(0,0,0,.4);border-radius:2px;overflow:hidden}
+.player-card .p-hp-fill{height:100%;background:linear-gradient(90deg,#44cc44,#66ee66);border-radius:2px}
+.player-card .p-mp{flex:1;height:3px;background:rgba(0,0,0,.4);border-radius:2px;overflow:hidden}
+.player-card .p-mp-fill{height:100%;background:linear-gradient(90deg,#4488ff,#66aaff);border-radius:2px}
+.player-card .p-stats{color:#99a;font-size:6px;margin-left:2px;white-space:nowrap}
+
+/* Log window */
+.log-window{background:rgba(0,0,0,.7);border:1.5px solid #3a4a6a;border-radius:5px;margin:2px 8px;padding:4px 8px;min-height:36px;display:flex;flex-direction:column;justify-content:center}
+.log-text{color:#bbc;font-size:10px;line-height:1.4;font-weight:bold}
+.log-text .atk{color:#ff8844}
+.log-text .def{color:#66ee66}
+.log-text .spl{color:#88bbff}
+.log-text .info{color:#aabbdd}
+
+/* Command buttons */
+.cmd-menu{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:3px 8px 4px}
+.cmd-btn{background:linear-gradient(180deg,#1a2a4a,rgba(13,27,42,.8));border:1.5px solid #3a5a7a;border-radius:6px;padding:6px 0;color:#bbc;font-size:12px;font-weight:bold;text-align:center;cursor:pointer;font-family:inherit;text-shadow:0 1px 0 #000;box-shadow:0 2px 0 #0a1a2a}
+.cmd-btn:active{transform:translateY(2px);box-shadow:none}
+
+/* Footer */
+.dbt-footer{margin:1px 8px 6px;padding:5px 8px;background:rgba(0,0,0,.5);border:1px solid #3a4a6a;border-radius:5px;color:#bbc;font-size:10px;line-height:1.3;text-align:center}
+.dbt-footer .hl{color:#ffcc44}
+
+/* Target overlay */
+.target-overlay{position:absolute;inset:0;background:rgba(0,0,0,.85);z-index:20;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.target-overlay.active{display:flex}
+.target-overlay h3{color:#ffcc44;font-size:14px;margin-bottom:10px}
+.target-grid{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.target-item{background:rgba(30,40,60,.7);border:1.5px solid #4a6a8a;border-radius:6px;padding:6px 10px;text-align:center;cursor:pointer;width:64px}
+.target-item:active{background:rgba(50,70,100,.8);border-color:#6a8aaa}
+.target-item .t-icon{font-size:22px;display:block}
+.target-item .t-name{color:#fff;font-size:9px;font-weight:bold}
+.target-item .t-hp{color:#889;font-size:7px}
+.target-back{color:#889;font-size:10px;margin-top:12px;cursor:pointer;padding:4px 16px;border:1px solid #446;border-radius:4px}
+
+/* Result */
+.result-overlay{position:absolute;inset:0;background:rgba(0,0,0,.75);z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center}
+.result-overlay.active{display:flex}
+.result-overlay h1{font-size:28px}
+.result-overlay .sub{color:#fff;font-size:12px;margin:4px 0 10px}
+.result-overlay .rewards{display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap;justify-content:center}
+.result-overlay .r-item{background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:4px 8px;color:#ffcc44;font-size:10px}
+.result-overlay button{background:#f59e0b;border:none;border-radius:6px;padding:5px 20px;color:#fff;font-size:12px;font-weight:bold;cursor:pointer;font-family:inherit;box-shadow:0 2px 0 #b87a00}
+</style>
+</head><body>
+<div class="phone">
+  <div class="battle-bg">
+    <div class="sky"></div>
+    <div class="mountains"></div>
+    <div class="ground"></div>
+    <div class="star"></div><div class="star"></div><div class="star"></div><div class="star"></div><div class="star"></div>
+  </div>
+
+  <div class="content">
+    <div class="monster-zone"><div class="monster-row" id="monsterRow"></div></div>
+
+    <div class="player-zone" id="playerZone"></div>
+
+    <div class="log-window">
+      <div class="log-text" id="logText"><span class="info">⚔️ 戰鬥開始！</span><br><span class="info">🌲 3 隻野狼出現了！</span></div>
+    </div>
+
+    <div class="cmd-menu">
+      <div class="cmd-btn" onclick="showTargets('attack')">⚔️ Fight</div>
+      <div class="cmd-btn" onclick="doAction('defend')">🛡️ Defend</div>
+      <div class="cmd-btn" onclick="showTargets('spell')">💥 Spell</div>
+      <div class="cmd-btn" onclick="doAction('flee')">🏃 Flee</div>
+    </div>
+
+    <div class="dbt-footer" id="dbtFooter"><span class="hl">⚔️ 進入戰鬥！vs 3 隻野狼</span></div>
+  </div>
+
+  <div class="target-overlay" id="targetOverlay">
+    <h3 id="targetTitle">🎯 選擇目標</h3>
+    <div class="target-grid" id="targetGrid"></div>
+    <div class="target-back" onclick="hideTargets()">↩️ 返回</div>
+  </div>
+
+  <div class="result-overlay" id="resultOverlay">
+    <h1>🎉</h1>
+    <div class="sub">戰鬥勝利！</div>
+    <div class="rewards" id="rewards"></div>
+    <button onclick="this.closest('.result-overlay').classList.remove('active')">👍 太好了！</button>
+  </div>
+</div>
+
+<script>
+const MONSTERS = [
+  { name:'小野狼', icon:'🐺', hp:18, mhp:22, lv:1, img:'https://image.pollinations.ai/prompt/cute%20chibi%20wolf%20pixel%20art%20game%20sprite%20transparent%20bg' },
+  { name:'灰狼',   icon:'🐺', hp:22, mhp:26, lv:1, img:'https://image.pollinations.ai/prompt/cute%20chibi%20wolf%20pixel%20art%20game%20sprite%20transparent%20bg' },
+  { name:'頭狼',   icon:'🐺', hp:30, mhp:35, lv:2, img:'https://image.pollinations.ai/prompt/cute%20chibi%20wolf%20pixel%20art%20game%20sprite%20transparent%20bg' },
+];
+
+const PARTY = [
+  { name:'小明', img:'assets-c/boy.png',  hp:28, mhp:30, mp:12, mmp:15, lv:3 },
+  { name:'小美', img:'assets-c/girl.png', hp:22, mhp:24, mp:18, mmp:20, lv:2 },
+  { name:'阿強', img:'assets-c/boy2.png', hp:36, mhp:40, mp:6,  mmp:10, lv:3 },
+];
+
+function render(){
+  const row = document.getElementById('monsterRow');
+  row.innerHTML = MONSTERS.map((m,i) => {
+    const pct = Math.round(m.hp/m.mhp*100);
+    const barColor = pct>50?'#44cc44':pct>25?'#ffaa44':'#ff4444';
+    return `<div class="monster-card">
+      <div class="m-img"><img src="${m.img}" onerror="this.outerHTML='<span style=font-size:32px>${m.icon}</span>'"></div>
+      <div class="m-name">${m.icon} ${m.name} Lv.${m.lv}</div>
+      <div class="m-hp-bar"><div class="m-hp-fill" style="width:${pct}%;background:${barColor}"></div></div>
+      <div class="m-hp-text">${m.hp}/${m.mhp}</div>
+    </div>`;
+  }).join('');
+
+  const zone = document.getElementById('playerZone');
+  zone.innerHTML = PARTY.map(p => {
+    const hpPct = Math.round(p.hp/p.mhp*100);
+    const mpPct = Math.round(p.mp/p.mmp*100);
+    return `<div class="player-card">
+      <div class="p-img"><img src="${p.img}" onerror="this.outerHTML='<span style=font-size:18px>🧒</span>'"></div>
+      <div class="p-info">
+        <div class="p-name">Lv.${p.lv} ${p.name}</div>
+        <div class="p-bars">
+          <div class="p-hp"><div class="p-hp-fill" style="width:${hpPct}%"></div></div>
+          <div class="p-mp"><div class="p-mp-fill" style="width:${mpPct}%"></div></div>
+          <div class="p-stats">${p.hp}/${p.mp}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showTargets(type){
+  const overlay = document.getElementById('targetOverlay');
+  const grid = document.getElementById('targetGrid');
+  document.getElementById('targetTitle').textContent = type==='attack' ? '⚔️ 選擇目標' : '💥 選擇魔法目標';
+  overlay.classList.add('active');
+  grid.innerHTML = MONSTERS.map((m,i) =>
+    `<div class="target-item" onclick="doAttack(${i})">
+      <span class="t-icon">${m.icon}</span>
+      <div class="t-name">${m.name}</div>
+      <div class="t-hp">HP ${m.hp}</div>
+    </div>`
+  ).join('') +
+    `<div class="target-item" onclick="doAllAttack()">
+      <span class="t-icon">🌊</span>
+      <div class="t-name">全體</div>
+      <div class="t-hp">全體攻擊</div>
+    </div>`;
+}
+function hideTargets(){document.getElementById('targetOverlay').classList.remove('active')}
+
+function doAction(type){
+  const log = document.getElementById('logText');
+  if(type==='defend'){log.innerHTML='<span class="def">🛡️ 小明 防禦姿態！</span>';document.getElementById('dbtFooter').innerHTML='🛡️ 防禦中！'}
+  if(type==='flee'){log.innerHTML='<span class="info">🏃 逃走了！</span>';document.getElementById('dbtFooter').innerHTML='🏃 返回小鎮...'}
+}
+
+function doAttack(idx){
+  hideTargets();
+  const log = document.getElementById('logText');
+  const dmg = 3+Math.floor(Math.random()*5);
+  MONSTERS[idx].hp = Math.max(0,MONSTERS[idx].hp-dmg);
+  render();
+  log.innerHTML = `<span class="atk">⚔️ 小明 攻擊 ${MONSTERS[idx].name}！</span><br><span class="atk">🐺 ${dmg} 點傷害！</span>`;
+  document.getElementById('dbtFooter').innerHTML = `<span class="hl">⚔️ ${MONSTERS[idx].name} 受到 ${dmg} 點傷害！</span>`;
+  if(MONSTERS.every(m=>m.hp<=0)) setTimeout(()=>{
+    document.getElementById('resultOverlay').classList.add('active');
+    document.getElementById('rewards').innerHTML = '<span class="r-item">🪙 30</span><span class="r-item">🪵 x3</span><span class="r-item">✨ x50</span>';
+  },500);
+}
+
+function doAllAttack(){
+  hideTargets();
+  const log = document.getElementById('logText');
+  const dmg = 1+Math.floor(Math.random()*3);
+  MONSTERS.forEach(m=>{m.hp=Math.max(0,m.hp-dmg)});
+  render();
+  log.innerHTML = `<span class="spl">🌊 全體攻擊！造成 ${dmg} 點傷害</span>`;
+  document.getElementById('dbtFooter').innerHTML = `<span class="hl">🌊 全體攻擊 ${dmg} 點傷害！</span>`;
+}
+
+render();
+</script>
+</body></html>

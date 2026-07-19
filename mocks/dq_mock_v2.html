@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>DQ Style Battle Mock v2</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#111;display:flex;justify-content:center;align-items:center;min-height:100dvh;font-family:'Courier New',monospace}
+#phone{width:375px;height:812px;background:linear-gradient(180deg,#0d1b2a 0%,#000 100%);border-radius:30px;overflow:hidden;position:relative;box-shadow:0 0 60px rgba(0,120,255,.15),inset 0 0 0 2px rgba(255,255,255,.08);display:flex;flex-direction:column}
+
+/* ── Top: Monster Zone ── */
+.monster-zone{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 16px 4px;gap:6px}
+.monster-row{display:flex;justify-content:center;gap:8px;width:100%;flex-wrap:wrap}
+.monster-card{width:80px;text-align:center;position:relative;animation:monsterBob 2s ease-in-out infinite}
+.monster-card:nth-child(2){animation-delay:.3s}
+.monster-card:nth-child(3){animation-delay:.6s}
+@keyframes monsterBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.monster-card .m-sprite{width:64px;height:64px;margin:0 auto;border-radius:50%;overflow:hidden;position:relative}
+.monster-card .m-sprite img{width:100%;height:100%;object-fit:cover;display:block}
+.monster-card .m-name{color:#ccc;font-size:9px;margin-top:2px;text-shadow:0 1px 2px #000}
+.monster-card .m-hp{height:4px;background:#222;border-radius:2px;overflow:hidden;margin:1px 4px 0}
+.monster-card .m-hp-fill{height:100%;width:80%;background:linear-gradient(90deg,#ff4444,#ff6644);border-radius:2px}
+.monster-card .m-hp-text{color:#889;font-size:8px}
+
+/* ── Separator line ── */
+.sep{height:2px;background:linear-gradient(90deg,transparent,rgba(100,100,200,.3),transparent);margin:2px 20px}
+
+/* ── Bottom: Player Zone ── */
+.player-zone{padding:6px 16px 4px;display:flex;justify-content:center;gap:10px}
+.player-card{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:4px 8px;width:105px}
+.player-card .p-sprite{width:32px;height:32px;border-radius:6px;overflow:hidden;flex-shrink:0;background:rgba(0,0,0,.3)}
+.player-card .p-sprite img{width:100%;height:100%;object-fit:cover}
+.player-card .p-info{flex:1;min-width:0}
+.player-card .p-name{color:#fff;font-size:10px;font-weight:bold}
+.player-card .p-hp-bar{height:4px;background:#222;border-radius:2px;overflow:hidden;margin-top:1px}
+.player-card .p-hp-fill{height:100%;width:90%;background:linear-gradient(90deg,#44cc44,#66ee66);border-radius:2px}
+.player-card .p-hp-text{color:#889;font-size:8px}
+
+/* ── Battle Log Window ── */
+.log-window{background:rgba(0,0,0,.7);border:2px solid #335;border-radius:6px;margin:4px 12px;padding:5px 10px;min-height:44px;display:flex;flex-direction:column;justify-content:center}
+.log-text{color:#bbc;font-size:11px;line-height:1.5;font-weight:bold}
+.log-text .dmg{color:#ff8844}
+.log-text .heal{color:#66ee66}
+.log-text .info{color:#88bbff}
+
+/* ── Command Menu ── */
+.cmd-menu{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:6px 12px 8px}
+.cmd-btn{background:linear-gradient(180deg,#1a2a4a,#0d1b2a);border:2px solid #3a5a7a;border-radius:8px;padding:8px 0;color:#bbc;font-size:13px;font-weight:bold;text-align:center;cursor:pointer;font-family:inherit;text-shadow:0 1px 0 #000;position:relative;top:0;box-shadow:0 2px 0 #0a1a2a;transition:all .08s}
+.cmd-btn:active{top:2px;box-shadow:0 0 0 #0a1a2a;background:linear-gradient(180deg,#2a3a5a,#1a2a4a)}
+.cmd-btn .ico{display:block;font-size:16px;margin-bottom:1px}
+.cmd-btn .lbl{font-size:10px;opacity:.7}
+
+/* ── Target submenu overlay ── */
+.target-overlay{position:absolute;inset:0;background:rgba(0,0,0,.85);z-index:20;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.target-overlay.active{display:flex}
+.target-overlay h3{color:#ffcc44;font-size:16px;margin-bottom:12px;text-shadow:0 2px 4px #000}
+.target-grid{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.target-item{background:rgba(30,40,60,.8);border:2px solid #4a6a8a;border-radius:10px;padding:10px 16px;text-align:center;cursor:pointer;width:80px;transition:all .1s}
+.target-item:active{background:rgba(50,70,100,.8);border-color:#6a8aaa}
+.target-item .t-icon{font-size:28px;display:block;margin-bottom:4px}
+.target-item .t-name{color:#fff;font-size:11px;font-weight:bold}
+.target-item .t-hp{color:#889;font-size:9px}
+.target-back{color:#889;font-size:12px;margin-top:16px;cursor:pointer;padding:6px 20px;border:1px solid #446;border-radius:6px}
+.target-back:active{background:rgba(255,255,255,.05)}
+
+/* ── Damage popup (temporary) ── */
+.dmg-fx{position:absolute;font-size:20px;font-weight:bold;pointer-events:none;z-index:10;animation:dmgFloat .8s ease-out forwards;text-shadow:0 0 6px rgba(255,200,0,.5),1px 1px 0 #000}
+@keyframes dmgFloat{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-40px) scale(1.2)}}
+
+.result-overlay{position:absolute;inset:0;background:rgba(0,0,0,.7);z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;animation:fadeIn .3s}
+@keyframes fadeIn{0%{opacity:0}100%{opacity:1}}
+.result-overlay h1{font-size:36px}
+.result-overlay .sub{color:#fff;font-size:13px;margin:8px 0 16px}
+.result-overlay .rewards{display:flex;gap:8px;margin-bottom:16px}
+.result-overlay .r-item{background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:6px 12px;color:#ffcc44;font-size:12px}
+.result-overlay button{background:#f59e0b;border:none;border-radius:8px;padding:8px 28px;color:#fff;font-size:14px;font-weight:bold;cursor:pointer;font-family:inherit;box-shadow:0 3px 0 #b87a00}
+
+/* ── Footer ── */
+.dbt-footer{margin:2px 12px 6px;padding:6px 10px;background:rgba(0,0,0,.5);border:1px solid #446;border-radius:6px;color:#bbc;font-size:11px;line-height:1.4;text-align:center}
+.dbt-footer .hl{color:#ffcc44}
+</style>
+</head><body>
+<div id="phone">
+  <!-- Monster Zone: up to 6 enemies -->
+  <div class="monster-zone">
+    <div class="monster-row" id="monsterRow">
+      <!-- Generated by JS below -->
+    </div>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- Player Zone: up to 3 party members -->
+  <div class="player-zone" id="playerZone">
+    <!-- Generated by JS below -->
+  </div>
+
+  <!-- Battle Log -->
+  <div class="log-window" id="logWindow">
+    <div class="log-text" id="logText">
+      <span class="info">⚔️ 戰鬥開始！</span>
+    </div>
+  </div>
+
+  <!-- Command Menu -->
+  <div class="cmd-menu" id="cmdMenu">
+    <div class="cmd-btn" onclick="showTargets('attack')"><span class="ico">⚔️</span><span class="lbl">Fight</span></div>
+    <div class="cmd-btn" onclick="showTargets('defend')"><span class="ico">🛡️</span><span class="lbl">Defend</span></div>
+    <div class="cmd-btn" onclick="showTargets('special')"><span class="ico">💥</span><span class="lbl">Spell</span></div>
+    <div class="cmd-btn" onclick="showTargets('flee')"><span class="ico">🏃</span><span class="lbl">Flee</span></div>
+  </div>
+
+  <!-- Target Selection Overlay -->
+  <div class="target-overlay" id="targetOverlay">
+    <h3>⚔️ 選擇目標</h3>
+    <div class="target-grid" id="targetGrid"></div>
+    <div class="target-back" onclick="hideTargets()">↩️ 返回</div>
+  </div>
+
+  <!-- Footer -->
+  <div class="dbt-footer"><span class="hl">⚔️ 進入戰鬥！vs 3 隻野狼</span></div>
+</div>
+
+<script>
+// Sample monsters data
+const monsters = [
+  { id: 1, name: '小野狼', icon: '🐺', hp: 15, maxHp: 20, level: 1 },
+  { id: 2, name: '頭狼',   icon: '🐺', hp: 28, maxHp: 35, level: 2 },
+  { id: 3, name: '狼王',   icon: '🐺', hp: 45, maxHp: 50, level: 3 },
+  { id: 4, name: '野狼',   icon: '🐺', hp: 10, maxHp: 20, level: 1 },
+  { id: 5, name: '灰狼',   icon: '🐺', hp: 18, maxHp: 25, level: 1 },
+  { id: 6, name: '狼崽',   icon: '🐺', hp: 8,  maxHp: 12, level: 1 },
+];
+
+// Sample party data
+const party = [
+  { id: 1, name: '小明',  avatar: 'assets-c/boy.png',   hp: 28, maxHp: 30, level: 3 },
+  { id: 2, name: '小美',  avatar: 'assets-c/girl.png',  hp: 22, maxHp: 24, level: 2 },
+  { id: 3, name: '阿強',  avatar: 'assets-c/boy2.png',  hp: 35, maxHp: 40, level: 3 },
+];
+
+function renderMonsters(count) {
+  const row = document.getElementById('monsterRow');
+  const selected = monsters.slice(0, count);
+  row.innerHTML = selected.map((m, i) => `
+    <div class="monster-card" data-idx="${i}">
+      <div class="m-sprite">
+        <img src="https://image.pollinations.ai/prompt/cute%20chibi%20wolf%20pixel%20art%20transparent%20background%20game%20sprite"
+          onerror="this.outerHTML='<div style=\"font-size:36px;\">${m.icon}</div>'">
+      </div>
+      <div class="m-name">${m.icon} ${m.name}</div>
+      <div class="m-hp"><div class="m-hp-fill" style="width:${Math.round(m.hp/m.maxHp*100)}%"></div></div>
+      <div class="m-hp-text">${m.hp}/${m.maxHp}</div>
+    </div>
+  `).join('');
+}
+
+function renderParty(count) {
+  const zone = document.getElementById('playerZone');
+  const selected = party.slice(0, count);
+  zone.innerHTML = selected.map(p => `
+    <div class="player-card">
+      <div class="p-sprite">
+        <img src="${p.avatar}" onerror="this.outerHTML='<div style=\"font-size:24px;\">🧒</div>'">
+      </div>
+      <div class="p-info">
+        <div class="p-name">Lv.${p.level} ${p.name}</div>
+        <div class="p-hp-bar"><div class="p-hp-fill" style="width:${Math.round(p.hp/p.maxHp*100)}%"></div></div>
+        <div class="p-hp-text">${p.hp}/${p.maxHp}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function showTargets(action) {
+  if (action === 'flee') {
+    document.getElementById('logText').innerHTML = '<span class="info">🏃 逃走了！</span>';
+    return;
+  }
+  if (action === 'defend') {
+    document.getElementById('logText').innerHTML = '<span class="heal">🛡️ 小明 防禦姿態！</span>';
+    return;
+  }
+
+  const overlay = document.getElementById('targetOverlay');
+  const grid = document.getElementById('targetGrid');
+  overlay.classList.add('active');
+
+  const targets = monsters.slice(0, parseInt(document.querySelector('#monsterRow').children.length));
+  grid.innerHTML = targets.map((m, i) => `
+    <div class="target-item" onclick="doAttack(${i})">
+      <span class="t-icon">${m.icon}</span>
+      <div class="t-name">${m.name}</div>
+      <div class="t-hp">HP ${m.hp}</div>
+    </div>
+  `).join('') + `
+    <div class="target-item" onclick="doAttackAll()">
+      <span class="t-icon">🌊</span>
+      <div class="t-name">全體攻擊</div>
+      <div class="t-hp">對全部敵人</div>
+    </div>
+  `;
+}
+
+function hideTargets() {
+  document.getElementById('targetOverlay').classList.remove('active');
+}
+
+function doAttack(idx) {
+  hideTargets();
+  const log = document.getElementById('logText');
+  log.innerHTML = `<span class="dmg">⚔️ 小明 攻擊 ${monsters[idx].name}！造成 5 點傷害！</span><br><span class="dmg">🐺 ${monsters[idx].name} 反擊 3 點傷害！</span>`;
+}
+
+function doAttackAll() {
+  hideTargets();
+  document.getElementById('logText').innerHTML = '<span class="dmg">🌊 全體攻擊！對所有敵人造成 3 點傷害！</span>';
+}
+
+// Init
+renderMonsters(3);
+renderParty(3);
+</script>
+</body></html>

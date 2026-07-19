@@ -504,27 +504,128 @@ body{
 .battle-placeholder .bp-icon{font-size:48px;margin-bottom:8px}
 .battle-placeholder .bp-title{font-weight:700;font-size:15px;color:#64748b;margin-bottom:4px}
 
-/* ── Battle Scene ── */
-.battle-scene{display:flex;flex-direction:column;gap:10px}
-.bt-vs{display:flex;align-items:center;justify-content:center;gap:16px;padding:16px;background:linear-gradient(135deg,#1e1b4b,#312e81);border-radius:14px;color:#fff}
-.bt-side{text-align:center;min-width:100px}
-.bt-icon{font-size:40px;margin-bottom:4px}
-.bt-icon img{width:40px;height:40px;border-radius:50%;border:2px solid rgba(255,255,255,.3)}
-.bt-name{font-size:13px;font-weight:700;margin-bottom:6px}
-.bt-hp-bar{width:100%;height:8px;background:rgba(255,255,255,.15);border-radius:4px;overflow:hidden;margin-bottom:2px}
-.bt-hp-fill{height:100%;border-radius:4px;transition:width .4s}
-.bt-hp-fill.monster{background:linear-gradient(90deg,#ef4444,#dc2626)}
-.bt-hp-fill.player{background:linear-gradient(90deg,#22c55e,#16a34a)}
-.bt-hp-text{font-size:9px;color:rgba(255,255,255,.7)}
-.bt-vs-text{font-size:20px;font-weight:900;color:#fbbf24;text-shadow:0 0 10px rgba(251,191,36,.4)}
-.bt-actions{display:flex;gap:6px;flex-wrap:wrap}
-.bt-log{background:#1e293b;color:#cbd5e1;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.6;max-height:80px;overflow-y:auto}
-.bt-log-line{padding:1px 0}
-.bt-result{text-align:center;padding:14px;border-radius:10px;font-weight:700;font-size:15px}
-.bt-result.win{background:#dcfce7;color:#16a34a}
-.bt-result.lose{background:#fef2f2;color:#ef4444}
-.bt-result.flee{background:#fef9c3;color:#a16207}
-.exp-btn.danger{background:linear-gradient(135deg,#64748b,#475569);color:#fff}
+/* ── Battle Scene (DQ Style) ── */
+@keyframes twinkle{0%,100%{opacity:.3}50%{opacity:.8}}
+@keyframes flashBurst{0%{opacity:.9}30%{opacity:.5}100%{opacity:0}}
+@keyframes shake{0%,100%{transform:translate(0)}10%{transform:translate(-6px,3px)}20%{transform:translate(6px,-2px)}30%{transform:translate(-4px,4px)}45%{transform:translate(4px,-3px)}60%{transform:translate(-2px,1px)}80%{transform:translate(2px,0)}}
+@keyframes heavyShake{0%,100%{transform:translate(0)}5%{transform:translate(-8px,5px)}15%{transform:translate(8px,-4px)}25%{transform:translate(-6px,6px)}35%{transform:translate(6px,-5px)}50%{transform:translate(-4px,3px)}65%{transform:translate(4px,-2px)}80%{transform:translate(-2px,1px)}}
+@keyframes monsterHit{0%{transform:scale(1) translateX(0)}10%{transform:scale(.85) translateX(-8px)}25%{transform:scale(.9) translateX(6px)}40%{transform:scale(.92) translateX(-5px)}55%{transform:scale(.95) translateX(3px)}70%{transform:scale(.97) translateX(-2px)}100%{transform:scale(1) translateX(0)}}
+@keyframes heavyMonsterHit{0%{transform:scale(1) translateX(0) rotate(0)}8%{transform:scale(.75) translateX(-12px) rotate(-5deg)}20%{transform:scale(.82) translateX(8px) rotate(3deg)}35%{transform:scale(.88) translateX(-6px) rotate(-2deg)}50%{transform:scale(.92) translateX(4px) rotate(1deg)}70%{transform:scale(.96) translateX(-2px) rotate(0)}100%{transform:scale(1) translateX(0) rotate(0)}}
+@keyframes deathDramatic{0%{opacity:1;transform:scale(1)}20%{transform:scale(1.2) rotate(8deg);opacity:.8}40%{transform:scale(.3) rotate(-15deg);opacity:.5;filter:brightness(2)}100%{opacity:0;transform:scale(.1) translateY(40px);filter:brightness(0)}}
+@keyframes dmgBounce{0%{opacity:0;transform:translate(-50%,0) scale(.3)}20%{opacity:1;transform:translate(-50%,-10px) scale(1.3)}40%{transform:translate(-50%,-25px) scale(1)}60%{transform:translate(-50%,-35px) scale(1.05)}100%{opacity:1;transform:translate(-50%,-50px) scale(1)}}
+@keyframes sparkBurst{0%{opacity:1;transform:translate(-50%,-50%) scale(0)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.5)}100%{opacity:0;transform:translate(-50%,-50%) scale(2)}}
+@keyframes slashAnim{0%{opacity:0;transform:translate(-50%,-50%) scaleX(0) rotate(-30deg)}20%{opacity:1;transform:translate(-50%,-50%) scaleX(1) rotate(-30deg)}80%{opacity:1;transform:translate(-50%,-50%) scaleX(1) rotate(-30deg)}100%{opacity:0;transform:translate(-50%,-50%) scaleX(0) rotate(-30deg)}}
+@keyframes healGlow{0%{box-shadow:inset 0 0 0 rgba(102,238,136,0)}30%{box-shadow:inset 0 0 40px rgba(102,238,136,.5)}70%{box-shadow:inset 0 0 20px rgba(102,238,136,.3)}100%{box-shadow:inset 0 0 0 rgba(102,238,136,0)}}
+@keyframes sparkle1{0%{opacity:0;transform:translateY(0) scale(0)}20%{opacity:1;transform:translateY(-10px) scale(1)}100%{opacity:0;transform:translateY(-50px) scale(.3)}}
+@keyframes sparkle2{0%{opacity:0;transform:translateY(0) scale(0)}20%{opacity:1;transform:translateY(-5px) scale(1)}100%{opacity:0;transform:translateY(-45px) scale(.2)}}
+@keyframes sparkle3{0%{opacity:0;transform:translateY(0) scale(0)}20%{opacity:1;transform:translateY(-15px) scale(.8)}100%{opacity:0;transform:translateY(-55px) scale(.2)}}
+@keyframes healFloat{0%{opacity:0;transform:translate(-50%,0) scale(.3)}20%{opacity:1;transform:translate(-50%,-10px) scale(1.3)}100%{opacity:1;transform:translate(-50%,-40px) scale(1)}}
+@keyframes buffRise{0%{opacity:0;transform:translateY(10px) scale(0)}60%{opacity:1;transform:translateY(-5px) scale(1.3)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes buffPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
+@keyframes buffFlash{0%{box-shadow:inset 0 0 0 rgba(255,200,50,0),0 0 0 rgba(255,200,50,0)}30%{box-shadow:inset 0 0 30px rgba(255,200,50,.4),0 0 25px rgba(255,200,50,.3)}70%{box-shadow:inset 0 0 15px rgba(255,200,50,.2),0 0 10px rgba(255,200,50,.1)}100%{box-shadow:inset 0 0 0 rgba(255,200,50,0),0 0 0 rgba(255,200,50,0)}}
+@keyframes glow{0%{box-shadow:0 0 8px rgba(255,204,68,.2)}100%{box-shadow:0 0 20px rgba(255,204,68,.5)}}
+@keyframes glowGreen{0%{box-shadow:0 0 8px rgba(102,238,136,.2)}100%{box-shadow:0 0 20px rgba(102,238,136,.5)}}
+@keyframes arrowBounce{0%{transform:translateX(-50%) translateY(0)}100%{transform:translateX(-50%) translateY(-4px)}}
+@keyframes heavySpark{0%{opacity:1;transform:translate(-50%,-50%) scale(0)}30%{opacity:1;transform:translate(-50%,-50%) scale(1.8)}60%{opacity:.6;transform:translate(-50%,-50%) scale(2.5)}100%{opacity:0;transform:translate(-50%,-50%) scale(3)}}
+
+.battle-scene{position:relative;display:flex;flex-direction:column;min-height:360px}
+.battle-scene .battle-bg{position:absolute;inset:0;z-index:0;overflow:hidden;border-radius:14px}
+.battle-scene .battle-bg .sky{position:absolute;inset:0;background:linear-gradient(180deg,#12082a,#1e0e3a 30%,#2d1b4e 55%,#3a2050 75%,#2a1535)}
+.battle-scene .battle-bg .ground{position:absolute;bottom:0;left:0;right:0;height:28%;background:linear-gradient(0deg,#1a2a18,#1e2e1c 30%,#263624 60%,transparent)}
+.battle-scene .battle-bg .star{position:absolute;width:2px;height:2px;background:#fff;border-radius:50%;opacity:.4;animation:twinkle 3s ease infinite}
+.battle-scene .battle-bg .star:nth-child(1){top:5%;left:10%}.battle-scene .battle-bg .star:nth-child(2){top:9%;left:75%}.battle-scene .battle-bg .star:nth-child(3){top:3%;left:40%;animation-delay:2s}.battle-scene .battle-bg .star:nth-child(4){top:12%;left:88%;animation-delay:.5s}
+
+.battle-content{position:relative;z-index:1;display:flex;flex-direction:column;flex:1}
+.shake{animation:shake .5s ease}
+.heavy-shake{animation:heavyShake .6s ease}
+.white-flash{position:absolute;inset:0;background:#fff;opacity:0;z-index:25;pointer-events:none;border-radius:14px}
+.white-flash.active{animation:flashBurst .25s ease forwards}
+
+.monster-zone{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:12px 8px 2px;min-height:140px}
+.monster-row{display:flex;justify-content:center;gap:6px;width:100%;flex-wrap:wrap;align-items:flex-end}
+.monster-card{width:72px;text-align:center;cursor:pointer;padding:3px;border-radius:10px;border:2px solid transparent;position:relative;transition:.1s}
+.monster-card:active{transform:scale(.92)}
+.monster-card.targetable{border-color:#ffcc44;background:rgba(255,204,68,.08);animation:glow .6s infinite alternate}
+.monster-card.monster-hit{animation:monsterHit .5s ease}
+.monster-card.monster-heavy{animation:heavyMonsterHit .6s ease}
+.monster-card.dead{animation:deathDramatic .7s forwards}
+.monster-card .m-img{width:56px;height:56px;margin:0 auto;position:relative}
+.monster-card .m-img img{width:100%;height:100%;object-fit:contain;display:block}
+.monster-card .m-name{color:#ffe0bb;font-size:10px;font-weight:bold;margin-top:1px;text-shadow:0 1px 4px #000;line-height:1.2}
+.monster-card .m-hp-bar{height:4px;background:rgba(0,0,0,.5);border-radius:2px;margin:1px 4px 0;border:1px solid rgba(255,255,255,.08)}
+.monster-card .m-hp-fill{height:100%;border-radius:2px;transition:width .3s}
+.monster-card .m-hp-text{color:#ddd;font-size:9px;margin-top:0;text-shadow:0 1px 3px #000;font-weight:bold}
+.monster-card .target-arrow{display:none;position:absolute;top:-12px;left:50%;transform:translateX(-50%);font-size:14px;color:#ffcc44}
+.monster-card.targetable .target-arrow{display:block;animation:arrowBounce .5s infinite alternate}
+
+.spark-burst{position:absolute;top:50%;left:50%;width:60px;height:60px;border-radius:50%;background:radial-gradient(circle,rgba(255,200,50,.8),rgba(255,100,0,.3),transparent);transform:translate(-50%,-50%);z-index:8;pointer-events:none;animation:sparkBurst .35s ease forwards}
+.heavy-spark{position:absolute;top:50%;left:50%;width:100px;height:100px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.9),rgba(255,200,0,.5),rgba(255,80,0,.2),transparent);transform:translate(-50%,-50%);z-index:8;pointer-events:none;animation:heavySpark .4s ease forwards}
+.slash{position:absolute;top:50%;left:50%;width:80px;height:3px;background:linear-gradient(90deg,transparent,#fff,#ffcc44,transparent);border-radius:2px;transform:translate(-50%,-50%) rotate(-30deg);z-index:9;pointer-events:none;box-shadow:0 0 12px rgba(255,200,68,.6);animation:slashAnim .3s ease forwards}
+.dmg-popup{position:absolute;top:-18px;left:50%;z-index:10;pointer-events:none;font-weight:bold;text-align:center}
+.dmg-popup .num{font-size:24px;color:#fff;text-shadow:0 0 12px rgba(255,200,0,.7),2px 2px 0 #000,-1px -1px 0 #000;animation:dmgBounce .7s cubic-bezier(.28,.84,.42,1) forwards}
+.dmg-popup.heavy .num{font-size:32px;color:#ff8800;text-shadow:0 0 20px rgba(255,136,0,.8),3px 3px 0 #000,-2px -2px 0 #000}
+.heal-num{position:absolute;top:-5px;left:50%;z-index:12;font-size:22px;font-weight:bold;color:#66ee88;text-shadow:0 0 12px rgba(102,238,136,.5),2px 2px 0 #000;pointer-events:none;animation:healFloat .9s cubic-bezier(.28,.84,.42,1) forwards}
+.heal-sparkle{position:absolute;width:5px;height:5px;border-radius:50%;background:#66ee88;z-index:11;pointer-events:none}
+.heal-sparkle.s1{left:30%;top:40%;animation:sparkle1 .8s ease forwards}
+.heal-sparkle.s2{left:55%;top:35%;animation:sparkle2 .9s ease forwards;width:4px;height:4px}
+.heal-sparkle.s3{left:70%;top:45%;animation:sparkle3 .75s ease forwards;width:4px;height:4px}
+.heal-sparkle.s4{left:45%;top:30%;animation:sparkle2 .85s ease forwards .1s;width:3px;height:3px}
+.heal-sparkle.s5{left:60%;top:50%;animation:sparkle1 .7s ease forwards .05s;width:3px;height:3px}
+
+.buff-icon{display:inline-block;font-size:16px;margin-left:3px;vertical-align:middle;animation:buffRise .4s cubic-bezier(.28,.84,.42,1) forwards}
+.buff-pulse{animation:buffPulse .6s ease-in-out infinite}
+.heal-glow{animation:healGlow .8s ease}
+.buff-flash{animation:buffFlash .5s ease}
+
+.player-zone{padding:2px 8px 4px;display:flex;justify-content:center;gap:5px;flex-wrap:wrap}
+.player-card{background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:4px 5px;width:auto;min-width:90px;max-width:110px;cursor:default;position:relative}
+.player-card.targetable{cursor:pointer;border-color:#66ee88;background:rgba(102,238,136,.08);animation:glowGreen .6s infinite alternate}
+.player-card .p-row{display:flex;gap:4px}
+.player-card .p-img{width:28px;height:28px;flex-shrink:0;position:relative}
+.player-card .p-img img{width:100%;height:100%;object-fit:cover;display:block;border-radius:3px}
+.player-card .p-name{color:#fff;font-size:10px;font-weight:bold;text-shadow:0 1px 3px #000;margin-bottom:2px;line-height:1.2}
+.bar{position:relative;height:12px;margin-bottom:1px}
+.bar-track{position:absolute;inset:0;height:12px;background:rgba(0,0,0,.4);border-radius:3px;overflow:hidden;border:1px solid rgba(255,255,255,.06)}
+.bar-fill{height:100%;border-radius:2px;transition:width .3s}
+.bar-fill.hp{background:#33dd55}
+.bar-fill.mp{background:#4488ff}
+.bar-lbl{position:absolute;left:2px;top:50%;transform:translateY(-50%);font-size:8px;font-weight:bold;z-index:1;text-shadow:0 1px 2px #000}
+.bar-lbl.h{color:#ff5555}.bar-lbl.m{color:#5577ff}
+.bar-val{position:absolute;right:2px;top:50%;transform:translateY(-50%);font-size:7px;font-weight:bold;color:#fff;z-index:1;text-shadow:0 1px 2px #000}
+
+.log-window{background:rgba(0,0,0,.75);border:2px solid #4a5a7a;border-radius:8px;margin:2px 8px;padding:4px 8px;min-height:36px}
+.log-text{color:#ccd;font-size:11px;line-height:1.5;font-weight:bold}
+.log-text .atk{color:#ff8844}.log-text .def{color:#66ee66}.log-text .skl{color:#ddaaff}.log-text .info{color:#aabbdd}
+
+.cmd-menu{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:2px 8px 4px}
+.cmd-btn{background:linear-gradient(180deg,#1f3055,rgba(13,27,42,.9));border:2px solid #4a6a8a;border-radius:8px;padding:7px 0;color:#cce;font-size:14px;font-weight:bold;text-align:center;cursor:pointer;font-family:inherit;text-shadow:0 1px 0 #000;box-shadow:0 2px 0 #0a1a2a}
+.cmd-btn:active{transform:translateY(2px);box-shadow:none}
+.cmd-btn.active{background:linear-gradient(180deg,#2a4570,#1f3055);border-color:#ffcc44;color:#ffe0aa}
+
+.skill-overlay{position:absolute;inset:0;background:rgba(0,0,0,.88);z-index:20;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;border-radius:14px}
+.skill-overlay.active{display:flex}
+.skill-overlay h3{color:#ddaaff;font-size:16px;margin-bottom:3px;text-shadow:0 2px 6px #000}
+.skill-overlay .mp-hint{color:#889;font-size:10px;margin-bottom:10px}
+.skill-grid{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.skill-item{background:rgba(40,30,60,.85);border:2px solid #6a4a8a;border-radius:8px;padding:8px 10px;text-align:center;cursor:pointer;width:82px}
+.skill-item:active{background:rgba(60,40,80,.9);border-color:#8a6aaa}
+.skill-item .s-icon{font-size:22px}.skill-item .s-name{color:#ddaaff;font-size:11px;font-weight:bold}
+.skill-item .s-mp{color:#6688ff;font-size:9px;font-weight:bold}
+.skill-item .s-desc{color:#889;font-size:7px}
+.skill-item.disabled{opacity:.4;pointer-events:none}
+.skill-back{color:#889;font-size:11px;margin-top:10px;cursor:pointer;padding:4px 16px;border:1px solid #557;border-radius:5px}
+
+.dbt-footer{margin:1px 8px 4px;padding:4px 8px;background:rgba(0,0,0,.55);border:1.5px solid #4a5a7a;border-radius:6px;color:#cce;font-size:11px;text-align:center}
+.dbt-footer .hl{color:#ffcc44}
+
+.result-overlay{position:absolute;inset:0;background:rgba(0,0,0,.78);z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;border-radius:14px}
+.result-overlay.active{display:flex}
+.result-overlay .ro-icon{font-size:36px}
+.result-overlay .ro-title{color:#fff;font-size:14px;margin:4px 0 10px;font-weight:bold}
+.result-overlay .rewards{display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap;justify-content:center}
+.result-overlay .r-item{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:4px 8px;color:#ffcc44;font-size:11px;font-weight:bold}
+.result-overlay button{background:#f59e0b;border:none;border-radius:7px;padding:6px 20px;color:#fff;font-size:13px;font-weight:bold;cursor:pointer;font-family:inherit;box-shadow:0 2px 0 #b87a00}
+.result-overlay button:active{transform:translateY(2px);box-shadow:none}
 
 /* ═══════════════════════════════════════
    INVENTORY TAB
@@ -3488,7 +3589,6 @@ function renderBattleLobby() {
 async function startBattle(regionId) {
   const kidId = currentUser?.id || townData?.kid?.id;
   if (!kidId) return;
-  // Auto-clean stale expedition
   if (townData.expedition && (townData.expedition.status === 'running' || townData.expedition.status === 'fighting')) {
     try { await fetch(`${API}/api/kids/${kidId}/expedition/claim`, {method:'POST'}); } catch(e) {}
     townData.expedition = null;
@@ -3501,11 +3601,14 @@ async function startBattle(regionId) {
     const data = await r.json();
     if (data.error) { showToast('⚠️ '+data.error, 'error'); return; }
     townData.expedition = data;
+    window._battleTargetMode = null;
+    window._pendingSkill = null;
     renderExpedition();
-    // Directly update footer
     const dbtEl = document.getElementById('dbt');
     if (dbtEl) {
-      dbtEl.innerHTML = `⚔️ 進入戰鬥！vs ${data.monster_name||'怪物'}`;
+      const mName = data.monsters?.[0]?.name || '怪物';
+      const mCount = data.monsters?.length || 1;
+      dbtEl.innerHTML = `⚔️ 進入戰鬥！vs ${mCount > 1 ? mCount+'隻 ' : ''}${mName}`;
       dbtEl.style.color = '#fff';
       dbtEl.style.whiteSpace = 'pre-wrap';
     }
@@ -3517,77 +3620,156 @@ function renderBattleMode(exp) {
     ? JSON.parse(exp.expedition_data)
     : (exp.expedition_data || exp);
   if (typeof bd === 'string') return renderBattleLobby();
+
+  const monsters = bd.monsters || [];
   const pMax = bd.player_max_hp || 30;
   const pHp = bd.player_hp || 0;
-  const mMax = bd.monster_max_hp || 30;
-  const mHp = bd.monster_hp || 0;
+  const pMpMax = bd.player_max_mp || 20;
+  const pMp = bd.player_mp || 0;
   const result = bd.battle_result || bd.status;
   const turns = bd.turns || [];
   const lastTurn = turns.length > 0 ? turns[turns.length-1] : null;
+  const skills = bd.skills || [];
 
   const pHpPct = Math.max(0, Math.round(pHp / pMax * 100));
-  const mHpPct = Math.max(0, Math.round(mHp / mMax * 100));
+  const pMpPct = Math.max(0, Math.round(pMp / pMpMax * 100));
 
-  let actionHtml = '';
-  let resultHtml = '';
-  let fleeBtn = '';
-
-  if (result === 'fighting') {
-    const brvDisabled = bd.brv_used ? 'disabled style="opacity:0.5"' : '';
-    fleeBtn = `<button class="exp-btn danger" onclick="battleAction('flee')" style="flex:1;font-size:11px;">🏃 逃跑</button>`;
-    actionHtml = `<div class="bt-actions">
-      <button class="exp-btn go" onclick="battleAction('attack')" style="flex:1;font-size:11px;">⚔️ 攻擊</button>
-      <button class="exp-btn" onclick="battleAction('defend')" style="flex:1;font-size:11px;background:#6366f1;">🛡️ 防禦</button>
-      <button class="exp-btn" onclick="battleAction('special')" ${brvDisabled} style="flex:1;font-size:11px;background:#f59e0b;">💥 必殺技</button>
-      ${fleeBtn}
-    </div>
-    <button class="exp-btn danger" onclick="abandonBattle()" style="margin-top:4px;font-size:10px;width:100%;padding:4px;background:#475569;">↩️ 放棄探險（返回）</button>`;
-  } else {
-    // ── Battle End ──
-    if (result === 'won') {
-      resultHtml = `<div class="bt-result win">🎉 勝利！</div>`;
-    } else if (result === 'lost' || result === 'fled') {
-      resultHtml = `<div class="bt-result ${result === 'lost' ? 'lose' : 'flee'}">${result === 'lost' ? '💀 戰敗...' : '🏃 逃走了'}</div>`;
-    }
-    actionHtml = `<button class="exp-btn go" onclick="closeExpedition()" style="margin-top:8px;">返回</button>`;
-  }
-
-  // Monster generated art
   const MONSTER_ART = {
     1:'https://image.pollinations.ai/prompt/cute%20chibi%20wolf%20pixel%20art%20game%20sprite%20woodland',
     2:'https://image.pollinations.ai/prompt/cute%20chibi%20polar%20bear%20pixel%20art%20game%20sprite%20snow',
     3:'https://image.pollinations.ai/prompt/cute%20chibi%20scorpion%20pixel%20art%20game%20sprite%20desert',
   };
-  const monsterArt = MONSTER_ART[bd.monster_id] || MONSTER_ART[1];
 
-  return `<div class="battle-scene">
-    <div class="bt-vs">
-      <div class="bt-side">
-        <div class="bt-icon"><img src="${monsterArt}" style="width:48px;height:48px;border-radius:50%;border:2px solid rgba(255,255,255,.3);object-fit:cover;" onerror="this.style.display='none';this.nextSibling&&(this.nextSibling.style.display='')"><span style="display:none">${bd.monster_icon||'🐺'}</span></div>
-        <div class="bt-name">${bd.monster_name||'怪物'}</div>
-        <div class="bt-hp-bar"><div class="bt-hp-fill monster" style="width:${mHpPct}%"></div></div>
-        <div class="bt-hp-text">HP ${mHp}/${mMax}</div>
+  // ── Monster zone ──
+  const showMonsterTarget = window._battleTargetMode === 'attack' || (window._pendingSkill && window._pendingSkill.target === 'enemy');
+  const monstersHtml = monsters.map(m => {
+    const pct = Math.max(0, Math.round(m.hp / m.max_hp * 100));
+    const bc = pct > 50 ? '#44cc44' : pct > 25 ? '#ffaa44' : '#ff4444';
+    const mImg = MONSTER_ART[m.monster_id] || MONSTER_ART[1];
+    return `<div class="monster-card${showMonsterTarget?' targetable':''}" data-idx="${m.id}" onclick="onMonsterClick(${m.id})">
+      <div class="target-arrow">▼</div>
+      <div class="m-img">
+        <img src="${mImg}" onerror="this.outerHTML='<span style=font-size:36px>${m.icon||'🐺'}</span>'">
       </div>
-      <div class="bt-vs-text">VS</div>
-      <div class="bt-side">
-        <div class="bt-icon"><img src="${characterImage(townData?.kid?.avatar)}" style="width:48px;height:48px;border-radius:50%;border:2px solid rgba(255,255,255,.3);object-fit:cover;"></div>
-        <div class="bt-name">${townData?.kid?.name||'你'}</div>
-        <div class="bt-hp-bar"><div class="bt-hp-fill player" style="width:${pHpPct}%"></div></div>
-        <div class="bt-hp-text">HP ${pHp}/${pMax}</div>
+      <div class="m-name">${m.icon||''} ${m.name}</div>
+      <div class="m-hp-bar"><div class="m-hp-fill" style="width:${pct}%;background:${bc}"></div></div>
+      <div class="m-hp-text">${m.hp}/${m.max_hp}</div>
+    </div>`;
+  }).join('');
+
+  // ── Player zone ──
+  const showAllyTarget = window._pendingSkill && window._pendingSkill.target === 'ally';
+  const playerHtml = `<div class="player-card${showAllyTarget?' targetable':''}" onclick="${showAllyTarget?'onPlayerClick(0)':''}">
+    <div class="p-row">
+      <div class="p-img"><img src="${characterImage(townData?.kid?.avatar)}" onerror="this.outerHTML='<span style=font-size:22px>🧒</span>'"></div>
+      <div style="flex:1">
+        <div class="p-name">${townData?.kid?.name||'你'}${bd._buff ? `<span class="buff-icon${bd._buff.type==='power'?' buff-pulse':''}">${bd._buff.icon}</span>` : ''}</div>
+        <div class="bar"><div class="bar-track"><div class="bar-fill hp" style="width:${pHpPct}%"></div></div><span class="bar-lbl h">HP</span><span class="bar-val">${pHp}/${pMax}</span></div>
+        <div class="bar"><div class="bar-track"><div class="bar-fill mp" style="width:${pMpPct}%"></div></div><span class="bar-lbl m">MP</span><span class="bar-val">${pMp}/${pMpMax}</span></div>
       </div>
     </div>
+  </div>`;
+
+  // ── Log window ──
+  let logHtml = '<span class="info">⚔️ 戰鬥開始！</span>';
+  if (lastTurn && lastTurn.log && lastTurn.log.length) {
+    logHtml = lastTurn.log.map(l => {
+      const cls = l.includes('⚔️')||l.includes('攻擊')||l.includes('爆擊')||l.includes('傷害') ? 'atk'
+        : l.includes('🛡️')||l.includes('防禦')||l.includes('擋住') ? 'def'
+        : l.includes('💥')||l.includes('💚')||l.includes('🔥')||l.includes('💪')||l.includes('MP') ? 'skl'
+        : 'info';
+      return `<span class="${cls}">${l}</span>`;
+    }).join('<br>');
+  }
+
+  // ── Command menu (only when fighting) ──
+  const cmdHtml = result === 'fighting' ? `<div class="cmd-menu">
+    <div class="cmd-btn${window._battleTargetMode==='attack'?' active':''}" onclick="startTarget('attack')">⚔️ 攻擊</div>
+    <div class="cmd-btn" onclick="battleAction('defend')">🛡️ 防禦</div>
+    <div class="cmd-btn${window._pendingSkill?' active':''}" onclick="openSkills()">💥 技能</div>
+    <div class="cmd-btn" onclick="battleAction('flee')">🏃 逃走</div>
+  </div>` : '';
+
+  // ── Footer DBT ──
+  let dbtMsg = '⚔️ 戰鬥中...';
+  if (result === 'fighting') {
+    if (window._battleTargetMode === 'attack') dbtMsg = '👆 點擊怪獸選擇目標';
+    else if (window._pendingSkill) dbtMsg = `👆 選擇目標（${window._pendingSkill.name}）`;
+    else dbtMsg = '⚔️ 選擇指令！';
+  } else if (result === 'won') dbtMsg = '🎉 戰鬥勝利！';
+  else if (result === 'lost') dbtMsg = '💀 戰敗...';
+  else if (result === 'fled') dbtMsg = '🏃 逃走了！';
+
+  // ── Skill overlay ──
+  const skillsHtml = skills.map(sk => {
+    const enough = pMp >= sk.mp_cost;
+    return `<div class="skill-item${enough?'':' disabled'}" onclick="${enough?`selectSkill('${sk.id}')`:''}">
+      <span class="s-icon">${sk.icon}</span>
+      <div class="s-name">${sk.name}</div>
+      <div class="s-mp">MP ${sk.mp_cost}</div>
+      <div class="s-desc">${sk.description||''}</div>
+    </div>`;
+  }).join('');
+
+  // ── Result overlay ──
+  let resultHtml = '';
+  if (result !== 'fighting') {
+    if (result === 'won') {
+      const rew = [];
+      if (bd.gold_reward > 0) rew.push(`<span class="r-item">🪙 ${bd.gold_reward}</span>`);
+      if (bd.mat_reward) Object.entries(bd.mat_reward).forEach(([k,v]) => rew.push(`<span class="r-item">${MAT_ICONS[k]||'📦'} x${v}</span>`));
+      resultHtml = `<div class="result-overlay active">
+        <div class="ro-icon">🎉</div><div class="ro-title">戰鬥勝利！</div>
+        <div class="rewards">${rew.join('')}</div>
+        <button onclick="closeExpedition()">👍 太好了！</button>
+      </div>`;
+    } else if (result === 'lost') {
+      resultHtml = `<div class="result-overlay active">
+        <div class="ro-icon">💀</div><div class="ro-title">戰敗...</div>
+        <button onclick="closeExpedition()">↩️ 返回</button>
+      </div>`;
+    } else if (result === 'fled') {
+      resultHtml = `<div class="result-overlay active">
+        <div class="ro-icon">🏃</div><div class="ro-title">逃走了！</div>
+        <button onclick="closeExpedition()">↩️ 返回</button>
+      </div>`;
+    }
+  }
+
+  return `<div class="battle-scene" id="battleScene">
+    <div class="battle-bg"><div class="sky"></div><div class="ground"></div>
+      <div class="star"></div><div class="star"></div><div class="star"></div><div class="star"></div>
+    </div>
+    <div class="battle-content" id="mainContent">
+      <div class="monster-zone"><div class="monster-row" id="monsterRow">${monstersHtml}</div></div>
+      <div class="player-zone" id="playerZone">${playerHtml}</div>
+      <div class="log-window"><div class="log-text" id="battleLogText">${logHtml}</div></div>
+      ${cmdHtml}
+      <div class="dbt-footer" id="battleDbtFooter"><span class="hl">${dbtMsg}</span></div>
+    </div>
+    <div class="white-flash" id="whiteFlash"></div>
+    <div class="skill-overlay" id="skillOverlay">
+      <h3>💥 選擇技能</h3>
+      <div class="mp-hint">MP: ${pMp}/${pMpMax}</div>
+      <div class="skill-grid" id="skillGrid">${skillsHtml}</div>
+      <div class="skill-back" onclick="hideSkills()">↩️ 返回</div>
+    </div>
     ${resultHtml}
-    ${actionHtml}
   </div>`;
 }
 
-async function battleAction(action) {
+async function battleAction(action, skillId, targetIdx) {
   const kidId = currentUser?.id || townData?.kid?.id;
   if (!kidId) return;
+  window._battleTargetMode = null;
+  window._pendingSkill = null;
   try {
+    const body = {action};
+    if (skillId) body.skill_id = skillId;
+    if (targetIdx !== undefined && targetIdx !== null) body.target_idx = targetIdx;
     const r = await fetch(`${API}/api/kids/${kidId}/expedition/battle-action`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({action})
+      body: JSON.stringify(body)
     });
     const data = await r.json();
     if (data.error) { showToast('⚠️ '+data.error, 'error'); return; }
@@ -3595,10 +3777,10 @@ async function battleAction(action) {
     renderExpedition();
 
     const dbtEl = document.getElementById('dbt');
-
-    // Show last turn log in footer
     const turns = data.turns || [];
     const lastTurn = turns[turns.length - 1];
+
+    // Show last turn log in dbt
     if (lastTurn && lastTurn.log && lastTurn.log.length && dbtEl) {
       dbtEl.innerHTML = lastTurn.log.join('<br>');
       dbtEl.style.color = '#fff';
@@ -3610,17 +3792,182 @@ async function battleAction(action) {
       const rew = [];
       if (data.gold_reward > 0) rew.push(`🪙 ${data.gold_reward}`);
       if (data.mat_reward) {
-        Object.entries(data.mat_reward).forEach(([k,v]) => {
-          rew.push(`${MAT_ICONS[k]||'📦'} x${v}`);
-        });
+        Object.entries(data.mat_reward).forEach(([k,v]) => rew.push(`${MAT_ICONS[k]||'📦'} x${v}`));
       }
-      if (dbtEl) { dbtEl.innerHTML = `🎉 戰鬥勝利！擊敗 ${data.monster_name||'怪物'} 獲得 ${rew.join(' · ')} ✨`; }
+      if (dbtEl) { dbtEl.innerHTML = `🎉 戰鬥勝利！獲得 ${rew.join(' · ')} ✨`; }
     } else if (data.status === 'lost' || data.battle_result === 'lost') {
-      if (dbtEl) { dbtEl.innerHTML = `💀 被 ${data.monster_name||'怪物'} 打敗了...`; }
+      if (dbtEl) { dbtEl.innerHTML = `💀 你被打敗了...`; }
     } else if (data.status === 'fled' || data.battle_result === 'fled') {
       if (dbtEl) { dbtEl.innerHTML = `🏃 逃走了！`; }
     }
+
+    // Apply animation hooks
+    if (lastTurn && lastTurn.log && lastTurn.log.length) {
+      const logText = lastTurn.log.join(' ');
+      const mc = document.querySelector('.monster-card');
+      const mainContent = document.getElementById('mainContent');
+
+      // Flash screen on any attack/skill hit
+      if (logText.includes('⚔️') || logText.includes('💥') || logText.includes('💪') || logText.includes('反擊')) {
+        const flashEl = document.getElementById('whiteFlash');
+        if (flashEl) {
+          flashEl.classList.remove('active');
+          void flashEl.offsetWidth;
+          flashEl.classList.add('active');
+          setTimeout(() => flashEl.classList.remove('active'), 300);
+        }
+      }
+
+      // Damage popup on the attacked monster
+      if (targetIdx !== undefined && targetIdx !== null) {
+        const tMonster = document.querySelector(`.monster-card[data-idx="${targetIdx}"]`);
+        if (tMonster && (logText.includes('傷害') || logText.includes('攻擊'))) {
+          const dmgMatch = logText.match(/(\d+)\s*點傷害/);
+          if (dmgMatch) {
+            if (logText.includes('爆擊') || logText.includes('💪')) {
+              tMonster.classList.add('monster-heavy');
+              if (mainContent) mainContent.classList.add('heavy-shake');
+              const spark = document.createElement('div'); spark.className = 'heavy-spark';
+              tMonster.querySelector('.m-img')?.appendChild(spark);
+              const slash = document.createElement('div'); slash.className = 'slash';
+              tMonster.querySelector('.m-img')?.appendChild(slash);
+              const pop = document.createElement('div'); pop.className = 'dmg-popup heavy';
+              pop.innerHTML = `<span class="num">${dmgMatch[1]}</span>`;
+              tMonster.querySelector('.m-img')?.appendChild(pop);
+              setTimeout(() => {
+                tMonster.classList.remove('monster-heavy');
+                if (mainContent) mainContent.classList.remove('heavy-shake');
+              }, 600);
+            } else {
+              tMonster.classList.add('monster-hit');
+              if (mainContent) mainContent.classList.add('shake');
+              const spark = document.createElement('div'); spark.className = 'spark-burst';
+              tMonster.querySelector('.m-img')?.appendChild(spark);
+              const slash = document.createElement('div'); slash.className = 'slash';
+              tMonster.querySelector('.m-img')?.appendChild(slash);
+              const pop = document.createElement('div'); pop.className = 'dmg-popup';
+              pop.innerHTML = `<span class="num">${dmgMatch[1]}</span>`;
+              tMonster.querySelector('.m-img')?.appendChild(pop);
+              setTimeout(() => {
+                tMonster.classList.remove('monster-hit');
+                if (mainContent) mainContent.classList.remove('shake');
+              }, 500);
+            }
+          }
+        }
+      }
+
+      // Heal effects on player
+      if (logText.includes('回復')) {
+        const pc = document.querySelector('.player-card');
+        if (pc) {
+          const healMatch = logText.match(/回復\s*(\d+)/);
+          if (healMatch) {
+            pc.classList.add('heal-glow');
+            for (let i = 1; i <= 5; i++) {
+              const sp = document.createElement('div'); sp.className = `heal-sparkle s${i}`;
+              pc.querySelector('.p-img')?.appendChild(sp);
+              setTimeout(() => sp.remove(), 900);
+            }
+            const hn = document.createElement('div'); hn.className = 'heal-num';
+            hn.textContent = '+' + healMatch[1];
+            pc.querySelector('.p-img')?.appendChild(hn);
+            setTimeout(() => hn.remove(), 1000);
+          }
+        }
+      }
+
+      // Monster counter-attack shake
+      if (logText.includes('反擊')) {
+        const pc = document.querySelector('.player-card');
+        if (pc) {
+          pc.classList.add('hit');
+          setTimeout(() => pc.classList.remove('hit'), 400);
+        }
+      }
+
+      // Death animation on defeated monsters
+      monstersLoop(data);
+    }
   } catch(e) { showToast('⚠️ 網絡錯誤', 'error'); }
+}
+
+function monstersLoop(data) {
+  const monsters = data.monsters || [];
+  const ms = data.expedition_data ? (typeof data.expedition_data === 'string' ? JSON.parse(data.expedition_data).monsters : data.expedition_data.monsters) : monsters;
+  if (ms) {
+    ms.forEach(m => {
+      if (m.hp <= 0) {
+        const mc = document.querySelector(`.monster-card[data-idx="${m.id}"]`);
+        if (mc && !mc.classList.contains('dead')) {
+          mc.classList.add('dead');
+        }
+      }
+    });
+  }
+}
+
+// ── Targeting mode ──
+function startTarget(mode) {
+  if (window._battleTargetMode === mode) {
+    window._battleTargetMode = null;
+    renderExpedition();
+    return;
+  }
+  window._battleTargetMode = mode;
+  window._pendingSkill = null;
+  renderExpedition();
+}
+
+// ── Skill selector ──
+function openSkills() {
+  const overlay = document.getElementById('skillOverlay');
+  if (overlay) overlay.classList.add('active');
+}
+
+function hideSkills() {
+  const overlay = document.getElementById('skillOverlay');
+  if (overlay) overlay.classList.remove('active');
+}
+
+function selectSkill(skillId) {
+  hideSkills();
+  const bd = getBattleData();
+  if (!bd) return;
+  const skills = bd.skills || [];
+  const sk = skills.find(s => s.id === skillId);
+  if (!sk) return;
+  window._pendingSkill = sk;
+  window._battleTargetMode = null;
+  if (sk.target === 'self') {
+    // Use immediately on self
+    battleAction('skill', skillId, 0);
+    return;
+  }
+  renderExpedition();
+}
+
+function getBattleData() {
+  const exp = townData?.expedition;
+  if (!exp) return null;
+  return (typeof exp.expedition_data === 'string')
+    ? JSON.parse(exp.expedition_data)
+    : (exp.expedition_data || exp);
+}
+
+// ── Target click handlers ──
+function onMonsterClick(idx) {
+  if (window._battleTargetMode === 'attack') {
+    battleAction('attack', null, idx);
+  } else if (window._pendingSkill && window._pendingSkill.target === 'enemy') {
+    battleAction('skill', window._pendingSkill.id, idx);
+  }
+}
+
+function onPlayerClick(idx) {
+  if (window._pendingSkill && window._pendingSkill.target === 'ally') {
+    battleAction('skill', window._pendingSkill.id, idx);
+  }
 }
 
 function closeExpedition() {
@@ -4382,6 +4729,14 @@ window.selectExpType = selectExpType;
 window.submitQuizAnswer = submitQuizAnswer;
 window.showRewardPopup = showRewardPopup;
 window.closeRewardPopup = closeRewardPopup;
+window.startBattle = startBattle;
+window.battleAction = battleAction;
+window.startTarget = startTarget;
+window.openSkills = openSkills;
+window.hideSkills = hideSkills;
+window.selectSkill = selectSkill;
+window.onMonsterClick = onMonsterClick;
+window.onPlayerClick = onPlayerClick;
 window.loadLedger = loadLedger;
 window.switchLedgerFilter = switchLedgerFilter;
 window.ledgerPage = ledgerPage;
