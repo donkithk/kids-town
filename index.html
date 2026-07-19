@@ -3535,7 +3535,8 @@ async function renderExpedition() {
   } else if (currentExpType === 'battle') {
     container.innerHTML = renderBattleLobby();
   }
-}
+  }
+  }
 
 function renderExploreMode(exp) {
   const explored = (townData.explored||[]).map(e => e.region_id);
@@ -4684,15 +4685,12 @@ async function savingsDelete(goalId) {
 async function loadKids() { return window.location.reload(); }
 
 window.loadKids = loadKids;
-window.renderKidSelector = renderKidSelector;
-window.selectKid = selectKid;
-window.addKid = addKid;
 window.logout = logout;
 window.loadTown = loadTown;
 window.loadBuildingDefs = loadBuildingDefs;
 window.fetchAPI = fetchAPI;
 window.updateHeader = updateHeader;
-window.switchTab = switchTab;
+window.switchTab = st;
 window.renderAll = renderAll;
 window.initCanvas = initCanvas;
 window.renderPlots = renderPlots;
