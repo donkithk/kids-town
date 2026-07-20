@@ -338,6 +338,19 @@ def test_buildings():
     cheapest = min(defs, key=lambda d: d["cost_gold"])
     def_id = cheapest["id"]
     show(f"Cheapest: {cheapest['name']} (id={def_id}, cost={cheapest['cost_gold']})")
+
+    # Check if kid already has this building type (only 1 allowed per type)
+    blds_existing, _ = get(f"/api/kids/{kid_id}/buildings")
+    existing_def_ids = {b["def_id"] for b in blds_existing} if blds_existing else set()
+    if def_id in existing_def_ids:
+        # Pick next cheapest NOT already built
+        available = [d for d in defs if d["id"] not in existing_def_ids]
+        if not available:
+            report("BUILD", "All building types already built — skip", True)
+            return
+        cheapest = min(available, key=lambda d: d["cost_gold"])
+        def_id = cheapest["id"]
+        show(f"Already built 圖書館, switching to: {cheapest['name']} (id={def_id})")
     
     # Check if kid can afford it
     kid_info, _ = get(f"/api/kids/{kid_id}/points")
@@ -374,12 +387,17 @@ def test_buildings():
         # Ensure enough gold for upgrades (level 2 = 200, level 3 = 300)
         upgrade_gold_needed = 200 + 300
         post(f"/api/kids/{kid_id}/points/adjust", {"amount": upgrade_gold_needed + 100, "reason": "Test upgrade funds"})
-        
+
         # Also add materials needed for upgrade (scaled: base_mats * (level+1))
-        # For 圖書館: {"wood":5} → Lv2 needs 10 wood, Lv3 needs 15 wood
-        post(f"/api/kids/{kid_id}/inventory/add", {"item_type": "wood", "quantity": 50})
-        post(f"/api/kids/{kid_id}/inventory/add", {"item_type": "brick", "quantity": 50})
-        post(f"/api/kids/{kid_id}/inventory/add", {"item_type": "iron", "quantity": 50})
+        # Use the actual building's materials from defs
+        base_mats = json.loads(cheapest.get("materials", "{}"))
+        upgrade_mats_total = {}
+        for level in [2, 3]:
+            for mat, qty in base_mats.items():
+                upgrade_mats_total[mat] = upgrade_mats_total.get(mat, 0) + qty * level
+        for mat, qty in upgrade_mats_total.items():
+            post(f"/api/kids/{kid_id}/inventory/add", {"item_type": mat, "quantity": qty + 20})
+        show(f"Added upgrade mats: {upgrade_mats_total} (+20 buffer)")
         show(f"Added materials for upgrades")
         show(f"Added extra gold for upgrades")
         
