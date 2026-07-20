@@ -781,6 +781,20 @@ def main():
     test_task_stats()
     test_auth_login()
     test_parent_register()
+
+    # Browser tests (Playwright) — imported separately
+    try:
+        import e2e_browser_tests as bt
+        # Wire up shared helpers
+        bt.results = results
+        bt.failures = failures
+        bt.report = report
+        bt.VERBOSE = VERBOSE
+        bt.test_browser()
+    except ImportError:
+        report("BROWSER", "e2e_browser_tests.py not found — skipping", True)
+    except Exception as e:
+        report("BROWSER", "Browser test suite crashed", False, str(e))
     
     # Summary
     print(f"\n{'='*60}")
