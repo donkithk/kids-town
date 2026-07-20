@@ -1026,6 +1026,16 @@ body{
 @keyframes deathDramatic{0%{opacity:1;transform:scale(1)}20%{transform:scale(1.2) rotate(8deg);opacity:.8}40%{transform:scale(.3) rotate(-15deg);opacity:.5;filter:brightness(2)}100%{opacity:0;transform:scale(.1) translateY(40px);filter:brightness(0)}}
 .monster-card.dead{animation:deathDramatic .7s forwards;pointer-events:none}
 
+/* Monster rush (counter-attack) */
+@keyframes monsterRush{0%{transform:scale(1) translateX(0)}30%{transform:scale(1.4) translateX(-20px)}60%{transform:scale(1.2) translateX(-10px)}100%{transform:scale(1) translateX(0)}}
+.monster-card.rush{animation:monsterRush .6s ease;z-index:10}
+
+/* Player hit effect */
+@keyframes playerHit{0%{filter:brightness(1)}20%{filter:brightness(2) sepia(1) hue-rotate(-20deg)}40%{filter:brightness(.6)}60%{filter:brightness(1.4)}100%{filter:brightness(1)}}
+.player-card.hit{animation:playerHit .5s ease}
+@keyframes hpFlash{0%{background:#ff4444!important;box-shadow:0 0 8px #ff4444}50%{background:#ff8888!important;box-shadow:0 0 16px #ff4444}100%{background:var(--hp-color,#44cc44)!important}}
+.bar-fill.hp.hit{animation:hpFlash .5s ease}
+
 /* Slash */
 @keyframes slashAnim{0%{opacity:0;transform:translate(-50%,-50%) scaleX(0) rotate(-30deg)}20%{opacity:1;transform:translate(-50%,-50%) scaleX(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scaleX(0)}}
 .slash{position:absolute;top:50%;left:50%;width:100px;height:4px;background:linear-gradient(90deg,transparent,#fff,#ffcc44,transparent);border-radius:2px;z-index:9;pointer-events:none;box-shadow:0 0 15px rgba(255,200,68,.6);animation:slashAnim .3s ease forwards}
@@ -3885,13 +3895,35 @@ async function battleAction(action, skillId, targetIdx) {
         }
       }
 
-      // Monster counter-attack shake
-      if (logText.includes('反擊')) {
+      // Monster counter-attack — delayed rush + hit effect
+      if (logText.includes('反擊') || logText.includes('🐾') || logText.includes('擋住')) {
+        // Find the monster that counter-attacked (has dmg info or is first alive)
+        const attMonster = document.querySelector('.monster-card:not(.dead)') || document.querySelector('.monster-card');
         const pc = document.querySelector('.player-card');
-        if (pc) {
-          pc.classList.add('hit');
-          setTimeout(() => pc.classList.remove('hit'), 400);
-        }
+        const hpBar = document.querySelector('.bar-fill.hp');
+        
+        // Phase 1: after 500ms, monster rushes toward player
+        setTimeout(() => {
+          if (attMonster) {
+            attMonster.classList.add('rush');
+            setTimeout(() => attMonster.classList.remove('rush'), 700);
+          }
+          // Phase 2: after rush peaks (300ms), player takes hit
+          setTimeout(() => {
+            if (pc) {
+              pc.classList.add('hit');
+              setTimeout(() => pc.classList.remove('hit'), 500);
+            }
+            if (hpBar) {
+              hpBar.classList.add('hit');
+              setTimeout(() => hpBar.classList.remove('hit'), 500);
+            }
+            if (mainContent) {
+              mainContent.classList.add('shake');
+              setTimeout(() => mainContent.classList.remove('shake'), 400);
+            }
+          }, 300);
+        }, 500);
       }
 
       // Death animation on defeated monsters
