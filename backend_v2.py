@@ -2282,9 +2282,9 @@ def answer_quiz(kid_id):
 def calc_battle_stats(kid):
     """Calculate player battle stats from kid attributes."""
     return {
-        'hp': (kid['ability_str'] or 0) * 10 + (kid['level'] or 1) * 5,
-        'atk': (kid['ability_str'] or 0) * 3 + (kid['level'] or 1) * 2,
-        'def': (kid['ability_str'] or 0) // 2 + (kid['level'] or 1),
+        'hp': 30 + (kid['ability_str'] or 0) * 2 + (kid['level'] or 1) * 3,
+        'atk': 5 + (kid['ability_str'] or 0) * 1 + (kid['level'] or 1) // 2,
+        'def': (kid['ability_str'] or 0) // 3,
         'crt': (kid['ability_crt'] or 0) * 3,  # crit %
         'spd': (kid['ability_spd'] or 0),
         'brv': (kid['ability_brv'] or 0),  # for special
@@ -2452,6 +2452,11 @@ def battle_action(kid_id):
     # --- Player action ---
     if action == 'attack':
         dmg = max(1, player_atk - target_monster['def'] + random.randint(0, 2))
+        # Charge boost: 2x damage
+        if bd.get('charge_boost'):
+            dmg *= 2
+            bd['charge_boost'] = False
+            log.append('⚡ 蓄力爆發！')
         crit = False
         if random.randint(1, 100) <= player_crt:
             dmg *= 2
@@ -2493,6 +2498,10 @@ def battle_action(kid_id):
 
         elif target == 'enemy':
             dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+            if bd.get('charge_boost'):
+                dmg *= 2
+                bd['charge_boost'] = False
+                log.append('⚡ 蓄力爆發！')
             target_monster['hp'] = max(0, target_monster['hp'] - dmg)
             log.append(f'{skill["icon"]} {skill["name"]}！造成 {dmg} 點傷害！')
 
@@ -2515,7 +2524,9 @@ def battle_action(kid_id):
 
     elif action == 'defend':
         defending = True
-        log.append('🛡️ 防禦姿態')
+        bd['charge_boost'] = True
+        # 防禦時暫減 30% 傷害
+        log.append('🛡️ 蓄力！下一擊傷害 x2')
 
     elif action == 'flee':
         bd['status'] = 'fled'
@@ -2525,21 +2536,22 @@ def battle_action(kid_id):
         db.commit()
         bd['battle_result'] = 'fled'
         return jsonify(bd)
-
     # Check all monsters defeated
     if all(m['hp'] <= 0 for m in monsters):
         bd['status'] = 'won'
         log.append('🎉 擊敗所有怪物！')
         bd['turns'].append({'action': action, 'log': log, 'target_idx': target_idx, 'mp_used': 0 if action != 'skill' else (skill['mp_cost'] if skill_id else 0)})
         _award_battle_rewards(db, kid_id, bd, monsters)
-        db.execute("UPDATE expeditions SET status='completed', expedition_data=? WHERE id=?", (json.dumps(bd), exp['id']))
+        db.execute("UPDATE expeditions SET status='completed', expedition_data=? WHERE id=?",
+                   (json.dumps(bd), exp['id']))
         db.commit()
         bd['battle_result'] = 'won'
         return jsonify(bd)
 
-    # --- Monster counter-attack (first alive monster attacks) ---
-    if not defending:
-        attacker = alive_targets[0]
+    # --- Monster counter-attack (recompute alive targets after player action) ---
+    alive_after = [m for m in monsters if m['hp'] > 0]
+    if not defending and alive_after:
+        attacker = alive_after[0]
         dmg = max(0, attacker['atk'] - player_def + random.randint(0, 2))
         if dmg > 0:
             bd['player_hp'] -= dmg

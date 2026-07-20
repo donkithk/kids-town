@@ -3655,11 +3655,17 @@ function renderBattleMode(exp) {
 
   // ── Monster zone ──
   const showMonsterTarget = window._battleTargetMode === 'attack' || (window._pendingSkill && window._pendingSkill.target === 'enemy');
+  // Track death animations to prevent replay on re-render
+  if (!window._deathPlayed) window._deathPlayed = {};
   const monstersHtml = monsters.map(m => {
     const pct = Math.max(0, Math.round(m.hp / m.max_hp * 100));
     const bc = pct > 50 ? '#44cc44' : pct > 25 ? '#ffaa44' : '#ff4444';
     const mImg = MONSTER_ART[m.monster_id] || MONSTER_ART[1];
-    return `<div class="monster-card${m.hp <= 0 ? ' dead' : ''}${showMonsterTarget && m.hp > 0 ? ' targetable' : ''}" data-idx="${m.id}" onclick="${m.hp > 0 ? 'onMonsterClick('+m.id+')' : ''}">
+    const isDead = m.hp <= 0;
+    const isNewlyDead = isDead && !window._deathPlayed[m.id];
+    if (isDead) window._deathPlayed[m.id] = true;
+    const animStyle = isDead && !isNewlyDead ? ' style="animation:none;opacity:0"' : '';
+    return `<div class="monster-card${isDead ? ' dead' : ''}${showMonsterTarget && !isDead ? ' targetable' : ''}" data-idx="${m.id}"${animStyle} onclick="${!isDead ? 'onMonsterClick('+m.id+')' : ''}">
       <div class="target-arrow">▼</div>
       <div class="m-img">
         <img src="${mImg}" onerror="this.outerHTML='<span style=font-size:36px>${m.icon||'🐺'}</span>'">
@@ -4750,6 +4756,75 @@ window.showToast = showToast;
 window.toggleAudioMute = toggleAudioMute;
 window.updateOnlineStatus = updateOnlineStatus;
 window.checkSyncQueue = checkSyncQueue;
+window.td = td;
+window.doLogin = doLogin;
+window.showParentLogin = showParentLogin;
+window.showAdminLogin = showAdminLogin;
+window.characterImage = characterImage;
+window.showTip = showTip;
+window.positionTip = positionTip;
+window.hideTip = hideTip;
+window.st = st;
+window.renderTownBuildings = renderTownBuildings;
+window.buildingImage = buildingImage;
+window.plotToGrid = plotToGrid;
+window.isBlockFree = isBlockFree;
+window.zoomIn = zoomIn;
+window.zoomOut = zoomOut;
+window.zoomReset = zoomReset;
+window.applyZoom = applyZoom;
+window.enterRoadMode = enterRoadMode;
+window.exitRoadMode = exitRoadMode;
+window.touchStart = touchStart;
+window.touchMove = touchMove;
+window.touchEnd = touchEnd;
+window.applyTransform = applyTransform;
+window.selectPlacePos = selectPlacePos;
+window.confirmPlaceBuilding = confirmPlaceBuilding;
+window.startMoveBuilding = startMoveBuilding;
+window.selectMovePos = selectMovePos;
+window.confirmMoveBuilding = confirmMoveBuilding;
+window.storeBuilding = storeBuilding;
+window.startUnstoreBuilding = startUnstoreBuilding;
+window.renderStoredBuildings = renderStoredBuildings;
+window.shopBuild = shopBuild;
+window.clickEmptyPlot = clickEmptyPlot;
+window.clickEmptyCell = clickEmptyCell;
+window.showStoredBuildingsModal = showStoredBuildingsModal;
+window.showDecoModal = showDecoModal;
+window.placeTile = placeTile;
+window.selectMgmtIcon = selectMgmtIcon;
+window.renderExpTypeSelector = renderExpTypeSelector;
+window.renderExploreMode = renderExploreMode;
+window.renderQuizLobby = renderQuizLobby;
+window.renderBattleLobby = renderBattleLobby;
+window.renderBattleMode = renderBattleMode;
+window.monstersLoop = monstersLoop;
+window.getBattleData = getBattleData;
+window.closeExpedition = closeExpedition;
+window.abandonBattle = abandonBattle;
+window.kidAvatarImg = kidAvatarImg;
+window.renderQuizMode = renderQuizMode;
+window.renderQuizQuestion = renderQuizQuestion;
+window.loadQuizQuestion = loadQuizQuestion;
+window.showDbt = showDbt;
+window.showModal = showModal;
+window.formatRelativeDate = formatRelativeDate;
+window.renderLedger = renderLedger;
+window.renderLedgerItem = renderLedgerItem;
+window.loadSavingsGoals = loadSavingsGoals;
+window.renderSavingsGoals = renderSavingsGoals;
+window.renderGoalCard = renderGoalCard;
+window.showAddSavingsGoal = showAddSavingsGoal;
+window.selectSavingsIcon = selectSavingsIcon;
+window.selectSavingsColor = selectSavingsColor;
+window.createSavingsGoal = createSavingsGoal;
+window.savingsContribute = savingsContribute;
+window.doContribute = doContribute;
+window.savingsWithdraw = savingsWithdraw;
+window.doWithdrawAll = doWithdrawAll;
+window.savingsDelete = savingsDelete;
+
 
 // ═══════════════════════════════════════════════════════════════
 // SERVICE WORKER REGISTRATION
