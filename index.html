@@ -3661,9 +3661,9 @@ function renderBattleMode(exp) {
   const pMpPct = Math.max(0, Math.round(pMp / pMpMax * 100));
 
   const MONSTER_ART = {
-    1:'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect fill="#3a2a1a" x="20" y="24" width="24" height="20" rx="4"/><rect fill="#5c4033" x="22" y="26" width="20" height="16" rx="3"/><rect fill="#2a1a0a" x="16" y="16" width="4" height="8"/><rect fill="#2a1a0a" x="44" y="16" width="4" height="8"/><ellipse fill="#fff" cx="26" cy="32" rx="3" ry="3"/><ellipse fill="#fff" cx="38" cy="32" rx="3" ry="3"/><ellipse fill="#222" cx="26" cy="33" rx="2" ry="2"/><ellipse fill="#222" cx="38" cy="33" rx="2" ry="2"/><rect fill="#222" x="30" y="38" width="4" height="3" rx="1"/><rect fill="#8b0000" x="24" y="44" width="16" height="4" rx="2"/><rect fill="#666" x="18" y="46" width="4" height="6" rx="2"/><rect fill="#666" x="42" y="46" width="4" height="6" rx="2"/><rect fill="#888" x="16" y="50" width="3" height="4" rx="1.5"/><rect fill="#888" x="45" y="50" width="3" height="4" rx="1.5"/></svg>'),
-    2:'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><ellipse fill="#e8e8f0" cx="32" cy="34" rx="18" ry="16"/><ellipse fill="#d0d0e0" cx="32" cy="36" rx="16" ry="14"/><ellipse fill="#fff" cx="26" cy="30" rx="3" ry="3"/><ellipse fill="#fff" cx="38" cy="30" rx="3" ry="3"/><ellipse fill="#333" cx="26" cy="31" rx="2" ry="2"/><ellipse fill="#333" cx="38" cy="31" rx="2" ry="2"/><ellipse fill="#222" cx="32" cy="24" rx="5" ry="3"/><ellipse fill="#333" cx="32" cy="25" rx="3" ry="2"/><rect fill="#666" x="22" y="42" width="4" height="8" rx="2"/><rect fill="#666" x="38" y="42" width="4" height="8" rx="2"/><rect fill="#888" x="20" y="46" width="3" height="6" rx="1.5"/><rect fill="#888" x="41" y="46" width="3" height="6" rx="1.5"/></svg>'),
-    3:'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect fill="#8b4513" x="22" y="26" width="20" height="18" rx="5"/><rect fill="#6b3410" x="24" y="28" width="16" height="14" rx="4"/><ellipse fill="#fff" cx="28" cy="32" rx="2.5" ry="2.5"/><ellipse fill="#fff" cx="36" cy="32" rx="2.5" ry="2.5"/><ellipse fill="#222" cx="28" cy="33" rx="1.5" ry="1.5"/><ellipse fill="#222" cx="36" cy="33" rx="1.5" ry="1.5"/><rect fill="#a00" x="30" y="37" width="4" height="2"/><rect fill="#8b4513" x="12" y="18" width="6" height="3" rx="1"/><rect fill="#8b4513" x="46" y="18" width="6" height="3" rx="1"/><rect fill="#8b4513" x="10" y="21" width="4" height="5" rx="1"/><rect fill="#8b4513" x="50" y="21" width="4" height="5" rx="1"/><rect fill="#666" x="18" y="44" width="5" height="10" rx="2"/><rect fill="#666" x="41" y="44" width="5" height="10" rx="2"/><rect fill="#888" x="16" y="48" width="3" height="8" rx="1.5"/><rect fill="#888" x="45" y="48" width="3" height="8" rx="1.5"/><rect fill="#a00" x="27" y="24" width="10" height="3" rx="1"/></svg>'),
+    1:'https://image.pollinations.ai/prompt/cute%20chibi%20wolf%20pixel%20art%20game%20sprite%20woodland',
+    2:'https://image.pollinations.ai/prompt/cute%20chibi%20polar%20bear%20pixel%20art%20game%20sprite%20snow',
+    3:'https://image.pollinations.ai/prompt/cute%20chibi%20scorpion%20pixel%20art%20game%20sprite%20desert',
   };
 
   // ── Monster zone ──
@@ -3681,7 +3681,7 @@ function renderBattleMode(exp) {
     return `<div class="monster-card${isDead ? ' dead' : ''}${showMonsterTarget && !isDead ? ' targetable' : ''}" data-idx="${m.id}"${animStyle} onclick="${!isDead ? 'onMonsterClick('+m.id+')' : ''}">
       <div class="target-arrow">▼</div>
       <div class="m-img">
-        <img src="${mImg}" onerror="this.outerHTML='<span style=font-size:36px>${m.icon||'🐺'}</span>'">
+        <img src="${mImg}" crossorigin="anonymous" onload="removeBackground(this)" onerror="this.outerHTML='<span style=font-size:36px>${m.icon||'🐺'}</span>'">
       </div>
       <div class="m-name">${m.icon||''} ${m.name}</div>
       <div class="m-hp-bar"><div class="m-hp-fill" style="width:${pct}%;background:${bc}"></div></div>
@@ -4276,48 +4276,39 @@ function closeModal() {
 
 // ── Remove background from monster images via canvas ──
 function removeBackground(imgEl) {
+  // Skip if already processed (data URL)
+  if (imgEl.src.startsWith('data:')) return;
   try {
     const c = document.createElement('canvas');
     const w = imgEl.naturalWidth || imgEl.width;
     const h = imgEl.naturalHeight || imgEl.height;
-    if (w < 2 || h < 2) return;
-    c.width = w; c.height = h;
+    if (w < 4 || h < 4) return;
+    c.width = w; c.height = h;  
     const ctx = c.getContext('2d');
     ctx.drawImage(imgEl, 0, 0, w, h);
     const d = ctx.getImageData(0, 0, w, h);
     const px = d.data;
     
-    // Sample corners to find the background color
-    function getColor(x, y) {
-      const i = (y * w + x) * 4;
+    // Sample 4 corners to find bg color
+    function pxAt(x, y) {
+      const i = (Math.min(y, h-1) * w + Math.min(x, w-1)) * 4;
       return {r: px[i], g: px[i+1], b: px[i+2]};
     }
-    const corners = [
-      getColor(0, 0), getColor(w-1, 0),
-      getColor(0, h-1), getColor(w-1, h-1),
-      getColor(Math.floor(w/2), 0), getColor(0, Math.floor(h/2)),
-      getColor(w-1, Math.floor(h/2)), getColor(Math.floor(w/2), h-1)
-    ];
-    // Average the corner colors to find the actual bg color
-    let br=0, bg=0, bb=0;
-    corners.forEach(c => { br+=c.r; bg+=c.g; bb+=c.b; });
-    const n = corners.length;
-    const bgR = Math.round(br/n), bgG = Math.round(bg/n), bgB = Math.round(bb/n);
+    const bg = pxAt(0, 0);
     
-    // Tolerance: how close to bg color to remove
-    const tol = 40;
+    // Only remove pixels very close to the corner color
+    const tol = 35;
     for (let i = 0; i < px.length; i += 4) {
-      const dr = Math.abs(px[i] - bgR);
-      const dg = Math.abs(px[i+1] - bgG);
-      const db = Math.abs(px[i+2] - bgB);
-      if (dr + dg + db < tol) {
+      const dr = Math.abs(px[i] - bg.r);
+      const dg = Math.abs(px[i+1] - bg.g);
+      const db = Math.abs(px[i+2] - bg.b);
+      if (dr <= tol && dg <= tol && db <= tol) {
         px[i+3] = 0;
       }
     }
     ctx.putImageData(d, 0, 0);
     imgEl.src = c.toDataURL('image/png');
-    imgEl.style.mixBlendMode = 'normal';
-  } catch(e) { /* canvas may fail on cross-origin images */ }
+  } catch(e) { /* canvas may fail on CORS */ }
 }
 
 function showToast(msg, type) {
