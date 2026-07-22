@@ -3681,7 +3681,7 @@ function renderBattleMode(exp) {
     return `<div class="monster-card${isDead ? ' dead' : ''}${showMonsterTarget && !isDead ? ' targetable' : ''}" data-idx="${m.id}"${animStyle} onclick="${!isDead ? 'onMonsterClick('+m.id+')' : ''}">
       <div class="target-arrow">▼</div>
       <div class="m-img">
-        <img src="${mImg}" crossorigin="anonymous" onload="removeBackground(this)" onerror="this.outerHTML='<span style=font-size:36px>${m.icon||'🐺'}</span>'">
+        <img src="${mImg}" onerror="this.outerHTML='<span style=font-size:36px>${m.icon||'🐺'}</span>'">
       </div>
       <div class="m-name">${m.icon||''} ${m.name}</div>
       <div class="m-hp-bar"><div class="m-hp-fill" style="width:${pct}%;background:${bc}"></div></div>
@@ -4272,43 +4272,6 @@ function showModal(html) {
 
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('active');
-}
-
-// ── Remove background from monster images via canvas ──
-function removeBackground(imgEl) {
-  // Skip if already processed (data URL)
-  if (imgEl.src.startsWith('data:')) return;
-  try {
-    const c = document.createElement('canvas');
-    const w = imgEl.naturalWidth || imgEl.width;
-    const h = imgEl.naturalHeight || imgEl.height;
-    if (w < 4 || h < 4) return;
-    c.width = w; c.height = h;  
-    const ctx = c.getContext('2d');
-    ctx.drawImage(imgEl, 0, 0, w, h);
-    const d = ctx.getImageData(0, 0, w, h);
-    const px = d.data;
-    
-    // Sample 4 corners to find bg color
-    function pxAt(x, y) {
-      const i = (Math.min(y, h-1) * w + Math.min(x, w-1)) * 4;
-      return {r: px[i], g: px[i+1], b: px[i+2]};
-    }
-    const bg = pxAt(0, 0);
-    
-    // Only remove pixels very close to the corner color
-    const tol = 35;
-    for (let i = 0; i < px.length; i += 4) {
-      const dr = Math.abs(px[i] - bg.r);
-      const dg = Math.abs(px[i+1] - bg.g);
-      const db = Math.abs(px[i+2] - bg.b);
-      if (dr <= tol && dg <= tol && db <= tol) {
-        px[i+3] = 0;
-      }
-    }
-    ctx.putImageData(d, 0, 0);
-    imgEl.src = c.toDataURL('image/png');
-  } catch(e) { /* canvas may fail on CORS */ }
 }
 
 function showToast(msg, type) {
