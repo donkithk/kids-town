@@ -480,7 +480,7 @@ def seed_skill_defs():
         ('挑釁', '🛡️', 4, 9, 4, 'self', '強制敵方攻擊自己', 0, 0, 'none', 'buff'),
         ('必殺', '💥', 10, 9, 5, 'enemy', '對低血量敵人特大傷害', 12, 5, 'str', 'damage'),
         # 圖書館 (1)
-        ('火球', '🔥', 6, 1, 2, 'enemy', '魔法攻擊', 10, 3, 'int', 'damage'),
+        ('火球', '🔥', 6, 1, 2, 'enemy', '魔法攻擊', 18, 3, 'int', 'damage'),
         ('冰凍', '❄️', 8, 1, 4, 'enemy', '魔法攻擊 + 減速', 14, 4, 'int', 'damage'),
         # 探險公會 (6)
         ('偵察', '👁️', 2, 6, 2, 'enemy', '查看怪物弱點', 0, 0, 'none', 'utility'),
@@ -2494,7 +2494,12 @@ def battle_action(kid_id):
             bldg_level = bldg_skills['level']
 
         if target == 'self':
-            log.append(f'🔥 {skill["name"]}！')
+            # Handle buffs
+            if skill['name'] == '蓄力' or skill['effect_type'] == 'buff':
+                bd['charge_boost'] = True
+                log.append(f'🔥 {skill["name"]}！{skill.get("description","")}')
+            else:
+                log.append(f'🔥 {skill["name"]}！')
 
         elif target == 'enemy':
             dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
