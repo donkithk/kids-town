@@ -2283,7 +2283,7 @@ def calc_battle_stats(kid):
     """Calculate player battle stats from kid attributes."""
     return {
         'hp': 30 + (kid['ability_str'] or 0) * 2 + (kid['level'] or 1) * 3,
-        'atk': 5 + (kid['ability_str'] or 0) * 1 + (kid['level'] or 1) // 2,
+        'atk': 5 + (kid['ability_str'] or 0) // 2 + (kid['level'] or 1) // 2,
         'def': (kid['ability_str'] or 0) // 3,
         'crt': (kid['ability_crt'] or 0) * 3,  # crit %
         'spd': (kid['ability_spd'] or 0),
