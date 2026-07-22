@@ -530,10 +530,18 @@ body{
 
 .battle-scene{position:relative;display:flex;flex-direction:column;min-height:360px}
 .battle-scene .battle-bg{position:absolute;inset:0;z-index:0;overflow:hidden;border-radius:14px}
-.battle-scene .battle-bg .sky{position:absolute;inset:0;background:linear-gradient(180deg,#12082a,#1e0e3a 30%,#2d1b4e 55%,#3a2050 75%,#2a1535)}
-.battle-scene .battle-bg .ground{position:absolute;bottom:0;left:0;right:0;height:28%;background:linear-gradient(0deg,#1a2a18,#1e2e1c 30%,#263624 60%,transparent)}
+.battle-scene .battle-bg .sky{position:absolute;inset:0;background:linear-gradient(180deg,#12082a,#1e0e3a 30%,#2d1b4e 55%,#3a2050 75%,#2a1535);transition:background .5s}
+.battle-scene .battle-bg .ground{position:absolute;bottom:0;left:0;right:0;height:28%;background:linear-gradient(0deg,#1a2a18,#1e2e1c 30%,#263624 60%,transparent);transition:background .5s}
 .battle-scene .battle-bg .star{position:absolute;width:2px;height:2px;background:#fff;border-radius:50%;opacity:.4;animation:twinkle 3s ease infinite}
 .battle-scene .battle-bg .star:nth-child(1){top:5%;left:10%}.battle-scene .battle-bg .star:nth-child(2){top:9%;left:75%}.battle-scene .battle-bg .star:nth-child(3){top:3%;left:40%;animation-delay:2s}.battle-scene .battle-bg .star:nth-child(4){top:12%;left:88%;animation-delay:.5s}
+
+/* Region backgrounds */
+.battle-scene.region-1 .sky{background:linear-gradient(180deg,#0a3d0a,#1a6b1a 30%,#2d8a2d 55%,#3a8a3a 75%,#1a4a1a)}
+.battle-scene.region-1 .ground{background:linear-gradient(0deg,#2d1f0f,#3d2b1f 30%,#3a2a1a 60%,transparent)}
+.battle-scene.region-2 .sky{background:linear-gradient(180deg,#1a1a3e,#2a3a6a 30%,#4a6a9a 55%,#5a7aaa 75%,#3a5a8a)}
+.battle-scene.region-2 .ground{background:linear-gradient(0deg,#c8d8e8,#d8e4f0 30%,#dce8f4 60%,transparent)}
+.battle-scene.region-3 .sky{background:linear-gradient(180deg,#3a2000,#6a3a00 30%,#9a5a00 55%,#b27210 75%,#8a4a00)}
+.battle-scene.region-3 .ground{background:linear-gradient(0deg,#b89a60,#c4a265 30%,#b89850 60%,transparent)}
 
 .battle-content{position:relative;z-index:1;display:flex;flex-direction:column;flex:1}
 .shake{animation:shake .5s ease}
@@ -549,8 +557,8 @@ body{
 .monster-card.monster-hit{animation:monsterHit .5s ease}
 .monster-card.monster-heavy{animation:heavyMonsterHit .6s ease}
 .monster-card.dead{animation:deathDramatic .7s forwards;pointer-events:none}
-.monster-card .m-img{width:56px;height:56px;margin:0 auto;position:relative;background:transparent}
-.monster-card .m-img img{width:100%;height:100%;object-fit:contain;display:block;image-rendering:pixelated}
+.monster-card .m-img{width:56px;height:56px;margin:0 auto;position:relative;background:transparent;overflow:hidden}
+.monster-card .m-img img{width:100%;height:100%;object-fit:contain;display:block;mix-blend-mode:multiply;image-rendering:pixelated}
 .monster-card .m-name{color:#ffe0bb;font-size:10px;font-weight:bold;margin-top:1px;text-shadow:0 1px 4px #000;line-height:1.2}
 .monster-card .m-hp-bar{height:4px;background:rgba(0,0,0,.5);border-radius:2px;margin:1px 4px 0;border:1px solid rgba(255,255,255,.08)}
 .monster-card .m-hp-fill{height:100%;border-radius:2px;transition:width .3s}
@@ -3762,7 +3770,7 @@ function renderBattleMode(exp) {
     }
   }
 
-  return `<div class="battle-scene" id="battleScene">
+  return `<div class="battle-scene region-${bd.region_id || 1}" id="battleScene">
     <div class="battle-bg"><div class="sky"></div><div class="ground"></div>
       <div class="star"></div><div class="star"></div><div class="star"></div><div class="star"></div>
     </div>

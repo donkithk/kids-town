@@ -2392,6 +2392,7 @@ def battle_start(kid_id):
         'player_crt': p_stats['crt'],
         'player_spd': p_stats['spd'],
         'player_brv': p_stats['brv'],
+        'region_id': region_id,
         'turns': [],
         'status': 'fighting',
         'expedition_type': 'battle',
