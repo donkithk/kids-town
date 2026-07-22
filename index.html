@@ -4274,7 +4274,7 @@ function closeModal() {
   document.getElementById('modalOverlay').classList.remove('active');
 }
 
-// ── Remove white background from monster images via canvas ──
+// ── Remove background from monster images via canvas ──
 function removeBackground(imgEl) {
   try {
     const c = document.createElement('canvas');
@@ -4286,15 +4286,36 @@ function removeBackground(imgEl) {
     ctx.drawImage(imgEl, 0, 0, w, h);
     const d = ctx.getImageData(0, 0, w, h);
     const px = d.data;
+    
+    // Sample corners to find the background color
+    function getColor(x, y) {
+      const i = (y * w + x) * 4;
+      return {r: px[i], g: px[i+1], b: px[i+2]};
+    }
+    const corners = [
+      getColor(0, 0), getColor(w-1, 0),
+      getColor(0, h-1), getColor(w-1, h-1),
+      getColor(Math.floor(w/2), 0), getColor(0, Math.floor(h/2)),
+      getColor(w-1, Math.floor(h/2)), getColor(Math.floor(w/2), h-1)
+    ];
+    // Average the corner colors to find the actual bg color
+    let br=0, bg=0, bb=0;
+    corners.forEach(c => { br+=c.r; bg+=c.g; bb+=c.b; });
+    const n = corners.length;
+    const bgR = Math.round(br/n), bgG = Math.round(bg/n), bgB = Math.round(bb/n);
+    
+    // Tolerance: how close to bg color to remove
+    const tol = 40;
     for (let i = 0; i < px.length; i += 4) {
-      // If pixel is near-white (all channels > 230), make transparent
-      if (px[i] > 230 && px[i+1] > 230 && px[i+2] > 230) {
-        px[i+3] = 0; // alpha = 0
+      const dr = Math.abs(px[i] - bgR);
+      const dg = Math.abs(px[i+1] - bgG);
+      const db = Math.abs(px[i+2] - bgB);
+      if (dr + dg + db < tol) {
+        px[i+3] = 0;
       }
     }
     ctx.putImageData(d, 0, 0);
     imgEl.src = c.toDataURL('image/png');
-    // Remove mix-blend-mode since we now have real transparency
     imgEl.style.mixBlendMode = 'normal';
   } catch(e) { /* canvas may fail on cross-origin images */ }
 }
