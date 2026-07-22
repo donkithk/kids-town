@@ -3681,7 +3681,7 @@ function renderBattleMode(exp) {
     return `<div class="monster-card${isDead ? ' dead' : ''}${showMonsterTarget && !isDead ? ' targetable' : ''}" data-idx="${m.id}"${animStyle} onclick="${!isDead ? 'onMonsterClick('+m.id+')' : ''}">
       <div class="target-arrow">▼</div>
       <div class="m-img">
-        <img src="${mImg}" onerror="this.outerHTML='<span style=font-size:36px>${m.icon||'🐺'}</span>'">
+        <img src="${mImg}" crossorigin="anonymous" onload="removeBackground(this)" onerror="this.outerHTML='<span style=font-size:36px>${m.icon||'🐺'}</span>'">
       </div>
       <div class="m-name">${m.icon||''} ${m.name}</div>
       <div class="m-hp-bar"><div class="m-hp-fill" style="width:${pct}%;background:${bc}"></div></div>
@@ -4272,6 +4272,31 @@ function showModal(html) {
 
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('active');
+}
+
+// ── Remove white background from monster images via canvas ──
+function removeBackground(imgEl) {
+  try {
+    const c = document.createElement('canvas');
+    const w = imgEl.naturalWidth || imgEl.width;
+    const h = imgEl.naturalHeight || imgEl.height;
+    if (w < 2 || h < 2) return;
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(imgEl, 0, 0, w, h);
+    const d = ctx.getImageData(0, 0, w, h);
+    const px = d.data;
+    for (let i = 0; i < px.length; i += 4) {
+      // If pixel is near-white (all channels > 230), make transparent
+      if (px[i] > 230 && px[i+1] > 230 && px[i+2] > 230) {
+        px[i+3] = 0; // alpha = 0
+      }
+    }
+    ctx.putImageData(d, 0, 0);
+    imgEl.src = c.toDataURL('image/png');
+    // Remove mix-blend-mode since we now have real transparency
+    imgEl.style.mixBlendMode = 'normal';
+  } catch(e) { /* canvas may fail on cross-origin images */ }
 }
 
 function showToast(msg, type) {
