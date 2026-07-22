@@ -6,7 +6,7 @@ v3.0 — Role-based auth: kids, parents, admins
 """
 import os, sqlite3, json, random, re, hashlib
 from datetime import datetime, timedelta, timezone
-from flask import Flask, request, jsonify, g, make_response
+from flask import Flask, request, jsonify, g, make_response, Response
 from flask_cors import CORS
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kids_town.db')
