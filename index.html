@@ -549,8 +549,8 @@ body{
 .monster-card.monster-hit{animation:monsterHit .5s ease}
 .monster-card.monster-heavy{animation:heavyMonsterHit .6s ease}
 .monster-card.dead{animation:deathDramatic .7s forwards;pointer-events:none}
-.monster-card .m-img{width:56px;height:56px;margin:0 auto;position:relative}
-.monster-card .m-img img{width:100%;height:100%;object-fit:contain;display:block}
+.monster-card .m-img{width:56px;height:56px;margin:0 auto;position:relative;background:transparent}
+.monster-card .m-img img{width:100%;height:100%;object-fit:contain;display:block;image-rendering:pixelated}
 .monster-card .m-name{color:#ffe0bb;font-size:10px;font-weight:bold;margin-top:1px;text-shadow:0 1px 4px #000;line-height:1.2}
 .monster-card .m-hp-bar{height:4px;background:rgba(0,0,0,.5);border-radius:2px;margin:1px 4px 0;border:1px solid rgba(255,255,255,.08)}
 .monster-card .m-hp-fill{height:100%;border-radius:2px;transition:width .3s}
@@ -3653,9 +3653,9 @@ function renderBattleMode(exp) {
   const pMpPct = Math.max(0, Math.round(pMp / pMpMax * 100));
 
   const MONSTER_ART = {
-    1:'https://image.pollinations.ai/prompt/cute%20chibi%20wolf%20pixel%20art%20game%20sprite%20woodland',
-    2:'https://image.pollinations.ai/prompt/cute%20chibi%20polar%20bear%20pixel%20art%20game%20sprite%20snow',
-    3:'https://image.pollinations.ai/prompt/cute%20chibi%20scorpion%20pixel%20art%20game%20sprite%20desert',
+    1:'https://image.pollinations.ai/prompt/cute%20chibi%20wolf%20pixel%20art%20transparent%20background%20no%20bg',
+    2:'https://image.pollinations.ai/prompt/cute%20chibi%20polar%20bear%20pixel%20art%20transparent%20background%20no%20bg',
+    3:'https://image.pollinations.ai/prompt/cute%20chibi%20scorpion%20pixel%20art%20transparent%20background%20no%20bg',
   };
 
   // ── Monster zone ──
