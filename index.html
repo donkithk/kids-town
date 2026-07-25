@@ -3863,7 +3863,8 @@ async function battleAction(action, skillId, targetIdx) {
               setTimeout(() => {
                 tMonster.classList.remove('monster-heavy');
                 if (mainContent) mainContent.classList.remove('heavy-shake');
-              }, 600);
+                pop.remove(); slash.remove(); spark.remove();
+              }, 700);
             } else {
               tMonster.classList.add('monster-hit');
               if (mainContent) mainContent.classList.add('shake');
@@ -3877,7 +3878,8 @@ async function battleAction(action, skillId, targetIdx) {
               setTimeout(() => {
                 tMonster.classList.remove('monster-hit');
                 if (mainContent) mainContent.classList.remove('shake');
-              }, 500);
+                pop.remove(); slash.remove(); spark.remove();
+              }, 700);
             }
           }
         }
