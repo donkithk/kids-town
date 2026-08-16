@@ -843,7 +843,7 @@ def adjust_points(kid_id):
 
 # -- Experience & Level --
 
-EXP_PER_LEVEL = 100  # base exp needed per level
+EXP_PER_LEVEL = 25  # base exp needed per level (cap 1000 → gentle curve)
 
 def calc_level(exp):
     """Calculate level from total experience. Lv.1 = 0exp, Lv.2 = 100exp, Lv.3 = 300exp, Lv.4 = 600exp..."""
@@ -856,6 +856,11 @@ def calc_level(exp):
 def exp_for_next_level(level):
     """How much exp needed to go from this level to next."""
     return level * EXP_PER_LEVEL
+
+
+def exp_reward_for_tier(tier):
+    """EXP reward per won battle = 15 + tier*10."""
+    return 15 + max(1, tier) * 10
 
 @app.route('/api/kids/<int:kid_id>/experience', methods=['GET'])
 def get_experience(kid_id):
@@ -2280,14 +2285,44 @@ def answer_quiz(kid_id):
 
 
 def calc_battle_stats(kid):
-    """Calculate player battle stats from kid attributes."""
+    """v2: HP from level, ATK from 臂力(str), DEF from 勇氣(brv)."""
+    str_v = kid['ability_str'] or 0
+    int_v = kid['ability_int'] or 0
+    spd_v = kid['ability_spd'] or 0
+    crt_v = kid['ability_crt'] or 0
+    brv_v = kid['ability_brv'] or 0
+    lvl = kid['level'] or 1
     return {
-        'hp': 30 + (kid['ability_str'] or 0) * 2 + (kid['level'] or 1) * 3,
-        'atk': 5 + (kid['ability_str'] or 0) // 2 + (kid['level'] or 1) // 2,
-        'def': (kid['ability_str'] or 0) // 3,
-        'crt': (kid['ability_crt'] or 0) * 3,  # crit %
-        'spd': (kid['ability_spd'] or 0),
-        'brv': (kid['ability_brv'] or 0),  # for special
+        'hp': 20 + lvl * 8,
+        'atk': int(5 + str_v * 1.5),
+        'matk': int(5 + int_v * 1.5),
+        'def': int(brv_v * 0.6),
+        'crt': min(50, crt_v * 2),        # crit %
+        'dodge': min(40, spd_v * 1.5),    # dodge %
+        'spd': spd_v,
+        'int': int_v,
+        'brv': brv_v,
+        'str': str_v,
+    }
+
+
+def calc_monster_stats(tier):
+    """Monster stats from tier (= region number)."""
+    t = max(1, tier)
+    return {
+        'hp': 20 + t * 20,
+        'atk': 4 + t * 3,
+        'def': t // 2,
+        'spd': t,
+    }
+
+
+def calc_boss_stats(base):
+    """Boss = 3x HP, 1.5x ATK, 1.5x DEF of the base monster."""
+    return {
+        'hp': base['hp'] * 3,
+        'atk': base['atk'] * 1.5,
+        'def': int(base['def'] * 1.5),
     }
 
 
@@ -2392,6 +2427,9 @@ def battle_start(kid_id):
         'player_crt': p_stats['crt'],
         'player_spd': p_stats['spd'],
         'player_brv': p_stats['brv'],
+        'player_int': p_stats.get('int', 0),
+        'player_str': p_stats.get('str', 0),
+        'player_dodge': p_stats.get('dodge', 0),
         'region_id': region_id,
         'turns': [],
         'status': 'fighting',
@@ -2519,7 +2557,7 @@ def battle_action(kid_id):
             log.append(f'{skill["icon"]} {skill["name"]}！全體 {len([m for m in monsters if m["hp"]>0])} 隻受到傷害！')
 
         elif target == 'ally' or target == 'all_allies':
-            heal = _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale)
+            heal = _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale, bd.get('player_int', 0))
             if target == 'ally':
                 # Heal player
                 bd['player_hp'] = min(bd['player_max_hp'], bd['player_hp'] + heal)
@@ -2584,23 +2622,46 @@ def battle_action(kid_id):
 
 
 def _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd, mult=1.0):
-    """Calculate skill damage based on building level and attributes."""
+    """Calculate skill damage. Physical scales from 臂力(str), magic from 知識(int)."""
     attr_bonus = 0
     if attr_scale == 'str':
-        attr_bonus = bd.get('player_atk', 0) // 2
+        attr_bonus = bd.get('player_str', 0)
     elif attr_scale == 'int':
-        attr_bonus = bd.get('player_brv', 0) // 2
+        attr_bonus = bd.get('player_int', 0)
     dmg = int((base + per_lv * bldg_level + attr_bonus) * mult)
     return max(1, dmg + random.randint(0, 3))
 
 
-def _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale):
-    """Calculate skill heal amount."""
+def _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale, player_int=0):
+    """Calculate skill heal amount. Scales from 知識(int)."""
     attr_bonus = 0
     if attr_scale == 'int':
-        attr_bonus = 5  # simplified; real int would come from kid stats
+        attr_bonus = int(player_int * 0.8)
     heal = int(base + per_lv * bldg_level + attr_bonus)
     return max(1, heal + random.randint(0, 2))
+
+
+DROP_RARITIES = ['common', 'rare', 'epic', 'legendary']
+DROP_BASE_WEIGHTS = {'common': 70.0, 'rare': 22.0, 'epic': 7.0, 'legendary': 1.0}
+
+
+def roll_drop(tier=1, pity_count=0):
+    """Roll a drop rarity. Higher tier → more epic/legendary; pity>=30 guarantees epic+."""
+    t = max(1, tier)
+    w = dict(DROP_BASE_WEIGHTS)
+    w['epic'] += (t - 1) * 1.5
+    w['legendary'] += (t - 1) * 0.3
+    if pity_count >= 30:
+        w['common'] = 0.0
+        w['rare'] = 0.0
+    total = sum(w.values())
+    r = random.random() * total
+    acc = 0.0
+    for rarity in DROP_RARITIES:
+        acc += w[rarity]
+        if r < acc:
+            return rarity
+    return 'common'
 
 
 def _award_battle_rewards(db, kid_id, bd, monsters=None):
