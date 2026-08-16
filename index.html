@@ -1605,6 +1605,7 @@ async function doLogin() {
       currentKidId = null;
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('app').style.display = 'block';
+      updateHeader();  // show parent identity, not stale kid HUD
       // Parent sees manage tab by default
       st('manage');
     } else if (data.role === 'admin') {
@@ -1702,6 +1703,19 @@ function characterImage(avatar) {
 }
 
 function updateHeader() {
+  const midEl = document.querySelector('.hdr-mid');
+  if (isParentSession) {
+    // Parent session — show parent identity, hide kid-specific stats
+    const nmEl = document.getElementById('hudNm');
+    if (nmEl) nmEl.textContent = (currentUser && currentUser.name) || '家長';
+    const lvEl = document.getElementById('hudLv');
+    if (lvEl) lvEl.textContent = '家長模式';
+    const avEl = document.getElementById('hudAv');
+    if (avEl) avEl.innerHTML = '🧑';
+    if (midEl) midEl.style.display = 'none';
+    return;
+  }
+  if (midEl) midEl.style.display = '';
   const kid = townData.kid || currentUser || {};
   // Name + Level
   const nmEl = document.getElementById('hudNm');
@@ -4727,7 +4741,14 @@ async function savingsDelete(goalId) {
   }
 }
 
-async function loadKids() { return window.location.reload(); }
+async function loadKids() {
+  // Refresh kids data (e.g. after adding/removing a child) without a full reload
+  if (isParentSession) {
+    await renderManage();
+  } else if (currentKidId) {
+    await loadTown();
+  }
+}
 
 window.loadKids = loadKids;
 window.logout = logout;
