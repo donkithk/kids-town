@@ -173,9 +173,7 @@ def migrate_db():
     if 'stat_points' not in kid_cols:
         db.execute("ALTER TABLE kids ADD COLUMN stat_points INTEGER DEFAULT 0")
     if 'ability_str' not in kid_cols:
-        db.execute("ALTER TABLE kids ADD COLUMN ability_str INTEGER DEFAULT 0")   # 體力 ❤️
-    if 'ability_atk' not in kid_cols:
-        db.execute("ALTER TABLE kids ADD COLUMN ability_atk INTEGER DEFAULT 0")   # 臂力 💪
+        db.execute("ALTER TABLE kids ADD COLUMN ability_str INTEGER DEFAULT 0")   # 臂力 💪
     if 'ability_int' not in kid_cols:
         db.execute("ALTER TABLE kids ADD COLUMN ability_int INTEGER DEFAULT 0")   # 知識 📖
     if 'ability_spd' not in kid_cols:
@@ -945,8 +943,7 @@ def add_experience(kid_id):
 # -- Ability Points Assignment --
 
 ABILITY_FIELDS = {
-    'str': 'ability_str',  # 體力 ❤️
-    'atk': 'ability_atk',  # 臂力 💪
+    'str': 'ability_str',  # 臂力 💪
     'int': 'ability_int',  # 知識 📖
     'spd': 'ability_spd',  # 速度 💨
     'crt': 'ability_crt',  # 創意 🎨
@@ -998,8 +995,8 @@ def assign_ability(kid_id):
 # -- Ability Buffs from Buildings --
 
 BUILDING_ABILITY_MAP = {
-    '健身室': 'str',    # Gym → +體力 ❤️
-    '競技場': 'atk',    # Arena → +臂力 💪
+    '健身室': 'str',    # Gym → +臂力 💪
+    '競技場': 'str',    # Arena → +臂力 💪
     '圖書館': 'int',    # Library → +知識 📖
     '天文台': 'int',    # Observatory → +知識 📖
     '工坊':   'crt',    # Workshop → +創意 🎨
@@ -1008,7 +1005,7 @@ BUILDING_ABILITY_MAP = {
 
 def calc_ability_buffs(db, kid_id):
     """Calculate bonus ability points from owned buildings."""
-    buffs = {'str': 0, 'atk': 0, 'int': 0, 'spd': 0, 'crt': 0, 'brv': 0}
+    buffs = {'str': 0, 'int': 0, 'spd': 0, 'crt': 0, 'brv': 0}
     rows = db.execute("""
         SELECT bd.name, b.level FROM buildings b
         JOIN building_defs bd ON b.def_id = bd.id
@@ -1033,7 +1030,6 @@ def get_abilities(kid_id):
     
     base = {
         'str': kid['ability_str'],
-        'atk': kid['ability_atk'],
         'int': kid['ability_int'],
         'spd': kid['ability_spd'],
         'crt': kid['ability_crt'],
@@ -2326,6 +2322,13 @@ def calc_boss_stats(base):
     }
 
 
+def migrate_ability_atk(db):
+    """Merge ability_atk into ability_str (臂力), then drop the column."""
+    db.execute("UPDATE kids SET ability_str = ability_str + COALESCE(ability_atk, 0)")
+    db.execute("ALTER TABLE kids DROP COLUMN ability_atk")
+    db.commit()
+
+
 @app.route('/api/kids/<int:kid_id>/skills', methods=['GET'])
 def get_kid_skills(kid_id):
     """Return skills available based on buildings owned and their levels."""
@@ -2400,8 +2403,9 @@ def battle_start(kid_id):
     p_stats = calc_battle_stats(kid)
     p_hp = p_stats['hp']
     p_mp = 10 + kid['level'] * 3  # Base MP: 10 + 3/level
-    # Multiple monsters (1-3)
+    # Multiple monsters (1-3), stats from tier formula
     num_monsters = random.randint(1, 3)
+    mstats = calc_monster_stats(region_id)  # tier = region number
     monsters = []
     for mi in range(num_monsters):
         hp_var = random.randint(-5, 5)
@@ -2410,10 +2414,11 @@ def battle_start(kid_id):
             'monster_id': monster['id'],
             'name': monster['name'],
             'icon': monster['icon'],
-            'max_hp': max(1, monster['hp'] + hp_var),
-            'hp': max(1, monster['hp'] + hp_var),
-            'atk': monster['atk'],
-            'def': monster['def'],
+            'max_hp': max(1, mstats['hp'] + hp_var),
+            'hp': max(1, mstats['hp'] + hp_var),
+            'atk': mstats['atk'],
+            'def': mstats['def'],
+            'spd': mstats['spd'],
         })
     battle_data = {
         'expedition_id': None,
@@ -2643,6 +2648,12 @@ def _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale, player_int=0):
 
 DROP_RARITIES = ['common', 'rare', 'epic', 'legendary']
 DROP_BASE_WEIGHTS = {'common': 70.0, 'rare': 22.0, 'epic': 7.0, 'legendary': 1.0}
+DROP_TABLE = {
+    'common': [('wood', 1), ('wood', 2)],
+    'rare': [('brick', 1), ('fur', 1), ('gear', 1)],
+    'epic': [('gem', 1), ('star_fragment', 1)],
+    'legendary': [('dragon_scale', 1)],
+}
 
 
 def roll_drop(tier=1, pity_count=0):
@@ -2680,7 +2691,7 @@ def _award_battle_rewards(db, kid_id, bd, monsters=None):
         db.execute("INSERT INTO points_log (kid_id, amount, reason) VALUES (?,?,?)",
                    (kid_id, gold, "Battle win"))
 
-    # Materials
+    # Materials (guaranteed base drop)
     for item_type, qty in mats.items():
         existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type=?", (kid_id, item_type)).fetchone()
         if existing:
@@ -2688,9 +2699,21 @@ def _award_battle_rewards(db, kid_id, bd, monsters=None):
         else:
             db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,?,?)", (kid_id, item_type, qty))
 
-    # EXP
+    # Bonus drop (rarity-based, tier-scaled)
+    tier = bd.get('region_id', 1) or 1
+    rarity = roll_drop(tier, bd.get('pity_count', 0))
+    pool = DROP_TABLE.get(rarity, [])
+    if pool:
+        item_type, qty = random.choice(pool)
+        existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type=?", (kid_id, item_type)).fetchone()
+        if existing:
+            db.execute("UPDATE inventory SET quantity=quantity+? WHERE id=?", (qty, existing['id']))
+        else:
+            db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,?,?)", (kid_id, item_type, qty))
+
+    # EXP (tier-scaled)
     if kid:
-        exp_amount = random.randint(15, 30) * bd.get('monster_id', 1)
+        exp_amount = exp_reward_for_tier(tier)
         new_exp = kid['experience'] + exp_amount
         new_level, _ = calc_level(new_exp)
         stat_gained = max(0, new_level - kid['level'])
