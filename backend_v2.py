@@ -467,24 +467,24 @@ def seed_skill_defs():
     defs = [
         # 健身室 (2)
         ('蓄力', '🔥', 3, 2, 1, 'self', '下次攻擊 1.5 倍', 0, 0, 'none', 'buff'),
-        ('重擊', '💪', 5, 2, 2, 'enemy', '強力物理攻擊', 8, 3, 'str', 'damage'),
-        ('連擊', '⚡', 7, 2, 4, 'enemy', '連續攻擊 2 次', 5, 2, 'str', 'damage'),
+        ('重擊', '💪', 5, 2, 2, 'enemy', '強力物理攻擊', 20, 5, 'str', 'damage'),
+        ('連擊', '⚡', 7, 2, 4, 'enemy', '連續攻擊 2 次', 16, 4, 'str', 'damage'),
         # 醫院 (5)
-        ('繃帶', '🩹', 3, 5, 1, 'ally', '小回復', 5, 2, 'int', 'heal'),
-        ('急救', '💚', 8, 5, 3, 'ally', '中回復', 10, 4, 'int', 'heal'),
-        ('全體治療', '🌿', 14, 5, 5, 'all_allies', '全體回復', 8, 3, 'int', 'heal'),
+        ('繃帶', '🩹', 3, 5, 1, 'ally', '小回復', 12, 4, 'int', 'heal'),
+        ('急救', '💚', 8, 5, 3, 'ally', '中回復', 25, 7, 'int', 'heal'),
+        ('全體治療', '🌿', 14, 5, 5, 'all_allies', '全體回復', 18, 5, 'int', 'heal'),
         # 競技場 (9)
-        ('橫掃', '🗡️', 6, 9, 2, 'all_enemies', '全體物理攻擊', 6, 2, 'str', 'damage'),
+        ('橫掃', '🗡️', 6, 9, 2, 'all_enemies', '全體物理攻擊', 15, 4, 'str', 'damage'),
         ('挑釁', '🛡️', 4, 9, 4, 'self', '強制敵方攻擊自己', 0, 0, 'none', 'buff'),
-        ('必殺', '💥', 10, 9, 5, 'enemy', '對低血量敵人特大傷害', 12, 5, 'str', 'damage'),
+        ('必殺', '💥', 10, 9, 5, 'enemy', '對低血量敵人特大傷害', 32, 8, 'str', 'damage'),
         # 圖書館 (1)
-        ('火球', '🔥', 6, 1, 2, 'enemy', '魔法攻擊', 10, 3, 'int', 'damage'),
-        ('冰凍', '❄️', 8, 1, 4, 'enemy', '魔法攻擊 + 減速', 14, 4, 'int', 'damage'),
+        ('火球', '🔥', 6, 1, 2, 'enemy', '魔法攻擊', 20, 5, 'int', 'damage'),
+        ('冰凍', '❄️', 8, 1, 4, 'enemy', '魔法攻擊 + 減速', 28, 7, 'int', 'damage'),
         # 探險公會 (6)
         ('偵察', '👁️', 2, 6, 2, 'enemy', '查看怪物弱點', 0, 0, 'none', 'utility'),
         ('迴避', '🏃', 3, 6, 4, 'self', '完全回避下次攻擊', 0, 0, 'none', 'buff'),
         # 工坊 (7)
-        ('修復', '🔧', 4, 7, 2, 'ally', '回復 MP', 5, 2, 'int', 'heal'),
+        ('修復', '🔧', 4, 7, 2, 'ally', '回復 MP', 10, 3, 'int', 'heal'),
         ('強化', '🛡️', 5, 7, 4, 'ally', '提升防禦力', 3, 1, 'none', 'buff'),
     ]
     for d in defs:
@@ -494,6 +494,21 @@ def seed_skill_defs():
         )
     db.commit()
     db.close()
+
+
+SKILL_BALANCE = {
+    '重擊': (20, 5), '連擊': (16, 4), '繃帶': (12, 4), '急救': (25, 7),
+    '全體治療': (18, 5), '橫掃': (15, 4), '必殺': (32, 8), '火球': (20, 5),
+    '冰凍': (28, 7), '修復': (10, 3),
+}
+
+
+def rebalance_skills(db):
+    """Apply skill balance values to skill_defs (base_value + per_level)."""
+    for name, (base, per_lv) in SKILL_BALANCE.items():
+        db.execute("UPDATE skill_defs SET base_value=?, per_level=? WHERE name=?",
+                   (base, per_lv, name))
+    db.commit()
 
 def row_to_dict(row):
     if row is None:
@@ -2601,12 +2616,10 @@ def battle_action(kid_id):
     alive_after = [m for m in monsters if m['hp'] > 0]
     if not defending and alive_after:
         attacker = alive_after[0]
-        dmg = max(0, attacker['atk'] - player_def + random.randint(0, 2))
+        log_line, dmg = _monster_counterattack(bd, attacker, player_def)
+        log.append(log_line)
         if dmg > 0:
             bd['player_hp'] -= dmg
-            log.append(f'🐾 {attacker["name"]} 反擊 {dmg} 點傷害')
-        else:
-            log.append('🛡️ 擋住攻擊！')
 
     # Check player defeated
     if bd['player_hp'] <= 0:
@@ -2624,6 +2637,18 @@ def battle_action(kid_id):
     db.commit()
     bd['battle_result'] = 'fighting'
     return jsonify(bd)
+
+
+def _monster_counterattack(bd, attacker, player_def):
+    """Monster counter-attack with 先手 (spd) + 回避 (dodge). Returns (log, damage)."""
+    if bd.get('player_spd', 0) > attacker.get('spd', 0):
+        return (f'💨 先手！{attacker["name"]} 未及反擊', 0)
+    if bd.get('player_dodge', 0) > 0 and random.randint(1, 100) <= bd['player_dodge']:
+        return (f'💨 回避！{attacker["name"]} 攻擊落空', 0)
+    dmg = max(0, attacker['atk'] - player_def + random.randint(0, 2))
+    if dmg > 0:
+        return (f'🐾 {attacker["name"]} 反擊 {dmg} 點傷害', dmg)
+    return ('🛡️ 擋住攻擊！', 0)
 
 
 def _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd, mult=1.0):

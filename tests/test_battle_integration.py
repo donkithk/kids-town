@@ -51,18 +51,44 @@ def test_ability_atk_migrated_into_str(test_db):
     """ability_atk 應該合併入 ability_str，然後欄位被移除."""
     db = sqlite3.connect(test_db)
     db.row_factory = sqlite3.Row
-    # 先模擬一個有臂力點數嘅小朋友
+    # 模擬未遷移狀態: 加返 ability_atk 欄位 + 臂力點數
+    db.execute("ALTER TABLE kids ADD COLUMN ability_atk INTEGER DEFAULT 0")
     db.execute("UPDATE kids SET ability_atk = 10 WHERE id = 4")
     db.commit()
+    before_str = db.execute("SELECT ability_str FROM kids WHERE id=4").fetchone()[0]
 
     b.migrate_ability_atk(db)
     db.commit()
 
-    # ability_str 應該 +10
-    kid = db.execute("SELECT ability_str FROM kids WHERE id=4").fetchone()
-    assert kid['ability_str'] >= 10, f"臂力應該合併入 str, 得到 str={kid['ability_str']}"
+    after_str = db.execute("SELECT ability_str FROM kids WHERE id=4").fetchone()[0]
+    assert after_str == before_str + 10, f"臂力應該合併入 str ({before_str}+10), 得到 {after_str}"
 
-    # ability_atk 欄位應該被移除
     cols = [r[1] for r in db.execute("PRAGMA table_info(kids)").fetchall()]
     assert 'ability_atk' not in cols, "ability_atk 欄位應該已被 drop"
     db.close()
+
+
+def _ref_kid():
+    return {'ability_str': 20, 'ability_int': 20, 'ability_spd': 0,
+            'ability_crt': 0, 'ability_brv': 0, 'level': 20}
+
+
+def test_damage_skills_stronger_than_basic_attack(test_db):
+    """每個單體 damage 技能嘅傷害應該 > 普攻."""
+    db = sqlite3.connect(test_db)
+    db.row_factory = sqlite3.Row
+    b.rebalance_skills(db)
+    db.commit()
+
+    basic = b.calc_battle_stats(_ref_kid())['atk']  # 5 + 20*1.5 = 35
+    bd = {'player_str': 20, 'player_int': 20}
+    rows = db.execute(
+        "SELECT name, base_value, per_level, attr_scale FROM skill_defs "
+        "WHERE effect_type='damage' AND target='enemy'"
+    ).fetchall()
+    db.close()
+
+    assert len(rows) >= 4, "應該有至少 4 個單體傷害技能"
+    for r in rows:
+        dmg = b._calc_skill_damage({}, r['base_value'], r['per_level'], 1, r['attr_scale'], bd)
+        assert dmg > basic, f"{r['name']} 傷害 {dmg} 應該 > 普攻 {basic}"

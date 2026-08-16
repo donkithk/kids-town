@@ -138,3 +138,35 @@ def test_boss_stats_multipliers():
     assert boss['hp'] == 300
     assert boss['atk'] == 15
     assert boss['def'] == 7  # int(5*1.5)
+
+
+# ════════════════════════════════════════════════════════════════════
+# Phase 2 — 先手 (spd) + 回避 (dodge)
+#   先手: player_spd > monster_spd → 怪物唔反擊
+#   回避: roll player_dodge% → 成功就零傷害
+# ════════════════════════════════════════════════════════════════════
+
+def test_first_strike_prevents_counter():
+    bd = {'player_spd': 10, 'player_dodge': 0}
+    attacker = {'name': '野狼', 'spd': 5, 'atk': 10}
+    log, dmg = b._monster_counterattack(bd, attacker, player_def=0)
+    assert dmg == 0
+    assert '先手' in log
+
+
+def test_dodge_avoids_damage(monkeypatch):
+    # 強制 dodge roll 成功 (randint→1 <= player_dodge)
+    monkeypatch.setattr(b.random, 'randint', lambda a, c: 1)
+    bd = {'player_spd': 1, 'player_dodge': 50}
+    attacker = {'name': '野狼', 'spd': 5, 'atk': 10}
+    log, dmg = b._monster_counterattack(bd, attacker, player_def=0)
+    assert dmg == 0
+    assert '回避' in log
+
+
+def test_counter_deals_damage_when_slower_no_dodge():
+    bd = {'player_spd': 1, 'player_dodge': 0}
+    attacker = {'name': '野狼', 'spd': 5, 'atk': 10}
+    log, dmg = b._monster_counterattack(bd, attacker, player_def=0)
+    assert dmg > 0
+    assert '反擊' in log
