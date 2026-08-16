@@ -5,7 +5,7 @@ Port 9123
 v3.0 — Role-based auth: kids, parents, admins
 """
 import os, sqlite3, json, random, re, hashlib
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from flask import Flask, request, jsonify, g, make_response, Response
 from flask_cors import CORS
 
@@ -322,6 +322,22 @@ def init_db():
             gold_reward INTEGER DEFAULT 20,
             mat_reward  TEXT DEFAULT '{}',
             created_at  TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS boss_progress (
+            kid_id         INTEGER NOT NULL,
+            region_id      INTEGER NOT NULL,
+            first_kill     INTEGER DEFAULT 0,
+            last_summon_at TEXT,
+            last_win_at    TEXT,
+            PRIMARY KEY (kid_id, region_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS daily_battles (
+            kid_id      INTEGER NOT NULL,
+            region_id   INTEGER NOT NULL,
+            battle_date TEXT NOT NULL,
+            PRIMARY KEY (kid_id, region_id, battle_date)
         );
 
         CREATE TABLE IF NOT EXISTS achievements (
@@ -2378,6 +2394,153 @@ def get_kid_skills(kid_id):
     return jsonify(skills)
 
 
+BOSS_SUMMON_COST = {'gem': 1}  # 召喚 Boss 材料
+
+
+def boss_is_unlocked(db, kid_id, region_id):
+    """Region 1 boss always available; higher regions need previous boss first-kill."""
+    if region_id <= 1:
+        return True
+    prev = db.execute("SELECT first_kill FROM boss_progress WHERE kid_id=? AND region_id=?",
+                      (kid_id, region_id - 1)).fetchone()
+    return prev is not None and prev['first_kill'] == 1
+
+
+def _award_boss_rewards(db, kid_id, bd):
+    """Boss win: first kill → guaranteed legendary + unlock next region; always set weekly win time."""
+    region_id = bd.get('region_id', 1) or 1
+    prog = db.execute("SELECT first_kill FROM boss_progress WHERE kid_id=? AND region_id=?",
+                      (kid_id, region_id)).fetchone()
+    now = datetime.now().isoformat()
+    if prog is None or not prog['first_kill']:
+        # 首殺: 保底 legendary (dragon_scale)
+        existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type='dragon_scale'",
+                              (kid_id,)).fetchone()
+        if existing:
+            db.execute("UPDATE inventory SET quantity=quantity+1 WHERE id=?", (existing['id'],))
+        else:
+            db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,?,?)",
+                       (kid_id, 'dragon_scale', 1))
+        db.execute("INSERT OR REPLACE INTO boss_progress (kid_id, region_id, first_kill, last_win_at) VALUES (?,?,1,?)",
+                   (kid_id, region_id, now))
+    else:
+        db.execute("UPDATE boss_progress SET last_win_at=? WHERE kid_id=? AND region_id=?",
+                   (now, kid_id, region_id))
+    db.commit()
+
+
+@app.route('/api/kids/<int:kid_id>/boss/summon', methods=['POST'])
+def boss_summon(kid_id):
+    db = get_db()
+    data = request.get_json(silent=True) or {}
+    region_id = data.get('region_id', 1)
+
+    # 解鎖檢查 (前一區 Boss 首殺)
+    if not boss_is_unlocked(db, kid_id, region_id):
+        return jsonify({'error': '尚未解鎖此 Boss 區域'}), 400
+
+    prog = db.execute("SELECT * FROM boss_progress WHERE kid_id=? AND region_id=?",
+                      (kid_id, region_id)).fetchone()
+
+    # 一週冷卻 (打贏咗 7 日內唔可以再召喚)
+    if prog and prog['last_win_at']:
+        try:
+            last_win = datetime.fromisoformat(prog['last_win_at'])
+            if datetime.now() - last_win < timedelta(days=7):
+                return jsonify({'error': '本週已打贏 Boss，下週再挑戰'}), 400
+        except ValueError:
+            pass
+
+    # 材料
+    for item, qty in BOSS_SUMMON_COST.items():
+        inv = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type=?",
+                         (kid_id, item)).fetchone()
+        if not inv or inv['quantity'] < qty:
+            return jsonify({'error': f'召喚材料不足，需要 {item} ×{qty}'}), 400
+        db.execute("UPDATE inventory SET quantity=quantity-? WHERE id=?", (qty, inv['id']))
+
+    # 冇 running expedition
+    running = db.execute("SELECT id FROM expeditions WHERE kid_id=? AND status='running'",
+                         (kid_id,)).fetchone()
+    if running:
+        return jsonify({'error': 'Expedition already running'}), 400
+
+    kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
+    if not kid:
+        return jsonify({'error': 'Kid not found'}), 404
+
+    # Boss 怪物 = 3x HP, 1.5x ATK/DEF
+    bstats = calc_boss_stats(calc_monster_stats(region_id))
+    boss = [{
+        'id': 0, 'monster_id': -1,
+        'name': f'第{region_id}區 Boss', 'icon': '👑',
+        'max_hp': bstats['hp'], 'hp': bstats['hp'],
+        'atk': bstats['atk'], 'def': bstats['def'],
+        'spd': region_id + 3,
+    }]
+
+    # 技能
+    buildings = db.execute(
+        "SELECT b.level, bd.id as bldg_def_id FROM buildings b JOIN building_defs bd ON b.def_id=bd.id "
+        "WHERE b.kid_id=? AND b.stored=0", (kid_id,)
+    ).fetchall()
+    skills = []
+    for bldg in buildings:
+        bldg_skills = db.execute(
+            "SELECT id, name, icon, mp_cost, target, description, base_value, per_level, attr_scale, effect_type, bldg_def_id, level_required "
+            "FROM skill_defs WHERE bldg_def_id=? AND level_required<=?",
+            (bldg['bldg_def_id'], bldg['level'])
+        ).fetchall()
+        for s in bldg_skills:
+            skills.append(dict(s))
+
+    p_stats = calc_battle_stats(kid)
+    p_hp = p_stats['hp']
+    p_mp = 10 + kid['level'] * 3
+
+    battle_data = {
+        'expedition_id': None,
+        'monsters': boss,
+        'player_max_hp': p_hp, 'player_hp': p_hp,
+        'player_max_mp': p_mp, 'player_mp': p_mp,
+        'player_atk': p_stats['atk'],
+        'player_def': p_stats.get('def', p_stats['atk'] // 2),
+        'player_crt': p_stats['crt'],
+        'player_spd': p_stats['spd'],
+        'player_brv': p_stats['brv'],
+        'player_int': p_stats.get('int', 0),
+        'player_str': p_stats.get('str', 0),
+        'player_dodge': p_stats.get('dodge', 0),
+        'region_id': region_id,
+        'turns': [],
+        'status': 'fighting',
+        'expedition_type': 'boss',
+        'is_boss': True,
+        'skills': skills,
+        'expedition_data': None,
+        'gold_reward': 100,
+        'mat_reward': {},
+    }
+
+    now = datetime.utcnow()
+    cur = db.execute(
+        "INSERT INTO expeditions (kid_id, region_id, expedition_type, start_time, end_time, status, expedition_data) VALUES (?,?,'boss',?,?,'running',?)",
+        (kid_id, region_id, now.isoformat() + 'Z', (now + timedelta(hours=1)).isoformat() + 'Z', json.dumps(battle_data))
+    )
+    battle_data['expedition_id'] = cur.lastrowid
+    db.execute("UPDATE expeditions SET expedition_data=? WHERE id=?", (json.dumps(battle_data), cur.lastrowid))
+
+    # 更新/插入 boss_progress (保留 first_kill + last_win_at)
+    if prog:
+        db.execute("UPDATE boss_progress SET last_summon_at=? WHERE kid_id=? AND region_id=?",
+                   (now.isoformat() + 'Z', kid_id, region_id))
+    else:
+        db.execute("INSERT INTO boss_progress (kid_id, region_id, first_kill, last_summon_at) VALUES (?,?,0,?)",
+                   (kid_id, region_id, now.isoformat() + 'Z'))
+    db.commit()
+    return jsonify(battle_data), 201
+
+
 @app.route('/api/kids/<int:kid_id>/expedition/battle-start', methods=['POST'])
 def battle_start(kid_id):
     """Start a battle expedition: player vs monster."""
@@ -2389,6 +2552,13 @@ def battle_start(kid_id):
     running = db.execute("SELECT id FROM expeditions WHERE kid_id=? AND status='running'", (kid_id,)).fetchone()
     if running:
         return jsonify({'error': 'Expedition already running'}), 400
+
+    # 每區一日一次 (打贏先計)
+    today = date.today().isoformat()
+    won_today = db.execute("SELECT 1 FROM daily_battles WHERE kid_id=? AND region_id=? AND battle_date=?",
+                           (kid_id, region_id, today)).fetchone()
+    if won_today:
+        return jsonify({'error': '今日已打過此區，聽日再嚟'}), 400
 
     # Get monster for this region
     monster = db.execute("SELECT * FROM monsters WHERE region_id=?", (region_id,)).fetchone()
@@ -2606,6 +2776,10 @@ def battle_action(kid_id):
         log.append('🎉 擊敗所有怪物！')
         bd['turns'].append({'action': action, 'log': log, 'target_idx': target_idx, 'mp_used': 0 if action != 'skill' else (skill['mp_cost'] if skill_id else 0)})
         _award_battle_rewards(db, kid_id, bd, monsters)
+        if bd.get('is_boss'):
+            _award_boss_rewards(db, kid_id, bd)
+        else:
+            _record_daily_battle(db, kid_id, bd)
         db.execute("UPDATE expeditions SET status='completed', expedition_data=? WHERE id=?",
                    (json.dumps(bd), exp['id']))
         db.commit()
@@ -2698,6 +2872,15 @@ def roll_drop(tier=1, pity_count=0):
         if r < acc:
             return rarity
     return 'common'
+
+
+def _record_daily_battle(db, kid_id, bd):
+    """Record a daily region win (打贏先計 — only regular battles, not boss)."""
+    if bd.get('is_boss'):
+        return
+    today = date.today().isoformat()
+    db.execute("INSERT OR IGNORE INTO daily_battles (kid_id, region_id, battle_date) VALUES (?,?,?)",
+               (kid_id, bd.get('region_id', 1), today))
 
 
 def _award_battle_rewards(db, kid_id, bd, monsters=None):

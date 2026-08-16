@@ -3,6 +3,7 @@
 These MUST fail before the wiring is done (RED), then pass after (GREEN).
 """
 import sys, os, sqlite3
+from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import backend_v2 as b
 
@@ -92,3 +93,55 @@ def test_damage_skills_stronger_than_basic_attack(test_db):
     for r in rows:
         dmg = b._calc_skill_damage({}, r['base_value'], r['per_level'], 1, r['attr_scale'], bd)
         assert dmg > basic, f"{r['name']} 傷害 {dmg} 應該 > 普攻 {basic}"
+
+
+# ════════════════════════════════════════════════════════════════════
+# 每日 reset — 每區一日一次 + 打贏先計
+# ════════════════════════════════════════════════════════════════════
+
+def test_region_once_per_day_blocks_second_battle(client, test_db):
+    db = sqlite3.connect(test_db)
+    db.execute("DELETE FROM daily_battles WHERE kid_id=4")
+    db.execute("INSERT INTO daily_battles (kid_id, region_id, battle_date) VALUES (4,1,?)",
+               (date.today().isoformat(),))
+    db.commit()
+    db.close()
+    r = client.post('/api/kids/4/expedition/battle-start', json={'region_id': 1})
+    assert r.status_code == 400, r.get_data(as_text=True)
+    assert '今日' in r.get_json()['error']
+
+
+def test_region_once_per_day_allows_different_region(client, test_db):
+    db = sqlite3.connect(test_db)
+    db.execute("DELETE FROM daily_battles WHERE kid_id=4")
+    db.execute("INSERT INTO daily_battles (kid_id, region_id, battle_date) VALUES (4,1,?)",
+               (date.today().isoformat(),))
+    db.commit()
+    db.close()
+    r = client.post('/api/kids/4/expedition/battle-start', json={'region_id': 2})
+    assert r.status_code == 201, r.get_data(as_text=True)
+
+
+def test_win_records_daily_battle(test_db):
+    db = sqlite3.connect(test_db)
+    db.row_factory = sqlite3.Row
+    db.execute("DELETE FROM daily_battles WHERE kid_id=4")
+    db.commit()
+    b._record_daily_battle(db, 4, {'region_id': 1, 'is_boss': False})
+    db.commit()
+    row = db.execute("SELECT * FROM daily_battles WHERE kid_id=4 AND region_id=1 AND battle_date=?",
+                     (date.today().isoformat(),)).fetchone()
+    assert row is not None, "打贏應該記錄今日戰鬥"
+    db.close()
+
+
+def test_boss_does_not_record_daily_battle(test_db):
+    db = sqlite3.connect(test_db)
+    db.row_factory = sqlite3.Row
+    db.execute("DELETE FROM daily_battles WHERE kid_id=4")
+    db.commit()
+    b._record_daily_battle(db, 4, {'region_id': 1, 'is_boss': True})
+    db.commit()
+    row = db.execute("SELECT * FROM daily_battles WHERE kid_id=4").fetchone()
+    assert row is None, "Boss 戰鬥唔應該記錄每日"
+    db.close()
