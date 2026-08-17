@@ -340,6 +340,11 @@ def init_db():
             PRIMARY KEY (kid_id, region_id, battle_date)
         );
 
+        CREATE TABLE IF NOT EXISTS drop_pity (
+            kid_id INTEGER PRIMARY KEY,
+            count  INTEGER DEFAULT 0
+        );
+
         CREATE TABLE IF NOT EXISTS achievements (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             kid_id      INTEGER NOT NULL,
@@ -2325,6 +2330,7 @@ def calc_battle_stats(kid):
         'matk': int(5 + int_v * 1.5),
         'def': int(brv_v * 0.6),
         'crt': min(50, crt_v * 2),        # crit %
+        'crit_dmg': 1.5 + crt_v * 0.02,   # 爆擊倍率
         'dodge': min(40, spd_v * 1.5),    # dodge %
         'spd': spd_v,
         'int': int_v,
@@ -2358,6 +2364,34 @@ def migrate_ability_atk(db):
     db.execute("UPDATE kids SET ability_str = ability_str + COALESCE(ability_atk, 0)")
     db.execute("ALTER TABLE kids DROP COLUMN ability_atk")
     db.commit()
+
+
+def region_unlock_level(region_id):
+    """Minimum player level to unlock a region (t*2)."""
+    return region_id * 2
+
+
+MILESTONES = [10, 25, 50, 100, 200, 500, 1000]
+
+
+def check_milestones(old_level, new_level):
+    """Return milestone levels crossed between old_level and new_level."""
+    return [m for m in MILESTONES if old_level < m <= new_level]
+
+
+def get_pity_count(db, kid_id):
+    row = db.execute("SELECT count FROM drop_pity WHERE kid_id=?", (kid_id,)).fetchone()
+    return row['count'] if row else 0
+
+
+def update_pity(db, kid_id, rarity):
+    """Reset pity on epic+; increment on common/rare."""
+    if rarity in ('epic', 'legendary'):
+        db.execute("INSERT OR REPLACE INTO drop_pity (kid_id, count) VALUES (?,0)", (kid_id,))
+    else:
+        row = db.execute("SELECT count FROM drop_pity WHERE kid_id=?", (kid_id,)).fetchone()
+        new_count = (row['count'] if row else 0) + 1
+        db.execute("INSERT OR REPLACE INTO drop_pity (kid_id, count) VALUES (?,?)", (kid_id, new_count))
 
 
 @app.route('/api/kids/<int:kid_id>/skills', methods=['GET'])
@@ -2424,6 +2458,12 @@ def _award_boss_rewards(db, kid_id, bd):
         db.execute("INSERT OR REPLACE INTO boss_progress (kid_id, region_id, first_kill, last_win_at) VALUES (?,?,1,?)",
                    (kid_id, region_id, now))
     else:
+        # 重戰: 保底 epic (gem)
+        existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type='gem'", (kid_id,)).fetchone()
+        if existing:
+            db.execute("UPDATE inventory SET quantity=quantity+1 WHERE id=?", (existing['id'],))
+        else:
+            db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,?,?)", (kid_id, 'gem', 1))
         db.execute("UPDATE boss_progress SET last_win_at=? WHERE kid_id=? AND region_id=?",
                    (now, kid_id, region_id))
     db.commit()
@@ -2506,6 +2546,7 @@ def boss_summon(kid_id):
         'player_atk': p_stats['atk'],
         'player_def': p_stats.get('def', p_stats['atk'] // 2),
         'player_crt': p_stats['crt'],
+        'player_crit_dmg': p_stats.get('crit_dmg', 1.5),
         'player_spd': p_stats['spd'],
         'player_brv': p_stats['brv'],
         'player_int': p_stats.get('int', 0),
@@ -2570,6 +2611,10 @@ def battle_start(kid_id):
     if not kid:
         return jsonify({'error': 'Kid not found'}), 404
 
+    # 區域解鎖門檻 (level gate, t*2)
+    if kid['level'] < region_unlock_level(region_id):
+        return jsonify({'error': f'需要 Lv{region_unlock_level(region_id)} 先解鎖此區'}), 400
+
     # Get available skills
     buildings = db.execute(
         "SELECT b.level, bd.id as bldg_def_id FROM buildings b JOIN building_defs bd ON b.def_id=bd.id "
@@ -2615,6 +2660,7 @@ def battle_start(kid_id):
         'player_atk': p_stats['atk'],
         'player_def': p_stats.get('def', p_stats['atk'] // 2),
         'player_crt': p_stats['crt'],
+        'player_crit_dmg': p_stats.get('crit_dmg', 1.5),
         'player_spd': p_stats['spd'],
         'player_brv': p_stats['brv'],
         'player_int': p_stats.get('int', 0),
@@ -2688,7 +2734,7 @@ def battle_action(kid_id):
             log.append('⚡ 蓄力爆發！')
         crit = False
         if random.randint(1, 100) <= player_crt:
-            dmg *= 2
+            dmg = int(dmg * bd.get('player_crit_dmg', 2.0))
             crit = True
             log.append('💥 爆擊！')
         target_monster['hp'] = max(0, target_monster['hp'] - dmg)
@@ -2909,7 +2955,9 @@ def _award_battle_rewards(db, kid_id, bd, monsters=None):
 
     # Bonus drop (rarity-based, tier-scaled)
     tier = bd.get('region_id', 1) or 1
-    rarity = roll_drop(tier, bd.get('pity_count', 0))
+    pity = get_pity_count(db, kid_id)
+    rarity = roll_drop(tier, pity)
+    update_pity(db, kid_id, rarity)
     pool = DROP_TABLE.get(rarity, [])
     if pool:
         item_type, qty = random.choice(pool)
@@ -2927,6 +2975,15 @@ def _award_battle_rewards(db, kid_id, bd, monsters=None):
         stat_gained = max(0, new_level - kid['level'])
         db.execute("UPDATE kids SET experience=?, level=?, stat_points=stat_points+? WHERE id=?",
                    (new_exp, new_level, stat_gained, kid_id))
+
+        # 里程碑獎勵 (Lv 10/25/50/100/...)
+        crossed = check_milestones(kid['level'], new_level)
+        for m in crossed:
+            existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type='gem'", (kid_id,)).fetchone()
+            if existing:
+                db.execute("UPDATE inventory SET quantity=quantity+3 WHERE id=?", (existing['id'],))
+            else:
+                db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,?,3)", (kid_id, 'gem'))
 
     # Mark region explored
     db.execute("INSERT OR IGNORE INTO explored_regions (kid_id, region_id) VALUES (?,?)",

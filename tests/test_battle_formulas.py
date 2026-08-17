@@ -170,3 +170,25 @@ def test_counter_deals_damage_when_slower_no_dodge():
     log, dmg = b._monster_counterattack(bd, attacker, player_def=0)
     assert dmg > 0
     assert '反擊' in log
+
+
+# ════════════════════════════════════════════════════════════════════
+# 爆擊倍率 scaling — CRTDMG = 1.5 + crt*0.02
+# ════════════════════════════════════════════════════════════════════
+
+def test_crit_dmg_multiplier_from_crt():
+    s = b.calc_battle_stats(_kid(ability_crt=10))
+    assert s.get('crit_dmg') == 1.5 + 10 * 0.02
+    s0 = b.calc_battle_stats(_kid(ability_crt=0))
+    assert s0.get('crit_dmg') == 1.5
+
+
+# ════════════════════════════════════════════════════════════════════
+# 里程碑獎勵 — check_milestones(old, new)
+# ════════════════════════════════════════════════════════════════════
+
+def test_milestones_crossed():
+    assert b.check_milestones(9, 11) == [10]
+    assert b.check_milestones(5, 30) == [10, 25]
+    assert b.check_milestones(50, 60) == []  # 冇跨過里程碑
+    assert b.check_milestones(24, 25) == [25]  # 剛好到 25

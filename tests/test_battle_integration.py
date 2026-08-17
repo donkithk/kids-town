@@ -145,3 +145,57 @@ def test_boss_does_not_record_daily_battle(test_db):
     row = db.execute("SELECT * FROM daily_battles WHERE kid_id=4").fetchone()
     assert row is None, "Boss 戰鬥唔應該記錄每日"
     db.close()
+
+
+# ════════════════════════════════════════════════════════════════════
+# 區域解鎖門檻 (level gate, t×2)
+# ════════════════════════════════════════════════════════════════════
+
+def test_region_requires_level(client, test_db):
+    db = sqlite3.connect(test_db)
+    db.execute("UPDATE kids SET level=1 WHERE id=4")
+    db.execute("DELETE FROM daily_battles WHERE kid_id=4")
+    db.commit()
+    db.close()
+    # region 3 需要 Lv6 (3*2), kid 得 Lv1 → block
+    r = client.post('/api/kids/4/expedition/battle-start', json={'region_id': 3})
+    assert r.status_code == 400, r.get_data(as_text=True)
+    assert 'Lv' in r.get_json()['error']
+
+
+# ════════════════════════════════════════════════════════════════════
+# 保底 pity 記錄
+# ════════════════════════════════════════════════════════════════════
+
+def test_pity_increments_and_resets(test_db):
+    db = sqlite3.connect(test_db)
+    db.row_factory = sqlite3.Row
+    db.execute("DELETE FROM drop_pity WHERE kid_id=4")
+    db.commit()
+    b.update_pity(db, 4, 'common')
+    b.update_pity(db, 4, 'rare')
+    db.commit()
+    assert b.get_pity_count(db, 4) == 2
+    b.update_pity(db, 4, 'epic')
+    db.commit()
+    assert b.get_pity_count(db, 4) == 0, "epic 應該重置 pity"
+    db.close()
+
+
+# ════════════════════════════════════════════════════════════════════
+# Boss 每週重戰 epic 保底
+# ════════════════════════════════════════════════════════════════════
+
+def test_boss_repeat_win_awards_epic(test_db):
+    db = sqlite3.connect(test_db)
+    db.row_factory = sqlite3.Row
+    db.execute("DELETE FROM boss_progress WHERE kid_id=4 AND region_id=1")
+    db.execute("DELETE FROM inventory WHERE kid_id=4 AND item_type='gem'")
+    db.execute("INSERT INTO boss_progress (kid_id, region_id, first_kill) VALUES (4,1,1)")
+    db.commit()
+    b._award_boss_rewards(db, 4, {'region_id': 1, 'is_boss': True})
+    db.commit()
+    # 重戰 (非首殺) 應該保底 epic (gem)
+    inv = db.execute("SELECT quantity FROM inventory WHERE kid_id=4 AND item_type='gem'").fetchone()
+    assert inv and inv['quantity'] >= 1, "重戰應該保底 epic (gem)"
+    db.close()
