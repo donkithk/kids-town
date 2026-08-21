@@ -2959,8 +2959,11 @@ def _award_battle_rewards(db, kid_id, bd, monsters=None):
     rarity = roll_drop(tier, pity)
     update_pity(db, kid_id, rarity)
     pool = DROP_TABLE.get(rarity, [])
+    bd['drop_rarity'] = rarity
     if pool:
         item_type, qty = random.choice(pool)
+        bd['drop_item'] = item_type
+        bd['drop_qty'] = qty
         existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type=?", (kid_id, item_type)).fetchone()
         if existing:
             db.execute("UPDATE inventory SET quantity=quantity+? WHERE id=?", (qty, existing['id']))

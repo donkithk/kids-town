@@ -31,31 +31,40 @@ def _wait_port(port, timeout=20):
 
 
 @pytest.fixture(scope="session")
-def base_url(tmp_path_factory):
-    """Dedicated test server on port 9131 with a temp copy of the real DB."""
+def test_db_path(tmp_path_factory):
+    """Temp copy of the real DB (session-scoped, shared by all frontend tests)."""
     src = os.path.join(REPO, 'kids_town.db')
     dst = str(tmp_path_factory.mktemp('db') / 'test.db')
     shutil.copy2(src, dst)
+    return dst
 
-    # 清理測試狀態 (running expedition + 今日 daily_battles + boss + pity)
-    import sqlite3
-    db = sqlite3.connect(dst)
-    db.execute('DELETE FROM expeditions WHERE status="running"')
-    db.execute('DELETE FROM daily_battles')
-    db.execute('DELETE FROM boss_progress')
-    db.execute('DELETE FROM drop_pity')
-    db.commit()
-    db.close()
 
+@pytest.fixture(scope="session")
+def base_url(test_db_path):
+    """Dedicated test server on port 9131 with the temp DB."""
     port = 9131
     proc = subprocess.Popen(
-        [PY312, os.path.join(REPO, 'tests', '_run_server.py'), dst, str(port)],
+        [PY312, os.path.join(REPO, 'tests', '_run_server.py'), test_db_path, str(port)],
         cwd=REPO, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     assert _wait_port(port), "test server failed to start"
     yield f'http://127.0.0.1:{port}'
     proc.terminate()
     proc.wait(timeout=10)
+
+
+@pytest.fixture(autouse=True)
+def _reset_state(test_db_path):
+    """每個 test 前重置遊戲狀態 (running expedition + daily/boss/pity)."""
+    import sqlite3
+    db = sqlite3.connect(test_db_path)
+    db.execute('DELETE FROM expeditions WHERE status="running"')
+    db.execute('DELETE FROM daily_battles')
+    db.execute('DELETE FROM boss_progress')
+    db.execute('DELETE FROM drop_pity')
+    db.commit()
+    db.close()
+    yield
 
 
 @pytest.fixture()
@@ -74,6 +83,16 @@ def _login(page, base_url, username='kid2', pin='0000'):
     page.get_by_placeholder('密碼').fill(pin)
     page.get_by_role('button', name='🚪 登入').click()
     page.wait_for_timeout(1500)
+
+
+def _goto_battle_lobby(page):
+    """導航到戰鬥挑戰頁 (☰ → 探索 → 戰鬥類型)."""
+    page.get_by_role('button', name='☰').click()
+    page.wait_for_timeout(600)
+    page.get_by_text('探索', exact=False).last.click()
+    page.wait_for_timeout(800)
+    page.locator('.exp-type-btn[data-type="battle"]').click()
+    page.wait_for_timeout(800)
 
 
 # ── TC-FE-01: 登入 ────────────────────────────────────────────────
@@ -118,3 +137,50 @@ def test_battle_flow_attack(page, base_url):
     # 攻擊
     page.get_by_text('攻擊', exact=False).first.click()
     page.wait_for_timeout(800)
+
+
+# ── TC-FE-04: Boss 集料召喚入口 ───────────────────────────────────
+
+def test_boss_summon_entry_in_battle_lobby(page, base_url):
+    """戰鬥挑戰頁應該有 Boss 召喚入口."""
+    _login(page, base_url)
+    _goto_battle_lobby(page)
+    assert page.get_by_text('Boss', exact=False).first.is_visible(), \
+        "戰鬥挑戰頁應該顯示 Boss 召喚入口"
+
+
+# ── TC-FE-05: 掉落稀有度顯示 ──────────────────────────────────────
+
+def test_battle_win_shows_rarity(page, base_url):
+    """打贏戰鬥後, 掉落應該顯示稀有度 (普通/稀有/珍貴/傳說)."""
+    _login(page, base_url)
+    _goto_battle_lobby(page)
+    page.locator('button.exp-btn.go').first.click()
+    page.locator('.m-name').first.wait_for(state='visible', timeout=8000)
+    won = False
+    for _ in range(20):
+        # 揀指令「攻擊」
+        page.get_by_text('⚔️ 攻擊', exact=False).first.click()
+        page.wait_for_timeout(300)
+        # 揀目標怪物
+        page.locator('.monster-card:not(.dead)').first.click()
+        page.wait_for_timeout(700)
+        body = page.locator('#dbt').inner_text()
+        if '勝利' in body or '戰敗' in body:
+            won = '勝利' in body
+            break
+    assert won, "應該打贏 (野狼 HP 低於玩家攻擊)"
+    body = page.locator('#dbt').inner_text()
+    assert any(r in body for r in ['普通', '稀有', '珍貴', '傳說']), \
+        f"掉落應該顯示稀有度, 得到: {body}"
+
+
+# ── TC-FE-06: 「即將開放」標籤移除 ────────────────────────────────
+
+def test_battle_not_marked_coming_soon(page, base_url):
+    """戰鬥已上線, 選單/戰鬥頁唔應該再有「即將開放」."""
+    _login(page, base_url)
+    page.get_by_role('button', name='☰').click()
+    page.wait_for_timeout(600)
+    assert page.get_by_text('即將開放', exact=False).count() == 0, \
+        "戰鬥已上線, 唔應該再顯示「即將開放」"

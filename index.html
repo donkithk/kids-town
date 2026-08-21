@@ -1527,7 +1527,7 @@ const REGIONS = [
 const EXPEDITION_TYPES = [
   {id:'explore', icon:'🌲', name:'探索', desc:'出發探索未知區域', color:'#22c55e'},
   {id:'quiz', icon:'📝', name:'學科', desc:'回答問題賺取金幣', color:'#3b82f6'},
-  {id:'battle', icon:'⚔️', name:'戰鬥', desc:'挑戰怪物（即將開放）', color:'#ef4444'},
+  {id:'battle', icon:'⚔️', name:'戰鬥', desc:'挑戰怪物，贏取稀有材料', color:'#ef4444'},
 ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -1770,6 +1770,12 @@ function updateHeader() {
 let tipTimeout = null;
 const TIP_ICONS = {str:'💪',int:'📖',spd:'💨',crt:'🎨',brv:'⚔️'};
 const TIP_NAMES = {str:'臂力',int:'知識',spd:'速度',crt:'創意',brv:'勇氣'};
+const RARITY = {
+  common:    {name:'普通', color:'#94a3b8'},
+  rare:      {name:'稀有', color:'#3b82f6'},
+  epic:      {name:'珍貴', color:'#a855f7'},
+  legendary: {name:'傳說', color:'#f59e0b'},
+};
 
 document.addEventListener('mouseover', function(e){
   const av = e.target.closest('#hudAv');
@@ -3620,7 +3626,8 @@ function renderBattleLobby() {
           ${unlocked ? '🔓 可挑戰' : '🔒 未解鎖'}
         </div>
         ${unlocked && !(townData.expedition && (townData.expedition.status === 'running' || townData.expedition.status === 'fighting'))
-          ? `<button class="exp-btn go" onclick="startBattle(${r.id})" style="flex:none;padding:6px 14px;font-size:11px;">⚔️ 戰鬥</button>`
+          ? `<button class="exp-btn go" onclick="startBattle(${r.id})" style="flex:none;padding:6px 14px;font-size:11px;">⚔️ 戰鬥</button>
+             <button class="exp-btn go" onclick="summonBoss(${r.id})" style="flex:none;padding:6px 14px;font-size:11px;background:#7c3aed;color:#fff;">👑 Boss</button>`
           : ''}
       </div>`;
     }).join('')}</div>`;
@@ -3651,6 +3658,29 @@ async function startBattle(regionId) {
       dbtEl.innerHTML = `⚔️ 進入戰鬥！vs ${mCount > 1 ? mCount+'隻 ' : ''}${mName}`;
       dbtEl.style.color = '#fff';
       dbtEl.style.whiteSpace = 'pre-wrap';
+    }
+  } catch(e) { showToast('⚠️ 網絡錯誤: '+e.message, 'error'); }
+}
+
+async function summonBoss(regionId) {
+  const kidId = currentKidId || currentUser?.id || townData?.kid?.id;
+  if (!kidId) return;
+  try {
+    const r = await fetch(`${API}/api/kids/${kidId}/boss/summon`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({region_id: regionId})
+    });
+    const data = await r.json();
+    if (data.error) { showToast('⚠️ '+data.error, 'error'); return; }
+    townData.expedition = data;
+    window._battleTargetMode = null;
+    window._pendingSkill = null;
+    renderExpedition();
+    const dbtEl = document.getElementById('dbt');
+    if (dbtEl) {
+      const bName = data.monsters?.[0]?.name || 'Boss';
+      dbtEl.innerHTML = `👑 ${bName} 出現！`;
+      dbtEl.style.color = '#fff';
     }
   } catch(e) { showToast('⚠️ 網絡錯誤: '+e.message, 'error'); }
 }
@@ -3766,6 +3796,13 @@ function renderBattleMode(exp) {
       const rew = [];
       if (expRewardGold > 0) rew.push('<span class="r-item">🪙 '+expRewardGold+'</span>');
       if (expRewardMats) Object.entries(expRewardMats).forEach(([k,v]) => rew.push('<span class="r-item">'+(MAT_ICONS[k]||'📦')+' x'+v+'</span>'));
+      const dropRarity = bd.drop_rarity || exp.drop_rarity;
+      if (dropRarity && RARITY[dropRarity]) {
+        const rr = RARITY[dropRarity];
+        const dItem = bd.drop_item || exp.drop_item;
+        const dQty = bd.drop_qty || exp.drop_qty || 1;
+        rew.push(`<span class="r-item" style="color:${rr.color};font-weight:700;">⭐ ${rr.name}掉落 · ${MAT_ICONS[dItem]||'📦'} x${dQty}</span>`);
+      }
       resultHtml = `<div class="result-overlay active">
         <div class="ro-icon">🎉</div><div class="ro-title">戰鬥勝利！</div>
         <div class="rewards">${rew.join('')}</div>
@@ -3833,6 +3870,10 @@ async function battleAction(action, skillId, targetIdx) {
       if (data.gold_reward > 0) rew.push(`🪙 ${data.gold_reward}`);
       if (data.mat_reward) {
         Object.entries(data.mat_reward).forEach(([k,v]) => rew.push(`${MAT_ICONS[k]||'📦'} x${v}`));
+      }
+      if (data.drop_rarity && RARITY[data.drop_rarity]) {
+        const rr = RARITY[data.drop_rarity];
+        rew.push(`${rr.name} ${MAT_ICONS[data.drop_item]||'📦'} x${data.drop_qty||1}`);
       }
       if (dbtEl) { dbtEl.innerHTML = `🎉 戰鬥勝利！獲得 ${rew.join(' · ')} ✨`; }
     } else if (data.status === 'lost' || data.battle_result === 'lost') {
