@@ -3542,7 +3542,7 @@ async function renderExpedition() {
     if (exp.expedition_type === 'quiz') {
       progressPanel.innerHTML = renderExpeditionProgress(exp);
       container.innerHTML = renderQuizMode(exp);
-    } else if (exp.expedition_type === 'battle') {
+    } else if (exp.expedition_type === 'battle' || exp.expedition_type === 'boss') {
       progressPanel.innerHTML = '';
       statusCard.style.display = 'none';
       container.innerHTML = renderBattleMode(exp);
@@ -3552,7 +3552,7 @@ async function renderExpedition() {
     }
     if (!expInterval) {
       expInterval = setInterval(async () => {
-        if (townData.expedition?.expedition_type === 'battle') return; // don't re-render battle (overlay breaks)
+        if (townData.expedition?.expedition_type === 'battle' || townData.expedition?.expedition_type === 'boss') return; // don't re-render battle (overlay breaks)
         await loadTown();
         renderExpedition();
       }, 3000);

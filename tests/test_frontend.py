@@ -184,3 +184,46 @@ def test_battle_not_marked_coming_soon(page, base_url):
     page.wait_for_timeout(600)
     assert page.get_by_text('即將開放', exact=False).count() == 0, \
         "戰鬥已上線, 唔應該再顯示「即將開放」"
+
+
+# ════════════════════════════════════════════════════════════════════
+# stale running expedition 應該自動清理 (唔會 block 新戰鬥/Boss)
+# ════════════════════════════════════════════════════════════════════
+
+def _insert_stale_running_expedition(test_db_path, etype='battle'):
+    import sqlite3
+    from datetime import datetime, timedelta
+    stale_start = (datetime.utcnow() - timedelta(hours=3)).isoformat() + 'Z'
+    stale_end = (datetime.utcnow() - timedelta(hours=2)).isoformat() + 'Z'
+    db = sqlite3.connect(test_db_path)
+    db.execute("INSERT INTO expeditions (kid_id, region_id, expedition_type, start_time, end_time, status) "
+               "VALUES (4,1,?,?,?,'running')", (etype, stale_start, stale_end))
+    db.commit()
+    db.close()
+
+
+def test_battle_starts_despite_stale_running_expedition(page, base_url, test_db_path):
+    """有遺留嘅 stale running expedition, 開新戰鬥應該自動清理並成功."""
+    _insert_stale_running_expedition(test_db_path, 'battle')
+    _login(page, base_url)
+    _goto_battle_lobby(page)
+    page.locator('button.exp-btn.go').first.click()
+    # 應該成功開戰 (見到野狼), 而唔係 "already running" toast
+    page.locator('.m-name').first.wait_for(state='visible', timeout=8000)
+    assert page.get_by_text('野狼', exact=False).first.is_visible()
+
+
+def test_boss_summon_despite_stale_running_expedition(page, base_url, test_db_path):
+    """有遺留嘅 stale running expedition, 召喚 Boss 應該自動清理並成功."""
+    import sqlite3
+    _insert_stale_running_expedition(test_db_path, 'boss')
+    db = sqlite3.connect(test_db_path)
+    db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (4,'gem',3)")
+    db.commit()
+    db.close()
+    _login(page, base_url)
+    _goto_battle_lobby(page)
+    page.locator('button.exp-btn.go').filter(has_text='Boss').first.click()
+    # 應該成功召喚 Boss (見到 Boss 怪物名)
+    page.locator('.m-name').first.wait_for(state='visible', timeout=8000)
+    assert page.get_by_text('Boss', exact=False).first.is_visible()

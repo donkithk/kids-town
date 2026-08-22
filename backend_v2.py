@@ -444,13 +444,21 @@ def _clean_stale_expeditions():
     """Mark running expeditions past their end_time as completed (auto-timeout)."""
     try:
         db = sqlite3.connect(DB_PATH)
-        cur = db.execute("UPDATE expeditions SET status='completed' WHERE status='running' AND end_time < datetime('now')")
+        now_iso = datetime.utcnow().isoformat() + 'Z'
+        cur = db.execute("UPDATE expeditions SET status='completed' WHERE status='running' AND end_time < ?", (now_iso,))
         if cur.rowcount > 0:
             print(f'   Cleaned {cur.rowcount} stale expedition(s)')
         db.commit()
         db.close()
     except Exception as e:
         print(f'   [warn] _clean_stale_expeditions: {e}')
+
+
+def _clean_stale_expeditions_db(db):
+    """Mark stale running expeditions (past end_time) as completed. Takes a live db connection."""
+    now_iso = datetime.utcnow().isoformat() + 'Z'
+    db.execute("UPDATE expeditions SET status='completed' WHERE status='running' AND end_time < ?", (now_iso,))
+    db.commit()
 
 def seed_building_defs():
     """Insert default building definitions if empty."""
@@ -2499,7 +2507,8 @@ def boss_summon(kid_id):
             return jsonify({'error': f'召喚材料不足，需要 {item} ×{qty}'}), 400
         db.execute("UPDATE inventory SET quantity=quantity-? WHERE id=?", (qty, inv['id']))
 
-    # 冇 running expedition
+    # 清理 stale running expedition, 再檢查 running
+    _clean_stale_expeditions_db(db)
     running = db.execute("SELECT id FROM expeditions WHERE kid_id=? AND status='running'",
                          (kid_id,)).fetchone()
     if running:
@@ -2589,7 +2598,8 @@ def battle_start(kid_id):
     region_id = data.get('region_id', 1)
     db = get_db()
 
-    # Check no running expedition
+    # 清理 stale running expedition, 再檢查 running
+    _clean_stale_expeditions_db(db)
     running = db.execute("SELECT id FROM expeditions WHERE kid_id=? AND status='running'", (kid_id,)).fetchone()
     if running:
         return jsonify({'error': 'Expedition already running'}), 400
@@ -3027,6 +3037,8 @@ def get_town_state(kid_id):
     ''', (kid_id,)).fetchall()
     inventory = db.execute("SELECT * FROM inventory WHERE kid_id=?", (kid_id,)).fetchall()
     explored = db.execute("SELECT * FROM explored_regions WHERE kid_id=?", (kid_id,)).fetchall()
+    # 清理 stale running expedition (避免 frontend 顯示過期嘅 running battle)
+    _clean_stale_expeditions_db(db)
     running_exp = db.execute("SELECT * FROM expeditions WHERE kid_id=? AND status='running' ORDER BY start_time DESC LIMIT 1", (kid_id,)).fetchone()
     achievements = db.execute("SELECT * FROM achievements WHERE kid_id=? ORDER BY earned_at DESC", (kid_id,)).fetchall()
     streak = db.execute("SELECT * FROM streaks WHERE kid_id=?", (kid_id,)).fetchone()
