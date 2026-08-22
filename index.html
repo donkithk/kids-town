@@ -3627,7 +3627,7 @@ function renderBattleLobby() {
         </div>
         ${unlocked && !(townData.expedition && (townData.expedition.status === 'running' || townData.expedition.status === 'fighting'))
           ? `<button class="exp-btn go" onclick="startBattle(${r.id})" style="flex:none;padding:6px 14px;font-size:11px;">⚔️ 戰鬥</button>
-             <button class="exp-btn go" onclick="summonBoss(${r.id})" style="flex:none;padding:6px 14px;font-size:11px;background:#7c3aed;color:#fff;">👑 Boss</button>`
+             <button class="exp-btn go" onclick="summonBoss(${r.id})" style="flex:none;padding:6px 14px;font-size:11px;background:#7c3aed;color:#fff;">👑 Boss 💎1</button>`
           : ''}
       </div>`;
     }).join('')}</div>`;
@@ -3665,6 +3665,7 @@ async function startBattle(regionId) {
 async function summonBoss(regionId) {
   const kidId = currentKidId || currentUser?.id || townData?.kid?.id;
   if (!kidId) return;
+  if (!confirm('召喚 Boss 需要 💎 寶石 ×1，確定要召喚嗎？')) return;
   try {
     const r = await fetch(`${API}/api/kids/${kidId}/boss/summon`, {
       method:'POST', headers:{'Content-Type':'application/json'},

@@ -92,3 +92,18 @@ def test_boss_cooldown_expires_after_week(client, test_db):
     db.close()
     r = client.post('/api/kids/4/boss/summon', json={'region_id': 1})
     assert r.status_code == 201, f"過咗一週應該可以再召喚, 得到 {r.get_data(as_text=True)}"
+
+
+def test_boss_battle_action_works(client, test_db):
+    """召喚 Boss 後應該可以攻擊/用技能 (唔會 no running battle)."""
+    db = sqlite3.connect(test_db)
+    _clear(db)
+    _give_gem(db)
+    db.close()
+    r = client.post('/api/kids/4/boss/summon', json={'region_id': 1})
+    assert r.status_code == 201, r.get_data(as_text=True)
+    # 攻擊 Boss
+    r2 = client.post('/api/kids/4/expedition/battle-action', json={'action': 'attack', 'target_idx': 0})
+    assert r2.status_code == 200, f"攻擊 Boss 應該成功, 得到 {r2.get_data(as_text=True)}"
+    d = r2.get_json()
+    assert 'error' not in d, f"唔應該有 error: {d}"

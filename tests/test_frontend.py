@@ -223,7 +223,29 @@ def test_boss_summon_despite_stale_running_expedition(page, base_url, test_db_pa
     db.close()
     _login(page, base_url)
     _goto_battle_lobby(page)
+    dialogs = []
+    page.on('dialog', lambda d: (dialogs.append(d.message), d.accept()))
     page.locator('button.exp-btn.go').filter(has_text='Boss').first.click()
     # 應該成功召喚 Boss (見到 Boss 怪物名)
     page.locator('.m-name').first.wait_for(state='visible', timeout=8000)
     assert page.get_by_text('Boss', exact=False).first.is_visible()
+    assert dialogs, "應該有 confirm 對話框"
+
+
+def test_boss_button_shows_cost_and_confirm(page, base_url, test_db_path):
+    """Boss 按鈕顯示素材成本 💎, 撳落去有 confirm (取消唔召喚)."""
+    import sqlite3
+    db = sqlite3.connect(test_db_path)
+    db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (4,'gem',3)")
+    db.commit()
+    db.close()
+    _login(page, base_url)
+    _goto_battle_lobby(page)
+    boss_btn = page.locator('button.exp-btn.go').filter(has_text='Boss').first
+    assert boss_btn.is_visible()
+    assert '💎' in boss_btn.inner_text(), "Boss 按鈕應該顯示素材成本 💎"
+    # 取消 confirm → 唔應該召喚
+    page.once('dialog', lambda d: d.dismiss())
+    boss_btn.click()
+    page.wait_for_timeout(800)
+    assert page.locator('.m-name').count() == 0, "取消 confirm 唔應該召喚 Boss"

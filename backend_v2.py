@@ -2707,7 +2707,7 @@ def battle_action(kid_id):
     skill_id = data.get('skill_id')
     db = get_db()
 
-    exp = db.execute("SELECT * FROM expeditions WHERE kid_id=? AND status='running' AND expedition_type='battle' ORDER BY start_time DESC LIMIT 1", (kid_id,)).fetchone()
+    exp = db.execute("SELECT * FROM expeditions WHERE kid_id=? AND status='running' AND expedition_type IN ('battle','boss') ORDER BY start_time DESC LIMIT 1", (kid_id,)).fetchone()
     if not exp:
         return jsonify({'error': 'No running battle'}), 400
 

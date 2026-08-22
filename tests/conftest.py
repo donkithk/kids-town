@@ -17,9 +17,12 @@ def test_db(tmp_path):
     dst = str(tmp_path / 'test_kids_town.db')
     shutil.copy2(src, dst)
 
-    # clean any running expeditions so battle-start works
+    # clean any running expeditions + daily/boss/pity so tests start clean
     db = sqlite3.connect(dst)
     db.execute('DELETE FROM expeditions WHERE status="running"')
+    db.execute('DELETE FROM daily_battles')
+    db.execute('DELETE FROM boss_progress')
+    db.execute('DELETE FROM drop_pity')
     db.commit()
     db.close()
 
