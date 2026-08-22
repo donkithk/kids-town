@@ -2507,7 +2507,8 @@ def boss_summon(kid_id):
             return jsonify({'error': f'召喚材料不足，需要 {item} ×{qty}'}), 400
         db.execute("UPDATE inventory SET quantity=quantity-? WHERE id=?", (qty, inv['id']))
 
-    # 清理 stale running expedition, 再檢查 running
+    # 自動放棄 running 嘅 battle/boss, 再清理 stale, 再檢查其他 running
+    db.execute("UPDATE expeditions SET status='completed' WHERE kid_id=? AND status='running' AND expedition_type IN ('battle','boss')", (kid_id,))
     _clean_stale_expeditions_db(db)
     running = db.execute("SELECT id FROM expeditions WHERE kid_id=? AND status='running'",
                          (kid_id,)).fetchone()
@@ -2598,7 +2599,8 @@ def battle_start(kid_id):
     region_id = data.get('region_id', 1)
     db = get_db()
 
-    # 清理 stale running expedition, 再檢查 running
+    # 自動放棄 running 嘅 battle/boss (開新戰鬥 = 放棄舊嘅), 再清理 stale, 再檢查其他 running
+    db.execute("UPDATE expeditions SET status='completed' WHERE kid_id=? AND status='running' AND expedition_type IN ('battle','boss')", (kid_id,))
     _clean_stale_expeditions_db(db)
     running = db.execute("SELECT id FROM expeditions WHERE kid_id=? AND status='running'", (kid_id,)).fetchone()
     if running:
