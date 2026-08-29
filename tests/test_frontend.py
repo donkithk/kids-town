@@ -271,3 +271,32 @@ def test_parent_register_flow(page, base_url):
     # 應該見到成功訊息
     assert page.get_by_text('成功', exact=False).first.is_visible(), \
         "註冊後應該顯示成功訊息"
+
+
+# ── TC-FE-08: 家長建立仔女帳戶 ────────────────────────────────────
+
+def _login_parent(page, base_url):
+    page.goto(f'{base_url}/kids/')
+    page.locator('#loginUsername').fill('parent')
+    page.locator('#loginPassword').fill('1234')
+    page.get_by_role('button', name='🚪 登入').click()
+    page.wait_for_timeout(2000)
+
+
+def test_parent_create_kid_ui(page, base_url):
+    """家長可以喺管理頁面建立仔女帳戶 (requirement)."""
+    import time
+    uname = f'uikid{int(time.time())}'
+    _login_parent(page, base_url)
+    # 管理頁面應該有「小朋友管理」section
+    assert page.get_by_text('小朋友管理', exact=False).first.is_visible(), \
+        "管理頁面應該有「小朋友管理」section"
+    # 填表單
+    page.locator('#kidNewName').fill('測試仔女')
+    page.locator('#kidNewUsername').fill(uname)
+    page.locator('#kidNewPin').fill('1234')
+    page.get_by_text('建立仔女', exact=False).first.click()
+    page.wait_for_timeout(1500)
+    # 新仔女應該出現喺列表
+    assert page.get_by_text('測試仔女', exact=False).first.is_visible(), \
+        "建立後新仔女應該出現喺列表"

@@ -1260,6 +1260,17 @@ body{
 
 <!-- Tab: Manage (Parent) -->
 <div class="tab-content" id="tab-manage">
+  <div class="mgmt-section" style="border:2px solid #bbf7d0;background:#f0fdf4;">
+    <div class="mgmt-title">👶 小朋友管理</div>
+    <div class="mgmt-create-bar" style="flex-wrap:wrap;">
+      <input id="kidNewName" placeholder="仔女名（例如：小明）" maxlength="20" style="flex:1;min-width:90px">
+      <input id="kidNewUsername" placeholder="登入名（英文/數字）" maxlength="30" style="flex:1;min-width:110px">
+      <input id="kidNewPin" placeholder="PIN（至少4字）" maxlength="30" style="width:100px">
+      <button class="create-btn" onclick="mgmtCreateKid()" style="background:#22c55e;flex:none;">👶 建立仔女</button>
+    </div>
+    <div style="font-size:11px;color:#166534;padding:4px 0 8px;">💡 建立後，仔女可以用「登入名 + PIN」登入遊戲</div>
+    <div id="kidList" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+  </div>
   <div class="mgmt-section">
     <div class="mgmt-title">📋 任務管理</div>
     <div class="mgmt-summary" id="mgmtSummary" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
@@ -3039,7 +3050,50 @@ async function deleteTask(taskId) {
 // PARENT MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
 
+function renderKidList() {
+  const parentId = currentUser?.id;
+  const list = document.getElementById('kidList');
+  if (!list || !parentId) { if (list) list.innerHTML = ''; return; }
+  fetch(`${API}/api/auth/parent-kids?parent_id=${parentId}`)
+    .then(r => r.json())
+    .then(kids => {
+      if (!Array.isArray(kids) || kids.length === 0) {
+        list.innerHTML = '<span style="font-size:12px;color:#94a3b8;">未有小朋友，用上面表單建立第一個啦！</span>';
+        return;
+      }
+      list.innerHTML = kids.map(k =>
+        `<span style="background:#fff;border:2px solid #22c55e;border-radius:12px;padding:4px 10px;font-size:13px;">${k.avatar||'👦'} ${k.name} <span style="color:#94a3b8;">(${k.username})</span></span>`
+      ).join('');
+    })
+    .catch(() => {});
+}
+
+async function mgmtCreateKid() {
+  const name = document.getElementById('kidNewName').value.trim();
+  const username = document.getElementById('kidNewUsername').value.trim();
+  const pin = document.getElementById('kidNewPin').value.trim();
+  const parentId = currentUser?.id;
+  if (!name || !username || !pin) { showToast('請填寫仔女名、登入名同 PIN', 'error'); return; }
+  if (!parentId) { showToast('請先用家長帳戶登入', 'error'); return; }
+  try {
+    const res = await fetch(`${API}/api/auth/create-kid`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({parent_id: parentId, name, username, pin})
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast('❌ ' + (data.error || '建立失敗'), 'error'); return; }
+    showToast(`✅ 已建立「${name}」！登入名: ${username}`);
+    document.getElementById('kidNewName').value = '';
+    document.getElementById('kidNewUsername').value = '';
+    document.getElementById('kidNewPin').value = '';
+    renderKidList();
+    await populateMgmtSelects();
+  } catch(e) { showToast('❌ ' + e.message, 'error'); }
+}
+
 async function renderManage() {
+  renderKidList();
   await populateMgmtSelects();
   await renderManageTasks();
   await loadActivity();

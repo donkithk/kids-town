@@ -3634,6 +3634,52 @@ def link_kid():
         return jsonify({'error': 'Already linked'}), 409
 
 
+@app.route('/api/auth/create-kid', methods=['POST'])
+def create_kid():
+    """Parent creates a kid account (kids + kid_auth PIN + parent_kid auto-link)."""
+    data = request.get_json(silent=True) or {}
+    parent_id = data.get('parent_id')
+    name = (data.get('name') or '').strip()
+    username = (data.get('username') or '').strip().lower()
+    pin = (data.get('pin') or '').strip()
+    avatar = data.get('avatar', '👦')
+
+    if not parent_id or not name or not username or not pin:
+        return jsonify({'error': 'parent_id、name、username、pin 都需要'}), 400
+    if not VALID_USERNAME.match(username):
+        return jsonify({'error': '用戶名必須為 2-30 個英文字母、數字或底線'}), 400
+    if len(pin) < 4:
+        return jsonify({'error': 'PIN 至少 4 個字元'}), 400
+
+    db = get_db()
+    parent = db.execute("SELECT * FROM parents WHERE id=?", (parent_id,)).fetchone()
+    if not parent:
+        return jsonify({'error': 'Parent not found'}), 404
+
+    # username 唯一 (kids / parents / admins)
+    if db.execute("SELECT id FROM kids WHERE username=?", (username,)).fetchone():
+        return jsonify({'error': '用戶名已被使用'}), 409
+    if db.execute("SELECT id FROM parents WHERE username=?", (username,)).fetchone():
+        return jsonify({'error': '用戶名已被使用'}), 409
+    if db.execute("SELECT id FROM admins WHERE username=?", (username,)).fetchone():
+        return jsonify({'error': '用戶名已被使用'}), 409
+
+    # 建立 kid (其他欄位用 DEFAULT)
+    cur = db.execute(
+        "INSERT INTO kids (name, username, avatar, color) VALUES (?, ?, ?, ?)",
+        (name, username, avatar, '#3b82f6')
+    )
+    kid_id = cur.lastrowid
+    # kid_auth (PIN)
+    db.execute("INSERT INTO kid_auth (kid_id, pin) VALUES (?, ?)", (kid_id, pin))
+    # auto-link 到呢個家長
+    db.execute("INSERT INTO parent_kid (parent_id, kid_id) VALUES (?, ?)", (parent_id, kid_id))
+    db.commit()
+
+    kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
+    return jsonify({'ok': True, 'kid': row_to_dict(kid)}), 201
+
+
 @app.route('/api/auth/parent-kids', methods=['GET'])
 def parent_kids():
     """Get kids linked to a parent."""
