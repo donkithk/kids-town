@@ -38,13 +38,13 @@ body{
 /* ═══════════════════════════════════════
    LOGIN SCREEN (v3 — role-based auth)
    ═══════════════════════════════════════ */
-#loginScreen{
+#loginScreen,#registerScreen{
   position:fixed;inset:0;z-index:999;
   background:linear-gradient(160deg,#f97316,#ef4444);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:24px;
 }
-#loginScreen.hidden{display:none}
+#loginScreen.hidden,#registerScreen.hidden{display:none}
 .login-card{
   background:rgba(255,255,255,0.12);backdrop-filter:blur(8px);
   border-radius:20px;padding:32px 28px;width:100%;max-width:340px;
@@ -1119,6 +1119,38 @@ body{
     <div class="login-footer">
       <span class="login-link" onclick="showParentLogin()">👨‍👩‍👧‍👦 家長登入</span>
       <span class="login-link" onclick="showAdminLogin()">👑 管理員</span>
+      <span class="login-link" onclick="showRegister()">📝 註冊</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ 家長註冊 ═══════════ -->
+<div id="registerScreen" class="hidden">
+  <div class="login-card">
+    <div class="login-logo">📝</div>
+    <h1>註冊家長帳戶</h1>
+    <h2>開個帳戶俾自己</h2>
+
+    <div class="login-field">
+      <span class="lf-icon">👤</span>
+      <input type="text" id="regUsername" placeholder="用戶名（英文字母/數字）" maxlength="30" autocomplete="username">
+    </div>
+    <div class="login-field">
+      <span class="lf-icon">🔑</span>
+      <input type="password" id="regPassword" placeholder="密碼（至少 4 個字）" maxlength="30" autocomplete="new-password">
+    </div>
+    <div class="login-field">
+      <span class="lf-icon">😊</span>
+      <input type="text" id="regName" placeholder="稱呼（例如：媽媽）" maxlength="30">
+    </div>
+    <div class="login-field">
+      <span class="lf-icon">✉️</span>
+      <input type="email" id="regEmail" placeholder="電郵（可選）" maxlength="60">
+    </div>
+    <button class="login-btn" onclick="doRegister()">📝 建立帳戶</button>
+    <div class="login-error" id="regError"></div>
+    <div class="login-footer" style="justify-content:center;">
+      <span class="login-link" onclick="backToLogin()">← 返去登入</span>
     </div>
   </div>
 </div>
@@ -1643,6 +1675,58 @@ function showAdminLogin() {
   document.getElementById('loginUsername').value = 'admin';
   document.getElementById('loginPassword').value = 'admin123';
   document.getElementById('loginError').textContent = '💡 管理員預設帳號: admin / admin123';
+}
+
+function showRegister() {
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('registerScreen').classList.remove('hidden');
+  const err = document.getElementById('regError');
+  err.textContent = '';
+  err.style.color = '';
+  document.getElementById('regUsername').focus();
+}
+
+function backToLogin() {
+  document.getElementById('registerScreen').classList.add('hidden');
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('loginError').textContent = '';
+}
+
+async function doRegister() {
+  const username = document.getElementById('regUsername').value.trim();
+  const password = document.getElementById('regPassword').value.trim();
+  const name = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const err = document.getElementById('regError');
+
+  if (!username || !password || !name) {
+    err.textContent = '請填寫用戶名、密碼同稱呼';
+    err.style.color = '#fecaca';
+    return;
+  }
+
+  err.textContent = '';
+  try {
+    const res = await fetch(`${API}/api/auth/parent-register`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, password, name, email})
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      err.textContent = '❌ ' + (data.error || '註冊失敗');
+      err.style.color = '#fecaca';
+      return;
+    }
+    // 註冊成功
+    err.textContent = '✅ 註冊成功！請用新帳戶登入';
+    err.style.color = '#4ade80';
+    document.getElementById('loginUsername').value = username;
+    document.getElementById('loginPassword').value = '';
+  } catch(e) {
+    err.textContent = '⚠️ 無法連接伺服器 (' + e.message + ')';
+    err.style.color = '#fecaca';
+  }
 }
 
 function logout() {

@@ -79,8 +79,8 @@ def page(base_url):
 
 def _login(page, base_url, username='kid2', pin='0000'):
     page.goto(f'{base_url}/kids/')
-    page.get_by_placeholder('登入名稱').fill(username)
-    page.get_by_placeholder('密碼').fill(pin)
+    page.locator('#loginUsername').fill(username)
+    page.locator('#loginPassword').fill(pin)
     page.get_by_role('button', name='🚪 登入').click()
     page.wait_for_timeout(1500)
 
@@ -249,3 +249,25 @@ def test_boss_button_shows_cost_and_confirm(page, base_url, test_db_path):
     boss_btn.click()
     page.wait_for_timeout(800)
     assert page.locator('.m-name').count() == 0, "取消 confirm 唔應該召喚 Boss"
+
+
+# ── TC-FE-07: 家長註冊 ────────────────────────────────────────────
+
+def test_parent_register_flow(page, base_url):
+    """家長可以喺登入頁註冊新帳戶 (requirement)."""
+    import time
+    uname = f'up{int(time.time())}'
+    page.goto(f'{base_url}/kids/')
+    # 撳「註冊」入口
+    page.get_by_text('註冊', exact=False).first.click()
+    page.wait_for_timeout(400)
+    # 填註冊表單
+    page.locator('#regUsername').fill(uname)
+    page.locator('#regPassword').fill('test1234')
+    page.locator('#regName').fill('新家長')
+    # 撳「建立帳戶」
+    page.get_by_text('建立帳戶', exact=False).first.click()
+    page.wait_for_timeout(1200)
+    # 應該見到成功訊息
+    assert page.get_by_text('成功', exact=False).first.is_visible(), \
+        "註冊後應該顯示成功訊息"
