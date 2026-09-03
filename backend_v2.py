@@ -707,6 +707,23 @@ def migrate_db_v3():
     print("✅ migrate_db_v3 done")
 
 
+def migrate_db_v4():
+    """Add task_completions table for per-kid completion of global (kid_id=NULL) tasks."""
+    db = sqlite3.connect(DB_PATH)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS task_completions (
+            task_id      INTEGER NOT NULL,
+            kid_id       INTEGER NOT NULL,
+            completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (task_id, kid_id),
+            FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+            FOREIGN KEY (kid_id) REFERENCES kids(id) ON DELETE CASCADE
+        )
+    """)
+    db.commit()
+    db.close()
+
+
 def hash_password(password):
     """Simple SHA-256 hash for passwords (upgrade to bcrypt later)."""
     return hashlib.sha256(password.encode()).hexdigest()
@@ -1151,30 +1168,44 @@ def list_tasks():
     kid_id = request.args.get('kid_id')
     completed = request.args.get('completed')
     search = request.args.get('search')
-    
-    query = """
-        SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar
-        FROM tasks t
-        LEFT JOIN kids k ON t.kid_id = k.id
-        WHERE 1=1
-    """
-    params = []
-    
+
+    if kid_id:
+        # 小朋友視角: 自己嘅任務 + 全體任務, 全體任務用 per-kid 完成狀態
+        kid_id_int = int(kid_id)
+        query = """
+            SELECT t.id, t.title, t.icon, t.points, t.kid_id,
+              t.created_at, t.completed_at, t.category, t.description, t.recurring, t.due_date,
+              k.name AS kid_name, k.avatar AS kid_avatar,
+              CASE WHEN t.kid_id IS NULL THEN
+                (SELECT COUNT(*) FROM task_completions tc WHERE tc.task_id=t.id AND tc.kid_id=?)
+              ELSE t.completed END AS completed
+            FROM tasks t
+            LEFT JOIN kids k ON t.kid_id = k.id
+            WHERE (t.kid_id IS NULL OR t.kid_id = ?)
+        """
+        params = [kid_id_int, kid_id_int]
+    else:
+        # 管理視角: 全部任務 (全體任務 completed 保持 0, 實際完成狀態睇 task_completions)
+        query = """
+            SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar
+            FROM tasks t
+            LEFT JOIN kids k ON t.kid_id = k.id
+            WHERE 1=1
+        """
+        params = []
+
     if category:
         query += " AND t.category=?"
         params.append(category)
-    if kid_id:
-        query += " AND t.kid_id=?"
-        params.append(int(kid_id))
     if completed is not None:
         query += " AND t.completed=?"
         params.append(1 if completed in ('1', 'true', 'yes') else 0)
     if search:
         query += " AND t.title LIKE ?"
         params.append(f'%{search}%')
-    
+
     query += " ORDER BY t.created_at DESC"
-    
+
     rows = db.execute(query, params).fetchall()
     return jsonify(rows_to_list(rows))
 
@@ -1227,6 +1258,7 @@ def update_task(task_id):
 
 @app.route('/api/tasks/<int:task_id>/complete', methods=['POST'])
 def complete_task(task_id):
+    data = request.get_json(silent=True) or {}
     db = get_db()
     task = db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
     if not task:
@@ -1236,6 +1268,38 @@ def complete_task(task_id):
     
     # Debug log
     print(f"[DEBUG] complete_task(id={task_id}): title={task['title']}, kid_id={task['kid_id']}, points={task['points']}, recurring={task['recurring']}, completed_before={task['completed']}", flush=True)
+    
+    # ── 全體任務 (kid_id=NULL): 每個小朋友獨立完成 (task_completions) ──
+    if task['kid_id'] is None:
+        kid_id = data.get('kid_id')
+        if not kid_id:
+            return jsonify({'error': '全體任務需要指定小朋友 (kid_id)'}), 400
+        if db.execute("SELECT 1 FROM task_completions WHERE task_id=? AND kid_id=?", (task_id, kid_id)).fetchone():
+            return jsonify({'error': 'Task already completed'}), 400
+        db.execute("INSERT INTO task_completions (task_id, kid_id, completed_at) VALUES (?, ?, ?)", (task_id, kid_id, now))
+        # 頒獎俾完成嘅小朋友
+        result = {'task': row_to_dict(task), 'points_awarded': 0, 'kid': None}
+        kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
+        if kid:
+            new_points = kid['points'] + task['points']
+            db.execute("UPDATE kids SET points=? WHERE id=?", (new_points, kid_id))
+            db.execute("INSERT INTO points_log (kid_id, amount, reason) VALUES (?,?,?)",
+                       (kid_id, task['points'], f"Completed task: {task['title']}"))
+            result['points_awarded'] = task['points']
+            result['kid'] = row_to_dict(db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone())
+            update_streak(kid_id, db)
+            new_achs = check_achievements(kid_id, db)
+            if new_achs:
+                result['achievements'] = new_achs
+            drops = award_task_drops(kid_id, task['points'], db)
+            if drops['materials']:
+                result['material_drops'] = drops['materials']
+            if drops['experience'] > 0:
+                result['experience_gained'] = drops['experience']
+        db.commit()
+        result['task'] = row_to_dict(db.execute("SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar FROM tasks t LEFT JOIN kids k ON t.kid_id=k.id WHERE t.id=?", (task_id,)).fetchone())
+        result['task']['completed'] = 1
+        return jsonify(result), 200
     
     # Handle recurring tasks: mark done, award points, set due_date to tomorrow
     if task['recurring']:
@@ -3754,6 +3818,7 @@ if __name__ == '__main__':
     init_db()
     migrate_db()
     migrate_db_v3()
+    migrate_db_v4()
     seed_building_defs()
     seed_skill_defs()
 

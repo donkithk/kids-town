@@ -300,3 +300,25 @@ def test_parent_create_kid_ui(page, base_url):
     # 新仔女應該出現喺列表
     assert page.get_by_text('測試仔女', exact=False).first.is_visible(), \
         "建立後新仔女應該出現喺列表"
+
+
+# ── TC-FE-09: 小朋友只見到自己 + 全體任務 ─────────────────────────
+
+def test_kid_only_sees_own_and_global_tasks(page, base_url, test_db_path):
+    """小朋友只見到自己嘅任務 + 全體任務, 唔見其他小朋友嘅任務."""
+    import sqlite3
+    db = sqlite3.connect(test_db_path)
+    db.execute("DELETE FROM tasks WHERE title LIKE '%專屬%'")
+    db.execute("INSERT INTO tasks (title, icon, points, kid_id, category, description, recurring, due_date) "
+               "VALUES ('小美專屬任務', '📝', 10, 3, '', '', '', NULL)")
+    db.commit()
+    db.close()
+    _login(page, base_url)  # kid2 = 小強 (kid 4)
+    # 導航到任務 tab
+    page.locator('button.q', has_text='任務').first.click()
+    page.wait_for_timeout(800)
+    # 應該見到全體任務 (做功課)
+    assert page.get_by_text('做功課', exact=False).first.is_visible(), "應該見到全體任務"
+    # 唔應該見到其他小朋友 (小美) 嘅任務
+    assert page.locator('text=小美專屬任務').count() == 0, \
+        "唔應該見到其他小朋友嘅任務"

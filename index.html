@@ -1765,7 +1765,7 @@ async function loadTown() {
   try {
     const [townRes, tasksRes] = await Promise.all([
       fetch(`${API}/api/kids/${currentKidId}/town`),
-      fetch(`${API}/api/tasks`)
+      fetch(`${API}/api/tasks?kid_id=${currentKidId}`)
     ]);
     if (!townRes.ok) return;
     townData = await townRes.json();
@@ -1773,7 +1773,7 @@ async function loadTown() {
     // Refresh recurring tasks (daily/weekly)
     await fetch(`${API}/api/tasks/refresh-recurring`, {method: 'POST'}).catch(()=>{});
     // Reload tasks after refresh
-    const tasksRes2 = await fetch(`${API}/api/tasks`).catch(()=>null);
+    const tasksRes2 = await fetch(`${API}/api/tasks?kid_id=${currentKidId}`).catch(()=>null);
     if (tasksRes2 && tasksRes2.ok) tasks = await tasksRes2.json();
     updateHeader();
     renderAll();
@@ -3016,7 +3016,11 @@ async function addTask() {
 
 async function completeTask(taskId) {
   try {
-    const data = await fetchAPI(`/api/tasks/${taskId}/complete`, {method: 'POST'});
+    const data = await fetchAPI(`/api/tasks/${taskId}/complete`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({kid_id: currentKidId})
+    });
     if (data.points_awarded) {
       Audio.taskComplete();
       // Celebration for larger rewards
