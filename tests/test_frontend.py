@@ -12,12 +12,21 @@ Requirements (from docs):
   TC-FE-05  每日 reset: 已打過嘅區今日不能再打 (提示)
   TC-FE-06  Level gate: 唔夠 level 嘅區顯示需要 Lv 提示
 """
-import os, sys, shutil, subprocess, time, socket
+import os, sys, subprocess, time, socket
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tests.factories import TEST_KID_PIN, init_empty_db, insert_kid
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PY312 = r'C:\Users\Administrator\AppData\Local\Programs\Python\Python312\python.exe'
+FE_KID_NAME = 'TestKid'
+FE_KID_USERNAME = 'test_fe_kid'
+
+pytestmark = pytest.mark.skipif(
+    not os.path.isfile(PY312),
+    reason='Windows Playwright runner only (TDD_PROCESS §6)',
+)
 
 
 def _wait_port(port, timeout=20):
@@ -32,11 +41,38 @@ def _wait_port(port, timeout=20):
 
 @pytest.fixture(scope="session")
 def test_db_path(tmp_path_factory):
-    """Temp copy of the real DB (session-scoped, shared by all frontend tests)."""
-    src = os.path.join(REPO, 'kids_town.db')
+    """Empty seeded SQLite (session-scoped). Never copies production kids_town.db."""
+    import backend_v2 as b
+    from tests.factories import TEST_PARENT_PASSWORD, connect_db
     dst = str(tmp_path_factory.mktemp('db') / 'test.db')
-    shutil.copy2(src, dst)
+    old = b.DB_PATH
+    init_empty_db(b, dst)
+    kid = insert_kid(dst, name=FE_KID_NAME, username=FE_KID_USERNAME, pin=TEST_KID_PIN, level=20)
+    insert_kid(dst, name='OtherKid', username='test_fe_other', pin=TEST_KID_PIN, level=5)
+    db = connect_db(dst)
+    db.execute(
+        "INSERT INTO parents (username, password, name) VALUES (?, ?, ?)",
+        ('test_fe_parent', b.hash_password(TEST_PARENT_PASSWORD), 'Test Parent'),
+    )
+    parent_id = db.execute("SELECT id FROM parents WHERE username='test_fe_parent'").fetchone()[0]
+    db.execute("INSERT INTO parent_kid (parent_id, kid_id) VALUES (?, ?)", (parent_id, kid['id']))
+    db.execute(
+        "INSERT INTO tasks (title, icon, points, kid_id) VALUES ('做功課', '📝', 10, NULL)"
+    )
+    db.commit()
+    db.close()
+    b.DB_PATH = old
     return dst
+
+
+@pytest.fixture(scope="session")
+def fe_kid_id(test_db_path):
+    import sqlite3
+    db = sqlite3.connect(test_db_path)
+    row = db.execute("SELECT id FROM kids WHERE username=?", (FE_KID_USERNAME,)).fetchone()
+    other = db.execute("SELECT id FROM kids WHERE username='test_fe_other'").fetchone()
+    db.close()
+    return {'kid_id': row[0], 'other_kid_id': other[0]}
 
 
 @pytest.fixture(scope="session")
@@ -77,7 +113,7 @@ def page(base_url):
         browser.close()
 
 
-def _login(page, base_url, username='kid2', pin='0000'):
+def _login(page, base_url, username=FE_KID_USERNAME, pin=TEST_KID_PIN):
     page.goto(f'{base_url}/kids/')
     page.locator('#loginUsername').fill(username)
     page.locator('#loginPassword').fill(pin)
@@ -100,7 +136,7 @@ def _goto_battle_lobby(page):
 def test_login_shows_town_hud(page, base_url):
     _login(page, base_url)
     # 城鎮 HUD 顯示小朋友名 + 等級
-    assert page.get_by_text('小強').first.is_visible()
+    assert page.get_by_text(FE_KID_NAME).first.is_visible()
     assert page.get_by_text('Lv.').first.is_visible()
 
 
@@ -190,14 +226,23 @@ def test_battle_not_marked_coming_soon(page, base_url):
 # stale running expedition 應該自動清理 (唔會 block 新戰鬥/Boss)
 # ════════════════════════════════════════════════════════════════════
 
+def _fe_kid_id(test_db_path):
+    import sqlite3
+    db = sqlite3.connect(test_db_path)
+    row = db.execute("SELECT id FROM kids WHERE username=?", (FE_KID_USERNAME,)).fetchone()
+    db.close()
+    return row[0]
+
+
 def _insert_stale_running_expedition(test_db_path, etype='battle'):
     import sqlite3
     from datetime import datetime, timedelta
     stale_start = (datetime.utcnow() - timedelta(hours=3)).isoformat() + 'Z'
     stale_end = (datetime.utcnow() - timedelta(hours=2)).isoformat() + 'Z'
+    kid_id = _fe_kid_id(test_db_path)
     db = sqlite3.connect(test_db_path)
     db.execute("INSERT INTO expeditions (kid_id, region_id, expedition_type, start_time, end_time, status) "
-               "VALUES (4,1,?,?,?,'running')", (etype, stale_start, stale_end))
+               "VALUES (?,1,?,?,?,'running')", (kid_id, etype, stale_start, stale_end))
     db.commit()
     db.close()
 
@@ -218,7 +263,10 @@ def test_boss_summon_despite_stale_running_expedition(page, base_url, test_db_pa
     import sqlite3
     _insert_stale_running_expedition(test_db_path, 'boss')
     db = sqlite3.connect(test_db_path)
-    db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (4,'gem',3)")
+    db.execute(
+        "INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,'gem',3)",
+        (_fe_kid_id(test_db_path),),
+    )
     db.commit()
     db.close()
     _login(page, base_url)
@@ -236,7 +284,10 @@ def test_boss_button_shows_cost_and_confirm(page, base_url, test_db_path):
     """Boss 按鈕顯示素材成本 💎, 撳落去有 confirm (取消唔召喚)."""
     import sqlite3
     db = sqlite3.connect(test_db_path)
-    db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (4,'gem',3)")
+    db.execute(
+        "INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,'gem',3)",
+        (_fe_kid_id(test_db_path),),
+    )
     db.commit()
     db.close()
     _login(page, base_url)
@@ -277,8 +328,8 @@ def test_parent_register_flow(page, base_url):
 
 def _login_parent(page, base_url):
     page.goto(f'{base_url}/kids/')
-    page.locator('#loginUsername').fill('parent')
-    page.locator('#loginPassword').fill('1234')
+    page.locator('#loginUsername').fill('test_fe_parent')
+    page.locator('#loginPassword').fill('TestParent!pass1')
     page.get_by_role('button', name='🚪 登入').click()
     page.wait_for_timeout(2000)
 
@@ -304,16 +355,19 @@ def test_parent_create_kid_ui(page, base_url):
 
 # ── TC-FE-09: 小朋友只見到自己 + 全體任務 ─────────────────────────
 
-def test_kid_only_sees_own_and_global_tasks(page, base_url, test_db_path):
+def test_kid_only_sees_own_and_global_tasks(page, base_url, test_db_path, fe_kid_id):
     """小朋友只見到自己嘅任務 + 全體任務, 唔見其他小朋友嘅任務."""
     import sqlite3
     db = sqlite3.connect(test_db_path)
     db.execute("DELETE FROM tasks WHERE title LIKE '%專屬%'")
-    db.execute("INSERT INTO tasks (title, icon, points, kid_id, category, description, recurring, due_date) "
-               "VALUES ('小美專屬任務', '📝', 10, 3, '', '', '', NULL)")
+    db.execute(
+        "INSERT INTO tasks (title, icon, points, kid_id, category, description, recurring, due_date) "
+        "VALUES ('小美專屬任務', '📝', 10, ?, '', '', '', NULL)",
+        (fe_kid_id['other_kid_id'],),
+    )
     db.commit()
     db.close()
-    _login(page, base_url)  # kid2 = 小強 (kid 4)
+    _login(page, base_url)
     # 導航到任務 tab
     page.locator('button.q', has_text='任務').first.click()
     page.wait_for_timeout(800)
