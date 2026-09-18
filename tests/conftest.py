@@ -31,6 +31,7 @@ def test_db(tmp_path):
 
     dst = str(tmp_path / "test_kids_town.db")
     old = b.DB_PATH
+    b.app.config["TESTING"] = True
     init_empty_db(b, dst)
     yield dst
     b.DB_PATH = old
@@ -50,6 +51,14 @@ def client(app):
     """Unauthenticated Flask test client bound to the empty temp DB."""
     with app.test_client() as c:
         yield c
+
+
+@pytest.fixture()
+def battle_client(client, battle_kid):
+    """Logged-in client for the synthetic battle kid (write APIs require a session)."""
+    r = login_as(client, battle_kid["username"], TEST_KID_PIN)
+    assert r.status_code == 200, r.get_data(as_text=True)
+    return client
 
 
 @pytest.fixture()

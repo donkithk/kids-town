@@ -8,9 +8,9 @@ from datetime import date
 import backend_v2 as b
 
 
-def test_battle_start_uses_tier_monster_stats(client, battle_kid):
+def test_battle_start_uses_tier_monster_stats(battle_client, battle_kid):
     """battle_start 應該用 calc_monster_stats(tier) 而唔係 DB 死數值."""
-    r = client.post(
+    r = battle_client.post(
         f"/api/kids/{battle_kid['id']}/expedition/battle-start", json={"region_id": 1}
     )
     assert r.status_code == 201, r.get_data(as_text=True)
@@ -102,7 +102,7 @@ def test_damage_skills_stronger_than_basic_attack(test_db):
         assert dmg > basic, f"{r['name']} 傷害 {dmg} 應該 > 普攻 {basic}"
 
 
-def test_region_once_per_day_blocks_second_battle(client, test_db, battle_kid):
+def test_region_once_per_day_blocks_second_battle(battle_client, test_db, battle_kid):
     kid_id = battle_kid["id"]
     db = sqlite3.connect(test_db)
     db.execute("DELETE FROM daily_battles WHERE kid_id=?", (kid_id,))
@@ -112,12 +112,12 @@ def test_region_once_per_day_blocks_second_battle(client, test_db, battle_kid):
     )
     db.commit()
     db.close()
-    r = client.post(f"/api/kids/{kid_id}/expedition/battle-start", json={"region_id": 1})
+    r = battle_client.post(f"/api/kids/{kid_id}/expedition/battle-start", json={"region_id": 1})
     assert r.status_code == 400, r.get_data(as_text=True)
     assert "今日" in r.get_json()["error"]
 
 
-def test_region_once_per_day_allows_different_region(client, test_db, battle_kid):
+def test_region_once_per_day_allows_different_region(battle_client, test_db, battle_kid):
     kid_id = battle_kid["id"]
     db = sqlite3.connect(test_db)
     db.execute("DELETE FROM daily_battles WHERE kid_id=?", (kid_id,))
@@ -127,7 +127,7 @@ def test_region_once_per_day_allows_different_region(client, test_db, battle_kid
     )
     db.commit()
     db.close()
-    r = client.post(f"/api/kids/{kid_id}/expedition/battle-start", json={"region_id": 2})
+    r = battle_client.post(f"/api/kids/{kid_id}/expedition/battle-start", json={"region_id": 2})
     assert r.status_code == 201, r.get_data(as_text=True)
 
 
@@ -160,14 +160,14 @@ def test_boss_does_not_record_daily_battle(test_db, battle_kid):
     db.close()
 
 
-def test_region_requires_level(client, test_db, battle_kid):
+def test_region_requires_level(battle_client, test_db, battle_kid):
     kid_id = battle_kid["id"]
     db = sqlite3.connect(test_db)
     db.execute("UPDATE kids SET level=1 WHERE id=?", (kid_id,))
     db.execute("DELETE FROM daily_battles WHERE kid_id=?", (kid_id,))
     db.commit()
     db.close()
-    r = client.post(f"/api/kids/{kid_id}/expedition/battle-start", json={"region_id": 3})
+    r = battle_client.post(f"/api/kids/{kid_id}/expedition/battle-start", json={"region_id": 3})
     assert r.status_code == 400, r.get_data(as_text=True)
     assert "Lv" in r.get_json()["error"]
 

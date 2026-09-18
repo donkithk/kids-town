@@ -1,6 +1,6 @@
 # Phase 0 安全測試目錄（先寫 pytest，後寫產品碼）
 
-> **狀態**：目錄 only。未實作。  
+> **狀態**：目錄 + GREEN 實作（見 [`PHASE0_SECURITY_STATUS.md`](PHASE0_SECURITY_STATUS.md)）。  
 > **流程**：[`docs/TDD_PROCESS.md`](../TDD_PROCESS.md)  
 > **產品背景**：[`docs/EVALUATION.md`](../EVALUATION.md) P0-1～P0-8、P1-14～P1-16；[`GAMEPLAY_REDESIGN.md`](../GAMEPLAY_REDESIGN.md) Phase 0。  
 > **Fixture**：空庫 + seed，**禁止** `shutil.copy2(kids_town.db)`。  

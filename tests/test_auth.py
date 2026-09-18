@@ -1,5 +1,5 @@
 """Auth tests: 家長建立仔女帳戶 (TDD — RED first)."""
-from tests.factories import TEST_KID_PIN, make_kid, make_parent
+from tests.factories import TEST_KID_PIN, login_as, make_kid, make_parent
 
 
 def test_parent_create_kid_full_flow(client, test_db):
@@ -23,6 +23,7 @@ def test_parent_create_kid_full_flow(client, test_db):
     assert r2.status_code == 200, r2.get_data(as_text=True)
     assert r2.get_json()["role"] == "kid"
 
+    login_as(client, parent["username"], parent["password"])
     r3 = client.get(f"/api/auth/parent-kids?parent_id={parent['id']}")
     kids = r3.get_json()
     assert any(k["username"] == "testkid" for k in kids), "家長應該關聯到新仔女"

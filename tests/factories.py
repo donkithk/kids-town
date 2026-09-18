@@ -164,6 +164,8 @@ def insert_kid(
     experience=0,
 ):
     """Direct SQL kid for battle tests that do not go through create-kid."""
+    import backend_v2 as b
+
     db = connect_db(db_path)
     cur = db.execute(
         "INSERT INTO kids (name, username, avatar, color, points, level, experience) "
@@ -171,7 +173,7 @@ def insert_kid(
         (name, username, points, level, experience),
     )
     kid_id = cur.lastrowid
-    db.execute("INSERT INTO kid_auth (kid_id, pin) VALUES (?, ?)", (kid_id, pin))
+    db.execute("INSERT INTO kid_auth (kid_id, pin) VALUES (?, ?)", (kid_id, b.hash_password(pin)))
     db.commit()
     db.close()
     return {"id": kid_id, "username": username, "name": name, "level": level, "points": points}

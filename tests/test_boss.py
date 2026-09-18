@@ -27,23 +27,23 @@ def _give_gem(db, kid_id, qty=5):
     db.commit()
 
 
-def test_boss_summon_requires_material(client, test_db, battle_kid):
+def test_boss_summon_requires_material(battle_client, test_db, battle_kid):
     kid_id = _kid_id(battle_kid)
     db = sqlite3.connect(test_db)
     _clear(db, kid_id)
     db.close()
-    r = client.post(f"/api/kids/{kid_id}/boss/summon", json={"region_id": 1})
+    r = battle_client.post(f"/api/kids/{kid_id}/boss/summon", json={"region_id": 1})
     assert r.status_code == 400, r.get_data(as_text=True)
     assert "材料" in r.get_json()["error"]
 
 
-def test_boss_summon_creates_boss_battle(client, test_db, battle_kid):
+def test_boss_summon_creates_boss_battle(battle_client, test_db, battle_kid):
     kid_id = _kid_id(battle_kid)
     db = sqlite3.connect(test_db)
     _clear(db, kid_id)
     _give_gem(db, kid_id)
     db.close()
-    r = client.post(f"/api/kids/{kid_id}/boss/summon", json={"region_id": 1})
+    r = battle_client.post(f"/api/kids/{kid_id}/boss/summon", json={"region_id": 1})
     assert r.status_code == 201, r.get_data(as_text=True)
     d = r.get_json()
     m = d["monsters"][0]
@@ -51,13 +51,13 @@ def test_boss_summon_creates_boss_battle(client, test_db, battle_kid):
     assert d.get("is_boss") is True
 
 
-def test_boss_requires_previous_region_kill(client, test_db, battle_kid):
+def test_boss_requires_previous_region_kill(battle_client, test_db, battle_kid):
     kid_id = _kid_id(battle_kid)
     db = sqlite3.connect(test_db)
     _clear(db, kid_id)
     _give_gem(db, kid_id)
     db.close()
-    r = client.post(f"/api/kids/{kid_id}/boss/summon", json={"region_id": 2})
+    r = battle_client.post(f"/api/kids/{kid_id}/boss/summon", json={"region_id": 2})
     assert r.status_code == 400
     assert "解鎖" in r.get_json()["error"]
 
@@ -82,7 +82,7 @@ def test_boss_first_kill_awards_legendary_and_unlocks(test_db, battle_kid):
     db.close()
 
 
-def test_boss_weekly_cooldown_blocks_resummon(client, test_db, battle_kid):
+def test_boss_weekly_cooldown_blocks_resummon(battle_client, test_db, battle_kid):
     kid_id = _kid_id(battle_kid)
     db = sqlite3.connect(test_db)
     _clear(db, kid_id)
@@ -93,12 +93,12 @@ def test_boss_weekly_cooldown_blocks_resummon(client, test_db, battle_kid):
     )
     db.commit()
     db.close()
-    r = client.post(f"/api/kids/{kid_id}/boss/summon", json={"region_id": 1})
+    r = battle_client.post(f"/api/kids/{kid_id}/boss/summon", json={"region_id": 1})
     assert r.status_code == 400
     assert "本週" in r.get_json()["error"]
 
 
-def test_boss_cooldown_expires_after_week(client, test_db, battle_kid):
+def test_boss_cooldown_expires_after_week(battle_client, test_db, battle_kid):
     kid_id = _kid_id(battle_kid)
     db = sqlite3.connect(test_db)
     _clear(db, kid_id)
@@ -110,20 +110,20 @@ def test_boss_cooldown_expires_after_week(client, test_db, battle_kid):
     )
     db.commit()
     db.close()
-    r = client.post(f"/api/kids/{kid_id}/boss/summon", json={"region_id": 1})
+    r = battle_client.post(f"/api/kids/{kid_id}/boss/summon", json={"region_id": 1})
     assert r.status_code == 201, f"過咗一週應該可以再召喚, 得到 {r.get_data(as_text=True)}"
 
 
-def test_boss_battle_action_works(client, test_db, battle_kid):
+def test_boss_battle_action_works(battle_client, test_db, battle_kid):
     """召喚 Boss 後應該可以攻擊/用技能 (唔會 no running battle)."""
     kid_id = _kid_id(battle_kid)
     db = sqlite3.connect(test_db)
     _clear(db, kid_id)
     _give_gem(db, kid_id)
     db.close()
-    r = client.post(f"/api/kids/{kid_id}/boss/summon", json={"region_id": 1})
+    r = battle_client.post(f"/api/kids/{kid_id}/boss/summon", json={"region_id": 1})
     assert r.status_code == 201, r.get_data(as_text=True)
-    r2 = client.post(
+    r2 = battle_client.post(
         f"/api/kids/{kid_id}/expedition/battle-action",
         json={"action": "attack", "target_idx": 0},
     )
