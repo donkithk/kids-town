@@ -3,8 +3,8 @@
 > Recorded against **this PR** product code (`backend_v2.py` / `index.html`) on branch `cursor/phase0-security-impl-8913`.  
 > Command: `python -m pytest tests/ -m phase0 -v`  
 > Date: 2026-09-18  
-> Collection: **96 tests collected** (`pytest tests/ --collect-only`); Phase 0 marker run: **32 passed**.  
-> Full suite: **96 passed, 0 skipped**. Playwright UI: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md) (**17 passed**). Frontend tests skip only if Chromium is missing.
+> Collection: **102 tests collected** (`pytest tests/ --collect-only`); Phase 0 marker run: **33 passed**.  
+> Full suite: see [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md) (**21 passed, 1 failed** on frontend; `FE-XSS-01` intentional). Playwright UI: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md). Frontend tests skip only if Chromium is missing.
 
 ## Locked choices
 
@@ -25,7 +25,7 @@ Synthetic fixture users only: `test-admin` / `TestAdmin!pass1`, `test_parent_*` 
 | P0-TC-SESS-02 | `tests/test_authz_session.py::test_unauthenticated_complete_task_returns_401` | **PASS** | |
 | P0-TC-SESS-03 | `tests/test_authz_session.py::test_unauthenticated_create_kid_returns_401` | **PASS** | Body `parent_id` ignored without session |
 | P0-TC-SESS-04 | `tests/test_authz_session.py::test_health_allows_anonymous_without_pii` | **PASS** | Health stays public |
-| P0-TC-SESS-05 | `tests/test_authz_session.py::test_logout_then_write_returns_401` | *see this PR run* | Logout clears session; writes 401 |
+| P0-TC-SESS-05 | `tests/test_authz_session.py::test_logout_then_write_returns_401` | **PASS** | Logout clears session; writes 401 |
 | P0-TC-IDOR-01 | `tests/test_authz_idor.py::test_kid_cannot_add_points_to_other_kid_returns_403` | **PASS** | Kid cannot POST points (self or other) |
 | P0-TC-IDOR-02 | `tests/test_authz_idor.py::test_kid_cannot_adjust_sibling_points_returns_403` | **PASS** | |
 | P0-TC-IDOR-03 | `tests/test_authz_idor.py::test_parent_cannot_forge_parent_id_on_create_kid` | **PASS** | Session `parent_id` wins; forged body → 403 |
@@ -51,8 +51,8 @@ Synthetic fixture users only: `test-admin` / `TestAdmin!pass1`, `test_parent_*` 
 | P0-TC-PTS-02 | `tests/test_points_floor.py::test_add_points_parent_negative_floors_at_zero` | **PASS** | `POST .../points` floors at 0 |
 | P0-TC-LIST-01 | `tests/test_list_kids_privacy.py::test_get_api_kids_is_not_a_public_full_list` | **PASS** | Kid sees self; parent sees linked |
 | P0-TC-LIST-02 | `tests/test_list_kids_privacy.py::test_parent_kids_ignores_forged_parent_id_query` | **PASS** | Query `parent_id` ignored |
-| P0-TC-XSS-01 | `tests/test_xss_encoding.py::test_task_title_roundtrip_and_escape_helper_if_present` | **PASS** (API) | DOM now `FE-XSS-01` in Playwright — may be **FAIL** if titles still innerHTML |
-| P0-TC-XSS-02 | `tests/test_xss_encoding.py::test_kid_display_name_api_roundtrip` | **PASS** (API) | DOM now `FE-XSS-02` (HUD `textContent` partial support) |
+| P0-TC-XSS-01 | `tests/test_xss_encoding.py::test_task_title_roundtrip_and_escape_helper_if_present` | **PASS** (API) | DOM `FE-XSS-01` **FAIL** — titles still innerHTML |
+| P0-TC-XSS-02 | `tests/test_xss_encoding.py::test_kid_display_name_api_roundtrip` | **PASS** (API) | DOM `FE-XSS-02` **PASS** (HUD `textContent`) |
 | P0-TC-DEV-01 | `tests/test_authz_session.py::test_dev_dashboard_denied_for_non_admin` | **PASS** | Admin session only |
 
 ## Accidentally passing guards (still green)
