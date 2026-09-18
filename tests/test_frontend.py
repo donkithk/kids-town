@@ -302,7 +302,19 @@ def _visible_text(page):
 
 
 def _json_post(page, url, payload):
-    return page.request.post(url, json=payload)
+    """POST JSON from the page's browser context (cookies / no cookies as-is)."""
+    return page.evaluate(
+        """async ({url, payload}) => {
+          const r = await fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+          });
+          return {status: r.status, text: await r.text()};
+        }""",
+        {"url": url, "payload": payload},
+    )
 
 
 # ── TC-FE-01: 登入 ────────────────────────────────────────────────
@@ -313,9 +325,10 @@ def test_login_shows_town_hud(page, base_url):
     _login(page, base_url)
     assert page.get_by_text(FE_KID_NAME).first.is_visible()
     assert page.get_by_text("Lv.").first.is_visible()
-    assert page.locator("#loginScreen").evaluate(
-        "el => el.classList.contains('hidden') or getComputedStyle(el).display === 'none'"
+    hidden = page.locator("#loginScreen").evaluate(
+        "el => el.classList.contains('hidden') || getComputedStyle(el).display === 'none'"
     )
+    assert hidden, "登入畫面應該收埋"
 
 
 # ── TC-FE-02: 能力面板 5 屬性 ─────────────────────────────────────
@@ -545,17 +558,17 @@ def test_unauthenticated_ui_cannot_complete_task_or_adjust_points(page, base_url
     before = get_kid_points(test_db_path, kid_id)
 
     points = _json_post(page, f"{base_url}/api/kids/{kid_id}/points", {"amount": 100, "reason": "hack"})
-    assert points.status == 401, points.text()
+    assert points["status"] == 401, points.get("text")
 
     adjust = _json_post(
         page,
         f"{base_url}/api/kids/{kid_id}/points/adjust",
         {"amount": 10, "reason": "hack"},
     )
-    assert adjust.status == 401, adjust.text()
+    assert adjust["status"] == 401, adjust.get("text")
 
     complete = _json_post(page, f"{base_url}/api/tasks/{task_id}/complete", {"kid_id": kid_id})
-    assert complete.status == 401, complete.text()
+    assert complete["status"] == 401, complete.get("text")
 
     assert get_kid_points(test_db_path, kid_id) == before
 
@@ -595,7 +608,9 @@ def test_parent_a_ui_cannot_manage_parent_b_kid(page, base_url, test_db_path, fe
     before = get_kid_points(test_db_path, other_id)
 
     _login_parent(page, base_url, username=FE_PARENT_A_USERNAME)
-    page.get_by_text(FE_KID_NAME, exact=False).first.wait_for(state="visible", timeout=8000)
+    page.locator("#kidList").get_by_text(FE_KID_NAME, exact=False).wait_for(
+        state="visible", timeout=8000
+    )
     page.wait_for_function(
         """(name) => {
           const sel = document.getElementById('adjustKid');
@@ -624,7 +639,7 @@ def test_parent_a_ui_cannot_manage_parent_b_kid(page, base_url, test_db_path, fe
         f"{base_url}/api/kids/{other_id}/points/adjust",
         {"amount": 99, "reason": "idor"},
     )
-    assert r.status == 403, r.text()
+    assert r["status"] == 403, r.get("text")
     assert get_kid_points(test_db_path, other_id) == before
 
 
