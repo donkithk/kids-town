@@ -95,3 +95,29 @@ def test_dev_dashboard_denied_for_non_admin(client, family, app):
         parent_r = parent_client.get("/api/dev-dashboard")
         assert parent_r.status_code in (401, 403), response_text(parent_r)
         assert "kid_details" not in response_text(parent_r)
+
+
+@pytest.mark.case_id("P0-TC-SESS-05")
+def test_logout_then_write_returns_401(client, family, test_db):
+    """P0-TC-SESS-05 logout 之後寫入 API → 401（session 已失效）。"""
+    kid_id = family.kid_a.id
+    login_as(client, family.kid_a.username, TEST_KID_PIN)
+    out = client.post("/api/auth/logout")
+    assert out.status_code == 200, response_text(out)
+    before = get_kid_points(test_db, kid_id)
+    points = client.post(
+        f"/api/kids/{kid_id}/points",
+        json={"amount": 100, "reason": "after-logout"},
+    )
+    assert points.status_code == 401, response_text(points)
+    adjust = client.post(
+        f"/api/kids/{kid_id}/points/adjust",
+        json={"amount": 10, "reason": "after-logout"},
+    )
+    assert adjust.status_code == 401, response_text(adjust)
+    complete = client.post(
+        f"/api/tasks/1/complete",
+        json={"kid_id": kid_id},
+    )
+    assert complete.status_code == 401, response_text(complete)
+    assert get_kid_points(test_db, kid_id) == before

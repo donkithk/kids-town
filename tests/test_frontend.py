@@ -9,15 +9,20 @@ Requirements:
   TC-FE-03  戰鬥流程: 開戰 → 見到怪物 → 攻擊
   TC-FE-04  Boss 集料召喚入口存在
   TC-FE-05  打贏戰鬥後掉落顯示稀有度
-  TC-FE-06  戰鬥已上線, 選單唔再有「即將開放」
+  TC-FE-06  戰鬥已上線：無「即將開放」；Boss 顯示 💎 成本；取消 confirm 唔召喚
+  TC-FE-10  打贏過嘅區域今日再開戰會被每日上限擋住
   TC-FE-07  家長可以喺登入頁註冊
   TC-FE-08  家長可以喺管理頁建立仔女
   TC-FE-09  小朋友只見到自己 + 全體任務
+  TC-FE-JOURNEY-01  家長指派任務 → 小朋友完成 → HUD 金幣同完成回饋
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
   FE-P0-03  家長 A session 不能管理家長 B 嘅仔女
   FE-P0-04  瀏覽器 GET /kids/kids_town.db 同 backend_v2.py → 404
   FE-P0-05  空庫 admin/admin123 登入失敗
+  FE-P0-06  登出後同一瀏覽器 context 寫入 API → 401，UI 返登入牆
+  FE-XSS-01 任務標題 markup 唔當 HTML 執行（對應 P0-TC-XSS-01 DOM）
+  FE-XSS-02 小朋友顯示名 markup 唔當 HTML 執行（對應 P0-TC-XSS-02 DOM）
 """
 from __future__ import annotations
 
@@ -27,6 +32,7 @@ import socket
 import subprocess
 import sys
 import time
+from datetime import date
 
 import pytest
 
@@ -52,6 +58,14 @@ FE_PARENT_B_NAME = "Test Parent B"
 # Historical default — must fail on a fresh DB (not a live family password).
 LEGACY_ADMIN_USERNAME = "admin"
 LEGACY_ADMIN_PASSWORD = "admin123"
+FE_XSS_BOLD_TITLE = "<b>粗體</b>"
+FE_XSS_IMG_TITLE = (
+    '<img src="https://xss.example.test/probe.png" onerror="window.__xssHit=1">'
+)
+FE_XSS_KID_NAME = "<img src=x onerror=alert(1)>"
+FE_XSS_KID_USERNAME = "test_fe_xss"
+JOURNEY_TASK_TITLE = "JOURNEY-洗碗"
+JOURNEY_TASK_POINTS = 12
 
 
 def _playwright_unavailable_reason():
@@ -317,6 +331,53 @@ def _json_post(page, url, payload):
     )
 
 
+def _assert_write_apis_401(page, base_url, fe_ids):
+    kid_id = fe_ids["kid_id"]
+    task_id = fe_ids["task_id"]
+    points = _json_post(
+        page, f"{base_url}/api/kids/{kid_id}/points", {"amount": 100, "reason": "after-logout"}
+    )
+    assert points["status"] == 401, points.get("text")
+    adjust = _json_post(
+        page,
+        f"{base_url}/api/kids/{kid_id}/points/adjust",
+        {"amount": 10, "reason": "after-logout"},
+    )
+    assert adjust["status"] == 401, adjust.get("text")
+    complete = _json_post(
+        page, f"{base_url}/api/tasks/{task_id}/complete", {"kid_id": kid_id}
+    )
+    assert complete["status"] == 401, complete.get("text")
+
+
+def _ui_logout(page):
+    """Click the harness-visible 登出 control and wait for the login wall."""
+    drawer = page.locator("#dr")
+    opened = drawer.evaluate("el => el.classList.contains('o')")
+    if not opened:
+        page.get_by_role("button", name="☰").click()
+        page.locator("#dr.o").wait_for(state="visible", timeout=8000)
+    with page.expect_response(
+        lambda r: "/api/auth/logout" in r.url and r.request.method == "POST"
+    ) as resp_info:
+        drawer.get_by_role("button", name="登出").click()
+    assert resp_info.value.ok, resp_info.value.text()
+    page.locator("#loginScreen").wait_for(state="visible", timeout=8000)
+    page.get_by_role("button", name="🚪 登入").wait_for(state="visible", timeout=8000)
+    app_display = page.locator("#app").evaluate("el => getComputedStyle(el).display")
+    assert app_display == "none", "登出後應該返去登入牆"
+
+
+def _give_gems(test_db_path, qty=3):
+    db = connect_db(test_db_path)
+    db.execute(
+        "INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,'gem',?)",
+        (_fe_kid_id(test_db_path), qty),
+    )
+    db.commit()
+    db.close()
+
+
 # ── TC-FE-01: 登入 ────────────────────────────────────────────────
 
 @pytest.mark.case_id("TC-FE-01")
@@ -405,16 +466,29 @@ def test_battle_win_shows_rarity(page, base_url):
         f"掉落應該顯示稀有度, 得到: {body[-500:]}"
 
 
-# ── TC-FE-06: 「即將開放」標籤移除 ────────────────────────────────
+# ── TC-FE-06: 戰鬥已上線（Boss 成本／confirm；唔再得「即將開放」） ─
 
 @pytest.mark.case_id("TC-FE-06")
-def test_battle_not_marked_coming_soon(page, base_url):
-    """TC-FE-06 戰鬥已上線, 選單/戰鬥頁唔應該再有「即將開放」."""
+def test_battle_lobby_boss_cost_confirm_not_coming_soon(page, base_url, test_db_path):
+    """TC-FE-06 戰鬥已上線：無「即將開放」；Boss 顯示 💎 成本；取消 confirm 唔召喚。"""
+    _give_gems(test_db_path)
     _login(page, base_url)
     page.get_by_role("button", name="☰").click()
     page.locator("#dr").wait_for(state="visible", timeout=5000)
     assert page.get_by_text("即將開放", exact=False).count() == 0, \
         "戰鬥已上線, 唔應該再顯示「即將開放」"
+    page.locator("#dr").get_by_text("探索", exact=False).click()
+    battle_tab = page.locator('.exp-type-btn[data-type="battle"]')
+    battle_tab.wait_for(state="visible", timeout=8000)
+    battle_tab.click()
+    page.get_by_text("戰鬥挑戰", exact=False).first.wait_for(state="visible", timeout=8000)
+    boss_btn = page.locator("button.exp-btn.go").filter(has_text="Boss").first
+    assert boss_btn.is_visible(), "戰鬥挑戰頁應該顯示 Boss 召喚入口"
+    assert "💎" in boss_btn.inner_text(), "Boss 按鈕應該顯示素材成本 💎"
+    page.once("dialog", lambda d: d.dismiss())
+    boss_btn.click()
+    page.wait_for_timeout(800)
+    assert page.locator(".m-name").count() == 0, "取消 confirm 唔應該召喚 Boss"
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -687,3 +761,200 @@ def test_default_admin_login_fails_on_fresh_db(page, base_url):
     app_display = page.locator("#app").evaluate("el => getComputedStyle(el).display")
     assert app_display == "none"
     assert "Lv." not in _visible_text(page) or page.locator("#hudNm").is_hidden()
+
+
+# ── TC-FE-10: 區域每日戰鬥上限 ────────────────────────────────────
+
+@pytest.mark.case_id("TC-FE-10")
+def test_battle_daily_region_limit_blocks_second_start(page, base_url, test_db_path):
+    """TC-FE-10 今日已打贏嘅區域再開戰 → API 400，UI 提示今日已打過。"""
+    kid_id = _fe_kid_id(test_db_path)
+    db = connect_db(test_db_path)
+    db.execute(
+        "INSERT OR IGNORE INTO daily_battles (kid_id, region_id, battle_date) VALUES (?,?,?)",
+        (kid_id, 1, date.today().isoformat()),
+    )
+    db.commit()
+    db.close()
+    _login(page, base_url)
+    _goto_battle_lobby(page)
+    with page.expect_response(
+        lambda r: "battle-start" in r.url and r.request.method == "POST"
+    ) as resp_info:
+        page.locator("button.exp-btn.go").filter(has_text="戰鬥").first.click()
+    assert resp_info.value.status == 400, resp_info.value.text()
+    data = resp_info.value.json()
+    assert "今日" in (data.get("error") or ""), data
+    page.locator("#toast").wait_for(state="visible", timeout=8000)
+    toast = page.locator("#toast").inner_text()
+    assert "今日" in toast, toast
+    assert page.locator(".m-name").count() == 0, "每日上限唔應該開到戰鬥"
+
+
+# ── FE-P0-06: 登出後寫入 API 401 ──────────────────────────────────
+
+@pytest.mark.case_id("FE-P0-06")
+def test_logout_then_write_apis_return_401(page, base_url, test_db_path, fe_ids):
+    """FE-P0-06 登出後同一瀏覽器 context POST points/adjust/complete → 401。"""
+    kid_id = fe_ids["kid_id"]
+    before = get_kid_points(test_db_path, kid_id)
+
+    _login(page, base_url)
+    _ui_logout(page)
+    _assert_write_apis_401(page, base_url, fe_ids)
+    assert get_kid_points(test_db_path, kid_id) == before
+
+    _login_parent(page, base_url)
+    _ui_logout(page)
+    _assert_write_apis_401(page, base_url, fe_ids)
+    assert get_kid_points(test_db_path, kid_id) == before
+
+
+# ── TC-FE-JOURNEY-01: 家長指派 → 小朋友完成 ───────────────────────
+
+@pytest.mark.case_id("TC-FE-JOURNEY-01")
+def test_parent_assigns_task_kid_completes_hud_gold(page, base_url, test_db_path, fe_ids):
+    """TC-FE-JOURNEY-01 家長建立/指派任務 → 小朋友見到並完成 → HUD 金幣同完成回饋。"""
+    kid_id = fe_ids["kid_id"]
+    db = connect_db(test_db_path)
+    db.execute("DELETE FROM tasks WHERE title LIKE 'JOURNEY-%'")
+    db.commit()
+    db.close()
+
+    _login_parent(page, base_url)
+    page.locator("#mgmtNewKid").wait_for(state="visible", timeout=8000)
+    page.wait_for_function(
+        """(name) => {
+          const sel = document.getElementById('mgmtNewKid');
+          return sel && [...sel.options].some(o => (o.textContent || '').includes(name) && o.value);
+        }""",
+        arg=FE_KID_NAME,
+        timeout=8000,
+    )
+    page.locator("#mgmtNewTitle").fill(JOURNEY_TASK_TITLE)
+    page.locator("#mgmtNewPts").fill(str(JOURNEY_TASK_POINTS))
+    page.locator("#mgmtNewKid").select_option(value=str(kid_id))
+    page.locator("button.create-btn", has_text="新增").first.click()
+    page.get_by_text(JOURNEY_TASK_TITLE, exact=False).first.wait_for(state="visible", timeout=8000)
+
+    _login(page, base_url)
+    page.locator("button.q", has_text="任務").first.click()
+    card = page.locator(".task-card", has_text=JOURNEY_TASK_TITLE).first
+    card.wait_for(state="visible", timeout=8000)
+    gold_before = int(page.locator("#hudCo").inner_text().strip() or "0")
+    card.get_by_text("完成", exact=False).click()
+    page.get_by_text("任務完成", exact=False).first.wait_for(state="visible", timeout=8000)
+    page.wait_for_function(
+        "(before) => parseInt((document.getElementById('hudCo') || {}).textContent, 10) > before",
+        arg=gold_before,
+        timeout=8000,
+    )
+    gold_after = int(page.locator("#hudCo").inner_text().strip() or "0")
+    assert gold_after >= gold_before + JOURNEY_TASK_POINTS
+    visible = _visible_text(page)
+    assert "🪙" in visible or str(JOURNEY_TASK_POINTS) in visible
+    db = connect_db(test_db_path)
+    row = db.execute(
+        "SELECT completed, points FROM tasks WHERE title=?", (JOURNEY_TASK_TITLE,)
+    ).fetchone()
+    db.close()
+    assert row is not None and row["completed"] == 1
+    assert get_kid_points(test_db_path, kid_id) == gold_after
+
+
+# ── FE-XSS-01 / FE-XSS-02: DOM encoding（對應 P0-TC-XSS-*）────────
+
+def _task_title_el(page, needle):
+    titles = page.locator("#taskList .task-title")
+    titles.first.wait_for(state="visible", timeout=8000)
+    for i in range(titles.count()):
+        el = titles.nth(i)
+        blob = (el.text_content() or "") + (el.inner_html() or "")
+        if needle in blob:
+            return el
+    raise AssertionError(f"task title containing {needle!r} not found")
+
+
+@pytest.mark.case_id("FE-XSS-01")
+def test_task_title_markup_is_plain_text_not_html(page, base_url, test_db_path, fe_ids):
+    """FE-XSS-01 任務標題含 markup 時只顯示純文字，唔插入 unsafe innerHTML。
+
+    Maps to P0-TC-XSS-01 DOM. Intentional FAIL until product encodes task titles
+    (today renderTasks() interpolates t.title into innerHTML).
+    """
+    kid_id = fe_ids["kid_id"]
+    db = connect_db(test_db_path)
+    db.execute("DELETE FROM tasks WHERE title LIKE '%粗體%' OR title LIKE '%xss.example.test%'")
+    db.execute(
+        "INSERT INTO tasks (title, icon, points, kid_id, category, description, recurring, due_date) "
+        "VALUES (?, '📝', 5, ?, '', '', '', NULL)",
+        (FE_XSS_BOLD_TITLE, kid_id),
+    )
+    db.execute(
+        "INSERT INTO tasks (title, icon, points, kid_id, category, description, recurring, due_date) "
+        "VALUES (?, '📝', 5, ?, '', '', '', NULL)",
+        (FE_XSS_IMG_TITLE, kid_id),
+    )
+    db.commit()
+    db.close()
+
+    xss_urls = []
+    page.route("https://xss.example.test/**", lambda route: route.abort())
+    page.on("request", lambda req: xss_urls.append(req.url) if "xss.example.test" in req.url else None)
+
+    _login(page, base_url)
+    page.locator("button.q", has_text="任務").first.click()
+    bold_el = _task_title_el(page, "粗體")
+    text = bold_el.text_content() or ""
+    html = bold_el.inner_html() or ""
+    assert page.locator("#taskList .task-title b, #taskList .task-title strong").count() == 0, (
+        "attacker <b> must not become a real bold element"
+    )
+    assert "<b>" in text or "&lt;b&gt;" in html, (
+        f"tags should show as text; text={text!r} html={html!r}"
+    )
+
+    img_el = _task_title_el(page, "xss.example.test")
+    assert img_el.locator("img").count() == 0, "task title must not insert an <img> from markup"
+    assert page.locator("#taskList .task-title img").count() == 0
+    hit = page.evaluate("() => window.__xssHit")
+    assert hit != 1, "img onerror must not run"
+    assert not any("xss.example.test" in u for u in xss_urls), xss_urls
+
+
+@pytest.mark.case_id("FE-XSS-02")
+def test_kid_display_name_markup_is_plain_text_in_hud(page, base_url, test_db_path):
+    """FE-XSS-02 小朋友顯示名含 img onerror 時 HUD 用文字，唔執行 onerror。
+
+    Maps to P0-TC-XSS-02 DOM. HUD #hudNm already uses textContent (partial support).
+    """
+    db = connect_db(test_db_path)
+    row = db.execute(
+        "SELECT id FROM kids WHERE username=?", (FE_XSS_KID_USERNAME,)
+    ).fetchone()
+    db.close()
+    if not row:
+        insert_kid(
+            test_db_path,
+            name=FE_XSS_KID_NAME,
+            username=FE_XSS_KID_USERNAME,
+            pin=TEST_KID_PIN,
+            level=5,
+            points=0,
+        )
+
+    alerts = []
+    page.on("dialog", lambda d: (alerts.append(d.message), d.dismiss()))
+    _login(page, base_url, username=FE_XSS_KID_USERNAME)
+    hud = page.locator("#hudNm")
+    hud.wait_for(state="visible", timeout=8000)
+    text = hud.text_content() or ""
+    assert FE_XSS_KID_NAME in text or "<img" in text, text
+    assert hud.locator("img").count() == 0, "HUD name must not create an img from the display name"
+    assert hud.locator("b, script").count() == 0
+    av_imgs = page.locator("#hudAv img")
+    if av_imgs.count():
+        src = av_imgs.first.get_attribute("src") or ""
+        assert src != "x"
+        assert "onerror=alert" not in src
+    assert not alerts, alerts

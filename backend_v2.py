@@ -28,6 +28,7 @@ PUBLIC_API = {
     ('POST', '/api/auth/login'),
     ('POST', '/api/auth/parent-register'),
     ('POST', '/api/login'),
+    ('POST', '/api/auth/logout'),
 }
 
 # ── Database helpers ─────────────────────────────────────────────
@@ -3950,6 +3951,18 @@ def auth_login():
         return jsonify({'error': '密碼錯誤'}), 403
     
     return jsonify({'error': '帳號不存在'}), 404
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def auth_logout():
+    """Clear the Flask session so later write APIs return 401.
+
+    Tiny harness-visible logout path used by the UI 登出 button and FE-P0-06.
+    Idempotent when already anonymous.
+    """
+    session.clear()
+    session.modified = True
+    return jsonify({'ok': True})
 
 
 @app.route('/api/auth/parent-register', methods=['POST'])

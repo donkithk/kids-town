@@ -18,6 +18,20 @@
 
 ---
 
+## P0-TC-SESS-05 — 登出後不能寫入
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | P0-TC-SESS-05 |
+| **標題** | `POST /api/auth/logout` 之後 points／adjust／complete → 401 |
+| **優先級** | P0 |
+| **建議模組** | `tests/test_authz_session.py`（API）+ `tests/test_frontend.py` FE-P0-06（UI） |
+| **前置** | login 為 `kid_a` |
+| **步驟** | 1. `POST /api/auth/logout` 2. `POST /api/kids/{kid_a}/points` 3. `POST .../points/adjust` 4. `POST /api/tasks/<id>/complete` |
+| **預期** | 步驟 1：200；步驟 2–4：401；金幣不變 |
+
+---
+
 ## P0-TC-SESS-01 — 未登入不能寫入金幣
 
 | 欄 | 內容 |
@@ -433,8 +447,8 @@
 | **優先級** | P1 |
 | **建議模組** | `tests/test_xss_encoding.py` |
 | **前置** | login parent_a 建任務 title=`<script>alert(1)</script>` 指定 kid_a |
-| **步驟** | 1. GET `/api/tasks?kid_id=kid_a`（kid session）2. 前端：Playwright 或靜態檢查 `completeTask`／任務卡唔把 title 拼進 innerHTML；**若前端測試未修路徑，本 case 後端部分仍要綠，前端部分標手動** |
-| **預期** | API JSON `title` 等於原字串（或已 escape，二揀一寫死）。DOM：`document.querySelector` 任務名 `textContent` 含 `<script>` 文字，`page.evaluate` 確認 **無** 執行 script、無額外套咗真正 `script` 節點。 |
+| **步驟** | 1. GET `/api/tasks?kid_id=kid_a`（kid session）2. 前端：Playwright `FE-XSS-01` 檢查任務卡唔把 title 拼進 unsafe innerHTML |
+| **預期** | API JSON `title` 等於原字串（或已 escape，二揀一寫死）。DOM：Playwright `FE-XSS-01` 斷言任務名 `textContent` 含 `<script>`／`<b>` 文字，**無** 執行 script、無額外套真正 `b`／`img` 節點、無 onerror 網絡。若產品仍用 innerHTML 拼 title，**FE-XSS-01 維持紅**（文件化 gap）。 |
 
 ---
 
@@ -447,8 +461,8 @@
 | **優先級** | P1 |
 | **建議模組** | `tests/test_xss_encoding.py` |
 | **前置** | 建 kid 時用上述 name（若 create 拒絕特殊字元：改預期為 400，亦算過） |
-| **步驟** | 1. GET 該 kid 嘅 town／kids API 2. 手動／Playwright 開 HUD |
-| **預期** | API 一致；HUD 名係文字；`#hudAv` 唔因 name 執行 onerror。 |
+| **步驟** | 1. GET 該 kid 嘅 town／kids API 2. Playwright `FE-XSS-02` 開 HUD |
+| **預期** | API 一致；HUD `#hudNm` 名係文字（`textContent`）；`#hudAv` 唔因 name 執行 onerror／alert。 |
 
 ---
 
@@ -468,7 +482,7 @@
 
 ## 手動／E2E 清單（雙重驗證 B）
 
-瀏覽器對應已自動化（Playwright）：[`FRONTEND_E2E.md`](FRONTEND_E2E.md) `FE-P0-01`…`FE-P0-05`。
+瀏覽器對應已自動化（Playwright）：[`FRONTEND_E2E.md`](FRONTEND_E2E.md) `FE-P0-01`…`FE-P0-06`、`FE-XSS-01`／`FE-XSS-02`、`TC-FE-JOURNEY-01`。
 
 喺 pytest 綠之後勾：
 
@@ -477,6 +491,7 @@
 - [ ] 瀏覽器開 `/kids/kids_town.db`、`/kids/backend_v2.py` 見到 404
 - [ ] 登入頁無預填 admin123
 - [ ] 家長註冊短密碼有紅字
-- [ ] 任務標題打 `<b>粗體</b>` 只見到括號字，頁面樣式唔變粗（若用 textContent）
+- [ ] 登出後同一分頁打 points／complete → 401，畫面返登入
+- [ ] 任務標題打 `<b>粗體</b>` 只見到括號字，頁面樣式唔變粗（Playwright `FE-XSS-01`；若紅，代表 DOM encoding 仍缺）
 
 簽收欄見 `TDD_PROCESS.md` §5。

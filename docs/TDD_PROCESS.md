@@ -51,7 +51,7 @@ python -m playwright install chromium
 python -m pytest tests/test_frontend.py -v
 ```
 
-- Case 目錄：[`docs/test-cases/FRONTEND_E2E.md`](test-cases/FRONTEND_E2E.md)（TC-FE-* 同 FE-P0-*）。
+- Case 目錄：[`docs/test-cases/FRONTEND_E2E.md`](test-cases/FRONTEND_E2E.md)（TC-FE-*、FE-P0-*、FE-XSS-*、TC-FE-JOURNEY-01）。
 - 只喺 Chromium／Playwright 未裝時 skip；skip 原因必須包含 `python -m playwright install chromium`。
 - Linux CI 若缺系統庫：`python -m playwright install-deps chromium`。
 - 唔好 copy `kids_town.db`；唔好寫死生產 PIN。
