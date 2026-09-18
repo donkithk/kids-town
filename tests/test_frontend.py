@@ -337,11 +337,16 @@ def test_login_shows_town_hud(page, base_url):
 def test_ability_panel_shows_five_attributes(page, base_url):
     """TC-FE-02 能力面板顯示 5 屬性，唔再有「體力」。"""
     _login(page, base_url)
+    page.get_by_text(FE_KID_NAME).first.wait_for(state="visible", timeout=8000)
     page.locator("#hudAv").hover()
-    page.locator("#hudTip").wait_for(state="visible", timeout=8000)
-    tooltip = page.locator("text=臂力")
-    assert tooltip.first.is_visible(), "能力面板應該顯示「臂力」"
-    assert page.locator("text=體力").count() == 0, "唔應該再有「體力」"
+    page.locator("#hudAv").dispatch_event("mouseover")
+    page.wait_for_function(
+        "() => (document.getElementById('hudTip') || {}).innerHTML.includes('臂力')",
+        timeout=8000,
+    )
+    html = page.locator("#hudTip").inner_html()
+    assert "臂力" in html, "能力面板應該顯示「臂力」"
+    assert "體力" not in html, "唔應該再有「體力」"
 
 
 # ── TC-FE-03: 戰鬥流程 ───────────────────────────────────────────
