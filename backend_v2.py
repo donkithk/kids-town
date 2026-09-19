@@ -6,12 +6,29 @@ v3.0 — Role-based auth: kids, parents, admins
 """
 import os, sqlite3, json, random, re, hashlib
 from datetime import datetime, timedelta, timezone, date
-from flask import Flask, request, jsonify, g, make_response, Response
+import bcrypt
+from flask import Flask, request, jsonify, g, make_response, Response, session
 from flask_cors import CORS
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kids_town.db')
 app = Flask(__name__)
-CORS(app)
+app.secret_key = os.environ.get('KIDS_TOWN_SECRET_KEY', 'kids-town-dev-secret-change-me')
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_PATH'] = '/'
+CORS(app, supports_credentials=True)
+
+# Static files the /kids/ route may serve. Anything else (including .db/.py) is 404.
+STATIC_ALLOWED_EXT = {'.html', '.js', '.css', '.png', '.svg', '.ico', '.json', '.woff2', '.webp'}
+STATIC_DENIED_MARKERS = ('.db', '.py', '.pyc', '.pyo', '.env', '.pem', '.key', '.sql')
+# Write endpoints kids must not call even for themselves (points / debug inventory).
+KID_DENIED_WRITE_SUFFIXES = ('/points', '/points/adjust', '/inventory/add')
+PUBLIC_API = {
+    ('GET', '/api/health'),
+    ('POST', '/api/auth/login'),
+    ('POST', '/api/auth/parent-register'),
+    ('POST', '/api/login'),
+}
 
 # ── Database helpers ─────────────────────────────────────────────
 
@@ -42,33 +59,58 @@ def serve_kids_index():
             return open(path, encoding='utf-8').read()
     return jsonify({'error': 'index not found'}), 404
 
+def _denied_static_filename(filename):
+    """True if this path must never be served (secrets, source, sqlite, traversal)."""
+    name = (filename or '').replace('\\', '/')
+    if not name or name.startswith('/') or '..' in name.split('/'):
+        return True
+    lower = name.lower()
+    for marker in STATIC_DENIED_MARKERS:
+        if marker in lower:
+            return True
+    ext = os.path.splitext(lower)[1]
+    if ext not in STATIC_ALLOWED_EXT:
+        return True
+    return False
+
+
+def _safe_static_path(root, filename):
+    base = os.path.abspath(root)
+    path = os.path.abspath(os.path.join(base, filename))
+    if path != base and not path.startswith(base + os.sep):
+        return None
+    return path
+
+
 @app.route('/kids/<path:filename>')
 def serve_kids_static(filename):
-    path = os.path.join(HTML_DIR, filename)
-    if os.path.isfile(path):
-        ext = os.path.splitext(filename)[1]
-        mime_map = {
-            '.json': 'application/json',
-            '.js': 'application/javascript',
-            '.svg': 'image/svg+xml',
-            '.css': 'text/css',
-            '.png': 'image/png',
-            '.html': 'text/html',
-            '.ico': 'image/x-icon',
-        }
-        content_type = mime_map.get(ext, 'text/plain')
-        
-        if ext in ('.png', '.ico'):
-            with open(path, 'rb') as f:
-                resp = make_response(f.read())
-        else:
-            with open(path, encoding='utf-8') as f:
-                resp = make_response(f.read())
-        
-        resp.headers['Content-Type'] = content_type
-        resp.headers['Cache-Control'] = 'public, max-age=86400'
-        return resp
-    return jsonify({'error': 'not found'}), 404
+    if _denied_static_filename(filename):
+        return jsonify({'error': 'not found'}), 404
+    path = _safe_static_path(HTML_DIR, filename)
+    if not path or not os.path.isfile(path):
+        return jsonify({'error': 'not found'}), 404
+    with open(path, 'rb') as f:
+        head = f.read(16)
+        rest = f.read()
+    if head.startswith(b'SQLite format 3'):
+        return jsonify({'error': 'not found'}), 404
+    data = head + rest
+    ext = os.path.splitext(filename)[1].lower()
+    mime_map = {
+        '.json': 'application/json',
+        '.js': 'application/javascript',
+        '.svg': 'image/svg+xml',
+        '.css': 'text/css',
+        '.png': 'image/png',
+        '.html': 'text/html',
+        '.ico': 'image/x-icon',
+        '.woff2': 'font/woff2',
+        '.webp': 'image/webp',
+    }
+    resp = make_response(data)
+    resp.headers['Content-Type'] = mime_map.get(ext, 'application/octet-stream')
+    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    return resp
 
 @app.route('/assets-c/<path:filename>')
 def serve_assets(filename):
@@ -692,16 +734,9 @@ def migrate_db_v3():
         details TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE SET NULL)""")
     
-    # Seed default admin
-    if not db.execute("SELECT id FROM admins WHERE username='admin'").fetchone():
-        db.execute("INSERT INTO admins (username, password, name, role) VALUES (?, ?, ?, ?)",
-                   ("admin", hash_password("admin123"), "系統管理員", "super_admin"))
-    
-    # Ensure all kids have auth records
-    for k in db.execute("SELECT id FROM kids").fetchall():
-        if not db.execute("SELECT id FROM kid_auth WHERE kid_id=?", (k[0],)).fetchone():
-            db.execute("INSERT INTO kid_auth (kid_id, pin) VALUES (?, '0000')", (k[0],))
-    
+    # Do not seed a default admin account. Use KIDS_TOWN_BOOTSTRAP_ADMIN_PASSWORD
+    # (and optional KIDS_TOWN_BOOTSTRAP_ADMIN_USERNAME) after migrate if needed.
+
     db.commit()
     db.close()
     print("✅ migrate_db_v3 done")
@@ -724,9 +759,189 @@ def migrate_db_v4():
     db.close()
 
 
+def _bcrypt_rounds():
+    return 4 if app.config.get('TESTING') else 12
+
+
 def hash_password(password):
-    """Simple SHA-256 hash for passwords (upgrade to bcrypt later)."""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Salted bcrypt hash for parent/admin passwords and kid PINs."""
+    pw = (password or '').encode('utf-8')
+    return bcrypt.hashpw(pw, bcrypt.gensalt(rounds=_bcrypt_rounds())).decode('utf-8')
+
+
+def _looks_bcrypt(stored):
+    return bool(stored) and (stored.startswith('$2') or stored.startswith('$argon2'))
+
+
+def _looks_sha256_hex(stored):
+    return bool(stored) and len(stored) == 64 and all(c in '0123456789abcdef' for c in stored.lower())
+
+
+def verify_password(password, stored):
+    """Check bcrypt, argon2-prefix, legacy SHA-256, or (last) plaintext."""
+    if stored is None or password is None:
+        return False
+    if stored.startswith('$2'):
+        try:
+            return bcrypt.checkpw(password.encode('utf-8'), stored.encode('utf-8'))
+        except (ValueError, TypeError):
+            return False
+    if stored.startswith('$argon2'):
+        return False  # stored by an older experiment; not verified here
+    if _looks_sha256_hex(stored):
+        return hashlib.sha256(password.encode('utf-8')).hexdigest() == stored.lower()
+    return stored == password
+
+
+def _needs_rehash(stored):
+    return not _looks_bcrypt(stored)
+
+
+def public_kid(row):
+    d = row_to_dict(row) if not isinstance(row, dict) else dict(row)
+    if not d:
+        return d
+    d.pop('pin', None)
+    d.pop('password', None)
+    return d
+
+
+def _norm_api_path():
+    p = request.path or ''
+    if len(p) > 1 and p.endswith('/'):
+        p = p[:-1]
+    return p
+
+
+def current_actor():
+    role = session.get('role')
+    if not role:
+        return None
+    return {
+        'role': role,
+        'user_id': session.get('user_id'),
+        'kid_id': session.get('kid_id'),
+        'parent_id': session.get('parent_id'),
+        'admin_id': session.get('admin_id'),
+        'must_change_password': bool(session.get('must_change_password')),
+    }
+
+
+def _set_session(role, user_id, **extra):
+    session.clear()
+    session['role'] = role
+    session['user_id'] = user_id
+    for k, v in extra.items():
+        session[k] = v
+    session.modified = True
+
+
+def parent_owns_kid(parent_id, kid_id):
+    if parent_id is None or kid_id is None:
+        return False
+    row = get_db().execute(
+        "SELECT 1 FROM parent_kid WHERE parent_id=? AND kid_id=?",
+        (parent_id, kid_id),
+    ).fetchone()
+    return row is not None
+
+
+def _unauthorized():
+    return jsonify({'error': 'Unauthorized'}), 401
+
+
+def _forbidden():
+    return jsonify({'error': 'Forbidden'}), 403
+
+
+def bootstrap_admin_if_configured():
+    """Create one admin only when a non-default bootstrap password is provided."""
+    raw = os.environ.get('KIDS_TOWN_BOOTSTRAP_ADMIN_PASSWORD') or ''
+    if not raw or raw in ('admin123', 'password', 'admin'):
+        return
+    username = (os.environ.get('KIDS_TOWN_BOOTSTRAP_ADMIN_USERNAME') or 'site-admin').strip().lower()
+    if username == 'admin' and raw == 'admin123':
+        return
+    db = sqlite3.connect(DB_PATH)
+    try:
+        if db.execute("SELECT id FROM admins LIMIT 1").fetchone():
+            return
+        db.execute(
+            "INSERT INTO admins (username, password, name, role) VALUES (?, ?, ?, ?)",
+            (username, hash_password(raw), 'Bootstrap Admin', 'super_admin'),
+        )
+        db.commit()
+        print(f'🔐 Bootstrapped admin username={username} (password not printed)')
+    finally:
+        db.close()
+
+
+def _is_default_admin_login(username, password):
+    return username == 'admin' and password == 'admin123'
+
+
+@app.before_request
+def gate_api_auth():
+    """Require a server session on write APIs and sensitive reads. Public: health + login/register."""
+    if request.method == 'OPTIONS':
+        return None
+    path = _norm_api_path()
+    if not path.startswith('/api'):
+        return None
+    if (request.method, path) in PUBLIC_API:
+        return None
+
+    actor = current_actor()
+    mutating = request.method in ('POST', 'PUT', 'PATCH', 'DELETE')
+    sensitive_get = request.method == 'GET' and (
+        path == '/api/kids'
+        or path == '/api/dev-dashboard'
+        or path == '/api/auth/parent-kids'
+        or path.startswith('/api/kids/')
+        or path.startswith('/api/tasks')
+        or path.startswith('/api/stats')
+        or path.startswith('/api/activity')
+        or path.startswith('/api/leaderboard')
+        or path.startswith('/api/transactions')
+        or path.startswith('/api/savings-goals')
+    )
+    if mutating or sensitive_get:
+        if not actor:
+            return _unauthorized()
+        if actor.get('must_change_password') and mutating:
+            return _forbidden()
+
+    if not actor:
+        return None
+
+    # IDOR: /api/kids/<id>/... must match session kid, linked parent, or admin.
+    m = re.match(r'^/api/kids/(\d+)(.*)$', path)
+    if m:
+        kid_id = int(m.group(1))
+        rest = m.group(2) or ''
+        if actor['role'] == 'admin':
+            if actor.get('must_change_password'):
+                return _forbidden()
+        elif actor['role'] == 'kid':
+            if mutating and rest in KID_DENIED_WRITE_SUFFIXES:
+                return _forbidden()
+            if actor.get('kid_id') != kid_id:
+                return _forbidden()
+        elif actor['role'] == 'parent':
+            if not parent_owns_kid(actor.get('parent_id'), kid_id):
+                return _forbidden()
+            if mutating and rest == '/inventory/add':
+                return _forbidden()
+        else:
+            return _forbidden()
+
+    if path == '/api/kids' and request.method in ('POST', 'DELETE'):
+        if actor['role'] != 'admin':
+            return _forbidden()
+    if re.match(r'^/api/kids/\d+$', path) and request.method == 'DELETE':
+        if actor['role'] != 'admin':
+            return _forbidden()
+    return None
 
 
 def update_streak(kid_id, db):
@@ -771,9 +986,27 @@ def update_streak(kid_id, db):
 
 @app.route('/api/kids', methods=['GET'])
 def list_kids():
+    actor = current_actor()
+    if not actor:
+        return _unauthorized()
     db = get_db()
-    rows = db.execute("SELECT * FROM kids ORDER BY points DESC, id ASC").fetchall()
-    return jsonify(rows_to_list(rows))
+    if actor['role'] == 'kid':
+        rows = db.execute(
+            "SELECT * FROM kids WHERE id=? ORDER BY id ASC", (actor['kid_id'],)
+        ).fetchall()
+    elif actor['role'] == 'parent':
+        rows = db.execute(
+            """SELECT k.* FROM kids k
+               JOIN parent_kid pk ON k.id = pk.kid_id
+               WHERE pk.parent_id=?
+               ORDER BY k.points DESC, k.id ASC""",
+            (actor['parent_id'],),
+        ).fetchall()
+    elif actor['role'] == 'admin':
+        rows = db.execute("SELECT * FROM kids ORDER BY points DESC, id ASC").fetchall()
+    else:
+        return _forbidden()
+    return jsonify([public_kid(r) for r in rows])
 
 @app.route('/api/kids', methods=['POST'])
 def add_kid():
@@ -859,7 +1092,7 @@ def add_points(kid_id):
     if not kid:
         return jsonify({'error': 'Kid not found'}), 404
 
-    new_points = kid['points'] + amount
+    new_points = max(0, kid['points'] + amount)
     db.execute("UPDATE kids SET points = ? WHERE id = ?", (new_points, kid_id))
     db.execute(
         "INSERT INTO points_log (kid_id, amount, reason) VALUES (?, ?, ?)",
@@ -1163,11 +1396,26 @@ def award_task_drops(kid_id, task_points, db, source='task'):
 
 @app.route('/api/tasks', methods=['GET'])
 def list_tasks():
+    actor = current_actor()
+    if not actor:
+        return _unauthorized()
     db = get_db()
     category = request.args.get('category')
     kid_id = request.args.get('kid_id')
     completed = request.args.get('completed')
     search = request.args.get('search')
+
+    if actor['role'] == 'kid':
+        kid_id = str(actor['kid_id'])
+    elif actor['role'] == 'parent':
+        if kid_id:
+            if not parent_owns_kid(actor['parent_id'], int(kid_id)):
+                return _forbidden()
+        else:
+            # Parent dashboard: own kids + unassigned/global tasks
+            kid_id = None
+    elif actor['role'] != 'admin':
+        return _forbidden()
 
     if kid_id:
         # 小朋友視角: 自己嘅任務 + 全體任務, 全體任務用 per-kid 完成狀態
@@ -1184,6 +1432,16 @@ def list_tasks():
             WHERE (t.kid_id IS NULL OR t.kid_id = ?)
         """
         params = [kid_id_int, kid_id_int]
+    elif actor['role'] == 'parent':
+        query = """
+            SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar
+            FROM tasks t
+            LEFT JOIN kids k ON t.kid_id = k.id
+            WHERE t.kid_id IS NULL OR t.kid_id IN (
+                SELECT kid_id FROM parent_kid WHERE parent_id=?
+            )
+        """
+        params = [actor['parent_id']]
     else:
         # 管理視角: 全部任務 (全體任務 completed 保持 0, 實際完成狀態睇 task_completions)
         query = """
@@ -1211,6 +1469,11 @@ def list_tasks():
 
 @app.route('/api/tasks', methods=['POST'])
 def add_task():
+    actor = current_actor()
+    if not actor:
+        return _unauthorized()
+    if actor['role'] not in ('parent', 'admin'):
+        return _forbidden()
     data = request.get_json(silent=True) or {}
     title = (data.get('title') or data.get('name') or '').strip()
     if not title:
@@ -1218,6 +1481,9 @@ def add_task():
     icon = data.get('icon', '✅')
     points = int(data.get('points', 10))
     kid_id = data.get('kid_id')
+    if actor['role'] == 'parent' and kid_id is not None:
+        if not parent_owns_kid(actor['parent_id'], int(kid_id)):
+            return _forbidden()
     category = data.get('category', '')
     description = data.get('description', '')
     recurring = data.get('recurring', '')
@@ -1258,12 +1524,34 @@ def update_task(task_id):
 
 @app.route('/api/tasks/<int:task_id>/complete', methods=['POST'])
 def complete_task(task_id):
+    actor = current_actor()
+    if not actor:
+        return _unauthorized()
     data = request.get_json(silent=True) or {}
     db = get_db()
     task = db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
     if not task:
         return jsonify({'error': 'Task not found'}), 404
-    
+
+    body_kid = data.get('kid_id')
+    assigned = task['kid_id']
+
+    if actor['role'] == 'kid':
+        if assigned is not None and int(assigned) != actor['kid_id']:
+            return _forbidden()
+        if body_kid is not None and int(body_kid) != actor['kid_id']:
+            return _forbidden()
+        data = dict(data)
+        data['kid_id'] = actor['kid_id']
+    elif actor['role'] == 'parent':
+        target = assigned if assigned is not None else body_kid
+        if target is not None and not parent_owns_kid(actor['parent_id'], int(target)):
+            return _forbidden()
+        if assigned is not None and not parent_owns_kid(actor['parent_id'], int(assigned)):
+            return _forbidden()
+    elif actor['role'] != 'admin':
+        return _forbidden()
+
     now = datetime.utcnow().isoformat()
     
     # Debug log
@@ -1964,12 +2252,14 @@ def login():
         return jsonify({'error': 'Kid not found'}), 404
     auth = db.execute("SELECT * FROM kid_auth WHERE kid_id = ?", (kid_id,)).fetchone()
     if not auth:
-        db.execute("INSERT INTO kid_auth (kid_id, pin) VALUES (?, '0000')", (kid_id,))
-        db.commit()
-        return jsonify({'ok': True, 'kid': row_to_dict(kid), 'pin': '0000'})
-    if auth['pin'] != pin:
         return jsonify({'error': 'Wrong PIN'}), 403
-    return jsonify({'ok': True, 'kid': row_to_dict(kid)})
+    if not verify_password(pin, auth['pin']):
+        return jsonify({'error': 'Wrong PIN'}), 403
+    if _needs_rehash(auth['pin']):
+        db.execute("UPDATE kid_auth SET pin=? WHERE kid_id=?", (hash_password(pin), kid_id))
+        db.commit()
+    _set_session('kid', kid['id'], kid_id=kid['id'])
+    return jsonify({'ok': True, 'kid': public_kid(kid)})
 
 # -- Buildings (unchanged from v2) --
 
@@ -3468,6 +3758,11 @@ DEV_FEATURES = [
 @app.route('/api/dev-dashboard')
 def dev_dashboard():
     """Return comprehensive development dashboard data."""
+    actor = current_actor()
+    if not actor:
+        return _unauthorized()
+    if actor['role'] != 'admin' or actor.get('must_change_password'):
+        return _forbidden()
     db = get_db()
 
     # ── Kid stats ──
@@ -3591,6 +3886,10 @@ def auth_login():
     
     if not username or not password:
         return jsonify({'error': 'Username and password required'}), 400
+
+    # Never accept the historical default admin credentials.
+    if _is_default_admin_login(username, password):
+        return jsonify({'error': 'Invalid credentials'}), 403
     
     db = get_db()
     
@@ -3598,10 +3897,17 @@ def auth_login():
     kid = db.execute("SELECT * FROM kids WHERE username=?", (username,)).fetchone()
     if kid:
         auth = db.execute("SELECT * FROM kid_auth WHERE kid_id=?", (kid['id'],)).fetchone()
-        if auth and auth['pin'] == password:
+        if auth and verify_password(password, auth['pin']):
+            if _needs_rehash(auth['pin']):
+                db.execute(
+                    "UPDATE kid_auth SET pin=? WHERE kid_id=?",
+                    (hash_password(password), kid['id']),
+                )
+                db.commit()
+            _set_session('kid', kid['id'], kid_id=kid['id'])
             return jsonify({
                 'role': 'kid',
-                'user': row_to_dict(kid),
+                'user': public_kid(kid),
                 'redirect': '/kids/'
             })
         return jsonify({'error': '密碼錯誤'}), 403
@@ -3609,17 +3915,24 @@ def auth_login():
     # 2. Try parent login
     parent = db.execute("SELECT * FROM parents WHERE username=?", (username,)).fetchone()
     if parent:
-        if parent['password'] == hash_password(password):
+        if verify_password(password, parent['password']):
+            if _needs_rehash(parent['password']):
+                db.execute(
+                    "UPDATE parents SET password=? WHERE id=?",
+                    (hash_password(password), parent['id']),
+                )
+                db.commit()
             # Get linked kids
             linked = db.execute("""
                 SELECT k.* FROM kids k
                 JOIN parent_kid pk ON k.id = pk.kid_id
                 WHERE pk.parent_id = ?
             """, (parent['id'],)).fetchall()
+            _set_session('parent', parent['id'], parent_id=parent['id'])
             return jsonify({
                 'role': 'parent',
                 'user': {'id': parent['id'], 'username': parent['username'], 'name': parent['name']},
-                'kids': rows_to_list(linked),
+                'kids': [public_kid(r) for r in linked],
                 'redirect': '/kids/manage'
             })
         return jsonify({'error': '密碼錯誤'}), 403
@@ -3627,7 +3940,8 @@ def auth_login():
     # 3. Try admin login
     admin = db.execute("SELECT * FROM admins WHERE username=?", (username,)).fetchone()
     if admin:
-        if admin['password'] == password or admin['password'] == hash_password(password):
+        if verify_password(password, admin['password']):
+            _set_session('admin', admin['id'], admin_id=admin['id'], role='admin')
             return jsonify({
                 'role': 'admin',
                 'user': {'id': admin['id'], 'username': admin['username'], 'name': admin['name'], 'role': admin['role']},
@@ -3649,8 +3963,8 @@ def parent_register():
     
     if not VALID_USERNAME.match(username):
         return jsonify({'error': '用戶名必須為 2-30 個英文字母、數字或底線'}), 400
-    if len(password) < 4:
-        return jsonify({'error': '密碼至少 4 個字元'}), 400
+    if len(password) < 8:
+        return jsonify({'error': '密碼至少 8 個字元'}), 400
     
     db = get_db()
     
@@ -3673,10 +3987,22 @@ def parent_register():
 
 @app.route('/api/auth/link-kid', methods=['POST'])
 def link_kid():
-    """Link a parent to a kid (by kid_id)."""
+    """Link a parent to a kid (by kid_id). Session parent_id wins over body."""
+    actor = current_actor()
+    if not actor:
+        return _unauthorized()
+    if actor['role'] not in ('parent', 'admin'):
+        return _forbidden()
     data = request.get_json(silent=True) or {}
-    parent_id = data.get('parent_id')
+    body_parent_id = data.get('parent_id')
     kid_username = (data.get('kid_username') or '').strip().lower()
+
+    if actor['role'] == 'parent':
+        if body_parent_id is not None and int(body_parent_id) != actor['parent_id']:
+            return _forbidden()
+        parent_id = actor['parent_id']
+    else:
+        parent_id = body_parent_id
     
     if not parent_id or not kid_username:
         return jsonify({'error': 'parent_id and kid_username required'}), 400
@@ -3701,12 +4027,24 @@ def link_kid():
 @app.route('/api/auth/create-kid', methods=['POST'])
 def create_kid():
     """Parent creates a kid account (kids + kid_auth PIN + parent_kid auto-link)."""
+    actor = current_actor()
+    if not actor:
+        return _unauthorized()
+    if actor['role'] not in ('parent', 'admin'):
+        return _forbidden()
     data = request.get_json(silent=True) or {}
-    parent_id = data.get('parent_id')
+    body_parent_id = data.get('parent_id')
     name = (data.get('name') or '').strip()
     username = (data.get('username') or '').strip().lower()
     pin = (data.get('pin') or '').strip()
     avatar = data.get('avatar', '👦')
+
+    if actor['role'] == 'parent':
+        if body_parent_id is not None and int(body_parent_id) != actor['parent_id']:
+            return _forbidden()
+        parent_id = actor['parent_id']
+    else:
+        parent_id = body_parent_id
 
     if not parent_id or not name or not username or not pin:
         return jsonify({'error': 'parent_id、name、username、pin 都需要'}), 400
@@ -3734,22 +4072,29 @@ def create_kid():
         (name, username, avatar, '#3b82f6')
     )
     kid_id = cur.lastrowid
-    # kid_auth (PIN)
-    db.execute("INSERT INTO kid_auth (kid_id, pin) VALUES (?, ?)", (kid_id, pin))
+    db.execute("INSERT INTO kid_auth (kid_id, pin) VALUES (?, ?)", (kid_id, hash_password(pin)))
     # auto-link 到呢個家長
     db.execute("INSERT INTO parent_kid (parent_id, kid_id) VALUES (?, ?)", (parent_id, kid_id))
     db.commit()
 
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
-    return jsonify({'ok': True, 'kid': row_to_dict(kid)}), 201
+    return jsonify({'ok': True, 'kid': public_kid(kid)}), 201
 
 
 @app.route('/api/auth/parent-kids', methods=['GET'])
 def parent_kids():
-    """Get kids linked to a parent."""
-    parent_id = request.args.get('parent_id')
-    if not parent_id:
-        return jsonify({'error': 'parent_id required'}), 400
+    """Get kids linked to the session parent. Query parent_id is ignored."""
+    actor = current_actor()
+    if not actor:
+        return _unauthorized()
+    if actor['role'] == 'parent':
+        parent_id = actor['parent_id']
+    elif actor['role'] == 'admin':
+        parent_id = request.args.get('parent_id')
+        if not parent_id:
+            return jsonify({'error': 'parent_id required'}), 400
+    else:
+        return _forbidden()
     
     db = get_db()
     kids = db.execute("""
@@ -3757,7 +4102,7 @@ def parent_kids():
         JOIN parent_kid pk ON k.id = pk.kid_id
         WHERE pk.parent_id = ?
     """, (parent_id,)).fetchall()
-    return jsonify(rows_to_list(kids))
+    return jsonify([public_kid(r) for r in kids])
 
 
 # ── Dashboard proxy ──────────────────────────────────────────────
@@ -3821,10 +4166,10 @@ if __name__ == '__main__':
     migrate_db_v4()
     seed_building_defs()
     seed_skill_defs()
+    bootstrap_admin_if_configured()
 
     # Auto‑clean stale expeditions (status='running' but past end_time)
     _clean_stale_expeditions()
     
-    print(f'🎮 Kids Town 3.0 Backend (Role-based Auth) on http://0.0.0.0:9123')
-    print(f'   Default admin: admin / admin123')
+    print('🎮 Kids Town 3.0 Backend (Role-based Auth) on http://0.0.0.0:9123')
     app.run(host='0.0.0.0', port=9123, debug=False)
