@@ -15,6 +15,9 @@ Requirements:
   TC-FE-08  家長可以喺管理頁建立仔女
   TC-FE-09  小朋友只見到自己 + 全體任務
   TC-FE-JOURNEY-01  家長指派任務 → 小朋友完成 → HUD 金幣同完成回饋
+  TC-FE-CEREMONY-01  真實 complete（唔 mock）後 toast／HUD 顯示金幣 + XP 數字 + 材料（唔只金幣）
+  TC-FE-PLACE-SHOP-01  商店 建造 → startPlacement → 點空地／確認 → 地圖出現建築
+  TC-FE-PLACE-BUILD-01  建築 tab 建造 → startPlacement → 點空地／確認 → 地圖出現建築
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
   FE-P0-03  家長 A session 不能管理家長 B 嘅仔女
@@ -40,10 +43,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tests.factories import (  # noqa: E402
     TEST_KID_PIN,
     TEST_PARENT_PASSWORD,
+    building_def_id,
     connect_db,
     get_kid_points,
+    grant_inventory,
     init_empty_db,
     insert_kid,
+    set_kid_points,
 )
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -66,6 +72,19 @@ FE_XSS_KID_NAME = "<img src=x onerror=alert(1)>"
 FE_XSS_KID_USERNAME = "test_fe_xss"
 JOURNEY_TASK_TITLE = "JOURNEY-洗碗"
 JOURNEY_TASK_POINTS = 12
+CEREMONY_REAL_TASK_TITLE = "TC-FE-CEREMONY-洗碗"
+CEREMONY_REAL_TASK_POINTS = 10
+PLACE_SHOP_BUILDING = "圖書館"
+PLACE_TAB_BUILDING = "健身室"
+MAT_UI_TOKENS = {
+    "wood": ("🪵", "木材", "wood"),
+    "brick": ("🧱", "磚", "brick"),
+    "glass": ("🪟", "玻璃", "glass"),
+    "gear": ("⚙️", "齒輪", "gear"),
+    "gem": ("💎", "寶石", "gem"),
+    "fur": ("🦊", "毛皮", "fur"),
+    "dragon_scale": ("🐉", "龍鱗", "dragon_scale"),
+}
 
 
 def _playwright_unavailable_reason():
@@ -376,6 +395,158 @@ def _give_gems(test_db_path, qty=3):
     )
     db.commit()
     db.close()
+
+
+def _hud_gold(page):
+    return int(page.locator("#hudCo").inner_text().strip() or "0")
+
+
+def _hud_mat_count(page, mat):
+    loc = page.locator(f'#hdrRes .mat[data-mat="{mat}"] .n')
+    if loc.count() == 0:
+        return 0
+    return int(loc.first.inner_text().strip() or "0")
+
+
+def _open_drawer(page):
+    drawer = page.locator("#dr")
+    opened = drawer.evaluate("el => el.classList.contains('o')")
+    if not opened:
+        page.get_by_role("button", name="☰").click()
+        page.locator("#dr.o").wait_for(state="visible", timeout=8000)
+    return drawer
+
+
+def _goto_town_map(page):
+    """建築 tab 嘅 startPlacement 唔會自動 st('town')；E2E 跟商店一樣切去地圖。
+
+    Tiny harness: call st('town') instead of ☰ drawer, so the overlay cannot
+    swallow the next map click. Product still does not auto-switch — (B).
+    """
+    town = page.locator("#tab-town")
+    classes = town.get_attribute("class") or ""
+    if "active" not in classes.split():
+        page.evaluate("() => { if (typeof st === 'function') st('town'); }")
+    page.locator("#tab-town.active").wait_for(state="visible", timeout=8000)
+    page.locator("#townCanvasWrapper").wait_for(state="visible", timeout=8000)
+
+
+def _fund_and_clear_building(test_db_path, kid_id, building_name):
+    """Test-only: enough gold/mats to click 建造, and no pre-placed copy of that def."""
+    set_kid_points(test_db_path, kid_id, 5000)
+    grant_inventory(
+        test_db_path,
+        kid_id,
+        {"wood": 80, "brick": 50, "glass": 20, "gear": 30, "gem": 10},
+    )
+    def_id_value = building_def_id(test_db_path, building_name)
+    db = connect_db(test_db_path)
+    db.execute(
+        "DELETE FROM buildings WHERE kid_id=? AND def_id=?",
+        (kid_id, def_id_value),
+    )
+    db.commit()
+    db.close()
+    return def_id_value
+
+
+def _click_build_on_card(page, container, building_name):
+    card = page.locator(container).locator(
+        ".shop-item, .building-card", has_text=building_name
+    ).first
+    card.wait_for(state="visible", timeout=8000)
+    btn = card.get_by_role("button", name="建造")
+    assert btn.is_enabled(), (
+        f"{building_name} 建造 should be enabled after fixture gold/materials seed"
+    )
+    btn.click()
+
+
+def _building_origins(test_db_path, kid_id):
+    db = connect_db(test_db_path)
+    rows = db.execute(
+        "SELECT cell_x, cell_y FROM buildings WHERE kid_id=?", (kid_id,)
+    ).fetchall()
+    db.close()
+    return [{"x": r["cell_x"] or 0, "y": r["cell_y"] or 0} for r in rows]
+
+
+def _pick_free_valid_plot(page, origins):
+    """Choose a 2×2 that does not overlap existing building origins (DB).
+
+    `let townData` is not on window, so occupancy is passed from SQLite.
+    Frontend .valid-plot overlay uses plot_idx, not cell_x/cell_y.
+    """
+    picked = page.evaluate(
+        """(origins) => {
+          const used = new Set();
+          (origins || []).forEach(b => {
+            const x = b.x || 0, y = b.y || 0;
+            for (let dy = 0; dy < 2; dy++)
+              for (let dx = 0; dx < 2; dx++)
+                used.add((x + dx) + ',' + (y + dy));
+          });
+          const plots = [...document.querySelectorAll('.valid-plot')];
+          for (const el of plots) {
+            const px = parseInt(el.dataset.px, 10);
+            const py = parseInt(el.dataset.py, 10);
+            let ok = true;
+            for (let dy = 0; dy < 2 && ok; dy++)
+              for (let dx = 0; dx < 2 && ok; dx++)
+                if (used.has((px + dx) + ',' + (py + dy))) ok = false;
+            if (ok) return {px, py};
+          }
+          return null;
+        }""",
+        origins,
+    )
+    assert picked, f"no free .valid-plot; origins={origins}"
+    return picked
+
+
+def _finish_placement_on_empty_cell(page, building_name, test_db_path, kid_id):
+    """startPlacement 之後：見到放置 bar → 點綠色空地 → 確認 → 地圖出現建築。
+
+    Product uses `.valid-plot` (2×2 green overlay) rather than `.empty-cell`
+    (empty-cell clicks are ignored while placementDefId is set). Confirm is
+    required by the current UI (selectPlacePos + confirmPlaceBuilding).
+    """
+    _goto_town_map(page)
+    bar = page.locator("#placementBar")
+    bar.wait_for(state="visible", timeout=8000)
+    assert "active" in (bar.get_attribute("class") or ""), (
+        "startPlacement must show #placementBar.active"
+    )
+    page.locator(".valid-plot").first.wait_for(state="visible", timeout=8000)
+    before = page.locator(".town-building").count()
+    picked = _pick_free_valid_plot(page, _building_origins(test_db_path, kid_id))
+    # Product stacks overlapping 2×2 hit targets. Dispatch the DOM click so
+    # selectPlacePos runs. (B) still walks this on a real device.
+    page.locator(
+        f'.valid-plot[data-px="{picked["px"]}"][data-py="{picked["py"]}"]'
+    ).first.dispatch_event("click")
+    confirm = bar.get_by_role("button", name="確認建造")
+    confirm.wait_for(state="visible", timeout=8000)
+    with page.expect_response(
+        lambda r: r.request.method == "POST"
+        and "/buildings" in r.url
+        and "/move" not in r.url
+        and "/upgrade" not in r.url
+        and "/unstored" not in r.url
+    ) as resp_info:
+        confirm.click()
+    assert resp_info.value.status in (200, 201), resp_info.value.text()
+    page.locator(f'.town-building img[alt="{building_name}"]').first.wait_for(
+        state="attached", timeout=8000
+    )
+    after = page.locator(".town-building").count()
+    assert after >= before, (
+        f"map should gain a building after place; before={before} after={after}"
+    )
+    visible = _visible_text(page) + (
+        page.locator("#toast").inner_text() if page.locator("#toast").count() else ""
+    )
+    assert building_name in visible or "建築完成" in visible or after > before
 
 
 # ── TC-FE-01: 登入 ────────────────────────────────────────────────
@@ -975,7 +1146,8 @@ def test_complete_task_ceremony_shows_xp_materials_achievements(
     Playwright mock of POST /api/tasks/<id>/complete returning CER-01 shape.
     This is the automatable (A) UI assert when Chromium is available.
     Source-contract twin: tests/test_frontend_ceremony.py (weak).
-    (B) manual checklist still required — do not treat either as full UX sign-off.
+    Stronger real-API twin: TC-FE-CEREMONY-01 (no route mock).
+    (B) manual checklist still required — do not treat mock/grep as full UX sign-off.
     """
     kid_id = fe_ids["kid_id"]
     db = connect_db(test_db_path)
@@ -1035,4 +1207,155 @@ def test_complete_task_ceremony_shows_xp_materials_achievements(
     assert any(token in visible for token in ("wood", "木材", "🪵")), visible
     assert "🪙" in visible or "10" in visible
     assert any(token in visible for token in ("第一次任務", "🌟", "first_task", "成就")), visible
+
+
+# ── TC-FE-CEREMONY-01: real complete (no mock) gold + XP + materials ──
+
+@pytest.mark.case_id("TC-FE-CEREMONY-01")
+def test_real_task_complete_ceremony_shows_gold_xp_and_materials(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-CEREMONY-01 真實 POST /complete（唔 mock route）後，可見回饋唔只金幣。
+
+    Empty-DB synthetic kid. If product toast is gold-only, this case stays RED
+    for the KT builder — do not weaken asserts to fake green.
+    """
+    kid_id = fe_ids["kid_id"]
+    db = connect_db(test_db_path)
+    db.execute("DELETE FROM tasks WHERE title=?", (CEREMONY_REAL_TASK_TITLE,))
+    db.execute(
+        "INSERT INTO tasks (title, icon, points, kid_id, category, description, recurring, due_date) "
+        "VALUES (?, '📝', ?, ?, '', '', '', NULL)",
+        (CEREMONY_REAL_TASK_TITLE, CEREMONY_REAL_TASK_POINTS, kid_id),
+    )
+    db.commit()
+    db.close()
+
+    _login(page, base_url)
+    gold_before = _hud_gold(page)
+    mats_before = {mat: _hud_mat_count(page, mat) for mat in ("wood", "brick", "glass", "gear")}
+
+    page.locator("button.q", has_text="任務").first.click()
+    card = page.locator(".task-card", has_text=CEREMONY_REAL_TASK_TITLE).first
+    card.wait_for(state="visible", timeout=8000)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/complete" in r.url
+    ) as resp_info:
+        card.get_by_text("完成", exact=False).click()
+    assert resp_info.value.ok, resp_info.value.text()
+    payload = resp_info.value.json()
+    awarded = int(payload.get("points_awarded") or 0)
+    xp_total = int(payload.get("experience_total") or payload.get("experience_gained") or 0)
+    drops = payload.get("material_drops") or []
+    assert awarded >= CEREMONY_REAL_TASK_POINTS, payload
+    assert xp_total > 0, f"API must award XP; got {payload}"
+    assert drops, f"API must drop at least one material; got {payload}"
+
+    page.locator("#toast").wait_for(state="visible", timeout=8000)
+    toast = page.locator("#toast").inner_text() or ""
+    page.get_by_text("任務完成", exact=False).first.wait_for(state="visible", timeout=8000)
+    page.wait_for_function(
+        "(before) => parseInt((document.getElementById('hudCo') || {}).textContent, 10) > before",
+        arg=gold_before,
+        timeout=8000,
+    )
+    gold_after = _hud_gold(page)
+    visible = _visible_text(page) + toast
+    blob = toast + visible
+
+    gold_ui = (
+        "🪙" in blob
+        or str(awarded) in toast
+        or gold_after >= gold_before + awarded
+    )
+    xp_ui = (
+        f"XP+{xp_total}" in blob
+        or f"XP＋{xp_total}" in blob
+        or f"經驗+{xp_total}" in blob
+        or f"經驗＋{xp_total}" in blob
+        or ("XP" in toast and str(xp_total) in toast)
+        or ("經驗" in toast and str(xp_total) in toast)
+        or (f"⭐{xp_total}" in toast)
+        or (f"⭐XP+{xp_total}" in blob)
+    )
+    mat_tokens = []
+    for drop in drops:
+        mat_tokens.extend(MAT_UI_TOKENS.get(drop, (drop,)))
+    mat_in_toast = any(token in blob for token in mat_tokens)
+    mat_hud_bumped = False
+    for drop in drops:
+        if drop in mats_before and _hud_mat_count(page, drop) > mats_before[drop]:
+            mat_hud_bumped = True
+            break
+    mat_ui = mat_in_toast or mat_hud_bumped
+
+    assert gold_ui, f"ceremony must show gold; toast={toast!r} hud {gold_before}->{gold_after}"
+    assert xp_ui, (
+        "ceremony UI must show an XP number (toast/panel), not gold-only. "
+        f"experience_total={xp_total}; toast={toast!r}. "
+        "Keep this case RED until the product surfaces XP — do not weaken."
+    )
+    assert mat_ui, (
+        "ceremony UI must show a material cue (🪵/wood/木材 or HUD count bump), "
+        f"not gold-only. drops={drops}; toast={toast!r}; "
+        f"hud_before={mats_before}."
+    )
+
+
+# ── TC-FE-PLACE-SHOP-01 / TC-FE-PLACE-BUILD-01: build → place E2E ──
+
+@pytest.mark.case_id("TC-FE-PLACE-SHOP-01")
+def test_shop_build_enters_placement_and_building_appears_on_map(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-PLACE-SHOP-01 商店「建造」→ startPlacement → 點空地 → 地圖出現建築。"""
+    kid_id = fe_ids["kid_id"]
+    _fund_and_clear_building(test_db_path, kid_id, PLACE_SHOP_BUILDING)
+    _login(page, base_url)
+    page.locator("button.b", has_text="背包").first.click()
+    page.locator("#tab-shop.active").wait_for(state="visible", timeout=8000)
+    page.locator("#shopGrid").get_by_text(PLACE_SHOP_BUILDING, exact=False).first.wait_for(
+        state="visible", timeout=8000
+    )
+    _click_build_on_card(page, "#shopGrid", PLACE_SHOP_BUILDING)
+    _finish_placement_on_empty_cell(page, PLACE_SHOP_BUILDING, test_db_path, kid_id)
+    db = connect_db(test_db_path)
+    row = db.execute(
+        "SELECT b.id FROM buildings b JOIN building_defs d ON d.id=b.def_id "
+        "WHERE b.kid_id=? AND d.name=?",
+        (kid_id, PLACE_SHOP_BUILDING),
+    ).fetchone()
+    db.close()
+    assert row is not None, f"{PLACE_SHOP_BUILDING} should be persisted after shop place"
+
+
+@pytest.mark.case_id("TC-FE-PLACE-BUILD-01")
+def test_buildings_tab_build_enters_placement_and_building_appears_on_map(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-PLACE-BUILD-01 建築 tab「建造」→ startPlacement → 點空地 → 地圖出現建築。
+
+    Stronger E2E twin of weak source P1-TC-PLC-FE-01. Product 建築 tab does not
+    call st('town'); after 建造 the harness switches to the town tab (same as
+    shopBuild). (B) still checks that kids can find the map on a real device.
+    """
+    kid_id = fe_ids["kid_id"]
+    _fund_and_clear_building(test_db_path, kid_id, PLACE_TAB_BUILDING)
+    _login(page, base_url)
+    drawer = _open_drawer(page)
+    drawer.get_by_text("建築管理", exact=False).click()
+    page.locator("#tab-buildings.active").wait_for(state="visible", timeout=8000)
+    page.locator("#availableBuildingsList").get_by_text(
+        PLACE_TAB_BUILDING, exact=False
+    ).first.wait_for(state="visible", timeout=8000)
+    _click_build_on_card(page, "#availableBuildingsList", PLACE_TAB_BUILDING)
+    _finish_placement_on_empty_cell(page, PLACE_TAB_BUILDING, test_db_path, kid_id)
+    db = connect_db(test_db_path)
+    row = db.execute(
+        "SELECT b.id FROM buildings b JOIN building_defs d ON d.id=b.def_id "
+        "WHERE b.kid_id=? AND d.name=?",
+        (kid_id, PLACE_TAB_BUILDING),
+    ).fetchone()
+    db.close()
+    assert row is not None, f"{PLACE_TAB_BUILDING} should be persisted after 建築 tab place"
 

@@ -6,7 +6,8 @@
 > **Skip rule**: skip **only** if Playwright / Chromium cannot launch; reason must tell the operator to run `python -m playwright install chromium`.  
 > **Install**: see [`README.md`](../../README.md) and [`docs/TDD_PROCESS.md`](../TDD_PROCESS.md) § frontend.
 
-Status map after a run: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).
+Status map after a run: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).  
+Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01`、`TC-FE-PLACE-BUILD-01`；(B) [`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md).
 
 共用前置（除另註）：
 
@@ -214,6 +215,52 @@ Status map after a run: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).
 | **前置** | 家長 A + 已 link 嘅 `test_fe_kid`；合成 PIN `1357`、家長密碼 `TestParent!pass1` |
 | **步驟** | 1. 家長登入管理頁 2. 填任務名 `JOURNEY-洗碗`、分數 12、指定 TestKid → ＋ 新增 3. 小朋友登入 → 任務 tab 見到該任務 4. 撳「✅ 完成」 |
 | **預期** | 家長列表見到新任務；小朋友見到同一標題；toast／文案有「任務完成」；`#hudCo` 金幣上升（至少 +12）；DB `completed=1` |
+| **備註** | 呢 case 只保證金幣／「任務完成」。**金幣 + XP 數字 + 材料** 由 `TC-FE-CEREMONY-01` 覆蓋。 |
+
+---
+
+## TC-FE-CEREMONY-01 — 真實完成任務：金幣 + XP + 材料（唔 mock）
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-CEREMONY-01 |
+| **優先級** | P0（體驗 C） |
+| **建議模組** | `tests/test_frontend.py` |
+| **對應** | P1-TC-CER-01（API）、P1-TC-CER-FE-01（mock／source） |
+| **前置** | 空庫合成 `test_fe_kid`；插入專屬任務 `TC-FE-CEREMONY-洗碗` points=10。**唔** mock `/api/tasks/<id>/complete`。 |
+| **步驟** | 1. 小朋友 PIN 登入 2. 任務 tab 撳「✅ 完成」 3. 截真實 complete JSON（`points_awarded`／`experience_total`／`material_drops`） 4. 讀 `#toast` 同 HUD（`#hudCo`、`#hdrRes .mat`） |
+| **預期** | API 有 XP 同至少一項材料。可見回饋必須同時有：**金幣**（toast 🪙 或 HUD 上升）、**XP 數字**（toast／面板含 `XP+N`／經驗，唔可以淨係 XP 條）、**材料提示**（🪵／木材／wood／🧱… 或 HUD 對應格數量 +1）。**禁止**金幣-only 當綠。若產品只 toast 金幣，本 case **故意留紅**，唔好放寬斷言。 |
+| **(A)/(B)** | Playwright 真實旅程 = 可自動化 (A)。真機細屏 toast `nowrap` 可能裁字 → **(B) 必須**（見 [`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md)）。唔好當 grep／mock 做齊 (A)。 |
+
+---
+
+## TC-FE-PLACE-SHOP-01 — 商店建造 → 放置 → 地圖出現建築
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-PLACE-SHOP-01 |
+| **優先級** | P0（體驗 C） |
+| **建議模組** | `tests/test_frontend.py` |
+| **對應** | P1-TC-PLC-01（API）、P1-TC-PLC-FE-01（建築 tab source） |
+| **前置** | 合成 kid；fixture 發夠金幣／材料；清走已有「圖書館」（保留探險公會） |
+| **步驟** | 1. 登入 2. 底欄「背包」→ 🏪 建築商店 3. 圖書館「🏗️ 建造」（`shopBuild` → `startPlacement`） 4. 見到 `#placementBar.active` 5. 撳綠色 `.valid-plot` 空地 6. 「✅ 確認建造」 |
+| **預期** | 進入放置態；確認後 `.town-building img[alt=圖書館]` 出現；DB 有該建築。產品空地係 2×2 `.valid-plot`（`.empty-cell` 喺放置態會被忽略）。 |
+| **(A)/(B)** | Linux Chromium E2E = (A)。真機手指點格／確認仍要 (B)。 |
+
+---
+
+## TC-FE-PLACE-BUILD-01 — 建築 tab 建造 → 放置 → 地圖出現建築
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-PLACE-BUILD-01 |
+| **優先級** | P0（體驗 C） |
+| **建議模組** | `tests/test_frontend.py` |
+| **對應** | P1-TC-PLC-FE-01（弱 source twin；本 case 係較強 E2E） |
+| **前置** | 合成 kid；金幣／材料夠；清走已有「健身室」 |
+| **步驟** | 1. 登入 2. ☰ → 建築管理 3. 可建造列表「健身室」撳「🏗️ 建造」（onclick `startPlacement`） 4. 若未喺地圖：☰ → 小鎮地圖 5. `#placementBar.active` → `.valid-plot` → 「✅ 確認建造」 |
+| **預期** | 同商店一樣進入放置態；地圖出現健身室；DB persist。**產品觀察（非本 PR 修復）：** 建築 tab `startPlacement` **唔**自動 `st('town')`（商店 `shopBuild` 會）。E2E 會跟住開小鎮地圖——呢步亦要 (B) 喺真機確認小朋友知去邊。 |
+| **(A)/(B)** | 取代「只 grep `startPlacement`」當齊 (A)。source 檔 `tests/test_frontend_placement.py` 仍保留作弱契約。 |
 
 ---
 
@@ -252,3 +299,5 @@ pip install -r requirements.txt
 python -m playwright install chromium
 python -m pytest tests/test_frontend.py -v
 ```
+
+雙重驗證 (B) 人手步驟：[`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md)。跑完結果寫 [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md)。

@@ -15,6 +15,8 @@
 
 Intentional leftover red: **P1-TC-CER-03** only (Phase 2 `require_approval` / `GAMEPLAY_REDESIGN` §6.7). Not skipped. Existing green suite (`not phase1`, including Phase 0 + frontend E2E) stayed 102 green.
 
+Experience C re-verify (branch `cursor/harden-ceremony-place-e2e-17ad`, 2026-09-19): `pytest -m phase1` still **39 passed / 1 failed (CER-03)**; `not phase1` **105 passed** (was 102; +3 TC-FE-CEREMONY/PLACE cases). Collection 145. Details: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).
+
 Synthetic fixtures only: `test_parent_*` / `TestParent!pass1`, kid PIN `1357`. Production `kids_town.db` is never copied.
 
 ## Mapping
@@ -72,8 +74,10 @@ Synthetic fixtures only: `test_parent_*` / `TestParent!pass1`, kid PIN `1357`. P
 
 | Case | Automatable (A) | Honest limit |
 |------|-----------------|--------------|
-| P1-TC-CER-FE-01 | Playwright mock **PASS** (Linux Chromium) + weak `completeTask` source **PASS** | **(B) still required** — do not treat grep/source as full ceremony UX |
-| P1-TC-PLC-FE-01 | Weak source **PASS** (`startPlacement` on 建築 tab) | **(B) still required** — click 商店 and 建築 建造 once |
+| P1-TC-CER-FE-01 | Playwright mock **PASS** + weak `completeTask` source **PASS** | **(B) still required** — do not treat grep/source as full ceremony UX |
+| TC-FE-CEREMONY-01 | Real complete Playwright **PASS** (gold + XP number + materials, no mock) | **(B) still required** — small-screen toast `nowrap` clipping; library +N copy |
+| P1-TC-PLC-FE-01 | Weak source **PASS** (`startPlacement` on 建築 tab) | **(B) still required** |
+| TC-FE-PLACE-SHOP-01 / TC-FE-PLACE-BUILD-01 | Playwright full path **PASS** (shop and 建築 tab → place → building on map) | **(B) still required** — overlapping green cells; 建築 tab does not auto-switch to map |
 
 ## Product code (this PR)
 

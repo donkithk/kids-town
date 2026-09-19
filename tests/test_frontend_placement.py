@@ -1,8 +1,9 @@
 """P1-TC-PLC-FE-01 — 建築分頁建造 must enter startPlacement (same as shop).
 
 WEAK (A): string/source assert on index.html. Catalog allows this for
-frontend-only placement. (B) manual — walk 商店 and 建築 tab once — required.
-Grep/source alone is not full UX (A).
+frontend-only placement. Stronger E2E: TC-FE-PLACE-SHOP-01 / TC-FE-PLACE-BUILD-01
+in tests/test_frontend.py. (B) manual — walk 商店 and 建築 tab once — still
+required on a real device. Grep/source alone is not full UX (A).
 """
 from __future__ import annotations
 
@@ -21,7 +22,8 @@ def test_buildings_tab_build_button_calls_start_placement():
     """P1-TC-PLC-FE-01 建築 tab 撳建造後進入同商店一樣嘅放置態。
 
     WEAK (A): the available-buildings card template must call startPlacement,
-    not only showToast('點擊下方空地…'). (B) manual still required.
+    not only showToast('點擊下方空地…'). Stronger (A): TC-FE-PLACE-BUILD-01.
+    (B) manual still required.
     """
     html = INDEX.read_text(encoding="utf-8")
     start = html.find("availContainer.innerHTML")
