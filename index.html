@@ -1560,11 +1560,11 @@ const MAT_NAMES = {
 // ═══ REGIONS ═══
 // Region definitions
 const REGIONS = [
-  {id:1,name:'🌲 靜謐森林',desc:'充滿神秘生物嘅古老森林',gold:30,time:2,required_building:null},
-  {id:2,name:'⛰️ 雪山山脈',desc:'終年積雪嘅險峻山嶺',gold:60,time:4,required_region:1},
-  {id:3,name:'🏜️ 沙漠遺跡',desc:'古代文明嘅神秘遺址',gold:100,time:6,required_region:2},
-  {id:4,name:'🌋 火山谷',desc:'熔岩流經嘅危險峽谷',gold:150,time:8,required_region:3},
-  {id:5,name:'🌌 星輝高原',desc:'連接到天界嘅神秘高地',gold:250,time:12,required_region:4},
+  {id:1,name:'🌲 靜謐森林',desc:'充滿神秘生物嘅古老森林',fee:10,timeMinutes:5,required_building:null},
+  {id:2,name:'⛰️ 雪山山脈',desc:'終年積雪嘅險峻山嶺',fee:20,timeMinutes:5,required_region:1},
+  {id:3,name:'🏜️ 沙漠遺跡',desc:'古代文明嘅神秘遺址',fee:30,timeMinutes:5,required_region:2},
+  {id:4,name:'🌋 火山谷',desc:'熔岩流經嘅危險峽谷',fee:0,timeMinutes:5,required_region:3,locked:true},
+  {id:5,name:'🌌 星輝高原',desc:'連接到天界嘅神秘高地',fee:0,timeMinutes:5,required_region:4,locked:true},
 ];
 
 // Expedition type definitions
@@ -1856,12 +1856,21 @@ function updateHeader() {
   if (coEl) coEl.textContent = kid.points || 0;
   const stEl = document.getElementById('hudSt');
   if (stEl) stEl.textContent = kid.stars || 0;
-  // EXP bar
+  // EXP bar — in-level / for-next (EXP_PER_LEVEL=25), never total/(level*100)
   const xfEl = document.getElementById('hudXp');
   if (xfEl) {
-    const exp = kid.experience || 0;
-    const needed = (kid.level||1) * 100;
-    const pct = Math.min(100, Math.round(exp / needed * 100));
+    const inLevel = kid.experience_in_level;
+    const forNext = kid.experience_for_next;
+    let pct;
+    if (typeof kid.xp_bar_percent === 'number') {
+      pct = kid.xp_bar_percent;
+    } else if (forNext === 0) {
+      pct = 100;
+    } else if (typeof inLevel === 'number' && typeof forNext === 'number') {
+      pct = Math.min(100, Math.round((inLevel / forNext) * 100));
+    } else {
+      pct = 0;
+    }
     xfEl.style.width = pct + '%';
   }
   // Materials inventory
@@ -2872,7 +2881,7 @@ async function renderBuildingsTab() {
           }).join('')}</div>
         </div>
         <div class="b-actions">
-          <button class="btn-upgrade" onclick="st('town');showToast('點擊下方空地放置 ${d.icon||'🏠'}')"
+          <button class="btn-upgrade" onclick="startPlacement(${d.id})"
             ${canBuild?'':'disabled'}>
             🏗️ 建造
           </button>
@@ -3051,17 +3060,25 @@ async function completeTask(taskId) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({kid_id: currentKidId})
     });
-    if (data.points_awarded) {
-      Audio.taskComplete();
-      // Celebration for larger rewards
-      if (data.points_awarded >= 15) {
-        setTimeout(() => Audio.celebration(0.2), 300);
-      }
-      showToast(`🎉 任務完成！獲得 🪙${data.points_awarded}`);
-    } else {
-      Audio.taskComplete();
-      showToast('✅ 任務完成！');
+    Audio.taskComplete();
+    if ((data.points_awarded || 0) >= 15) {
+      setTimeout(() => Audio.celebration(0.2), 300);
     }
+    const gold = data.points_awarded || 0;
+    const xpTotal = data.experience_total ?? data.experience_gained ?? 0;
+    const xpBonus = data.experience_bonus || 0;
+    const drops = data.material_drops || [];
+    const achs = data.achievements || [];
+    const matLabels = {wood:'🪵木材', brick:'🧱磚頭', glass:'🪟玻璃', gear:'⚙️齒輪', gem:'💎寶石', fur:'🦊毛皮', dragon_scale:'🐉龍鱗'};
+    const matText = drops.map(m => matLabels[m] || m).join(' ');
+    const achText = achs.map(a => `${a.icon || '🌟'}${a.title || a.badge || '成就'}`).join(' ');
+    let msg = `🎉 任務完成！獲得 🪙${gold}`;
+    if (xpTotal) msg += ` ⭐XP+${xpTotal}`;
+    if (xpBonus) msg += ` (圖書館 +${xpBonus})`;
+    if (matText) msg += ` ${matText}`;
+    if (achText) msg += ` ${achText}`;
+    if (data.pending_approval) msg = '✅ 做完喇！等爸爸媽媽確認就入帳';
+    showToast(msg);
     await loadTown();
   } catch(e) {
     Audio.errorBuzzer();
@@ -3752,20 +3769,22 @@ function renderExploreMode(exp) {
 
   return `<div class="section-title">🗺️ 探險區域</div>
     ${REGIONS.map(r => {
-      const unlocked = !r.required_region || explored.includes(r.required_region) || r.id === 1;
+      const contentLocked = !!r.locked || r.id >= 4;
+      const unlocked = !contentLocked && (!r.required_region || explored.includes(r.required_region) || r.id === 1);
       const exploredFlag = explored.includes(r.id);
+      const fee = r.fee || 0;
       return `<div class="exp-region-card ${!unlocked?'locked':''}">
         <div class="r-icon">${r.name.split(' ')[0]}</div>
         <div class="r-info">
           <div class="r-name">${r.name}</div>
-          <div class="r-desc">${r.desc} · ⏱️ ${r.time}小時</div>
-          <div class="r-reward">🪙 ${r.gold} · 隨機材料</div>
+          <div class="r-desc">${r.desc}${contentLocked ? '' : ' · ⏱️ ' + (r.timeMinutes || 5) + '分鐘'}</div>
+          <div class="r-reward">${contentLocked ? '尚未開放' : ('費用 🪙' + fee + ' · 材料：木頭／磚／玻璃／齒輪')}</div>
         </div>
-        <div class="r-status ${exploredFlag?'explored':(unlocked?'unlocked':'locked')}">
-          ${exploredFlag?'✅ 已完成':(unlocked?'🔓 可探險':'🔒 未解鎖')}
+        <div class="r-status ${contentLocked?'locked':(exploredFlag?'explored':(unlocked?'unlocked':'locked'))}">
+          ${contentLocked?'🔒 尚未開放':(exploredFlag?'✅ 去過':(unlocked?'🔓 可探險':'🔒 未解鎖'))}
         </div>
-        ${unlocked && !exploredFlag && !isExploring
-          ? `<button class="exp-btn go" onclick="startExpedition(${r.id},${r.time},'explore')" style="flex:none;padding:6px 14px;font-size:11px;">出發</button>`
+        ${unlocked && !isExploring
+          ? `<button class="exp-btn go" onclick="startExpedition(${r.id},0,'explore')" style="flex:none;padding:6px 14px;font-size:11px;">出發</button>`
           : ''}
       </div>`;
     }).join('')}`;
@@ -3785,20 +3804,22 @@ function renderBattleLobby() {
   return `<div class="section-title">⚔️ 戰鬥挑戰</div>
     <p style="font-size:12px;color:#64748b;margin-bottom:10px;">擊敗每個區域嘅怪物，贏取稀有材料！</p>
     ${REGIONS.map(r => {
-      const unlocked = !r.required_region || explored.includes(r.required_region) || r.id === 1;
+      const contentLocked = !!r.locked || r.id >= 4;
+      const unlocked = !contentLocked && (!r.required_region || explored.includes(r.required_region) || r.id === 1);
       const exploredFlag = explored.includes(r.id);
       return `<div class="exp-region-card ${!unlocked?'locked':''}">
         <div class="r-icon">${r.name.split(' ')[0]}</div>
         <div class="r-info">
           <div class="r-name">${r.name}</div>
           <div class="r-desc">${r.desc}</div>
-          ${!exploredFlag ? '<div class="r-reward">⚠️ 未探索</div>'
-            : `<div class="r-reward">🐺 區域怪物 · 🪙 金幣獎勵</div>`}
+          ${contentLocked ? '<div class="r-reward">尚未開放</div>'
+            : (!exploredFlag ? '<div class="r-reward">⚠️ 未探索</div>'
+            : `<div class="r-reward">🐺 區域怪物 · 🪙 金幣獎勵</div>`)}
         </div>
-        <div class="r-status ${unlocked?'unlocked':'locked'}">
-          ${unlocked ? '🔓 可挑戰' : '🔒 未解鎖'}
+        <div class="r-status ${contentLocked||!unlocked?'locked':'unlocked'}">
+          ${contentLocked ? '🔒 尚未開放' : (unlocked ? '🔓 可挑戰' : '🔒 未解鎖')}
         </div>
-        ${unlocked && !(townData.expedition && (townData.expedition.status === 'running' || townData.expedition.status === 'fighting'))
+        ${!contentLocked && unlocked && !(townData.expedition && (townData.expedition.status === 'running' || townData.expedition.status === 'fighting'))
           ? `<button class="exp-btn go" onclick="startBattle(${r.id})" style="flex:none;padding:6px 14px;font-size:11px;">⚔️ 戰鬥</button>
              <button class="exp-btn go" onclick="summonBoss(${r.id})" style="flex:none;padding:6px 14px;font-size:11px;background:#7c3aed;color:#fff;">👑 Boss 💎1</button>`
           : ''}
@@ -3819,7 +3840,19 @@ async function startBattle(regionId) {
       body: JSON.stringify({region_id: regionId})
     });
     const data = await r.json();
-    if (data.error) { showToast('⚠️ '+data.error, 'error'); return; }
+    if (data.error) {
+      if (data.error === 'region_locked') {
+        const names = {4:'🌋 火山谷尚未開放', 5:'🌌 星輝高原尚未開放'};
+        showToast(names[data.region_id] || '⚠️ 呢個區域尚未開放', 'error');
+        return;
+      }
+      if (data.error === 'guild_required') {
+        showToast('🗺️ 要先起探險公會先可以戰鬥', 'error');
+        return;
+      }
+      showToast('⚠️ '+data.error, 'error');
+      return;
+    }
     townData.expedition = data;
     window._battleTargetMode = null;
     window._pendingSkill = null;
@@ -4410,15 +4443,28 @@ function renderExpeditionProgress(exp) {
 async function startExpedition(regionId, hours, type) {
   try {
     Audio.expBoost();
+    const kind = type || 'explore';
+    const body = {region_id: regionId, expedition_type: kind};
+    if (kind === 'explore') {
+      body.duration_hours = 0;
+      body.duration_minutes = 5;
+    } else {
+      body.duration_hours = hours || 0;
+      body.duration_minutes = 0;
+    }
     const data = await fetchAPI(`/api/kids/${currentKidId}/expedition/start`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({region_id: regionId, duration_hours: hours, expedition_type: type || 'explore'})
+      body:JSON.stringify(body)
     });
-    showToast('🗺️ 探險隊出發！');
+    showToast(kind === 'explore' ? '🗺️ 短征出發！費用已扣' : '🗺️ 探險隊出發！');
     await loadTown();
   } catch(e) {
-    showToast('❌ '+e.message, 'error');
+    const msg = e.message || '';
+    if (msg === 'region_locked') showToast('🌋 呢個區域尚未開放', 'error');
+    else if (msg === 'guild_required') showToast('🗺️ 要先起探險公會先可以出發', 'error');
+    else if (msg === 'insufficient_gold') showToast('🪙 金幣唔夠付探險費', 'error');
+    else showToast('❌ '+msg, 'error');
   }
 }
 

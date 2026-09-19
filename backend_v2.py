@@ -4,7 +4,7 @@ Kids Town Backend — SQLite + Flask API
 Port 9123
 v3.0 — Role-based auth: kids, parents, admins
 """
-import os, sqlite3, json, random, re, hashlib
+import os, sqlite3, json, random, re, hashlib, math
 from datetime import datetime, timedelta, timezone, date
 import bcrypt
 from flask import Flask, request, jsonify, g, make_response, Response, session
@@ -187,26 +187,15 @@ def migrate_db():
         )
     """)
     
-    # Migrate old building materials (iron→gear, gem→glass, star_shard→glass)
-    defs_migrated = False
-    bdefs = db.execute("SELECT id, materials FROM building_defs").fetchall()
-    OLD_TO_NEW = {'iron':'gear', 'gem':'glass', 'star_shard':'glass'}
-    for bd in bdefs:
-        try:
-            mats = json.loads(bd['materials'])
-            changed = False
-            for old_key, new_key in OLD_TO_NEW.items():
-                if old_key in mats:
-                    mats[new_key] = mats.get(new_key, 0) + mats[old_key]
-                    del mats[old_key]
-                    changed = True
-            if changed:
-                db.execute("UPDATE building_defs SET materials=? WHERE id=?", (json.dumps(mats), bd['id']))
-                defs_migrated = True
-        except (json.JSONDecodeError, TypeError):
-            pass
-    if defs_migrated:
-        db.commit()
+    _canonicalize_building_def_materials(db)
+    _migrate_inventory_item_types(db)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS farm_claims (
+            kid_id     INTEGER PRIMARY KEY,
+            claim_date TEXT    NOT NULL,
+            FOREIGN KEY (kid_id) REFERENCES kids(id) ON DELETE CASCADE
+        )
+    """)
     
     # Character stats (experience, level, abilities)
     if 'experience' not in kid_cols:
@@ -513,19 +502,20 @@ def seed_building_defs():
         ("📚", "圖書館", 100, '{"wood":5}', "任務 +2⭐", "task_bonus", "[2,4,6,10,15]", 5, None),
         ("🏋️", "健身室", 200, '{"wood":10,"brick":5}', "連續保護", "streak_protect", "[1,1,1,1,1]", 5, None),
         ("🌾", "農場", 300, '{"wood":15,"brick":10}', "每日 +5🪙", "daily_gold", "[5,10,15,25,40]", 5, None),
-        ("🏪", "商店", 500, '{"wood":20,"brick":15,"iron":5}', "獎勵 -10%", "discount", "[0.9,0.85,0.8,0.75,0.7]", 5, None),
+        ("🏪", "商店", 500, '{"wood":20,"brick":15,"gear":5}', "獎勵 -10%", "discount", "[0.9,0.85,0.8,0.75,0.7]", 5, None),
         ("🏥", "醫院", 400, '{"wood":15,"brick":20}', "探險回復 x2", "expedition_recovery", "[2,3,4,5,6]", 5, None),
-        ("🗺️", "探險公會", 600, '{"wood":25,"brick":20,"iron":10}', "解鎖探險", "unlock_explore", "[1,1,1,1,1]", 5, None),
-        ("🔨", "工坊", 350, '{"wood":20,"iron":5}', "建築速度 x2", "build_speed", "[2,3,4,5,6]", 5, None),
-        ("🗼", "燈塔", 800, '{"wood":30,"brick":25,"iron":15,"gem":3}', "探險範圍 +1", "explore_range", "[1,2,2,3,3]", 5, "r3"),
-        ("⚔️", "競技場", 1000, '{"wood":40,"brick":30,"iron":20,"gem":5}', "探險金幣 x2", "expedition_gold", "[2,3,4,5,6]", 5, "r4"),
-        ("🔭", "天文台", 1500, '{"wood":50,"brick":40,"iron":25,"gem":10,"star_shard":3}', "新區域發現率", "discovery_rate", "[1.5,2,2.5,3,4]", 5, "r5"),
+        ("🗺️", "探險公會", 600, '{"wood":25,"brick":20,"gear":10}', "解鎖探險", "unlock_explore", "[1,1,1,1,1]", 5, None),
+        ("🔨", "工坊", 350, '{"wood":20,"gear":5}', "建築速度 x2", "build_speed", "[2,3,4,5,6]", 5, None),
+        ("🗼", "燈塔", 800, '{"wood":30,"brick":25,"gear":15,"gem":3}', "探險範圍 +1", "explore_range", "[1,2,2,3,3]", 5, "r3"),
+        ("⚔️", "競技場", 1000, '{"wood":40,"brick":30,"gear":20,"gem":5}', "探險金幣 x2", "expedition_gold", "[2,3,4,5,6]", 5, "r4"),
+        ("🔭", "天文台", 1500, '{"wood":50,"brick":40,"gear":25,"gem":10,"glass":3}', "新區域發現率", "discovery_rate", "[1.5,2,2.5,3,4]", 5, "r5"),
     ]
     for d in defs:
         db.execute(
             "INSERT INTO building_defs (icon, name, cost_gold, materials, effect, buff_type, buff_vals, max_level, unlock_region) VALUES (?,?,?,?,?,?,?,?,?)",
             (d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8])
         )
+    _canonicalize_building_def_materials(db)
     db.commit()
     db.close()
 
@@ -1155,6 +1145,267 @@ def exp_reward_for_tier(tier):
     """EXP reward per won battle = 15 + tier*10."""
     return 15 + max(1, tier) * 10
 
+
+# GAMEPLAY_REDESIGN §6.2 — write-side aliases. mystery_box is Phase 1 stop-issue.
+ITEM_TYPE_ALIASES = {
+    'iron': 'gear',
+    'star_shard': 'glass',
+    'star_fragment': 'gem',
+    'star_stone': 'gem',
+}
+STOPPED_ITEM_TYPES = frozenset({'mystery_box'})
+PHASE1_LOCKED_REGIONS = frozenset({4, 5})
+EXPLORE_FEE_BY_REGION = {1: 10, 2: 20, 3: 30}
+EXPLORE_GOLD_REWARD_RANGE = {1: (6, 10), 2: (12, 18), 3: (18, 28)}
+HK_TZ = timezone(timedelta(hours=8))
+DEFAULT_GUILD_MATERIALS = '{"wood":25,"brick":20,"gear":10}'
+
+
+def canonicalize_item_type(item_type):
+    """Map legacy inventory ids to canonical ones. mystery_box → None (do not issue)."""
+    if not item_type:
+        return None
+    if item_type in STOPPED_ITEM_TYPES:
+        return None
+    return ITEM_TYPE_ALIASES.get(item_type, item_type)
+
+
+def add_item(kid_id, item_type, qty, db):
+    """Grant inventory, merging onto the canonical item_type. Returns stored id or None."""
+    canonical = canonicalize_item_type(item_type)
+    if not canonical or not qty:
+        return None
+    qty = int(qty)
+    if qty <= 0:
+        return None
+    existing = db.execute(
+        "SELECT id FROM inventory WHERE kid_id=? AND item_type=?",
+        (kid_id, canonical),
+    ).fetchone()
+    if existing:
+        db.execute("UPDATE inventory SET quantity=quantity+? WHERE id=?", (qty, existing['id']))
+    else:
+        db.execute(
+            "INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,?,?)",
+            (kid_id, canonical, qty),
+        )
+    return canonical
+
+
+def _canonicalize_material_dict(mats):
+    out = {}
+    if not isinstance(mats, dict):
+        return out
+    for key, qty in mats.items():
+        canonical = canonicalize_item_type(key)
+        if not canonical:
+            continue
+        try:
+            qty = int(qty)
+        except (TypeError, ValueError):
+            continue
+        if qty <= 0:
+            continue
+        out[canonical] = out.get(canonical, 0) + qty
+    return out
+
+
+def _canonicalize_building_def_materials(db):
+    """Normalize seed / migrated recipe keys; repair empty guild materials."""
+    bdefs = db.execute("SELECT id, name, materials FROM building_defs").fetchall()
+    for bd in bdefs:
+        try:
+            mats = json.loads(bd['materials'] or '{}')
+        except (json.JSONDecodeError, TypeError):
+            mats = {}
+        new_mats = _canonicalize_material_dict(mats)
+        if bd['name'] == '探險公會' and not new_mats:
+            new_mats = json.loads(DEFAULT_GUILD_MATERIALS)
+        if new_mats != mats:
+            db.execute(
+                "UPDATE building_defs SET materials=? WHERE id=?",
+                (json.dumps(new_mats, ensure_ascii=False), bd['id']),
+            )
+    db.commit()
+
+
+def _migrate_inventory_item_types(db):
+    """Merge legacy inventory rows onto canonical ids. Leave mystery_box in-bag."""
+    try:
+        rows = db.execute("SELECT id, kid_id, item_type, quantity FROM inventory").fetchall()
+    except sqlite3.OperationalError:
+        return
+    for row in rows:
+        canonical = canonicalize_item_type(row['item_type'])
+        if not canonical or canonical == row['item_type']:
+            continue
+        existing = db.execute(
+            "SELECT id FROM inventory WHERE kid_id=? AND item_type=?",
+            (row['kid_id'], canonical),
+        ).fetchone()
+        if existing:
+            db.execute(
+                "UPDATE inventory SET quantity=quantity+? WHERE id=?",
+                (row['quantity'], existing['id']),
+            )
+            db.execute("DELETE FROM inventory WHERE id=?", (row['id'],))
+        else:
+            db.execute("UPDATE inventory SET item_type=? WHERE id=?", (canonical, row['id']))
+    db.commit()
+
+
+def get_building_buff(kid_id, buff_type, db):
+    """Return buff_vals[level-1] for an unstored building, or None."""
+    row = db.execute(
+        """
+        SELECT b.level, bd.buff_vals
+        FROM buildings b
+        JOIN building_defs bd ON b.def_id = bd.id
+        WHERE b.kid_id=? AND bd.buff_type=? AND COALESCE(b.stored, 0)=0
+        ORDER BY b.level DESC
+        LIMIT 1
+        """,
+        (kid_id, buff_type),
+    ).fetchone()
+    if not row:
+        return None
+    try:
+        vals = json.loads(row['buff_vals'] or '[]')
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not vals:
+        return None
+    idx = max(0, min(int(row['level'] or 1) - 1, len(vals) - 1))
+    return vals[idx]
+
+
+def xp_bar_percent(experience_in_level, experience_for_next):
+    """HUD fill: in-level / for-next, capped at 100. for_next==0 → 100."""
+    try:
+        for_next = float(experience_for_next)
+    except (TypeError, ValueError):
+        return 100
+    if for_next <= 0:
+        return 100
+    try:
+        in_level = float(experience_in_level)
+    except (TypeError, ValueError):
+        in_level = 0
+    return min(100, round(in_level / for_next * 100))
+
+
+def _row_get(row, key, default=None):
+    try:
+        return row[key]
+    except (IndexError, KeyError, TypeError):
+        return default
+
+
+def _abilities_payload(kid):
+    """5-ability HUD dict. Never read dropped ability_atk."""
+    return {
+        'str': _row_get(kid, 'ability_str', 0) or 0,
+        'int': _row_get(kid, 'ability_int', 0) or 0,
+        'spd': _row_get(kid, 'ability_spd', 0) or 0,
+        'crt': _row_get(kid, 'ability_crt', 0) or 0,
+        'brv': _row_get(kid, 'ability_brv', 0) or 0,
+    }
+
+
+def kid_hud(kid):
+    """Kid row plus in-level XP fields for ceremony / HUD."""
+    data = row_to_dict(kid) or {}
+    exp = data.get('experience') or 0
+    level = data.get('level') or 1
+    _, exp_in = calc_level(exp)
+    for_next = exp_for_next_level(level)
+    data['experience_in_level'] = exp_in
+    data['experience_for_next'] = for_next
+    data['xp_bar_percent'] = xp_bar_percent(exp_in, for_next)
+    return data
+
+
+def hk_today_str():
+    return datetime.now(HK_TZ).date().isoformat()
+
+
+def region_content_locked(region_id):
+    try:
+        return int(region_id) in PHASE1_LOCKED_REGIONS
+    except (TypeError, ValueError):
+        return False
+
+
+def parse_unlock_region(value):
+    if not value:
+        return None
+    text = str(value).strip().lower()
+    if text.startswith('r') and text[1:].isdigit():
+        return int(text[1:])
+    if text.isdigit():
+        return int(text)
+    return None
+
+
+def has_active_guild(kid_id, db):
+    row = db.execute(
+        """
+        SELECT b.id FROM buildings b
+        JOIN building_defs bd ON b.def_id = bd.id
+        WHERE b.kid_id=? AND COALESCE(b.stored, 0)=0
+          AND (bd.buff_type='unlock_explore' OR bd.name='探險公會')
+        LIMIT 1
+        """,
+        (kid_id,),
+    ).fetchone()
+    return row is not None
+
+
+def discounted_gold_cost(kid_id, base_cost, db):
+    """Shop discount applies to gold only. Minimum 1. No shop → full price."""
+    try:
+        cost = int(base_cost or 0)
+    except (TypeError, ValueError):
+        cost = 0
+    discount = get_building_buff(kid_id, 'discount', db)
+    if discount is None:
+        return cost
+    try:
+        return max(1, math.floor(cost * float(discount)))
+    except (TypeError, ValueError):
+        return cost
+
+
+def building_unlock_error(kid_id, unlock_region, db):
+    """Return (error_code, extra) if the building cannot be placed, else (None, None)."""
+    region_num = parse_unlock_region(unlock_region)
+    if region_num is None:
+        return None, None
+    if region_content_locked(region_num):
+        return 'region_locked', region_num
+    explored = db.execute(
+        "SELECT 1 FROM explored_regions WHERE kid_id=? AND region_id=?",
+        (kid_id, region_num),
+    ).fetchone()
+    if explored:
+        return None, None
+    won = db.execute(
+        "SELECT 1 FROM daily_battles WHERE kid_id=? AND region_id=?",
+        (kid_id, region_num),
+    ).fetchone()
+    if won:
+        return None, None
+    try:
+        boss = db.execute(
+            "SELECT 1 FROM boss_progress WHERE kid_id=? AND region_id=? AND first_kill=1",
+            (kid_id, region_num),
+        ).fetchone()
+        if boss:
+            return None, None
+    except sqlite3.OperationalError:
+        pass
+    return 'unlock_region', region_num
+
 @app.route('/api/kids/<int:kid_id>/experience', methods=['GET'])
 def get_experience(kid_id):
     db = get_db()
@@ -1172,14 +1423,8 @@ def get_experience(kid_id):
         'experience_in_level': exp_in_level,
         'experience_for_next': exp_for_next_level(current_level),
         'stat_points': kid['stat_points'],
-        'abilities': {
-            'str': kid['ability_str'],
-            'atk': kid['ability_atk'],
-            'int': kid['ability_int'],
-            'spd': kid['ability_spd'],
-            'crt': kid['ability_crt'],
-            'brv': kid['ability_brv'],
-        }
+        'xp_bar_percent': xp_bar_percent(exp_in_level, exp_for_next_level(current_level)),
+        'abilities': _abilities_payload(kid),
     })
 
 @app.route('/api/kids/<int:kid_id>/experience', methods=['POST'])
@@ -1225,14 +1470,8 @@ def add_experience(kid_id):
         'stat_points': updated['stat_points'],
         'leveled_up': new_level > kid['level'],
         'levels_gained': new_level - kid['level'],
-        'abilities': {
-            'str': updated['ability_str'],
-            'atk': updated['ability_atk'],
-            'int': updated['ability_int'],
-            'spd': updated['ability_spd'],
-            'crt': updated['ability_crt'],
-            'brv': updated['ability_brv'],
-        }
+        'xp_bar_percent': xp_bar_percent(exp_in_level, exp_for_next_level(updated['level'])),
+        'abilities': _abilities_payload(updated),
     })
 
 # -- Ability Points Assignment --
@@ -1277,14 +1516,7 @@ def assign_ability(kid_id):
         'id': updated['id'],
         'name': updated['name'],
         'stat_points': updated['stat_points'],
-        'abilities': {
-            'str': updated['ability_str'],
-            'atk': updated['ability_atk'],
-            'int': updated['ability_int'],
-            'spd': updated['ability_spd'],
-            'crt': updated['ability_crt'],
-            'brv': updated['ability_brv'],
-        }
+        'abilities': _abilities_payload(updated),
     })
 
 # -- Ability Buffs from Buildings --
@@ -1352,15 +1584,24 @@ MATERIAL_POOLS = {
 }
 
 def award_task_drops(kid_id, task_points, db, source='task'):
-    """Award random materials and experience when completing a task or expedition."""
-    import random
-    drops = {'materials': [], 'experience': 0}
-    
-    # Experience: 5 exp per point of the task
-    exp_amount = max(5, task_points // 2)
+    """Award random materials and experience when completing a task or expedition.
+
+    Base XP is max(5, points//2). Library task_bonus is added on top and
+    reported separately (GAMEPLAY_REDESIGN §6.1 / §6.4).
+    """
+    drops = {'materials': [], 'experience': 0, 'experience_bonus': 0, 'experience_total': 0}
+
+    exp_amount = max(5, int(task_points or 0) // 2)
+    bonus_raw = get_building_buff(kid_id, 'task_bonus', db)
+    try:
+        bonus = int(bonus_raw or 0)
+    except (TypeError, ValueError):
+        bonus = 0
+    total = exp_amount + bonus
+
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
     if kid:
-        new_exp = kid['experience'] + exp_amount
+        new_exp = (kid['experience'] or 0) + total
         new_level, _ = calc_level(new_exp)
         stat_gained = 0
         if new_level > kid['level']:
@@ -1370,8 +1611,9 @@ def award_task_drops(kid_id, task_points, db, source='task'):
             (new_exp, new_level, stat_gained, kid_id)
         )
         drops['experience'] = exp_amount
-    
-    # Materials: 1-2 random items based on task value
+        drops['experience_bonus'] = bonus
+        drops['experience_total'] = total
+
     num_drops = 1 if task_points < 20 else random.randint(1, 2)
     for _ in range(num_drops):
         pool = 'common'
@@ -1379,18 +1621,12 @@ def award_task_drops(kid_id, task_points, db, source='task'):
             pool = random.choices(['common', 'uncommon', 'rare'], weights=[3, 2, 1])[0]
         elif task_points >= 20:
             pool = random.choices(['common', 'uncommon'], weights=[3, 1])[0]
-        mat_type = random.choice(MATERIAL_POOLS[pool])
-        
-        existing = db.execute(
-            "SELECT * FROM inventory WHERE kid_id=? AND item_type=?", (kid_id, mat_type)
-        ).fetchone()
-        if existing:
-            db.execute("UPDATE inventory SET quantity=quantity+1 WHERE id=?", (existing['id'],))
-        else:
-            db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?, ?, 1)", (kid_id, mat_type))
-        
+        mat_type = canonicalize_item_type(random.choice(MATERIAL_POOLS[pool]))
+        if not mat_type:
+            continue
+        add_item(kid_id, mat_type, 1, db)
         drops['materials'].append(mat_type)
-    
+
     return drops
 
 # -- Tasks --
@@ -1523,6 +1759,46 @@ def update_task(task_id):
     updated = db.execute("SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar FROM tasks t LEFT JOIN kids k ON t.kid_id=k.id WHERE t.id=?", (task_id,)).fetchone()
     return jsonify(row_to_dict(updated))
 
+def _empty_ceremony():
+    return {
+        'points_awarded': 0,
+        'experience_gained': 0,
+        'experience_bonus': 0,
+        'experience_total': 0,
+        'material_drops': [],
+        'achievements': [],
+        'pending_approval': False,
+        'kid': None,
+    }
+
+
+def _apply_task_completion_rewards(db, kid_id, task, result):
+    """Award gold + XP/materials. XP is never written to points_log."""
+    result.update(_empty_ceremony())
+    if not kid_id:
+        return
+    kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
+    if not kid:
+        return
+    points = task['points'] or 0
+    db.execute("UPDATE kids SET points=? WHERE id=?", (kid['points'] + points, kid_id))
+    db.execute(
+        "INSERT INTO points_log (kid_id, amount, reason) VALUES (?,?,?)",
+        (kid_id, points, f"Completed task: {task['title']}"),
+    )
+    result['points_awarded'] = points
+    update_streak(kid_id, db)
+    result['achievements'] = check_achievements(kid_id, db) or []
+    drops = award_task_drops(kid_id, points, db)
+    result['material_drops'] = drops.get('materials') or []
+    result['experience_gained'] = int(drops.get('experience') or 0)
+    result['experience_bonus'] = int(drops.get('experience_bonus') or 0)
+    result['experience_total'] = int(drops.get('experience_total') or result['experience_gained'])
+    result['pending_approval'] = False
+    updated = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
+    result['kid'] = kid_hud(updated)
+
+
 @app.route('/api/tasks/<int:task_id>/complete', methods=['POST'])
 def complete_task(task_id):
     actor = current_actor()
@@ -1566,25 +1842,8 @@ def complete_task(task_id):
         if db.execute("SELECT 1 FROM task_completions WHERE task_id=? AND kid_id=?", (task_id, kid_id)).fetchone():
             return jsonify({'error': 'Task already completed'}), 400
         db.execute("INSERT INTO task_completions (task_id, kid_id, completed_at) VALUES (?, ?, ?)", (task_id, kid_id, now))
-        # 頒獎俾完成嘅小朋友
-        result = {'task': row_to_dict(task), 'points_awarded': 0, 'kid': None}
-        kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
-        if kid:
-            new_points = kid['points'] + task['points']
-            db.execute("UPDATE kids SET points=? WHERE id=?", (new_points, kid_id))
-            db.execute("INSERT INTO points_log (kid_id, amount, reason) VALUES (?,?,?)",
-                       (kid_id, task['points'], f"Completed task: {task['title']}"))
-            result['points_awarded'] = task['points']
-            result['kid'] = row_to_dict(db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone())
-            update_streak(kid_id, db)
-            new_achs = check_achievements(kid_id, db)
-            if new_achs:
-                result['achievements'] = new_achs
-            drops = award_task_drops(kid_id, task['points'], db)
-            if drops['materials']:
-                result['material_drops'] = drops['materials']
-            if drops['experience'] > 0:
-                result['experience_gained'] = drops['experience']
+        result = {'task': row_to_dict(task)}
+        _apply_task_completion_rewards(db, kid_id, task, result)
         db.commit()
         result['task'] = row_to_dict(db.execute("SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar FROM tasks t LEFT JOIN kids k ON t.kid_id=k.id WHERE t.id=?", (task_id,)).fetchone())
         result['task']['completed'] = 1
@@ -1592,43 +1851,12 @@ def complete_task(task_id):
     
     # Handle recurring tasks: mark done, award points, set due_date to tomorrow
     if task['recurring']:
-        # Mark as completed
         db.execute("UPDATE tasks SET completed=1, completed_at=? WHERE id=?", (now, task_id))
-        
-        # Award points
         kid_id = task['kid_id']
-        result = {'task': row_to_dict(task), 'points_awarded': 0, 'kid': None}
-        if kid_id:
-            kid = db.execute("SELECT * FROM kids WHERE id = ?", (kid_id,)).fetchone()
-            if kid:
-                new_points = kid['points'] + task['points']
-                db.execute("UPDATE kids SET points = ? WHERE id = ?", (new_points, kid_id))
-                db.execute(
-                    "INSERT INTO points_log (kid_id, amount, reason) VALUES (?, ?, ?)",
-                    (kid_id, task['points'], f"Completed task: {task['title']}")
-                )
-                result['points_awarded'] = task['points']
-                updated_kid = db.execute("SELECT * FROM kids WHERE id = ?", (kid_id,)).fetchone()
-                result['kid'] = row_to_dict(updated_kid)
-        
-        # Set due_date to tomorrow so it reappears tomorrow
+        result = {'task': row_to_dict(task)}
+        _apply_task_completion_rewards(db, kid_id, task, result)
         tomorrow = (datetime.utcnow() + timedelta(days=1)).strftime('%Y-%m-%d')
         db.execute("UPDATE tasks SET due_date=? WHERE id=?", (tomorrow, task_id))
-        
-        # Check streak + achievements
-        if kid_id:
-            update_streak(kid_id, db)
-            new_achs = check_achievements(kid_id, db)
-            if new_achs:
-                result['achievements'] = new_achs
-        
-        # Award material drops + experience
-        drops = award_task_drops(kid_id, task['points'], db)
-        if drops['materials']:
-            result['material_drops'] = drops['materials']
-        if drops['experience'] > 0:
-            result['experience_gained'] = drops['experience']
-        
         db.commit()
         result['task'] = row_to_dict(db.execute("SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar FROM tasks t LEFT JOIN kids k ON t.kid_id=k.id WHERE t.id=?", (task_id,)).fetchone())
         return jsonify(result), 200
@@ -1640,33 +1868,12 @@ def complete_task(task_id):
     db.execute("UPDATE tasks SET completed = 1, completed_at = ? WHERE id = ?", (now, task_id))
 
     kid_id = task['kid_id']
-    result = {'task': row_to_dict(task), 'points_awarded': 0, 'kid': None}
+    result = {'task': row_to_dict(task)}
+    _apply_task_completion_rewards(db, kid_id, task, result)
     if kid_id:
-        kid = db.execute("SELECT * FROM kids WHERE id = ?", (kid_id,)).fetchone()
-        if kid:
-            new_points = kid['points'] + task['points']
-            db.execute("UPDATE kids SET points = ? WHERE id = ?", (new_points, kid_id))
-            db.execute(
-                "INSERT INTO points_log (kid_id, amount, reason) VALUES (?, ?, ?)",
-                (kid_id, task['points'], f"Completed task: {task['title']}")
-            )
-            result['points_awarded'] = task['points']
-            updated_kid = db.execute("SELECT * FROM kids WHERE id = ?", (kid_id,)).fetchone()
-            result['kid'] = row_to_dict(updated_kid)
-            
-            # Update streak + check achievements
-            new_streak = update_streak(kid_id, db)
-            result['streak'] = new_streak
-            new_achs = check_achievements(kid_id, db)
-            if new_achs:
-                result['achievements'] = new_achs
-            
-            # Award material drops + experience
-            drops = award_task_drops(kid_id, task['points'], db)
-            if drops['materials']:
-                result['material_drops'] = drops['materials']
-            if drops['experience'] > 0:
-                result['experience_gained'] = drops['experience']
+        streak_row = db.execute("SELECT * FROM streaks WHERE kid_id=?", (kid_id,)).fetchone()
+        if streak_row:
+            result['streak'] = row_to_dict(streak_row)
 
     db.commit()
     result['task'] = row_to_dict(db.execute("SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar FROM tasks t LEFT JOIN kids k ON t.kid_id=k.id WHERE t.id=?", (task_id,)).fetchone())
@@ -2314,14 +2521,23 @@ def place_building(kid_id):
     if not bdef:
         return jsonify({'error': 'Building definition not found'}), 404
 
+    unlock_err, unlock_region = building_unlock_error(kid_id, bdef['unlock_region'], db)
+    if unlock_err == 'region_locked':
+        return jsonify({'error': 'region_locked', 'region_id': unlock_region}), 400
+    if unlock_err:
+        return jsonify({'error': 'unlock_region', 'region_id': unlock_region}), 400
+
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
     if not kid:
         return jsonify({'error': 'Kid not found'}), 404
-    if kid['points'] < bdef['cost_gold']:
+    gold_cost = discounted_gold_cost(kid_id, bdef['cost_gold'], db)
+    if kid['points'] < gold_cost:
         return jsonify({'error': 'Insufficient resources'}), 400
 
     try:
-        required_mats = json.loads(bdef['materials']) if bdef['materials'] else {}
+        required_mats = _canonicalize_material_dict(
+            json.loads(bdef['materials']) if bdef['materials'] else {}
+        )
     except (json.JSONDecodeError, TypeError):
         required_mats = {}
     for item_type, qty in required_mats.items():
@@ -2329,9 +2545,9 @@ def place_building(kid_id):
         if not inv or inv['quantity'] < qty:
             return jsonify({'error': 'Insufficient resources'}), 400
 
-    db.execute("UPDATE kids SET points = points - ? WHERE id=?", (bdef['cost_gold'], kid_id))
+    db.execute("UPDATE kids SET points = points - ? WHERE id=?", (gold_cost, kid_id))
     db.execute("INSERT INTO points_log (kid_id, amount, reason) VALUES (?, ?, ?)",
-               (kid_id, -bdef['cost_gold'], f"Built {bdef['name']}"))
+               (kid_id, -gold_cost, f"Built {bdef['name']}"))
 
     for item_type, qty in required_mats.items():
         db.execute("UPDATE inventory SET quantity = quantity - ? WHERE kid_id=? AND item_type=?",
@@ -2432,9 +2648,11 @@ def upgrade_building(kid_id, b_id):
     if b['level'] >= b['max_level']:
         return jsonify({'error': 'Already max level'}), 400
 
-    cost_gold = b['level'] * 100
+    cost_gold = discounted_gold_cost(kid_id, b['level'] * 100, db)
     try:
-        base_mats = json.loads(b['materials']) if b['materials'] else {}
+        base_mats = _canonicalize_material_dict(
+            json.loads(b['materials']) if b['materials'] else {}
+        )
     except (json.JSONDecodeError, TypeError):
         base_mats = {}
     required_mats = {k: v * (b['level'] + 1) for k, v in base_mats.items()}
@@ -2485,11 +2703,7 @@ def add_to_inventory(kid_id):
     item_type = data.get('item_type')
     qty = int(data.get('quantity', 1))
     db = get_db()
-    existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type=?", (kid_id, item_type)).fetchone()
-    if existing:
-        db.execute("UPDATE inventory SET quantity=quantity+? WHERE id=?", (qty, existing['id']))
-    else:
-        db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?, ?, ?)", (kid_id, item_type, qty))
+    add_item(kid_id, item_type, qty, db)
     db.commit()
     updated = db.execute("SELECT * FROM inventory WHERE kid_id=?", (kid_id,)).fetchall()
     return jsonify(rows_to_list(updated))
@@ -2522,8 +2736,8 @@ def get_building_recipes():
     """Return building defs with expanded material info (name + icon)."""
     db = get_db()
     rows = db.execute("SELECT * FROM building_defs ORDER BY cost_gold ASC").fetchall()
-    MAT_ICONS = {'wood': '🪵', 'brick': '🧱', 'glass': '🪟', 'gear': '⚙️'}
-    MAT_NAMES = {'wood': '木材', 'brick': '磚頭', 'glass': '玻璃', 'gear': '齒輪'}
+    MAT_ICONS = {'wood': '🪵', 'brick': '🧱', 'glass': '🪟', 'gear': '⚙️', 'gem': '💎'}
+    MAT_NAMES = {'wood': '木材', 'brick': '磚頭', 'glass': '玻璃', 'gear': '齒輪', 'gem': '寶石'}
     result = []
     for r in rows:
         d = dict(r)
@@ -2546,7 +2760,42 @@ def get_material_defs():
         {'id':'brick', 'name':'磚頭', 'icon':'🧱'},
         {'id':'glass', 'name':'玻璃', 'icon':'🪟'},
         {'id':'gear', 'name':'齒輪', 'icon':'⚙️'},
+        {'id':'gem', 'name':'寶石', 'icon':'💎'},
     ])
+
+
+@app.route('/api/kids/<int:kid_id>/farm/claim', methods=['POST'])
+def farm_claim(kid_id):
+    """Daily farm gold. One claim per Asia/Hong_Kong calendar day."""
+    db = get_db()
+    amount = get_building_buff(kid_id, 'daily_gold', db)
+    if amount is None:
+        return jsonify({'error': 'farm_required'}), 400
+    try:
+        amount = int(amount)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'farm_required'}), 400
+    today = hk_today_str()
+    prev = db.execute("SELECT claim_date FROM farm_claims WHERE kid_id=?", (kid_id,)).fetchone()
+    if prev and prev['claim_date'] == today:
+        return jsonify({'error': 'already_claimed_today'}), 400
+    db.execute("UPDATE kids SET points = points + ? WHERE id=?", (amount, kid_id))
+    db.execute(
+        "INSERT INTO points_log (kid_id, amount, reason) VALUES (?,?,?)",
+        (kid_id, amount, 'daily_gold'),
+    )
+    if prev:
+        db.execute("UPDATE farm_claims SET claim_date=? WHERE kid_id=?", (today, kid_id))
+    else:
+        db.execute("INSERT INTO farm_claims (kid_id, claim_date) VALUES (?,?)", (kid_id, today))
+    db.commit()
+    kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
+    return jsonify({
+        'ok': True,
+        'amount': amount,
+        'points': kid['points'] if kid else amount,
+        'claim_date': today,
+    }), 200
 
 # -- Expeditions --
 
@@ -2560,7 +2809,6 @@ def get_expedition(kid_id):
 def start_expedition(kid_id):
     data = request.get_json(silent=True) or {}
     region_id = data.get('region_id')
-    duration = int(data.get('duration_hours', 2))
     expedition_type = data.get('expedition_type', 'explore')
     if expedition_type not in ('explore', 'quiz', 'battle'):
         return jsonify({'error': 'Invalid expedition type'}), 400
@@ -2568,8 +2816,35 @@ def start_expedition(kid_id):
     running = db.execute("SELECT id FROM expeditions WHERE kid_id=? AND status='running'", (kid_id,)).fetchone()
     if running:
         return jsonify({'error': 'Expedition already running'}), 400
+
+    if expedition_type == 'explore':
+        if region_content_locked(region_id):
+            return jsonify({'error': 'region_locked', 'region_id': int(region_id)}), 400
+        if not has_active_guild(kid_id, db):
+            return jsonify({'error': 'guild_required'}), 400
+        try:
+            fee = EXPLORE_FEE_BY_REGION.get(int(region_id), 0)
+        except (TypeError, ValueError):
+            fee = 0
+        kid = db.execute("SELECT points FROM kids WHERE id=?", (kid_id,)).fetchone()
+        have = kid['points'] if kid else 0
+        if fee > 0 and have < fee:
+            return jsonify({'error': 'insufficient_gold', 'need': fee, 'have': have}), 400
+        if fee > 0:
+            db.execute("UPDATE kids SET points = points - ? WHERE id=?", (fee, kid_id))
+            db.execute(
+                "INSERT INTO points_log (kid_id, amount, reason) VALUES (?,?,?)",
+                (kid_id, -fee, f"expedition_fee region={region_id}"),
+            )
+
+    hours = data.get('duration_hours')
+    minutes = data.get('duration_minutes')
+    if hours is None and minutes is None:
+        delta = timedelta(minutes=5) if expedition_type == 'explore' else timedelta(hours=2)
+    else:
+        delta = timedelta(hours=int(hours or 0), minutes=int(minutes or 0))
     now = datetime.utcnow()
-    end = now + timedelta(hours=duration)
+    end = now + delta
     cur = db.execute("INSERT INTO expeditions (kid_id, region_id, expedition_type, start_time, end_time, status) VALUES (?,?,?,?,?,'running')",
                      (kid_id, region_id, expedition_type, now.isoformat() + 'Z', end.isoformat() + 'Z'))
     db.commit()
@@ -2600,28 +2875,27 @@ def claim_expedition(kid_id):
     end = datetime.fromisoformat(exp['end_time'])
     if now < end:
         return jsonify({'error': 'Expedition not finished'}), 400
-    materials = ['wood', 'brick', 'iron', 'gem', 'star_shard']
+    materials = ['wood', 'brick', 'glass', 'gear', 'gem']
     rewards = {}
+    events = []
     for m in materials:
         if random.random() < 0.6:
-            rewards[m] = random.randint(1, 5)
-    events = []
+            qty = random.randint(1, 5)
+            stored = add_item(kid_id, m, qty, db)
+            if stored:
+                rewards[stored] = rewards.get(stored, 0) + qty
     if random.random() < 0.1:
-        rewards['dragon_scale'] = rewards.get('dragon_scale', 0) + 1
-        events.append('🐉 發現龍鱗！')
+        stored = add_item(kid_id, 'dragon_scale', 1, db)
+        if stored:
+            rewards[stored] = rewards.get(stored, 0) + 1
+            events.append('🐉 發現龍鱗！')
     if random.random() < 0.08:
-        rewards['star_stone'] = rewards.get('star_stone', 0) + 1
-        events.append('⭐ 搵到星石！')
-    if random.random() < 0.15:
-        rewards['mystery_box'] = rewards.get('mystery_box', 0) + 1
-        events.append('🎁 獲得神秘寶箱')
-    gold_reward = random.randint(10, 30) * (exp['region_id'] or 1)
-    for item_type, qty in rewards.items():
-        existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type=?", (kid_id, item_type)).fetchone()
-        if existing:
-            db.execute("UPDATE inventory SET quantity=quantity+? WHERE id=?", (qty, existing['id']))
-        else:
-            db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?, ?, ?)", (kid_id, item_type, qty))
+        stored = add_item(kid_id, 'fur', 1, db)
+        if stored:
+            rewards[stored] = rewards.get(stored, 0) + 1
+            events.append('🦊 搵到毛皮！')
+    lo, hi = EXPLORE_GOLD_REWARD_RANGE.get(exp['region_id'] or 1, (6, 10))
+    gold_reward = random.randint(lo, hi)
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
     if kid:
         db.execute("UPDATE kids SET points=points+? WHERE id=?", (gold_reward, kid_id))
@@ -2811,22 +3085,12 @@ def _award_boss_rewards(db, kid_id, bd):
     now = datetime.now().isoformat()
     if prog is None or not prog['first_kill']:
         # 首殺: 保底 legendary (dragon_scale)
-        existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type='dragon_scale'",
-                              (kid_id,)).fetchone()
-        if existing:
-            db.execute("UPDATE inventory SET quantity=quantity+1 WHERE id=?", (existing['id'],))
-        else:
-            db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,?,?)",
-                       (kid_id, 'dragon_scale', 1))
+        add_item(kid_id, 'dragon_scale', 1, db)
         db.execute("INSERT OR REPLACE INTO boss_progress (kid_id, region_id, first_kill, last_win_at) VALUES (?,?,1,?)",
                    (kid_id, region_id, now))
     else:
         # 重戰: 保底 epic (gem)
-        existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type='gem'", (kid_id,)).fetchone()
-        if existing:
-            db.execute("UPDATE inventory SET quantity=quantity+1 WHERE id=?", (existing['id'],))
-        else:
-            db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,?,?)", (kid_id, 'gem', 1))
+        add_item(kid_id, 'gem', 1, db)
         db.execute("UPDATE boss_progress SET last_win_at=? WHERE kid_id=? AND region_id=?",
                    (now, kid_id, region_id))
     db.commit()
@@ -2837,6 +3101,9 @@ def boss_summon(kid_id):
     db = get_db()
     data = request.get_json(silent=True) or {}
     region_id = data.get('region_id', 1)
+
+    if region_content_locked(region_id):
+        return jsonify({'error': 'region_locked', 'region_id': int(region_id)}), 400
 
     # 解鎖檢查 (前一區 Boss 首殺)
     if not boss_is_unlocked(db, kid_id, region_id):
@@ -2953,6 +3220,11 @@ def battle_start(kid_id):
     data = request.get_json(silent=True) or {}
     region_id = data.get('region_id', 1)
     db = get_db()
+
+    if region_content_locked(region_id):
+        return jsonify({'error': 'region_locked', 'region_id': int(region_id)}), 400
+    if not has_active_guild(kid_id, db):
+        return jsonify({'error': 'guild_required'}), 400
 
     # 自動放棄 running 嘅 battle/boss (開新戰鬥 = 放棄舊嘅), 再清理 stale, 再檢查其他 running
     db.execute("UPDATE expeditions SET status='completed' WHERE kid_id=? AND status='running' AND expedition_type IN ('battle','boss')", (kid_id,))
@@ -3263,7 +3535,7 @@ DROP_BASE_WEIGHTS = {'common': 70.0, 'rare': 22.0, 'epic': 7.0, 'legendary': 1.0
 DROP_TABLE = {
     'common': [('wood', 1), ('wood', 2)],
     'rare': [('brick', 1), ('fur', 1), ('gear', 1)],
-    'epic': [('gem', 1), ('star_fragment', 1)],
+    'epic': [('gem', 1), ('gem', 1)],
     'legendary': [('dragon_scale', 1)],
 }
 
@@ -3314,11 +3586,7 @@ def _award_battle_rewards(db, kid_id, bd, monsters=None):
 
     # Materials (guaranteed base drop)
     for item_type, qty in mats.items():
-        existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type=?", (kid_id, item_type)).fetchone()
-        if existing:
-            db.execute("UPDATE inventory SET quantity=quantity+? WHERE id=?", (qty, existing['id']))
-        else:
-            db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,?,?)", (kid_id, item_type, qty))
+        add_item(kid_id, item_type, qty, db)
 
     # Bonus drop (rarity-based, tier-scaled)
     tier = bd.get('region_id', 1) or 1
@@ -3331,11 +3599,7 @@ def _award_battle_rewards(db, kid_id, bd, monsters=None):
         item_type, qty = random.choice(pool)
         bd['drop_item'] = item_type
         bd['drop_qty'] = qty
-        existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type=?", (kid_id, item_type)).fetchone()
-        if existing:
-            db.execute("UPDATE inventory SET quantity=quantity+? WHERE id=?", (qty, existing['id']))
-        else:
-            db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,?,?)", (kid_id, item_type, qty))
+        add_item(kid_id, item_type, qty, db)
 
     # EXP (tier-scaled)
     if kid:
@@ -3349,11 +3613,7 @@ def _award_battle_rewards(db, kid_id, bd, monsters=None):
         # 里程碑獎勵 (Lv 10/25/50/100/...)
         crossed = check_milestones(kid['level'], new_level)
         for m in crossed:
-            existing = db.execute("SELECT * FROM inventory WHERE kid_id=? AND item_type='gem'", (kid_id,)).fetchone()
-            if existing:
-                db.execute("UPDATE inventory SET quantity=quantity+3 WHERE id=?", (existing['id'],))
-            else:
-                db.execute("INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?,?,3)", (kid_id, 'gem'))
+            add_item(kid_id, 'gem', 3, db)
 
     # Mark region explored
     db.execute("INSERT OR IGNORE INTO explored_regions (kid_id, region_id) VALUES (?,?)",
@@ -3401,7 +3661,7 @@ def get_town_state(kid_id):
     streak = db.execute("SELECT * FROM streaks WHERE kid_id=?", (kid_id,)).fetchone()
     tiles = db.execute("SELECT cell_x, cell_y, tile_type FROM town_tiles WHERE kid_id=?", (kid_id,)).fetchall()
     return jsonify({
-        'kid': row_to_dict(kid),
+        'kid': kid_hud(kid),
         'buildings': rows_to_list(buildings),
         'inventory': rows_to_list(inventory),
         'explored': rows_to_list(explored),
