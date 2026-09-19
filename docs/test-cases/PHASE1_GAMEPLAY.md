@@ -1,6 +1,6 @@
 # Phase 1 遊戲循環測試目錄（先寫 pytest，後寫產品碼）
 
-> **狀態**：RED tests in PR（`@pytest.mark.phase1`）。未實作產品碼。對照表見 [`PHASE1_GAMEPLAY_STATUS.md`](PHASE1_GAMEPLAY_STATUS.md)。  
+> **狀態**：GREEN（產品碼已實作）。`pytest -m phase1` = 39 passed / 1 failed（**P1-TC-CER-03** Phase 2 批核，故意留紅）。對照表見 [`PHASE1_GAMEPLAY_STATUS.md`](PHASE1_GAMEPLAY_STATUS.md)。  
 > **依賴**：Phase 0 session／角色模型已存在；呢啲 case 全部用 **已登入** 嘅正確擁有者，另加註明嘅 401／403。  
 > **企劃**：[`GAMEPLAY_REDESIGN.md`](../GAMEPLAY_REDESIGN.md) §6。  
 > **Fixture**：空庫 seed 10 座建築；factory 發足夠金幣／材料；`freezegun` 測每日農場。  

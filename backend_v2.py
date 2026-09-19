@@ -495,6 +495,7 @@ def _clean_stale_expeditions_db(db):
 def seed_building_defs():
     """Insert default building definitions if empty."""
     db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
     if db.execute("SELECT COUNT(*) FROM building_defs").fetchone()[0] > 0:
         db.close()
         return
@@ -1214,17 +1215,20 @@ def _canonicalize_building_def_materials(db):
     """Normalize seed / migrated recipe keys; repair empty guild materials."""
     bdefs = db.execute("SELECT id, name, materials FROM building_defs").fetchall()
     for bd in bdefs:
+        bid = bd['id'] if not isinstance(bd, tuple) else bd[0]
+        name = bd['name'] if not isinstance(bd, tuple) else bd[1]
+        raw = bd['materials'] if not isinstance(bd, tuple) else bd[2]
         try:
-            mats = json.loads(bd['materials'] or '{}')
+            mats = json.loads(raw or '{}')
         except (json.JSONDecodeError, TypeError):
             mats = {}
         new_mats = _canonicalize_material_dict(mats)
-        if bd['name'] == '探險公會' and not new_mats:
+        if name == '探險公會' and not new_mats:
             new_mats = json.loads(DEFAULT_GUILD_MATERIALS)
         if new_mats != mats:
             db.execute(
                 "UPDATE building_defs SET materials=? WHERE id=?",
-                (json.dumps(new_mats, ensure_ascii=False), bd['id']),
+                (json.dumps(new_mats, ensure_ascii=False), bid),
             )
     db.commit()
 
