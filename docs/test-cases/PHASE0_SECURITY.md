@@ -448,7 +448,7 @@
 | **建議模組** | `tests/test_xss_encoding.py` |
 | **前置** | login parent_a 建任務 title=`<script>alert(1)</script>` 指定 kid_a |
 | **步驟** | 1. GET `/api/tasks?kid_id=kid_a`（kid session）2. 前端：Playwright `FE-XSS-01` 檢查任務卡唔把 title 拼進 unsafe innerHTML |
-| **預期** | API JSON `title` 等於原字串（或已 escape，二揀一寫死）。DOM：Playwright `FE-XSS-01` 斷言任務名 `textContent` 含 `<script>`／`<b>` 文字，**無** 執行 script、無額外套真正 `b`／`img` 節點、無 onerror 網絡。若產品仍用 innerHTML 拼 title，**FE-XSS-01 維持紅**（文件化 gap）。 |
+| **預期** | API JSON `title` 等於原字串（或已 escape，二揀一寫死）。DOM：Playwright `FE-XSS-01` 斷言任務名 `textContent` 含 `<script>`／`<b>` 文字，**無** 執行 script、無額外套真正 `b`／`img` 節點、無 onerror 網絡。產品用 `escapeHtml()` 編碼 title 再拼 innerHTML。 |
 
 ---
 
@@ -492,6 +492,6 @@
 - [ ] 登入頁無預填 admin123
 - [ ] 家長註冊短密碼有紅字
 - [ ] 登出後同一分頁打 points／complete → 401，畫面返登入
-- [ ] 任務標題打 `<b>粗體</b>` 只見到括號字，頁面樣式唔變粗（Playwright `FE-XSS-01`；若紅，代表 DOM encoding 仍缺）
+- [ ] 任務標題打 `<b>粗體</b>` 只見到括號字，頁面樣式唔變粗（Playwright `FE-XSS-01`）
 
 簽收欄見 `TDD_PROCESS.md` §5。

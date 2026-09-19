@@ -879,8 +879,8 @@ def _task_title_el(page, needle):
 def test_task_title_markup_is_plain_text_not_html(page, base_url, test_db_path, fe_ids):
     """FE-XSS-01 任務標題含 markup 時只顯示純文字，唔插入 unsafe innerHTML。
 
-    Maps to P0-TC-XSS-01 DOM. Intentional FAIL until product encodes task titles
-    (today renderTasks() interpolates t.title into innerHTML).
+    Maps to P0-TC-XSS-01 DOM. Product encodes titles via escapeHtml() before
+    interpolating into task-card innerHTML (textContent shows literal tags).
     """
     kid_id = fe_ids["kid_id"]
     db = connect_db(test_db_path)

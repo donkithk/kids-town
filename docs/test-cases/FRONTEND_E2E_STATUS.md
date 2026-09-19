@@ -1,13 +1,13 @@
 # Frontend E2E status
 
-> Recorded against branch `cursor/trust-depth-ui-e2e-45bd` (based on PR #5 Playwright harness).  
+> Recorded against branch `cursor/green-fe-xss-01-task-title-encoding-b390` (based on latest `main` / PR #7).  
 > Command: `python3 -m pytest tests/test_frontend.py -v`  
-> Date: 2026-09-18  
+> Date: 2026-09-19  
 > Chromium: Playwright bundled browser (`python3 -m playwright install chromium`).  
-> Result: **21 passed, 1 failed** (`FE-XSS-01` intentional red — task titles still interpolated into `innerHTML`).
+> Result: **22 passed, 0 failed** (`FE-XSS-01` green — task titles encoded as plain text).
 
-Also: `python3 -m pytest tests/ -m phase0 -v` → **33 passed** (includes new `P0-TC-SESS-05`).  
-Full suite: `python3 -m pytest tests/ -q` → **101 passed, 1 failed** (`FE-XSS-01` only).
+Also: `python3 -m pytest tests/ -m phase0 -v` → **33 passed**.  
+Full suite: `python3 -m pytest tests/ -q` → **102 passed, 0 failed**.
 
 Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
@@ -35,7 +35,7 @@ Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`
 | FE-P0-04 | `test_browser_static_denylist_db_and_python` | **PASS** | |
 | FE-P0-05 | `test_default_admin_login_fails_on_fresh_db` | **PASS** | |
 | FE-P0-06 | `test_logout_then_write_apis_return_401` | **PASS** | Kid + parent UI 登出 → writes 401 |
-| FE-XSS-01 | `test_task_title_markup_is_plain_text_not_html` | **FAIL** | Intentional: `<b>粗體</b>` becomes a real `<b>` via `innerHTML` |
+| FE-XSS-01 | `test_task_title_markup_is_plain_text_not_html` | **PASS** | `escapeHtml()` — `<b>粗體</b>` shows as text, no real `<b>` / `<img>` |
 | FE-XSS-02 | `test_kid_display_name_markup_is_plain_text_in_hud` | **PASS** | `#hudNm` `textContent` shows tags as text; no alert |
 
 Phase 0 API marker run is tracked separately in [`PHASE0_SECURITY_STATUS.md`](PHASE0_SECURITY_STATUS.md).
