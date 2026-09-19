@@ -4,6 +4,10 @@ __pycache__/
 *.pyo
 .DS_Store
 
+# SQLite (do not add new DBs; tracked kids_town.db stays until a later cleanup)
+*.db
+!kids_town.db
+
 # Test scripts (keep only essential ones)
 check_*.py
 playwright_*.py

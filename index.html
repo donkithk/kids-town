@@ -1137,7 +1137,7 @@ body{
     </div>
     <div class="login-field">
       <span class="lf-icon">🔑</span>
-      <input type="password" id="regPassword" placeholder="密碼（至少 4 個字）" maxlength="30" autocomplete="new-password">
+      <input type="password" id="regPassword" placeholder="密碼（至少 8 個字）" maxlength="30" autocomplete="new-password">
     </div>
     <div class="login-field">
       <span class="lf-icon">😊</span>
@@ -1612,6 +1612,7 @@ async function doLogin() {
     const res = await fetch(`${API}/api/auth/login`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin',
       body: JSON.stringify({username, password})
     });
     const data = await res.json();
@@ -1683,9 +1684,9 @@ function showParentLogin() {
 function showAdminLogin() {
   document.getElementById('loginUsername').placeholder = '管理員名稱';
   document.getElementById('loginPassword').placeholder = '管理員密碼';
-  document.getElementById('loginUsername').value = 'admin';
-  document.getElementById('loginPassword').value = 'admin123';
-  document.getElementById('loginError').textContent = '💡 管理員預設帳號: admin / admin123';
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('loginError').textContent = '💡 請輸入管理員帳號（無預設口令）';
 }
 
 function showRegister() {
@@ -1712,6 +1713,11 @@ async function doRegister() {
 
   if (!username || !password || !name) {
     err.textContent = '請填寫用戶名、密碼同稱呼';
+    err.style.color = '#fecaca';
+    return;
+  }
+  if (password.length < 8) {
+    err.textContent = '密碼至少 8 個字元';
     err.style.color = '#fecaca';
     return;
   }
@@ -1788,7 +1794,7 @@ async function loadBuildingDefs() {
 }
 
 async function fetchAPI(path, options={}) {
-  const res = await fetch(`${API}${path}`, options);
+  const res = await fetch(`${API}${path}`, {credentials: 'same-origin', ...options});
   if (!res.ok) { const err = await res.json().catch(()=>({})); throw new Error(err.error||'Request failed'); }
   return res.json();
 }

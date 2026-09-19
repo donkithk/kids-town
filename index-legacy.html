@@ -1105,9 +1105,9 @@ function showParentLogin() {
 function showAdminLogin() {
   document.getElementById('loginUsername').placeholder = '管理員名稱';
   document.getElementById('loginPassword').placeholder = '管理員密碼';
-  document.getElementById('loginUsername').value = 'admin';
-  document.getElementById('loginPassword').value = 'admin123';
-  document.getElementById('loginError').textContent = '💡 管理員預設帳號: admin / admin123';
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('loginError').textContent = '💡 請輸入管理員帳號（無預設口令）';
 }
 
 function logout() {
