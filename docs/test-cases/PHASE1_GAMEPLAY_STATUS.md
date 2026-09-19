@@ -17,6 +17,8 @@ Intentional leftover red: **P1-TC-CER-03** only (Phase 2 `require_approval` / `G
 
 Experience C re-verify (branch `cursor/harden-ceremony-place-e2e-17ad`, 2026-09-19): `pytest -m phase1` still **39 passed / 1 failed (CER-03)**; `not phase1` **105 passed** (was 102; +3 TC-FE-CEREMONY/PLACE cases). Collection 145. Details: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).
 
+Phase 1.5 GREEN re-verify (branch `cursor/onboard-tdd-green-0b05`, 2026-09-19): `pytest -m phase1` still **39 passed / 1 failed (CER-03)**; P1-TC-MAT-03 now asserts guild **wood/brick, no gear**. Details: [`PHASE1_5_ONBOARD_STATUS.md`](PHASE1_5_ONBOARD_STATUS.md).
+
 Synthetic fixtures only: `test_parent_*` / `TestParent!pass1`, kid PIN `1357`. Production `kids_town.db` is never copied.
 
 ## Mapping
@@ -34,7 +36,7 @@ Synthetic fixtures only: `test_parent_*` / `TestParent!pass1`, kid PIN `1357`. P
 | P1-TC-BUFF-09 | `tests/test_building_buffs.py::test_get_building_buff_helper_farm_and_missing_types` | **PASS** | farm Lv.3 `daily_gold=15`; missing `task_bonus` → None |
 | P1-TC-MAT-01 | `tests/test_materials_ids.py::test_expedition_claim_only_emits_canonical_material_ids` | **PASS** | claim pool wood/brick/glass/gear/gem + optional fur/dragon_scale |
 | P1-TC-MAT-02 | `tests/test_materials_ids.py::test_internal_add_iron_normalizes_to_gear` | **PASS** | `add_item` + `canonicalize_item_type('iron')=='gear'` |
-| P1-TC-MAT-03 | `tests/test_materials_ids.py::test_material_defs_and_building_recipes_use_canonical_ids` | **PASS** | defs include gem; seed recipes canonical; guild has wood/brick/gear |
+| P1-TC-MAT-03 | `tests/test_materials_ids.py::test_material_defs_and_building_recipes_use_canonical_ids` | **PASS** | defs include gem; seed recipes canonical; guild wood/brick **no gear** (Phase 1.5 §9 Q4) |
 | P1-TC-MAT-04 | `tests/test_materials_ids.py::test_task_drop_pools_and_complete_use_canonical_ids` | **PASS** | `MATERIAL_POOLS` already canonical |
 | P1-TC-MAT-05 | `tests/test_materials_ids.py::test_boss_summon_consumes_gem_not_glass` | **PASS** | Boss still costs `gem`×1 |
 | P1-TC-REG-01 | `tests/test_region_lock.py::test_regions_1_2_3_battle_start_has_monsters_not_404` | **PASS** | regions 1–3 still have monsters |
