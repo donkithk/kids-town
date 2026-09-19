@@ -179,7 +179,7 @@ Session helper 同 Phase 0。金幣／建築操作一律 kid 或該家長。
 | **建議模組** | `tests/test_materials_ids.py` |
 | **前置** | 空庫 seed |
 | **步驟** | 1. GET materials/defs 2. SELECT building_defs |
-| **預期** | defs 至少五 canonical；每座建築 materials 鍵屬於 canonical；公會 **唔係** `{}`（修復壞資料路徑：seed 新庫有 wood/brick/gear） |
+| **預期** | defs 至少五 canonical；每座建築 materials 鍵屬於 canonical；公會 **唔係** `{}`（Phase 1.5：seed 新庫 wood×10 + brick×5，**無 gear 鍵**） |
 
 ---
 
