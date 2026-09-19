@@ -958,3 +958,81 @@ def test_kid_display_name_markup_is_plain_text_in_hud(page, base_url, test_db_pa
         assert src != "x"
         assert "onerror=alert" not in src
     assert not alerts, alerts
+
+
+# ── P1-TC-CER-FE-01: ceremony UX (Playwright mock; Phase 1 RED) ──
+
+CEREMONY_TASK_TITLE = "P1-CER-FE-洗碗"
+
+
+@pytest.mark.phase1
+@pytest.mark.case_id("P1-TC-CER-FE-01")
+def test_complete_task_ceremony_shows_xp_materials_achievements(
+    page, base_url, test_db_path, fe_ids
+):
+    """P1-TC-CER-FE-01 completeTask 必須顯示 XP／材料／成就，唔只 toast 金幣。
+
+    Playwright mock of POST /api/tasks/<id>/complete returning CER-01 shape.
+    This is the automatable (A) UI assert when Chromium is available.
+    Source-contract twin: tests/test_frontend_ceremony.py (weak).
+    (B) manual checklist still required — do not treat either as full UX sign-off.
+    """
+    kid_id = fe_ids["kid_id"]
+    db = connect_db(test_db_path)
+    db.execute("DELETE FROM tasks WHERE title=?", (CEREMONY_TASK_TITLE,))
+    db.execute(
+        "INSERT INTO tasks (title, icon, points, kid_id, category, description, recurring, due_date) "
+        "VALUES (?, '📝', 10, ?, '', '', '', NULL)",
+        (CEREMONY_TASK_TITLE, kid_id),
+    )
+    db.commit()
+    task_id = db.execute(
+        "SELECT id FROM tasks WHERE title=?", (CEREMONY_TASK_TITLE,)
+    ).fetchone()[0]
+    db.close()
+
+    ceremony = {
+        "points_awarded": 10,
+        "experience_gained": 5,
+        "experience_bonus": 2,
+        "experience_total": 7,
+        "material_drops": ["wood"],
+        "achievements": [
+            {"badge": "first_task", "title": "第一次任務", "icon": "🌟"}
+        ],
+        "pending_approval": False,
+        "kid": {
+            "points": 50,
+            "level": 1,
+            "experience": 7,
+            "experience_in_level": 7,
+            "experience_for_next": 25,
+        },
+    }
+
+    def _fulfill_complete(route):
+        url = route.request.url
+        if route.request.method == "POST" and f"/api/tasks/{task_id}/complete" in url:
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps(ceremony),
+            )
+            return
+        route.continue_()
+
+    page.route("**/api/tasks/**", _fulfill_complete)
+    _login(page, base_url)
+    page.locator("button.q", has_text="任務").first.click()
+    card = page.locator(".task-card", has_text=CEREMONY_TASK_TITLE).first
+    card.wait_for(state="visible", timeout=8000)
+    card.get_by_text("完成", exact=False).click()
+    page.locator("#toast").wait_for(state="visible", timeout=8000)
+    visible = _visible_text(page) + (page.locator("#toast").inner_text() or "")
+    assert "7" in visible or "XP" in visible or "經驗" in visible or "+2" in visible, (
+        f"ceremony UI must show XP (experience_total=7); got {visible!r}"
+    )
+    assert any(token in visible for token in ("wood", "木材", "🪵")), visible
+    assert "🪙" in visible or "10" in visible
+    assert any(token in visible for token in ("第一次任務", "🌟", "first_task", "成就")), visible
+
