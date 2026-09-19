@@ -1804,6 +1804,16 @@ async function fetchAPI(path, options={}) {
   return res.json();
 }
 
+/** Escape user-controlled strings before interpolating into innerHTML (plain text, not markup). */
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function characterImage(avatar) {
   return 'assets-c/boy.png';
 }
@@ -1832,7 +1842,14 @@ function updateHeader() {
   const avEl = document.getElementById('hudAv');
   if (avEl) {
     const imgSrc = characterImage(kid.avatar);
-    avEl.innerHTML = `<img src="${imgSrc}" onerror="this.style.display='none';this.parentElement.textContent='${kid.avatar||'🐱'}'" alt="${kid.name||''}">`;
+    const img = document.createElement('img');
+    img.src = imgSrc;
+    img.alt = kid.name || '';
+    img.onerror = function() {
+      this.style.display = 'none';
+      if (this.parentElement) this.parentElement.textContent = kid.avatar || '🐱';
+    };
+    avEl.replaceChildren(img);
   }
   // Coins & Stars
   const coEl = document.getElementById('hudCo');
@@ -2951,14 +2968,15 @@ async function renderTasks() {
     html += pending.map(t => {
       const canComplete = t.kid_id === null || t.kid_id === currentKidId;
       const kidInfo = kids.find(k => k.id === t.kid_id);
-      const kidLabel = kidInfo ? `${kidInfo.avatar||'👦'} ${kidInfo.name}` : '';
+      const kidLabel = kidInfo ? `${escapeHtml(kidInfo.avatar||'👦')} ${escapeHtml(kidInfo.name)}` : '';
       const recurLabel = t.recurring === 'daily' ? '🔄每日' : t.recurring === 'weekly' ? '🔄每週' : t.recurring === 'weekdays' ? '🔄平日' : '';
       const isOverdue = t.due_date && new Date(t.due_date+'T23:59:59') < new Date();
+      const desc = t.description ? String(t.description) : '';
       return `<div class="task-card ${!canComplete ? 'faded' : ''}">
-        <div class="task-icon" style="font-size:22px">${t.icon||'✅'}</div>
+        <div class="task-icon" style="font-size:22px">${escapeHtml(t.icon||'✅')}</div>
         <div class="task-info">
-          <div class="task-title">${t.title}</div>
-          ${t.description ? `<div style="font-size:11px;color:#64748b;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;">${t.description.substring(0,40)}${t.description.length>40?'…':''}</div>` : ''}
+          <div class="task-title">${escapeHtml(t.title)}</div>
+          ${desc ? `<div style="font-size:11px;color:#64748b;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;">${escapeHtml(desc.substring(0,40))}${desc.length>40?'…':''}</div>` : ''}
           <div class="task-meta">
             <span class="task-points">🪙 +${t.points||10}</span>
             ${recurLabel ? `<span class="mc-badge recurring" style="font-size:10px;padding:1px 6px;">${recurLabel}</span>` : ''}
@@ -2978,11 +2996,11 @@ async function renderTasks() {
     html += '<div style="font-size:11px;color:#94a3b8;margin-top:12px;margin-bottom:4px;">✅ 已完成</div>';
     html += completed.slice(0, 20).map(t => {
       const kidInfo = kids.find(k => k.id === t.kid_id);
-      const kidLabel = kidInfo ? `${kidInfo.avatar||'👦'} ${kidInfo.name}` : '';
+      const kidLabel = kidInfo ? `${escapeHtml(kidInfo.avatar||'👦')} ${escapeHtml(kidInfo.name)}` : '';
       return `<div class="task-card completed">
-        <div class="task-icon" style="font-size:22px">${t.icon||'✅'}</div>
+        <div class="task-icon" style="font-size:22px">${escapeHtml(t.icon||'✅')}</div>
         <div class="task-info">
-          <div class="task-title" style="text-decoration:line-through;opacity:0.7">${t.title}</div>
+          <div class="task-title" style="text-decoration:line-through;opacity:0.7">${escapeHtml(t.title)}</div>
           <div class="task-meta">
             <span class="task-points">🪙 +${t.points||10}</span>
             ${kidLabel ? `<span style="font-size:11px">👤 ${kidLabel}</span>` : ''}
@@ -3078,7 +3096,7 @@ function renderKidList() {
         return;
       }
       list.innerHTML = kids.map(k =>
-        `<span style="background:#fff;border:2px solid #22c55e;border-radius:12px;padding:4px 10px;font-size:13px;">${k.avatar||'👦'} ${k.name} <span style="color:#94a3b8;">(${k.username})</span></span>`
+        `<span style="background:#fff;border:2px solid #22c55e;border-radius:12px;padding:4px 10px;font-size:13px;">${escapeHtml(k.avatar||'👦')} ${escapeHtml(k.name)} <span style="color:#94a3b8;">(${escapeHtml(k.username)})</span></span>`
       ).join('');
     })
     .catch(() => {});
@@ -3126,7 +3144,7 @@ async function populateMgmtSelects() {
       const currentVal = sel.value;
       let html = `<option value="">${id === 'adjustKid' ? '選擇小朋友' : '全部小朋友'}</option>`;
       kids.forEach(k => {
-        html += `<option value="${k.id}">${k.avatar||'👦'} ${k.name} (${k.points}🪙)</option>`;
+        html += `<option value="${k.id}">${escapeHtml(k.avatar||'👦')} ${escapeHtml(k.name)} (${k.points}🪙)</option>`;
       });
       sel.innerHTML = html;
       sel.value = currentVal;
@@ -3139,7 +3157,7 @@ async function populateMgmtSelects() {
       if (catSel && stats.categories && stats.categories.length) {
         const cur = catSel.value;
         catSel.innerHTML = '<option value="">全部分類</option>' + 
-          stats.categories.map(c => `<option value="${c.category}">${c.category} (${c.count})</option>`).join('');
+          stats.categories.map(c => `<option value="${escapeHtml(c.category)}">${escapeHtml(c.category)} (${c.count})</option>`).join('');
         catSel.value = cur;
       }
     } catch(e) {}
@@ -3204,17 +3222,18 @@ async function renderManageTasks() {
     
     let html = '';
     Object.entries(cats).forEach(([cat, ctasks]) => {
-      html += `<div style="font-size:11px;color:#94a3b8;margin:8px 0 4px;font-weight:600;">${cat}</div>`;
+      html += `<div style="font-size:11px;color:#94a3b8;margin:8px 0 4px;font-weight:600;">${escapeHtml(cat)}</div>`;
       ctasks.forEach(t => {
         const isDone = t.completed === 1 || t.completed === '1' || t.completed === true;
+        const desc = t.description ? String(t.description) : '';
         html += `<div class="mgmt-card ${isDone ? 'completed' : ''}" style="${isDone ? 'opacity:0.65' : ''}">
-          <div class="mc-icon">${t.icon||'✅'}</div>
+          <div class="mc-icon">${escapeHtml(t.icon||'✅')}</div>
           <div class="mc-info">
-            <div class="mc-title">${t.title}</div>
-            ${t.description ? `<div style="font-size:11px;color:#64748b;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;">${t.description.substring(0,50)}${t.description.length>50?'…':''}</div>` : ''}
+            <div class="mc-title">${escapeHtml(t.title)}</div>
+            ${desc ? `<div style="font-size:11px;color:#64748b;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;">${escapeHtml(desc.substring(0,50))}${desc.length>50?'…':''}</div>` : ''}
             <div class="mc-meta">
               <span class="mc-pts">🪙 ${t.points||10}</span>
-              ${t.kid_name ? `<span>${t.kid_avatar||'👤'} ${t.kid_name}</span>` : '<span>👤 未指定</span>'}
+              ${t.kid_name ? `<span>${escapeHtml(t.kid_avatar||'👤')} ${escapeHtml(t.kid_name)}</span>` : '<span>👤 未指定</span>'}
               ${t.recurring ? '<span class="mc-badge recurring">🔄 重複</span>' : ''}
               ${t.due_date ? `<span style="color:${!isDone && new Date(t.due_date+'T23:59:59') < new Date() ? '#ef4444' : '#94a3b8'};font-weight:${!isDone && new Date(t.due_date+'T23:59:59') < new Date() ? '700' : '400'}">📅 ${new Date(t.due_date+'T00:00:00').toLocaleDateString('zh-TW',{month:'short',day:'numeric'})}${!isDone && new Date(t.due_date+'T23:59:59') < new Date() ? ' ⚠️逾期' : ''}</span>` : ''}
               ${isDone ? `<span>✅ ${t.completed_at ? new Date(t.completed_at).toLocaleDateString() : ''}</span>` : ''}
@@ -3304,11 +3323,11 @@ async function editTask(taskId) {
       <h2>✏️ 編輯任務</h2>
       <div class="edit-field">
         <label>任務名稱</label>
-        <input id="editTitle" value="${task.title.replace(/"/g,'&quot;')}" maxlength="50">
+        <input id="editTitle" value="${escapeHtml(task.title)}" maxlength="50">
       </div>
       <div class="edit-field">
         <label>描述（可選）</label>
-        <textarea id="editDesc" maxlength="200" style="resize:vertical;min-height:50px;">${(task.description||'').replace(/"/g,'&quot;')}</textarea>
+        <textarea id="editDesc" maxlength="200" style="resize:vertical;min-height:50px;">${escapeHtml(task.description||'')}</textarea>
       </div>
       <div class="edit-row">
         <div class="edit-field">
@@ -3325,12 +3344,12 @@ async function editTask(taskId) {
           <label>👤 指定小朋友</label>
           <select id="editKid">
             <option value="">唔指定</option>
-            ${kids.map(k => `<option value="${k.id}" ${k.id === task.kid_id ? 'selected' : ''}>${k.avatar||'👦'} ${k.name}</option>`).join('')}
+            ${kids.map(k => `<option value="${k.id}" ${k.id === task.kid_id ? 'selected' : ''}>${escapeHtml(k.avatar||'👦')} ${escapeHtml(k.name)}</option>`).join('')}
           </select>
         </div>
         <div class="edit-field">
           <label>📂 分類</label>
-          <input id="editCategory" value="${(task.category||'').replace(/"/g,'&quot;')}" maxlength="15">
+          <input id="editCategory" value="${escapeHtml(task.category||'')}" maxlength="15">
         </div>
       </div>
       <div class="edit-row">
@@ -3454,8 +3473,8 @@ async function loadActivity() {
       const amt = item.amount;
       const cls = amt > 0 ? 'positive' : (amt < 0 ? 'negative' : '');
       return `<div class="activity-item">
-        <span>${item.kid_avatar||'👤'}</span>
-        <span style="flex:1">${item.kid_name||''}: ${(item.reason||'').substring(0,30)}</span>
+        <span>${escapeHtml(item.kid_avatar||'👤')}</span>
+        <span style="flex:1">${escapeHtml(item.kid_name||'')}: ${escapeHtml((item.reason||'').substring(0,30))}</span>
         <span class="ai-pts ${cls}">${amt > 0 ? '+' : ''}${amt}</span>
         <span class="ai-time">${new Date(item.created_at).toLocaleDateString()}</span>
       </div>`;
@@ -3504,8 +3523,8 @@ async function renderStreaks() {
         const sRes = await fetch(`${API}/api/kids/${kid.id}/streak`);
         const s = await sRes.json();
         html += `<div class="kid-stat-mini">
-          <div class="ks-avatar">${kid.avatar||'👦'}</div>
-          <div class="ks-name">${kid.name}</div>
+          <div class="ks-avatar">${escapeHtml(kid.avatar||'👦')}</div>
+          <div class="ks-name">${escapeHtml(kid.name)}</div>
           <div class="ks-val" style="color:${s.current_streak >= 7 ? '#ef4444' : (s.current_streak >= 3 ? '#f59e0b' : '#64748b')}">${s.current_streak||0}🔥</div>
           <div class="ks-label">最高: ${s.best_streak||0}日</div>
         </div>`;
@@ -3575,7 +3594,7 @@ async function renderLeaderboard(period) {
       return `<div class="lb-card">
         <div class="lb-rank ${cls}">${rank}</div>
         <div class="lb-info">
-          <div class="lb-name">${k.avatar||'👦'} ${k.name}</div>
+          <div class="lb-name">${escapeHtml(k.avatar||'👦')} ${escapeHtml(k.name)}</div>
           <div class="lb-pts-label">${period === 'all' ? '累積積分' : (period === 'weekly' ? '本週得分' : '本月得分')}</div>
         </div>
         <div class="lb-points">${pts}</div>
@@ -3622,7 +3641,7 @@ async function renderAchievementsGrid() {
       const earnedSet = new Set(achievements.map(a => a.title));
       
       html += `<div style="margin-bottom:12px;">
-        <div style="font-weight:700;font-size:13px;margin-bottom:6px;">${kid.avatar||'👦'} ${kid.name} (${achievements.length}/${allDefs.length})</div>
+        <div style="font-weight:700;font-size:13px;margin-bottom:6px;">${escapeHtml(kid.avatar||'👦')} ${escapeHtml(kid.name)} (${achievements.length}/${allDefs.length})</div>
         <div class="ach-grid">
           ${allDefs.map(a => {
             const earned = earnedSet.has(a.title);
@@ -4744,8 +4763,8 @@ function renderGoalCard(g) {
 
   return `<div class="${cls}">
     <div class="savings-card-head">
-      <span class="savings-card-icon">${g.icon || '🎯'}</span>
-      <span class="${titleCls}">${g.title}</span>
+      <span class="savings-card-icon">${escapeHtml(g.icon || '🎯')}</span>
+      <span class="${titleCls}">${escapeHtml(g.title)}</span>
     </div>
     <div class="savings-progress-wrap">
       <div class="savings-progress">
@@ -4966,6 +4985,7 @@ window.renderBuildingsTab = renderBuildingsTab;
 window.renderInventory = renderInventory;
 window.renderShop = renderShop;
 window.renderTasks = renderTasks;
+window.escapeHtml = escapeHtml;
 window.addTask = addTask;
 window.completeTask = completeTask;
 window.deleteTask = deleteTask;

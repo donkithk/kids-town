@@ -227,7 +227,7 @@ Status map after a run: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).
 | **前置** | 合成任務標題 `<b>粗體</b>` 同 `<img src="https://xss.example.test/probe.png" onerror="window.__xssHit=1">` |
 | **步驟** | 小朋友登入 → 任務 tab；用 Playwright 讀 `.task-title` 嘅 `textContent`／`innerHTML`；監聽 `xss.example.test` 網絡 |
 | **預期** | 見到括號字／escape 後嘅 tags；**無** 真正 `<b>` 節點；**無** 任務標題入面嘅 `<img>`；`window.__xssHit` 唔係 1；無 probe 網絡 |
-| **備註** | 產品而家 `renderTasks()` 仍用 innerHTML 拼 title。呢 case **可以紅**，用嚟鎖 DOM encoding gap（同 Phase 0 XSS 手動 follow-up 同一模式）。**本 PR 唔修產品編碼。** |
+| **備註** | 產品 `renderTasks()` 用 `escapeHtml()` 編碼 title／描述等用戶字串，再拼進 innerHTML。標籤以純文字顯示，唔執行 markup。 |
 
 ---
 
