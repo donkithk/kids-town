@@ -23,8 +23,16 @@ FORBIDDEN_DROP_MATERIALS = frozenset(
     {"iron", "star_shard", "star_fragment", "star_stone", "mystery_box"}
 )
 
-# GAMEPLAY_REDESIGN §6.5 short-explore gold fees
+# GAMEPLAY_REDESIGN §6.5 short-explore gold fees (do not change in Phase 1.5)
 EXPLORE_FEE_BY_REGION = {1: 10, 2: 20, 3: 30}
+
+# GAMEPLAY_REDESIGN §6.6 / §7 / user-locked §9 Q4 — 入局包 (onboarding pack)
+# Guild: 150 gold + wood×10 + brick×5, gear×0 (no gear key in materials JSON).
+GUILD_COST_GOLD = 150
+GUILD_COST_MATERIALS = {"wood": 10, "brick": 5}
+# Starter pack on create-kid / new account: exact grant; flag starter_granted.
+STARTER_POINTS = 120
+STARTER_MATERIALS = {"wood": 8, "brick": 5}
 
 BUILDING_NAMES = {
     "library": "圖書館",
