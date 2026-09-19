@@ -418,12 +418,15 @@ def _open_drawer(page):
 
 
 def _goto_town_map(page):
-    """建築 tab 嘅 startPlacement 唔會自動 st('town')；人手（或 E2E）要返地圖先點到格。"""
+    """建築 tab 嘅 startPlacement 唔會自動 st('town')；E2E 跟商店一樣切去地圖。
+
+    Tiny harness: call st('town') instead of ☰ drawer, so the overlay cannot
+    swallow the next map click. Product still does not auto-switch — (B).
+    """
     town = page.locator("#tab-town")
     classes = town.get_attribute("class") or ""
     if "active" not in classes.split():
-        drawer = _open_drawer(page)
-        drawer.get_by_text("小鎮地圖", exact=False).click()
+        page.evaluate("() => { if (typeof st === 'function') st('town'); }")
     page.locator("#tab-town.active").wait_for(state="visible", timeout=8000)
     page.locator("#townCanvasWrapper").wait_for(state="visible", timeout=8000)
 
@@ -459,7 +462,49 @@ def _click_build_on_card(page, container, building_name):
     btn.click()
 
 
-def _finish_placement_on_empty_cell(page, building_name):
+def _building_origins(test_db_path, kid_id):
+    db = connect_db(test_db_path)
+    rows = db.execute(
+        "SELECT cell_x, cell_y FROM buildings WHERE kid_id=?", (kid_id,)
+    ).fetchall()
+    db.close()
+    return [{"x": r["cell_x"] or 0, "y": r["cell_y"] or 0} for r in rows]
+
+
+def _pick_free_valid_plot(page, origins):
+    """Choose a 2×2 that does not overlap existing building origins (DB).
+
+    `let townData` is not on window, so occupancy is passed from SQLite.
+    Frontend .valid-plot overlay uses plot_idx, not cell_x/cell_y.
+    """
+    picked = page.evaluate(
+        """(origins) => {
+          const used = new Set();
+          (origins || []).forEach(b => {
+            const x = b.x || 0, y = b.y || 0;
+            for (let dy = 0; dy < 2; dy++)
+              for (let dx = 0; dx < 2; dx++)
+                used.add((x + dx) + ',' + (y + dy));
+          });
+          const plots = [...document.querySelectorAll('.valid-plot')];
+          for (const el of plots) {
+            const px = parseInt(el.dataset.px, 10);
+            const py = parseInt(el.dataset.py, 10);
+            let ok = true;
+            for (let dy = 0; dy < 2 && ok; dy++)
+              for (let dx = 0; dx < 2 && ok; dx++)
+                if (used.has((px + dx) + ',' + (py + dy))) ok = false;
+            if (ok) return {px, py};
+          }
+          return null;
+        }""",
+        origins,
+    )
+    assert picked, f"no free .valid-plot; origins={origins}"
+    return picked
+
+
+def _finish_placement_on_empty_cell(page, building_name, test_db_path, kid_id):
     """startPlacement 之後：見到放置 bar → 點綠色空地 → 確認 → 地圖出現建築。
 
     Product uses `.valid-plot` (2×2 green overlay) rather than `.empty-cell`
@@ -474,7 +519,12 @@ def _finish_placement_on_empty_cell(page, building_name):
     )
     page.locator(".valid-plot").first.wait_for(state="visible", timeout=8000)
     before = page.locator(".town-building").count()
-    page.locator(".valid-plot").first.click()
+    picked = _pick_free_valid_plot(page, _building_origins(test_db_path, kid_id))
+    # Product stacks overlapping 2×2 hit targets. Dispatch the DOM click so
+    # selectPlacePos runs. (B) still walks this on a real device.
+    page.locator(
+        f'.valid-plot[data-px="{picked["px"]}"][data-py="{picked["py"]}"]'
+    ).first.dispatch_event("click")
     confirm = bar.get_by_role("button", name="確認建造")
     confirm.wait_for(state="visible", timeout=8000)
     with page.expect_response(
@@ -482,6 +532,7 @@ def _finish_placement_on_empty_cell(page, building_name):
         and "/buildings" in r.url
         and "/move" not in r.url
         and "/upgrade" not in r.url
+        and "/unstored" not in r.url
     ) as resp_info:
         confirm.click()
     assert resp_info.value.status in (200, 201), resp_info.value.text()
@@ -492,7 +543,9 @@ def _finish_placement_on_empty_cell(page, building_name):
     assert after >= before, (
         f"map should gain a building after place; before={before} after={after}"
     )
-    visible = _visible_text(page) + (page.locator("#toast").inner_text() if page.locator("#toast").count() else "")
+    visible = _visible_text(page) + (
+        page.locator("#toast").inner_text() if page.locator("#toast").count() else ""
+    )
     assert building_name in visible or "建築完成" in visible or after > before
 
 
@@ -1265,7 +1318,7 @@ def test_shop_build_enters_placement_and_building_appears_on_map(
         state="visible", timeout=8000
     )
     _click_build_on_card(page, "#shopGrid", PLACE_SHOP_BUILDING)
-    _finish_placement_on_empty_cell(page, PLACE_SHOP_BUILDING)
+    _finish_placement_on_empty_cell(page, PLACE_SHOP_BUILDING, test_db_path, kid_id)
     db = connect_db(test_db_path)
     row = db.execute(
         "SELECT b.id FROM buildings b JOIN building_defs d ON d.id=b.def_id "
@@ -1283,7 +1336,8 @@ def test_buildings_tab_build_enters_placement_and_building_appears_on_map(
     """TC-FE-PLACE-BUILD-01 建築 tab「建造」→ startPlacement → 點空地 → 地圖出現建築。
 
     Stronger E2E twin of weak source P1-TC-PLC-FE-01. Product 建築 tab does not
-    call st('town'); this test opens 小鎮地圖 after 建造 (honest UI path).
+    call st('town'); after 建造 the harness switches to the town tab (same as
+    shopBuild). (B) still checks that kids can find the map on a real device.
     """
     kid_id = fe_ids["kid_id"]
     _fund_and_clear_building(test_db_path, kid_id, PLACE_TAB_BUILDING)
@@ -1295,7 +1349,7 @@ def test_buildings_tab_build_enters_placement_and_building_appears_on_map(
         PLACE_TAB_BUILDING, exact=False
     ).first.wait_for(state="visible", timeout=8000)
     _click_build_on_card(page, "#availableBuildingsList", PLACE_TAB_BUILDING)
-    _finish_placement_on_empty_cell(page, PLACE_TAB_BUILDING)
+    _finish_placement_on_empty_cell(page, PLACE_TAB_BUILDING, test_db_path, kid_id)
     db = connect_db(test_db_path)
     row = db.execute(
         "SELECT b.id FROM buildings b JOIN building_defs d ON d.id=b.def_id "

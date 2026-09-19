@@ -51,7 +51,7 @@ DOUBLE-CHECK (B)
 | B-PLC-05 | 綠格 → 確認 | 第二座建築出現喺另一格 | PLACE-BUILD-01 |
 | B-PLC-06 | 真機手指（唔係 mouse）點綠格 | 選中高亮 + 確認掣出嚟；無點唔中／點到裝飾 modal | **必須人手** |
 
-`.empty-cell`（1×1 裝飾格）喺放置態 **唔會**起屋；要點 `.valid-plot` 綠色 2×2。人手清單請寫「撳綠色範圍」而唔係「撳任意空格」。
+`.empty-cell`（1×1 裝飾格）喺放置態 **唔會**起屋；要點 `.valid-plot` 綠色 2×2。人手清單請寫「撳綠色範圍」而唔係「撳任意空格」。自動化要用 `force` click，因為產品疊咗好多層 2×2 熱區（Playwright 會話 intercepts pointer events）；真機手指會點到最上層。
 
 ---
 
