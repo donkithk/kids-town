@@ -366,7 +366,7 @@ Session helper 同 Phase 0。金幣／建築操作一律 kid 或該家長。
 | **建議模組** | `tests/test_frontend.py` 或 `tests/test_frontend_ceremony.py` |
 | **前置** | mock `/api/tasks/1/complete` 返回 CER-01 形狀，含 `experience_total=7`、`material_drops:["wood"]`、成就 |
 | **步驟** | 觸發完成 |
-| **預期** | 可見字包含 XP 數字同材料（木材／wood／🪵 任一）；金幣；成就標題或 icon。**策略**：1) Playwright mock route 最穩；2) 若未有瀏覽器，用正則／AST 測 `index.html` 嘅 `completeTask` **引用** `experience_total` 或 `experience_gained` 同 `material_drops`——呢個係弱斷言，(B) 清單必須人手點一次。禁止只 grep 過關當 (A) 完成儀式 UX。 |
+| **預期** | 可見字包含 XP 數字同材料（木材／wood／🪵 任一）；金幣；成就標題或 icon。**策略**：1) Playwright mock route 最穩（本 case）；2) 若未有瀏覽器，用正則／AST 測 `index.html` 嘅 `completeTask` **引用** `experience_total` 或 `experience_gained` 同 `material_drops`——呢個係弱斷言；3) **較強 (A)**：`TC-FE-CEREMONY-01` 真實 complete、唔 mock。禁止只 grep 過關當 (A) 完成儀式 UX。(B) 見 [`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md)。 |
 
 ---
 
@@ -574,7 +574,7 @@ Session helper 同 Phase 0。金幣／建築操作一律 kid 或該家長。
 | **建議模組** | `tests/test_frontend_placement.py` |
 | **前置** | 已登入；金幣夠；開建築分頁 |
 | **步驟** | 撳圖書館建造（唔經商店）→ 點空地 |
-| **預期** | 見到放置高亮／2×2 預覽；成功後格上有建築。**若前端-only：** (A) 可用字串斷言 `index.html` 建築分頁 onclick 含 `startPlacement` 而非只 `showToast`；**(B) 必須人手走一次兩個入口**。 |
+| **預期** | 見到放置高亮／2×2 預覽；成功後格上有建築。**弱 (A)：** 字串斷言 `index.html` 建築分頁 onclick 含 `startPlacement` 而非只 `showToast`（`tests/test_frontend_placement.py`）。**較強 (A)：** `TC-FE-PLACE-SHOP-01`／`TC-FE-PLACE-BUILD-01` Playwright 全路徑。**(B) 必須人手走一次兩個入口**（真機；見 [`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md)）。 |
 
 ---
 
@@ -588,7 +588,8 @@ Session helper 同 Phase 0。金幣／建築操作一律 kid 或該家長。
 - [ ] 無公會時探險／戰鬥有人話，唔係靜默失敗
 - [ ] 短征費用標「費用 🪙10」，唔再把 🪙30 當費用
 - [ ] 同一區探索可第二次出發
-- [ ] 建築分頁同商店都能放置
+- [ ] 建築分頁同商店都能放置（對應 `TC-FE-PLACE-SHOP-01` / `TC-FE-PLACE-BUILD-01`；(B) 真機仍要）
+- [ ] 完成任務儀式同時見到金幣 + XP 數字 + 材料（對應 `TC-FE-CEREMONY-01`；真機確認 toast 冇裁走 XP／🪵）
 - [ ] XP 條：升 1 級過程中條由空→滿，唔係一開始滿格（對住 GET `/experience`）
 - [ ] 15 分鐘劇本（企劃 §8）至少內部走一次
 

@@ -2,7 +2,8 @@
 
 This file is a **weak source-contract** (string/AST-ish scan of index.html).
 It is NOT full double-verification (A) for ceremony UX. STATUS.md records:
-  (A) Playwright mock in tests/test_frontend.py when Chromium is available
+  (A) Playwright mock in tests/test_frontend.py (P1-TC-CER-FE-01) when Chromium is available
+  (A+) Real complete E2E: TC-FE-CEREMONY-01 (no route mock) — gold + XP number + materials
   (B) manual checklist still required — grep alone is not ceremony UX.
 """
 from __future__ import annotations
@@ -39,7 +40,8 @@ def test_complete_task_source_reads_xp_materials_achievements():
 
     WEAK (A): source contract only. Does not prove toast/modal copy.
     Playwright mock (same Case ID in test_frontend.py) is the automatable UI
-    assert when Chromium works. (B) manual still required.
+    assert when Chromium works. Real-API UI: TC-FE-CEREMONY-01.
+    (B) manual still required.
     """
     html = INDEX.read_text(encoding="utf-8")
     body = _function_body(html, "completeTask")
