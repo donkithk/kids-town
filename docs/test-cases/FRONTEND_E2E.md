@@ -70,13 +70,30 @@ Status map after a run: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).
 
 ---
 
-## TC-FE-06 — 唔再標「即將開放」
+## TC-FE-06 — 戰鬥已上線：Boss 成本／confirm（唔再得「即將開放」）
 
 | 欄 | 內容 |
 |----|------|
 | **ID** | TC-FE-06 |
-| **步驟** | 打開主目錄 |
-| **預期** | 冇「即將開放」 |
+| **優先級** | P0 |
+| **建議模組** | `tests/test_frontend.py` |
+| **步驟** | 1. 登入後打開主目錄，確認冇「即將開放」 2. 進入戰鬥挑戰頁 3. 見到 Boss 按鈕含 💎 成本 4. 撳 Boss 之後 **取消** confirm |
+| **預期** | 選單／戰鬥頁冇「即將開放」；Boss 按鈕可見且含 💎；取消 confirm 之後唔會出現怪物名 |
+| **備註** | 取代舊「只 assert 冇即將開放」淺 case。稀有度仍由 TC-FE-05 覆蓋。Harness `test_boss_button_shows_cost_and_confirm` 保留作回歸。 |
+
+---
+
+## TC-FE-10 — 區域每日戰鬥上限
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-10 |
+| **優先級** | P1 |
+| **建議模組** | `tests/test_frontend.py` |
+| **前置** | 合成 kid；fixture 寫入今日 `daily_battles`（區域 1） |
+| **步驟** | 戰鬥挑戰頁撳「⚔️ 戰鬥」 |
+| **預期** | `POST .../battle-start` **400**；錯誤含「今日」；toast 提示今日已打過；唔進入戰鬥（冇 `.m-name`） |
+| **備註** | 測而家已有嘅每日一區上限，**唔**發明 Phase 1 buff。 |
 
 ---
 
@@ -170,6 +187,61 @@ Status map after a run: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).
 | **前置** | 空庫（無 admin 行） |
 | **步驟** | 開登入頁（密碼欄空白）→ 填 `admin` / `admin123` → 登入 |
 | **預期** | 錯誤訊息；停留登入頁；`#app` 仍 `display:none`；錯誤文字不含密碼 |
+
+---
+
+## FE-P0-06 — 登出後寫入 API → 401
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | FE-P0-06 |
+| **優先級** | P0 |
+| **對應 API** | P0-TC-SESS-05 |
+| **前置** | 合成 kid／家長已 seed |
+| **步驟** | 1. 小朋友登入 2. 主目錄撳「🚪 登出」 3. 同一 browser context `POST /api/kids/<id>/points`、`.../points/adjust`、`POST /api/tasks/<id>/complete` 4. 再用家長帳戶重做一次 |
+| **預期** | UI 返登入牆（`#loginScreen` 可見、`#app` `display:none`）；三個 API **401**；金幣不變 |
+| **產品 hook** | `POST /api/auth/logout`（清 Flask session）+ 主目錄「登出」掣。JS `logout()` 會 call 呢條 API，唔只清前端變數。 |
+
+---
+
+## TC-FE-JOURNEY-01 — 家長指派任務 → 小朋友完成
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-JOURNEY-01 |
+| **優先級** | P0 |
+| **建議模組** | `tests/test_frontend.py` |
+| **前置** | 家長 A + 已 link 嘅 `test_fe_kid`；合成 PIN `1357`、家長密碼 `TestParent!pass1` |
+| **步驟** | 1. 家長登入管理頁 2. 填任務名 `JOURNEY-洗碗`、分數 12、指定 TestKid → ＋ 新增 3. 小朋友登入 → 任務 tab 見到該任務 4. 撳「✅ 完成」 |
+| **預期** | 家長列表見到新任務；小朋友見到同一標題；toast／文案有「任務完成」；`#hudCo` 金幣上升（至少 +12）；DB `completed=1` |
+
+---
+
+## FE-XSS-01 — 任務標題 DOM 唔執行 markup
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | FE-XSS-01 |
+| **優先級** | P1 |
+| **對應 API** | P0-TC-XSS-01 |
+| **前置** | 合成任務標題 `<b>粗體</b>` 同 `<img src="https://xss.example.test/probe.png" onerror="window.__xssHit=1">` |
+| **步驟** | 小朋友登入 → 任務 tab；用 Playwright 讀 `.task-title` 嘅 `textContent`／`innerHTML`；監聽 `xss.example.test` 網絡 |
+| **預期** | 見到括號字／escape 後嘅 tags；**無** 真正 `<b>` 節點；**無** 任務標題入面嘅 `<img>`；`window.__xssHit` 唔係 1；無 probe 網絡 |
+| **備註** | 產品而家 `renderTasks()` 仍用 innerHTML 拼 title。呢 case **可以紅**，用嚟鎖 DOM encoding gap（同 Phase 0 XSS 手動 follow-up 同一模式）。**本 PR 唔修產品編碼。** |
+
+---
+
+## FE-XSS-02 — 小朋友顯示名 HUD 編碼
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | FE-XSS-02 |
+| **優先級** | P1 |
+| **對應 API** | P0-TC-XSS-02 |
+| **前置** | 合成 kid `test_fe_xss`，name=`<img src=x onerror=alert(1)>` |
+| **步驟** | 用該帳戶登入；讀 `#hudNm` |
+| **預期** | HUD 名係文字（含 `<img` tags 字面）；`#hudNm` 入面無 attacker `img`；無 `alert` dialog；`#hudAv img[src]` 唔係 `x` |
+| **備註** | `#hudNm` 已用 `textContent`（部分支援）。呢 case 預期可以綠。 |
 
 ---
 

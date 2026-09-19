@@ -1508,6 +1508,7 @@ body{
       <button class="di" onclick="st('savings');td()"><span class="ic">🎯</span> 儲蓄目標</button>
       <button class="di" onclick="st('ledger');td()"><span class="ic">📊</span> 帳本</button>
       <button class="di" onclick="st('manage');td()"><span class="ic">⚙️</span> 設定 <span class="sb">→</span></button>
+      <button class="di" id="logoutBtn" onclick="logout();td()"><span class="ic">🚪</span> 登出</button>
     </div>
   </div>
 <div id="toast"></div>
@@ -1746,7 +1747,11 @@ async function doRegister() {
   }
 }
 
-function logout() {
+async function logout() {
+  // Tiny product hook (FE-P0-06): invalidate the server session, not just local JS state.
+  try {
+    await fetch(`${API}/api/auth/logout`, {method: 'POST', credentials: 'same-origin'});
+  } catch (e) {}
   currentKidId = null;
   isParentSession = false;
   currentRole = null;

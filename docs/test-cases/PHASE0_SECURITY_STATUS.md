@@ -3,8 +3,8 @@
 > Recorded against **this PR** product code (`backend_v2.py` / `index.html`) on branch `cursor/phase0-security-impl-8913`.  
 > Command: `python -m pytest tests/ -m phase0 -v`  
 > Date: 2026-09-18  
-> Collection: **96 tests collected** (`pytest tests/ --collect-only`); Phase 0 marker run: **32 passed**.  
-> Full suite: **96 passed, 0 skipped**. Playwright UI: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md) (**17 passed**). Frontend tests skip only if Chromium is missing.
+> Collection: **102 tests collected** (`pytest tests/ --collect-only`); Phase 0 marker run: **33 passed**.  
+> Full suite: see [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md) (**21 passed, 1 failed** on frontend; `FE-XSS-01` intentional). Playwright UI: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md). Frontend tests skip only if Chromium is missing.
 
 ## Locked choices
 
@@ -13,7 +13,7 @@
 | Default admin | **No seeded usable `admin`/`admin123` on a fresh DB.** Login with those creds is always 403. Optional bootstrap via `KIDS_TOWN_BOOTSTRAP_ADMIN_PASSWORD` (weak/default values refused). |
 | Legacy parent SHA-256 | **Login succeeds and rehashes** to bcrypt (`P0-TC-PWD-03`). |
 | IDOR status | **403** (not 404). Unauthenticated writes/sensitive reads: **401**. |
-| XSS frontend | **Manual / E2E (B).** Backend JSON round-trip is automated and **passes**. |
+| XSS frontend | **Playwright `FE-XSS-01` / `FE-XSS-02`.** Backend JSON round-trip stays automated. Task-title DOM encoding may still be **FAIL** until product stops using innerHTML for titles. HUD name (`#hudNm` `textContent`) is partial support. |
 
 Synthetic fixture users only: `test-admin` / `TestAdmin!pass1`, `test_parent_*` / `TestParent!pass1`, kid PIN `1357`. Production `kids_town.db` is never copied.
 
@@ -25,6 +25,7 @@ Synthetic fixture users only: `test-admin` / `TestAdmin!pass1`, `test_parent_*` 
 | P0-TC-SESS-02 | `tests/test_authz_session.py::test_unauthenticated_complete_task_returns_401` | **PASS** | |
 | P0-TC-SESS-03 | `tests/test_authz_session.py::test_unauthenticated_create_kid_returns_401` | **PASS** | Body `parent_id` ignored without session |
 | P0-TC-SESS-04 | `tests/test_authz_session.py::test_health_allows_anonymous_without_pii` | **PASS** | Health stays public |
+| P0-TC-SESS-05 | `tests/test_authz_session.py::test_logout_then_write_returns_401` | **PASS** | Logout clears session; writes 401 |
 | P0-TC-IDOR-01 | `tests/test_authz_idor.py::test_kid_cannot_add_points_to_other_kid_returns_403` | **PASS** | Kid cannot POST points (self or other) |
 | P0-TC-IDOR-02 | `tests/test_authz_idor.py::test_kid_cannot_adjust_sibling_points_returns_403` | **PASS** | |
 | P0-TC-IDOR-03 | `tests/test_authz_idor.py::test_parent_cannot_forge_parent_id_on_create_kid` | **PASS** | Session `parent_id` wins; forged body → 403 |
@@ -50,8 +51,8 @@ Synthetic fixture users only: `test-admin` / `TestAdmin!pass1`, `test_parent_*` 
 | P0-TC-PTS-02 | `tests/test_points_floor.py::test_add_points_parent_negative_floors_at_zero` | **PASS** | `POST .../points` floors at 0 |
 | P0-TC-LIST-01 | `tests/test_list_kids_privacy.py::test_get_api_kids_is_not_a_public_full_list` | **PASS** | Kid sees self; parent sees linked |
 | P0-TC-LIST-02 | `tests/test_list_kids_privacy.py::test_parent_kids_ignores_forged_parent_id_query` | **PASS** | Query `parent_id` ignored |
-| P0-TC-XSS-01 | `tests/test_xss_encoding.py::test_task_title_roundtrip_and_escape_helper_if_present` | **PASS** (API) | **Frontend DOM encoding is MANUAL** |
-| P0-TC-XSS-02 | `tests/test_xss_encoding.py::test_kid_display_name_api_roundtrip` | **PASS** (API) | **HUD `innerHTML` / onerror is MANUAL** |
+| P0-TC-XSS-01 | `tests/test_xss_encoding.py::test_task_title_roundtrip_and_escape_helper_if_present` | **PASS** (API) | DOM `FE-XSS-01` **FAIL** — titles still innerHTML |
+| P0-TC-XSS-02 | `tests/test_xss_encoding.py::test_kid_display_name_api_roundtrip` | **PASS** (API) | DOM `FE-XSS-02` **PASS** (HUD `textContent`) |
 | P0-TC-DEV-01 | `tests/test_authz_session.py::test_dev_dashboard_denied_for_non_admin` | **PASS** | Admin session only |
 
 ## Accidentally passing guards (still green)
@@ -59,7 +60,7 @@ Synthetic fixture users only: `test-admin` / `TestAdmin!pass1`, `test_parent_*` 
 1. **SESS-04** — health stays public.
 2. **PIN-02** — successful kid login JSON does not echo PIN.
 3. **STAT-04** — HTML/png still load after denylist.
-4. **XSS-01 / XSS-02** — backend round-trip only. DOM checks remain on the Phase 0 **manual (B)** list.
+4. **XSS-01 / XSS-02** — backend round-trip only in `test_xss_encoding.py`. DOM checks moved to Playwright `FE-XSS-01` / `FE-XSS-02` (task titles may remain red).
 
 ## Intentional behavior decisions
 
