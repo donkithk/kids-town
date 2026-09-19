@@ -42,7 +42,12 @@ def test_xp_bar_percent_uses_in_level_not_total():
 def test_get_experience_returns_hud_fields_not_500(client, family):
     """P1-TC-XP-03 GET /experience 有 in-level 欄位；唔 500（ability_atk KeyError）。"""
     login_kid(client, family)
-    r = client.get(f"/api/kids/{family.kid_a.id}/experience")
+    try:
+        r = client.get(f"/api/kids/{family.kid_a.id}/experience")
+    except Exception as exc:
+        pytest.fail(
+            f"GET /experience must not 500 / KeyError (ability_atk); got {type(exc).__name__}: {exc}"
+        )
     assert r.status_code == 200, response_text(r)
     data = json_or_text(r)
     assert "experience_in_level" in data, data

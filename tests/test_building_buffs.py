@@ -99,9 +99,9 @@ def test_farm_daily_gold_claim_once_per_hk_day(client, family, test_db):
     kid_id = family.kid_a.id
     insert_building(test_db, kid_id, def_id(test_db, "farm"), level=1, stored=0, cell_x=2, cell_y=0)
     set_kid_points(test_db, kid_id, 0)
-    login_kid(client, family)
 
     with freeze_time(datetime(2026, 9, 18, 10, 0, tzinfo=HK)):
+        login_kid(client, family)
         r1 = farm_claim(client, kid_id)
         assert r1.status_code == 200, response_text(r1)
         assert get_kid_points(test_db, kid_id) == 5
@@ -114,6 +114,7 @@ def test_farm_daily_gold_claim_once_per_hk_day(client, family, test_db):
         assert get_kid_points(test_db, kid_id) == 5
 
     with freeze_time(datetime(2026, 9, 19, 0, 1, tzinfo=HK)):
+        login_kid(client, family)
         r3 = farm_claim(client, kid_id)
         assert r3.status_code == 200, response_text(r3)
         assert get_kid_points(test_db, kid_id) == 10
