@@ -41,6 +41,21 @@
 
 **RED 先通過關：** 新測試必須先紅（失敗原因係「產品未做」或「而家行為錯」），先至開始 GREEN。若測試一寫就綠，代表無斷到新行為——改測試，唔好當完成。
 
+### Frontend Playwright
+
+`tests/test_frontend.py` 用 **sync Playwright**（唔綁 Windows `Python312\python.exe`）。測試 server 用 `sys.executable`、空庫 factory、隨機空閒 port。
+
+```bash
+pip install -r requirements.txt
+python -m playwright install chromium
+python -m pytest tests/test_frontend.py -v
+```
+
+- Case 目錄：[`docs/test-cases/FRONTEND_E2E.md`](test-cases/FRONTEND_E2E.md)（TC-FE-* 同 FE-P0-*）。
+- 只喺 Chromium／Playwright 未裝時 skip；skip 原因必須包含 `python -m playwright install chromium`。
+- Linux CI 若缺系統庫：`python -m playwright install-deps chromium`。
+- 唔好 copy `kids_town.db`；唔好寫死生產 PIN。
+
 ### Step 3 — 最少實作
 
 - 只改令呢個 Case ID 變綠嘅碼。
@@ -67,7 +82,7 @@ python -m pytest tests/ -v
 
 - 失敗 = 唔准合併。
 - 暫時 skip 必須喺 PR 寫明 ticket／原因；**P0 安全 case 禁止 skip**。
-- `tests/test_frontend.py` 而家綁 Windows `Python312\python.exe`（評估 P2-6）：未修路徑之前，**唔好**當 (A) 嘅必綠項；修路徑本身係一個 TDD 任務。修完之後前端 E2E 納入 (A)。
+- `tests/test_frontend.py` 用當前 venv `sys.executable` + Playwright Chromium（Linux／macOS／Windows）。若瀏覽器未裝，pytest **skip** 並提示 `python -m playwright install chromium`。裝好之後前端 E2E 納入 (A)：`python -m pytest tests/test_frontend.py -v`。
 
 **(B) 第二輪：手動／E2E checklist 簽收**
 
@@ -230,7 +245,7 @@ Phase 0 全目錄變綠先至公開示範。Phase 1 遊戲碼 **唔好** 混進�
 - [ ] 無 skip P0
 
 ## Double verification
-- [ ] (A) `python -m pytest tests/ -v` 綠（或列出豁免嘅 Windows-only 前端檔 + 原因）
+- [ ] (A) `python -m pytest tests/ -v` 綠（前端 E2E 若 skip，原因必須係 Chromium 未裝）
 - [ ] (B) 手動／E2E 清單已勾，簽收見上
 
 ## Safety
@@ -251,7 +266,7 @@ Phase 0 全目錄變綠先至公開示範。Phase 1 遊戲碼 **唔好** 混進�
 |------|----------------|
 | `tests/conftest.py` copy 真 DB | Phase 0 改空庫；戰鬥測試用 factory 建 Lv 足夠嘅假 kid |
 | `test_auth.py` 寫死 parent_id=7 | 一併改 factory；舊測試可暫留但唔再加硬編碼 id |
-| `test_frontend.py` Windows Python | 獨立 PR 改 `sys.executable`；之前 (A) 豁免呢個檔 |
+| `test_frontend.py` Playwright | 用 `sys.executable`；skip 只限 Chromium 未裝。見 [`FRONTEND_E2E.md`](test-cases/FRONTEND_E2E.md) |
 | 根目錄 `e2e_functional_test.py` | 當手動腳本；新 case 優先入 `tests/` |
 | 無 CI workflow | Later；未有 CI 都要本地 (A) |
 

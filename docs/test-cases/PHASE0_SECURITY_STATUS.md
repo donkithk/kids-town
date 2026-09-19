@@ -3,8 +3,8 @@
 > Recorded against **this PR** product code (`backend_v2.py` / `index.html`) on branch `cursor/phase0-security-impl-8913`.  
 > Command: `python -m pytest tests/ -m phase0 -v`  
 > Date: 2026-09-18  
-> Collection: **91 tests collected** (`pytest tests/ --collect-only`); Phase 0 marker run: **32 passed**.  
-> Full suite: **79 passed, 12 skipped** (`tests/test_frontend.py` skipped — Windows Playwright path, `TDD_PROCESS.md` §6).
+> Collection: **96 tests collected** (`pytest tests/ --collect-only`); Phase 0 marker run: **32 passed**.  
+> Full suite: **96 passed, 0 skipped**. Playwright UI: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md) (**17 passed**). Frontend tests skip only if Chromium is missing.
 
 ## Locked choices
 

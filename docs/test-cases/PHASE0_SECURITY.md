@@ -468,6 +468,8 @@
 
 ## 手動／E2E 清單（雙重驗證 B）
 
+瀏覽器對應已自動化（Playwright）：[`FRONTEND_E2E.md`](FRONTEND_E2E.md) `FE-P0-01`…`FE-P0-05`。
+
 喺 pytest 綠之後勾：
 
 - [ ] 無登入用 curl 加分失敗，DB 不變
