@@ -219,3 +219,124 @@ def fetchone(db_path, sql, params=()):
 
 def response_text(r):
     return r.get_data(as_text=True)
+
+
+def get_kid_row(db_path, kid_id):
+    row = fetchone(db_path, "SELECT * FROM kids WHERE id=?", (kid_id,))
+    return row
+
+
+def get_kid_experience(db_path, kid_id):
+    row = get_kid_row(db_path, kid_id)
+    return row["experience"] if row else None
+
+
+def set_kid_level(db_path, kid_id, level, experience=None):
+    db = connect_db(db_path)
+    if experience is None:
+        db.execute("UPDATE kids SET level=? WHERE id=?", (level, kid_id))
+    else:
+        db.execute(
+            "UPDATE kids SET level=?, experience=? WHERE id=?",
+            (level, experience, kid_id),
+        )
+    db.commit()
+    db.close()
+
+
+def grant_inventory(db_path, kid_id, items):
+    """Test-only seed: set inventory quantities (does not go through inventory/add)."""
+    db = connect_db(db_path)
+    for item_type, qty in items.items():
+        row = db.execute(
+            "SELECT id FROM inventory WHERE kid_id=? AND item_type=?",
+            (kid_id, item_type),
+        ).fetchone()
+        if row:
+            db.execute("UPDATE inventory SET quantity=? WHERE id=?", (qty, row["id"]))
+        else:
+            db.execute(
+                "INSERT INTO inventory (kid_id, item_type, quantity) VALUES (?, ?, ?)",
+                (kid_id, item_type, qty),
+            )
+    db.commit()
+    db.close()
+
+
+def inventory_map(db_path, kid_id):
+    db = connect_db(db_path)
+    rows = db.execute(
+        "SELECT item_type, quantity FROM inventory WHERE kid_id=?", (kid_id,)
+    ).fetchall()
+    db.close()
+    return {r["item_type"]: r["quantity"] for r in rows}
+
+
+def building_def_id(db_path, name):
+    row = fetchone(db_path, "SELECT id FROM building_defs WHERE name=?", (name,))
+    assert row, f"building_defs missing {name!r}"
+    return row["id"]
+
+
+def insert_building(
+    db_path,
+    kid_id,
+    def_id,
+    level=1,
+    stored=0,
+    cell_x=0,
+    cell_y=0,
+):
+    """Test-only seed of a placed building (skips gold/material costs)."""
+    db = connect_db(db_path)
+    cur = db.execute(
+        "INSERT INTO buildings (kid_id, def_id, plot_idx, level, cell_x, cell_y, stored) "
+        "VALUES (?, ?, 0, ?, ?, ?, ?)",
+        (kid_id, def_id, level, cell_x, cell_y, stored),
+    )
+    db.commit()
+    bid = cur.lastrowid
+    db.close()
+    return bid
+
+
+def insert_explored_region(db_path, kid_id, region_id):
+    db = connect_db(db_path)
+    db.execute(
+        "INSERT OR IGNORE INTO explored_regions (kid_id, region_id) VALUES (?, ?)",
+        (kid_id, region_id),
+    )
+    db.commit()
+    db.close()
+
+
+def force_expedition_claimable(db_path, kid_id):
+    """Test-only: make the running expedition immediately claimable."""
+    db = connect_db(db_path)
+    db.execute(
+        "UPDATE expeditions SET end_time=? WHERE kid_id=? AND status='running'",
+        ("2000-01-01T00:00:00+00:00", kid_id),
+    )
+    db.commit()
+    db.close()
+
+
+def mark_expeditions_completed(db_path, kid_id):
+    """Test-only: clear running expeditions so a follow-up start is allowed."""
+    db = connect_db(db_path)
+    db.execute(
+        "UPDATE expeditions SET status='completed' WHERE kid_id=? AND status='running'",
+        (kid_id,),
+    )
+    db.commit()
+    db.close()
+
+
+def points_log_rows(db_path, kid_id):
+    db = connect_db(db_path)
+    rows = db.execute(
+        "SELECT amount, reason FROM points_log WHERE kid_id=? ORDER BY id",
+        (kid_id,),
+    ).fetchall()
+    db.close()
+    return [dict(r) for r in rows]
