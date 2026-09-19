@@ -150,6 +150,8 @@ def migrate_db():
     kid_cols = [row[1] for row in db.execute("PRAGMA table_info(kids)").fetchall()]
     if 'theme' not in kid_cols:
         db.execute("ALTER TABLE kids ADD COLUMN theme TEXT DEFAULT ''")
+    if 'starter_granted' not in kid_cols:
+        db.execute("ALTER TABLE kids ADD COLUMN starter_granted INTEGER DEFAULT 0")
     
     # Check tasks table columns
     cols = [row[1] for row in db.execute("PRAGMA table_info(tasks)").fetchall()]
@@ -188,6 +190,7 @@ def migrate_db():
     """)
     
     _canonicalize_building_def_materials(db)
+    _apply_guild_onboard_recipe(db)
     _migrate_inventory_item_types(db)
     db.execute("""
         CREATE TABLE IF NOT EXISTS farm_claims (
@@ -505,7 +508,7 @@ def seed_building_defs():
         ("🌾", "農場", 300, '{"wood":15,"brick":10}', "每日 +5🪙", "daily_gold", "[5,10,15,25,40]", 5, None),
         ("🏪", "商店", 500, '{"wood":20,"brick":15,"gear":5}', "獎勵 -10%", "discount", "[0.9,0.85,0.8,0.75,0.7]", 5, None),
         ("🏥", "醫院", 400, '{"wood":15,"brick":20}', "探險回復 x2", "expedition_recovery", "[2,3,4,5,6]", 5, None),
-        ("🗺️", "探險公會", 600, '{"wood":25,"brick":20,"gear":10}', "解鎖探險", "unlock_explore", "[1,1,1,1,1]", 5, None),
+        ("🗺️", "探險公會", GUILD_COST_GOLD, DEFAULT_GUILD_MATERIALS, "解鎖探險", "unlock_explore", "[1,1,1,1,1]", 5, None),
         ("🔨", "工坊", 350, '{"wood":20,"gear":5}', "建築速度 x2", "build_speed", "[2,3,4,5,6]", 5, None),
         ("🗼", "燈塔", 800, '{"wood":30,"brick":25,"gear":15,"gem":3}', "探險範圍 +1", "explore_range", "[1,2,2,3,3]", 5, "r3"),
         ("⚔️", "競技場", 1000, '{"wood":40,"brick":30,"gear":20,"gem":5}', "探險金幣 x2", "expedition_gold", "[2,3,4,5,6]", 5, "r4"),
@@ -517,6 +520,7 @@ def seed_building_defs():
             (d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8])
         )
     _canonicalize_building_def_materials(db)
+    _apply_guild_onboard_recipe(db)
     db.commit()
     db.close()
 
@@ -1159,7 +1163,11 @@ PHASE1_LOCKED_REGIONS = frozenset({4, 5})
 EXPLORE_FEE_BY_REGION = {1: 10, 2: 20, 3: 30}
 EXPLORE_GOLD_REWARD_RANGE = {1: (6, 10), 2: (12, 18), 3: (18, 28)}
 HK_TZ = timezone(timedelta(hours=8))
-DEFAULT_GUILD_MATERIALS = '{"wood":25,"brick":20,"gear":10}'
+# GAMEPLAY_REDESIGN §6.6 / §7 / §9 Q4 — 入局包 (onboarding pack)
+GUILD_COST_GOLD = 150
+DEFAULT_GUILD_MATERIALS = '{"wood":10,"brick":5}'
+STARTER_POINTS = 120
+STARTER_MATERIALS = {'wood': 8, 'brick': 5}
 
 
 def canonicalize_item_type(item_type):
@@ -1231,6 +1239,41 @@ def _canonicalize_building_def_materials(db):
                 (json.dumps(new_mats, ensure_ascii=False), bid),
             )
     db.commit()
+
+
+def _apply_guild_onboard_recipe(db):
+    """GAMEPLAY_REDESIGN §6.6 / §9 Q4: 探險公會 is 150 gold + wood×10 + brick×5 (no gear)."""
+    try:
+        db.execute(
+            "UPDATE building_defs SET cost_gold=?, materials=? WHERE name=?",
+            (GUILD_COST_GOLD, DEFAULT_GUILD_MATERIALS, '探險公會'),
+        )
+    except sqlite3.OperationalError:
+        return
+
+
+def grant_starter_pack_once(db, kid_id):
+    """GAMEPLAY_REDESIGN §6.6: one-time 120 gold + wood×8 + brick×5 per kid.
+
+    Idempotent: if starter_granted is already truthy, do not add again.
+    """
+    try:
+        row = db.execute(
+            "SELECT starter_granted FROM kids WHERE id=?", (kid_id,)
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return False
+    if not row:
+        return False
+    if row['starter_granted']:
+        return False
+    db.execute(
+        "UPDATE kids SET points = points + ?, starter_granted=1 WHERE id=?",
+        (STARTER_POINTS, kid_id),
+    )
+    for item_type, qty in STARTER_MATERIALS.items():
+        add_item(kid_id, item_type, qty, db)
+    return True
 
 
 def _migrate_inventory_item_types(db):
@@ -4343,7 +4386,7 @@ def create_kid():
     if db.execute("SELECT id FROM admins WHERE username=?", (username,)).fetchone():
         return jsonify({'error': '用戶名已被使用'}), 409
 
-    # 建立 kid (其他欄位用 DEFAULT)
+    # 建立 kid (其他欄位用 DEFAULT)；新手包一次過發放（§6.6 starter_granted）
     cur = db.execute(
         "INSERT INTO kids (name, username, avatar, color) VALUES (?, ?, ?, ?)",
         (name, username, avatar, '#3b82f6')
@@ -4352,6 +4395,7 @@ def create_kid():
     db.execute("INSERT INTO kid_auth (kid_id, pin) VALUES (?, ?)", (kid_id, hash_password(pin)))
     # auto-link 到呢個家長
     db.execute("INSERT INTO parent_kid (parent_id, kid_id) VALUES (?, ?)", (parent_id, kid_id))
+    grant_starter_pack_once(db, kid_id)
     db.commit()
 
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()

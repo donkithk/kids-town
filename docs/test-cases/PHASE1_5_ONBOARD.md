@@ -1,10 +1,10 @@
-# Phase 1.5 入局包測試目錄（TDD RED — 先寫失敗測試）
+# Phase 1.5 入局包測試目錄（TDD GREEN）
 
-> **狀態**：RED（產品碼**未**實作）。對照表見 [`PHASE1_5_ONBOARD_STATUS.md`](PHASE1_5_ONBOARD_STATUS.md)。  
+> **狀態**：GREEN（產品碼已實作）。對照表見 [`PHASE1_5_ONBOARD_STATUS.md`](PHASE1_5_ONBOARD_STATUS.md)。  
 > **Marker**：`phase1_5`（`python -m pytest tests/ -m phase1_5 -v`）。未用別名 `onboard`，避免兩套跑法。  
 > **企劃**：[`GAMEPLAY_REDESIGN.md`](../GAMEPLAY_REDESIGN.md) §6.6 15 分鐘劇本、§7 新手包／公會成本、§9 Q3／Q4（用戶已拍板，見下）。  
 > **Fixture**：空庫 seed；factory 合成帳戶。**禁止** copy `kids_town.db`。**禁止**真實 PIN。  
-> **產品碼**：本目錄 PR **唔改** `backend_v2.py`／`index.html`。GREEN 另 PR。  
+> **產品碼**：`backend_v2.py` 公會成本／新手包；`index.html` 公會閘文案 150🪙。  
 > **短征費用表**：維持 Phase 1 **10 / 20 / 30**（`P1-TC-EXP-01`–`04`）。本目錄**唔**改費用。
 
 Pytest 模組：`tests/test_onboard.py`。常數：`tests/phase1_helpers.py`（`GUILD_COST_*`、`STARTER_*`）。
@@ -49,7 +49,7 @@ Pytest 模組：`tests/test_onboard.py`。常數：`tests/phase1_helpers.py`（`
 | **步驟** | `POST /api/kids/{id}/buildings` `def_id`=探險公會 |
 | **預期** | 201；DB 有 1 行公會；points=0；wood=0；brick=0；**唔**要求扣 gear（測試唔發 gear） |
 
-現況（故意紅）：seed 仍係 **600 金 + wood×25 + brick×20 + gear×10**，150/10/5 會 400。
+現況：seed／migrate 公會係 **150 金 + wood×10 + brick×5**（無 gear）。
 
 ---
 
@@ -83,7 +83,7 @@ Pytest 模組：`tests/test_onboard.py`。常數：`tests/phase1_helpers.py`（`
 | **步驟** | create-kid（合成 username + PIN `1357`，非生產 PIN） |
 | **預期** | 201；`kid.points==120`（DB 同 JSON）；inventory **恰好** wood=8、brick=5（空庫新號）；`starter_granted` 喺 create-kid JSON **或** `kids.starter_granted`（truthy / 1） |
 
-現況（故意紅）：`INSERT INTO kids` 用 DEFAULT points=0；無材料；無 `starter_granted`。
+現況：`POST /api/auth/create-kid` 發 `points=120`、wood×8、brick×5，並設 `starter_granted=1`（只發一次）。
 
 ---
 
@@ -123,7 +123,7 @@ Pytest 模組：`tests/test_onboard.py`。常數：`tests/phase1_helpers.py`（`
 
 | Phase 1 case | 入局包之後 |
 |--------------|------------|
-| `P1-TC-MAT-03` 斷言公會 materials 含 **gear** | GREEN PR **必須一併改**呢條（新配方無 gear）。本 RED PR **唔改**，以免 `pytest -m phase1` 多一條紅。 |
+| `P1-TC-MAT-03` 公會 materials | 已改為 **無 gear 鍵**（wood/brick only）；canonical 鍵規則不變。 |
 | `P1-TC-EXP-01`–`04` 費用 10/20/30 | **保持** |
 | `P1-TC-EXP-05` 可再農 | **保持**；ONB-EXP-01 重複斷言 |
 
@@ -137,4 +137,4 @@ Pytest 模組：`tests/test_onboard.py`。常數：`tests/phase1_helpers.py`（`
 - [ ] 149 金不能起公會
 - [ ] 區 1 短征 claim 後可再出發（無「今日已達上限」）
 
-簽收格式見 `TDD_PROCESS.md`。本 RED PR 唔做 (B)。
+簽收格式見 `TDD_PROCESS.md`。GREEN PR 自動化 (A) 以 pytest 表為準。
