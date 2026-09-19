@@ -12,7 +12,9 @@ from tests.factories import (  # noqa: E402
     TEST_ADMIN_USERNAME,
     TEST_KID_PIN,
     TEST_PARENT_PASSWORD,
+    building_def_id,
     init_empty_db,
+    insert_building,
     insert_kid,
     login_as,
     make_admin,
@@ -109,8 +111,13 @@ def family(app, test_db):
 
 @pytest.fixture()
 def battle_kid(test_db):
-    """High-level synthetic kid for existing battle tests (no production id=4)."""
-    return insert_kid(
+    """High-level synthetic kid for existing battle tests (no production id=4).
+
+    Phase 1 guild gate is server-side, so battle fixtures include an unstored
+    expedition guild. This is not a weakening of P1-TC-GLD-*; those cases use
+    family kids without a guild.
+    """
+    kid = insert_kid(
         test_db,
         name="Battle Kid",
         username="test_battle_kid",
@@ -119,6 +126,16 @@ def battle_kid(test_db):
         points=100,
         experience=100,
     )
+    insert_building(
+        test_db,
+        kid["id"],
+        building_def_id(test_db, "探險公會"),
+        level=1,
+        stored=0,
+        cell_x=6,
+        cell_y=0,
+    )
+    return kid
 
 
 @pytest.fixture()
