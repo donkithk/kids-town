@@ -184,6 +184,7 @@ tests/test_<area>.py
 | 探險費用 | `tests/test_expedition_gold.py` |
 | 公會閘 | `tests/test_guild_gate.py` |
 | 放置模式（前端） | `tests/test_frontend_placement.py` |
+| Phase 1.5 入局包（公會成本／新手包／短征可農） | `tests/test_onboard.py`（marker `phase1_5`） |
 
 一個 Case ID 對一個 `def test_...`。相關 helper 可同檔。
 

@@ -34,6 +34,12 @@ API (Phase 0 security, no browser):
 python -m pytest tests/ -m phase0 -v
 ```
 
+Phase 1.5 onboarding pack (TDD; currently RED until the guild-cost / starter-pack product PR):
+
+```bash
+python -m pytest tests/ -m phase1_5 -v
+```
+
 Frontend E2E (Playwright + Chromium, empty seeded DB):
 
 ```bash
@@ -49,4 +55,4 @@ Full suite:
 python -m pytest tests/ -v
 ```
 
-Case catalogs: [`docs/test-cases/PHASE0_SECURITY.md`](docs/test-cases/PHASE0_SECURITY.md), [`docs/test-cases/FRONTEND_E2E.md`](docs/test-cases/FRONTEND_E2E.md). Engineering process: [`docs/TDD_PROCESS.md`](docs/TDD_PROCESS.md).
+Case catalogs: [`docs/test-cases/PHASE0_SECURITY.md`](docs/test-cases/PHASE0_SECURITY.md), [`docs/test-cases/PHASE1_GAMEPLAY.md`](docs/test-cases/PHASE1_GAMEPLAY.md), [`docs/test-cases/PHASE1_5_ONBOARD.md`](docs/test-cases/PHASE1_5_ONBOARD.md), [`docs/test-cases/FRONTEND_E2E.md`](docs/test-cases/FRONTEND_E2E.md). Engineering process: [`docs/TDD_PROCESS.md`](docs/TDD_PROCESS.md).
