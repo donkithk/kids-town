@@ -48,7 +48,7 @@ Synthetic fixtures only: `test_parent_*` / `TestParent!pass1`, kid PIN `1357`. P
 | P1-TC-UNL-03 | `tests/test_unlock_region.py::test_arena_stays_locked_while_region_4_content_locked` | **PASS** | arena 400 `region_locked` even with explored 4 |
 | P1-TC-CER-01 | `tests/test_task_ceremony.py::test_complete_json_includes_ceremony_fields` | **PASS** | bonus/total/pending_approval + HUD XP fields; XP not in points_log |
 | P1-TC-CER-02 | `tests/test_task_ceremony.py::test_first_task_achievement_in_complete_response` | **PASS** | `first_task` still awarded |
-| P1-TC-CER-03 | `tests/test_task_ceremony.py::test_require_approval_defers_rewards_until_parent_approves` | **FAIL** (now `phase2`) | Marker moved 2026-09-20; still **not skipped**. See [`PHASE2_APPROVAL_STATUS.md`](PHASE2_APPROVAL_STATUS.md) |
+| P1-TC-CER-03 | `tests/test_task_ceremony.py::test_require_approval_defers_rewards_until_parent_approves` | **PASS** (now `phase2`) | Marker moved 2026-09-20; GREEN in Phase 2. See [`PHASE2_APPROVAL_STATUS.md`](PHASE2_APPROVAL_STATUS.md) |
 | P1-TC-CER-FE-01 | `tests/test_frontend_ceremony.py::test_complete_task_source_reads_xp_materials_achievements` | **PASS** | Weak source (A): `completeTask` reads XP/materials/achievements |
 | P1-TC-CER-FE-01 | `tests/test_frontend.py::test_complete_task_ceremony_shows_xp_materials_achievements` | **PASS** | Playwright mock (A): toast shows XP + 🪵木材 + 🌟第一次任務 |
 | P1-TC-XP-01 | `tests/test_xp_bar.py::test_calc_level_uses_exp_per_level_25` | **PASS** | `EXP_PER_LEVEL=25` unchanged |
@@ -70,7 +70,7 @@ Synthetic fixtures only: `test_parent_*` / `TestParent!pass1`, kid PIN `1357`. P
 
 | Case ID | Why |
 |---------|-----|
-| P1-TC-CER-03 | Folded into Phase 2 (`@pytest.mark.phase2`). Same product gap: no `require_approval` or `POST /api/tasks/<id>/approve`. Do not silent-skip. |
+| P1-TC-CER-03 | Folded into Phase 2 (`@pytest.mark.phase2`). GREEN: `require_approval` + `POST /api/tasks/<id>/approve`. |
 
 ## Frontend (A) vs (B)
 

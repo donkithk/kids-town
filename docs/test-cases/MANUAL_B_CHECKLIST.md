@@ -76,6 +76,6 @@ DOUBLE-CHECK (B)
 
 | 項目 | 點解 |
 |------|------|
-| P1-TC-CER-03 | 已摺入 Phase 2 `require_approval`（marker `phase2`）；**保持紅**，禁止 skip。見 [`PHASE2_APPROVAL.md`](PHASE2_APPROVAL.md) |
+| P1-TC-CER-03 | 已摺入 Phase 2 `require_approval`（marker `phase2`）；GREEN PR 已令 case 綠。見 [`PHASE2_APPROVAL.md`](PHASE2_APPROVAL.md) |
 | grep `completeTask` / `startPlacement` | 弱契約；唔可以標「(A) 完成」 |
 | 產品修正 toast 裁字、建築 tab 自動切地圖 | 體驗 C 呢單係 **測試／文件**；產品修另 PR |

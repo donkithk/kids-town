@@ -1,11 +1,11 @@
-# Phase 2 家長批核家課獎勵測試目錄（TDD RED — 先寫失敗測試）
+# Phase 2 家長批核家課獎勵測試目錄（TDD GREEN）
 
-> **狀態**：RED（產品碼**未**實作 `require_approval` 閘）。`pytest -m phase2` = **7 failed / 3 passed**。對照表見 [`PHASE2_APPROVAL_STATUS.md`](PHASE2_APPROVAL_STATUS.md)。  
+> **狀態**：GREEN（產品碼已實作 `require_approval` 閘，預設 off）。`pytest -m phase2` = **10 passed**。對照表見 [`PHASE2_APPROVAL_STATUS.md`](PHASE2_APPROVAL_STATUS.md)。  
 > **Marker**：`phase2`（`python -m pytest tests/ -m phase2 -v`）。  
 > **企劃**：[`GAMEPLAY_REDESIGN.md`](../GAMEPLAY_REDESIGN.md) **§6.7**（可選家長批核先發獎；family setting，**預設 off**）。  
 > **Fixture**：空庫 seed；factory 合成帳戶。**禁止** copy `kids_town.db`。**禁止**真實 PIN。  
-> **產品碼**：本目錄 PR **唔改** `backend_v2.py`／`index.html`。GREEN 另 PR。  
-> **Phase 1 leftover**：`P1-TC-CER-03` 由 `phase1` **改標 `phase2`**（唔 silent-skip）。執行覆蓋以本目錄為準；Phase 1 目錄保留歷史 ID。
+> **產品碼**：GREEN PR 實作 `parents.require_approval`、`/approve`、`/reject`、管理頁待批列表。  
+> **Phase 1 leftover**：`P1-TC-CER-03` 由 `phase1` **改標 `phase2`**（唔 silent-skip），而家同 APR-02／03 一齊綠。
 
 Pytest 模組：`tests/test_approval.py`（API）、`tests/test_approval_ui.py`（可選 FE 契約）、`tests/test_task_ceremony.py::test_require_approval_defers_rewards_until_parent_approves`（CER-03）。Helper：`tests/phase1_helpers.py` 嘅 `try_enable_require_approval`。
 
