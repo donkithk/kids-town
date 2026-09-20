@@ -180,6 +180,7 @@ tests/test_<area>.py
 | 區域鎖／怪物 | `tests/test_region_lock.py` |
 | unlock_region | `tests/test_unlock_region.py` |
 | 任務儀式 API | `tests/test_task_ceremony.py` |
+| Phase 2 家長批核家課獎勵 | `tests/test_approval.py`（marker `phase2`）；FE 契約 `tests/test_approval_ui.py` |
 | XP helper | `tests/test_xp_bar.py` |
 | 探險費用 | `tests/test_expedition_gold.py` |
 | 公會閘 | `tests/test_guild_gate.py` |

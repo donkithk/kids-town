@@ -1,6 +1,6 @@
 # Phase 1 遊戲循環測試目錄（先寫 pytest，後寫產品碼）
 
-> **狀態**：GREEN（產品碼已實作）。`pytest -m phase1` = 39 passed / 1 failed（**P1-TC-CER-03** Phase 2 批核，故意留紅）。對照表見 [`PHASE1_GAMEPLAY_STATUS.md`](PHASE1_GAMEPLAY_STATUS.md)。  
+> **狀態**：GREEN（產品碼已實作）。`pytest -m phase1` 預期全綠：歷史 leftover **P1-TC-CER-03** 已改標 `phase2`（唔 skip），摺入 [`PHASE2_APPROVAL.md`](PHASE2_APPROVAL.md)。對照表見 [`PHASE1_GAMEPLAY_STATUS.md`](PHASE1_GAMEPLAY_STATUS.md)。  
 > **Phase 1.5 入局包**（公會 150 金＋新手包 120／wood×8／brick×5）：另見 [`PHASE1_5_ONBOARD.md`](PHASE1_5_ONBOARD.md)，marker `phase1_5`。本目錄 **唔** 改短征費用表 10/20/30；可重複農仍由 **P1-TC-EXP-05** 覆蓋。  
 > **依賴**：Phase 0 session／角色模型已存在；呢啲 case 全部用 **已登入** 嘅正確擁有者，另加註明嘅 401／403。  
 > **企劃**：[`GAMEPLAY_REDESIGN.md`](../GAMEPLAY_REDESIGN.md) §6。  
@@ -343,17 +343,18 @@ Session helper 同 Phase 0。金幣／建築操作一律 kid 或該家長。
 
 ---
 
-### P1-TC-CER-03 — 批核開啟時唔入帳（若 setting API 尚未做，skip 直到 Phase 2——**唔好 silent skip**；未做則本 case 標 Phase 2 依賴）
+### P1-TC-CER-03 — 批核開啟時唔入帳（**已摺入 Phase 2**；**唔好 silent skip**）
 
 | 欄 | 內容 |
 |----|------|
 | **ID** | P1-TC-CER-03 |
 | **標題** | `require_approval=true` 時 complete 後金幣／XP 不變、`pending_approval=true` |
-| **優先級** | P1 |
-| **建議模組** | `tests/test_task_ceremony.py` |
+| **優先級** | P1（執行歸 Phase 2） |
+| **建議模組** | `tests/test_task_ceremony.py`（`@pytest.mark.phase2`，唔再 `phase1`） |
 | **前置** | 家庭開啟批核（API 名以實作為準） |
 | **步驟** | complete；再 approve |
 | **預期** | complete 後 points 不變；approve 後先至加上 `points_awarded` |
+| **Marker 遷移** | 2026-09-20：由 `phase1` 改 `phase2`，以免 `pytest -m phase1` 攜帶 §6.7 故意紅。完整目錄：[`PHASE2_APPROVAL.md`](PHASE2_APPROVAL.md) `P2-APR-02`／`P2-APR-03`。 |
 
 ---
 

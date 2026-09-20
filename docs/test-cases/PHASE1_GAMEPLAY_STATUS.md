@@ -9,11 +9,11 @@
 
 | Suite | Command | Result |
 |-------|---------|--------|
-| Phase 1 | `python3 -m pytest tests/ -m phase1 -v` | **39 passed, 1 failed**, 102 deselected, 33 warnings in 9.05s |
+| Phase 1 | `python3 -m pytest tests/ -m phase1 -v` | **39 passed, 1 failed**, 102 deselected, 33 warnings in 9.05s（GREEN 當時；**P1-TC-CER-03** 其後改標 `phase2`，見 Phase 2 目錄） |
 | Rest of suite | `python3 -m pytest tests/ -m "not phase1" -q` | **102 passed**, 40 deselected, 20 warnings in 36.56s |
 | Collection | `python3 -m pytest tests/ -m phase1 --collect-only -q` | **40 selected** / 142 collected |
 
-Intentional leftover red: **P1-TC-CER-03** only (Phase 2 `require_approval` / `GAMEPLAY_REDESIGN` §6.7). Not skipped. Existing green suite (`not phase1`, including Phase 0 + frontend E2E) stayed 102 green.
+Historical leftover red was **P1-TC-CER-03** only (Phase 2 `require_approval` / `GAMEPLAY_REDESIGN` §6.7). **Not skipped.** On 2026-09-20 the pytest marker moved `phase1` → `phase2` so `pytest -m phase1` no longer carries this intentional red. Executable coverage: [`PHASE2_APPROVAL.md`](PHASE2_APPROVAL.md) / [`PHASE2_APPROVAL_STATUS.md`](PHASE2_APPROVAL_STATUS.md).
 
 Experience C re-verify (branch `cursor/harden-ceremony-place-e2e-17ad`, 2026-09-19): `pytest -m phase1` still **39 passed / 1 failed (CER-03)**; `not phase1` **105 passed** (was 102; +3 TC-FE-CEREMONY/PLACE cases). Collection 145. Details: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).
 
@@ -48,7 +48,7 @@ Synthetic fixtures only: `test_parent_*` / `TestParent!pass1`, kid PIN `1357`. P
 | P1-TC-UNL-03 | `tests/test_unlock_region.py::test_arena_stays_locked_while_region_4_content_locked` | **PASS** | arena 400 `region_locked` even with explored 4 |
 | P1-TC-CER-01 | `tests/test_task_ceremony.py::test_complete_json_includes_ceremony_fields` | **PASS** | bonus/total/pending_approval + HUD XP fields; XP not in points_log |
 | P1-TC-CER-02 | `tests/test_task_ceremony.py::test_first_task_achievement_in_complete_response` | **PASS** | `first_task` still awarded |
-| P1-TC-CER-03 | `tests/test_task_ceremony.py::test_require_approval_defers_rewards_until_parent_approves` | **FAIL** | **Phase 2 dependency** — no `require_approval` API/column; **not skipped** |
+| P1-TC-CER-03 | `tests/test_task_ceremony.py::test_require_approval_defers_rewards_until_parent_approves` | **FAIL** (now `phase2`) | Marker moved 2026-09-20; still **not skipped**. See [`PHASE2_APPROVAL_STATUS.md`](PHASE2_APPROVAL_STATUS.md) |
 | P1-TC-CER-FE-01 | `tests/test_frontend_ceremony.py::test_complete_task_source_reads_xp_materials_achievements` | **PASS** | Weak source (A): `completeTask` reads XP/materials/achievements |
 | P1-TC-CER-FE-01 | `tests/test_frontend.py::test_complete_task_ceremony_shows_xp_materials_achievements` | **PASS** | Playwright mock (A): toast shows XP + 🪵木材 + 🌟第一次任務 |
 | P1-TC-XP-01 | `tests/test_xp_bar.py::test_calc_level_uses_exp_per_level_25` | **PASS** | `EXP_PER_LEVEL=25` unchanged |
@@ -70,7 +70,7 @@ Synthetic fixtures only: `test_parent_*` / `TestParent!pass1`, kid PIN `1357`. P
 
 | Case ID | Why |
 |---------|-----|
-| P1-TC-CER-03 | Phase 2 / `GAMEPLAY_REDESIGN` §6.7 parent approval. Catalog said do not silent-skip. Product does not implement `require_approval` or `POST /api/tasks/<id>/approve`. |
+| P1-TC-CER-03 | Folded into Phase 2 (`@pytest.mark.phase2`). Same product gap: no `require_approval` or `POST /api/tasks/<id>/approve`. Do not silent-skip. |
 
 ## Frontend (A) vs (B)
 

@@ -20,7 +20,7 @@ Synthetic fixtures only: `test_onb_*` / `test_parent_*` / `TestParent!pass1`, ki
 | Frontend | `python3 -m pytest tests/test_frontend.py -v` | **26 passed**, 4 warnings in 28.83s |
 | Not onboard marker | `python3 -m pytest tests/ -m "not phase1_5" -q` | **144 passed, 1 failed**, 6 deselected, 53 warnings in 50.57s |
 
-Phase 1 leftover red is still **only P1-TC-CER-03** (Phase 2 `require_approval`). No new reds from the guild/starter change. Frontend stayed 26 green.
+Phase 1 leftover red **P1-TC-CER-03** (Phase 2 `require_approval`) was later moved to marker `phase2` (2026-09-20; not skipped). See [`PHASE2_APPROVAL_STATUS.md`](PHASE2_APPROVAL_STATUS.md). No new reds from the guild/starter change. Frontend stayed 26 green.
 
 ## Mapping
 
