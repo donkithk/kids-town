@@ -1,6 +1,6 @@
 # Phase 2 家長批核家課獎勵測試目錄（TDD RED — 先寫失敗測試）
 
-> **狀態**：RED（產品碼**未**實作 `require_approval` 閘）。對照表見 [`PHASE2_APPROVAL_STATUS.md`](PHASE2_APPROVAL_STATUS.md)。  
+> **狀態**：RED（產品碼**未**實作 `require_approval` 閘）。`pytest -m phase2` = **7 failed / 3 passed**。對照表見 [`PHASE2_APPROVAL_STATUS.md`](PHASE2_APPROVAL_STATUS.md)。  
 > **Marker**：`phase2`（`python -m pytest tests/ -m phase2 -v`）。  
 > **企劃**：[`GAMEPLAY_REDESIGN.md`](../GAMEPLAY_REDESIGN.md) **§6.7**（可選家長批核先發獎；family setting，**預設 off**）。  
 > **Fixture**：空庫 seed；factory 合成帳戶。**禁止** copy `kids_town.db`。**禁止**真實 PIN。  
@@ -83,7 +83,7 @@ Pytest 模組：`tests/test_approval.py`（API）、`tests/test_approval_ui.py`�
 | **步驟** | 家長 session `POST /api/tasks/{id}/approve`（body 可含 `kid_id`） |
 | **預期** | 200 或 201；`kids.points` = complete 前 + `points_awarded`；`kids.experience` = complete 前 + `experience_total`；每個 `material_drops` 項 inventory +1。 |
 
-現況（故意紅）：無 `POST /api/tasks/<id>/approve`（404）。
+現況（故意紅）：開唔到 `require_approval`；亦無 `POST /api/tasks/<id>/approve`。
 
 ---
 
@@ -131,7 +131,7 @@ Pytest 模組：`tests/test_approval.py`（API）、`tests/test_approval_ui.py`�
 | **建議模組** | `tests/test_approval.py` |
 | **前置** | 已有指派任務；client **未** login |
 | **步驟** | 匿名 POST approve、reject |
-| **預期** | 兩個都 **401**（唔係 404 當「未做路由」混過；GREEN 必須有路由 + session 閘）。金幣不變。 |
+| **預期** | 兩個都 **401**。現況：**已綠**（Phase 0 session 閘喺路由未存在時都 401）。GREEN 加路由時**必須保持** 401。 |
 
 ---
 
