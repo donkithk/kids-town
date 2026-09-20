@@ -137,7 +137,7 @@ def test_material_defs_and_building_recipes_use_canonical_ids(client, family, te
     guild_mats = json.loads(guild["materials"] or "{}")
     assert guild_mats, "guild materials must not be {} on a fresh seed"
     assert "wood" in guild_mats and "brick" in guild_mats
-    assert "gear" in guild_mats
+    assert "gear" not in guild_mats, f"guild recipe has no gear key (Phase 1.5 §9 Q4): {guild_mats}"
 
     for row in rows:
         mats = json.loads(row["materials"] or "{}")

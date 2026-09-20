@@ -13,6 +13,7 @@ from tests.factories import (  # noqa: E402
     TEST_KID_PIN,
     TEST_PARENT_PASSWORD,
     building_def_id,
+    connect_db,
     init_empty_db,
     insert_building,
     insert_kid,
@@ -99,6 +100,15 @@ def family(app, test_db):
     set_kid_points(test_db, kid_b["id"], 5)
     kid_a["points"] = 0
     kid_b["points"] = 5
+    # Family fixture uses known empty inventory; starter pack is asserted on
+    # create-kid directly (ONB-START-*). Same idea as resetting points above.
+    db = connect_db(test_db)
+    db.execute(
+        "DELETE FROM inventory WHERE kid_id IN (?, ?)",
+        (kid_a["id"], kid_b["id"]),
+    )
+    db.commit()
+    db.close()
     return SimpleNamespace(
         parent_a=SimpleNamespace(**parent_a),
         kid_a=SimpleNamespace(**kid_a),
