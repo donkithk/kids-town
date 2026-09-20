@@ -163,6 +163,12 @@ def migrate_db():
         db.execute("ALTER TABLE tasks ADD COLUMN recurring TEXT DEFAULT ''")  # daily/weekly/weekdays
     if 'due_date' not in cols:
         db.execute("ALTER TABLE tasks ADD COLUMN due_date TEXT")
+    if 'pending_approval' not in cols:
+        db.execute("ALTER TABLE tasks ADD COLUMN pending_approval INTEGER DEFAULT 0")
+    if 'pending_rewards' not in cols:
+        db.execute("ALTER TABLE tasks ADD COLUMN pending_rewards TEXT")
+    if 'reject_reason' not in cols:
+        db.execute("ALTER TABLE tasks ADD COLUMN reject_reason TEXT")
     
     # Achievements table
     db.execute("""
@@ -258,6 +264,9 @@ def init_db():
             due_date    TEXT,
             created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             completed_at TIMESTAMP,
+            pending_approval INTEGER DEFAULT 0,
+            pending_rewards TEXT,
+            reject_reason TEXT,
             FOREIGN KEY (kid_id) REFERENCES kids(id) ON DELETE SET NULL
         );
 
@@ -703,7 +712,11 @@ def migrate_db_v3():
     db.execute("""CREATE TABLE IF NOT EXISTS parents (
         id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE,
         password TEXT NOT NULL, email TEXT, name TEXT DEFAULT '',
+        require_approval INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+    parent_cols = [row[1] for row in db.execute("PRAGMA table_info(parents)").fetchall()]
+    if 'require_approval' not in parent_cols:
+        db.execute("ALTER TABLE parents ADD COLUMN require_approval INTEGER DEFAULT 0")
     
     # Parent-Kid many-to-many
     db.execute("""CREATE TABLE IF NOT EXISTS parent_kid (
@@ -746,11 +759,18 @@ def migrate_db_v4():
             task_id      INTEGER NOT NULL,
             kid_id       INTEGER NOT NULL,
             completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            pending      INTEGER DEFAULT 0,
+            pending_rewards TEXT,
             PRIMARY KEY (task_id, kid_id),
             FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
             FOREIGN KEY (kid_id) REFERENCES kids(id) ON DELETE CASCADE
         )
     """)
+    tc_cols = [row[1] for row in db.execute("PRAGMA table_info(task_completions)").fetchall()]
+    if 'pending' not in tc_cols:
+        db.execute("ALTER TABLE task_completions ADD COLUMN pending INTEGER DEFAULT 0")
+    if 'pending_rewards' not in tc_cols:
+        db.execute("ALTER TABLE task_completions ADD COLUMN pending_rewards TEXT")
     db.commit()
     db.close()
 
@@ -842,6 +862,34 @@ def parent_owns_kid(parent_id, kid_id):
     return row is not None
 
 
+def _truthy_flag(value):
+    if isinstance(value, str):
+        return value.strip().lower() in ('1', 'true', 'yes', 'on')
+    return bool(value)
+
+
+def _set_parent_require_approval(db, parent_id, flag):
+    db.execute(
+        "UPDATE parents SET require_approval=? WHERE id=?",
+        (1 if _truthy_flag(flag) else 0, parent_id),
+    )
+    db.commit()
+
+
+def _kid_requires_approval(db, kid_id):
+    """GAMEPLAY_REDESIGN §6.7: any owning parent with require_approval=1."""
+    if not kid_id:
+        return False
+    row = db.execute(
+        """SELECT 1 FROM parents p
+           JOIN parent_kid pk ON pk.parent_id = p.id
+           WHERE pk.kid_id=? AND COALESCE(p.require_approval, 0)=1
+           LIMIT 1""",
+        (kid_id,),
+    ).fetchone()
+    return bool(row)
+
+
 def _unauthorized():
     return jsonify({'error': 'Unauthorized'}), 401
 
@@ -895,6 +943,9 @@ def gate_api_auth():
         or path == '/api/auth/parent-kids'
         or path.startswith('/api/kids/')
         or path.startswith('/api/tasks')
+        or path.startswith('/api/family/settings')
+        or path.startswith('/api/auth/family-settings')
+        or path.startswith('/api/parents/')
         or path.startswith('/api/stats')
         or path.startswith('/api/activity')
         or path.startswith('/api/leaderboard')
@@ -1053,6 +1104,27 @@ def delete_kid(kid_id):
 @app.route('/api/settings', methods=['POST'])
 def save_settings():
     data = request.get_json(silent=True) or {}
+    actor = current_actor()
+    if not actor:
+        return _unauthorized()
+    flag = data.get('require_approval')
+    nested = data.get('family_settings')
+    if flag is None and isinstance(nested, dict):
+        flag = nested.get('require_approval')
+    if flag is not None:
+        if actor['role'] not in ('parent', 'admin'):
+            return _forbidden()
+        parent_id = actor.get('parent_id')
+        if actor['role'] == 'parent' and not parent_id:
+            return _forbidden()
+        if parent_id:
+            _set_parent_require_approval(get_db(), parent_id, flag)
+        kid_id = data.get('kid_id')
+        theme = data.get('theme')
+        if kid_id is not None and theme is not None:
+            get_db().execute("UPDATE kids SET theme=? WHERE id=?", (theme, kid_id))
+            get_db().commit()
+        return jsonify({'ok': True, 'require_approval': _truthy_flag(flag)}), 200
     kid_id = data.get('kid_id')
     theme = data.get('theme', '')
     if not kid_id:
@@ -1061,6 +1133,64 @@ def save_settings():
     db.execute("UPDATE kids SET theme=? WHERE id=?", (theme, kid_id))
     db.commit()
     return jsonify({'ok': True}), 200
+
+
+@app.route('/api/family/settings', methods=['GET', 'POST'])
+@app.route('/api/auth/family-settings', methods=['GET', 'POST'])
+def family_settings():
+    """GAMEPLAY_REDESIGN §6.7 family require_approval toggle (default off)."""
+    actor = current_actor()
+    if not actor:
+        return _unauthorized()
+    if actor['role'] not in ('parent', 'admin'):
+        return _forbidden()
+    db = get_db()
+    parent_id = actor.get('parent_id')
+    if request.method == 'GET':
+        flag = False
+        if parent_id:
+            row = db.execute(
+                "SELECT require_approval FROM parents WHERE id=?", (parent_id,)
+            ).fetchone()
+            flag = bool(row['require_approval']) if row else False
+        return jsonify({'ok': True, 'require_approval': flag})
+    data = request.get_json(silent=True) or {}
+    if 'require_approval' not in data:
+        return jsonify({'error': 'require_approval required'}), 400
+    if actor['role'] == 'parent' and not parent_id:
+        return _forbidden()
+    if parent_id:
+        _set_parent_require_approval(db, parent_id, data.get('require_approval'))
+    return jsonify({'ok': True, 'require_approval': _truthy_flag(data.get('require_approval'))}), 200
+
+
+@app.route('/api/parents/<int:parent_id>/settings', methods=['GET', 'POST'])
+def parent_settings(parent_id):
+    actor = current_actor()
+    if not actor:
+        return _unauthorized()
+    if actor['role'] == 'kid':
+        return _forbidden()
+    if actor['role'] == 'parent' and actor.get('parent_id') != parent_id:
+        return _forbidden()
+    if actor['role'] not in ('parent', 'admin'):
+        return _forbidden()
+    db = get_db()
+    if request.method == 'GET':
+        row = db.execute(
+            "SELECT require_approval FROM parents WHERE id=?", (parent_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({'error': 'Parent not found'}), 404
+        return jsonify({'ok': True, 'require_approval': bool(row['require_approval'])})
+    data = request.get_json(silent=True) or {}
+    flag = data.get('require_approval')
+    if flag is None:
+        flag = data.get('approve_rewards')
+    if flag is None:
+        return jsonify({'error': 'require_approval required'}), 400
+    _set_parent_require_approval(db, parent_id, flag)
+    return jsonify({'ok': True, 'require_approval': _truthy_flag(flag)}), 200
 
 # -- Points --
 
@@ -1630,11 +1760,13 @@ MATERIAL_POOLS = {
     'rare': ['gear'],
 }
 
-def award_task_drops(kid_id, task_points, db, source='task'):
+def award_task_drops(kid_id, task_points, db, source='task', apply=True):
     """Award random materials and experience when completing a task or expedition.
 
     Base XP is max(5, points//2). Library task_bonus is added on top and
     reported separately (GAMEPLAY_REDESIGN §6.1 / §6.4).
+    When apply=False, roll and report amounts without mutating gold/XP/inventory
+    (parent-approval foreshadow, GAMEPLAY_REDESIGN §6.7).
     """
     drops = {'materials': [], 'experience': 0, 'experience_bonus': 0, 'experience_total': 0}
 
@@ -1648,18 +1780,19 @@ def award_task_drops(kid_id, task_points, db, source='task'):
 
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
     if kid:
-        new_exp = (kid['experience'] or 0) + total
-        new_level, _ = calc_level(new_exp)
-        stat_gained = 0
-        if new_level > kid['level']:
-            stat_gained = new_level - kid['level']
-        db.execute(
-            "UPDATE kids SET experience=?, level=?, stat_points=stat_points+? WHERE id=?",
-            (new_exp, new_level, stat_gained, kid_id)
-        )
         drops['experience'] = exp_amount
         drops['experience_bonus'] = bonus
         drops['experience_total'] = total
+        if apply:
+            new_exp = (kid['experience'] or 0) + total
+            new_level, _ = calc_level(new_exp)
+            stat_gained = 0
+            if new_level > kid['level']:
+                stat_gained = new_level - kid['level']
+            db.execute(
+                "UPDATE kids SET experience=?, level=?, stat_points=stat_points+? WHERE id=?",
+                (new_exp, new_level, stat_gained, kid_id)
+            )
 
     num_drops = 1 if task_points < 20 else random.randint(1, 2)
     for _ in range(num_drops):
@@ -1671,7 +1804,8 @@ def award_task_drops(kid_id, task_points, db, source='task'):
         mat_type = canonicalize_item_type(random.choice(MATERIAL_POOLS[pool]))
         if not mat_type:
             continue
-        add_item(kid_id, mat_type, 1, db)
+        if apply:
+            add_item(kid_id, mat_type, 1, db)
         drops['materials'].append(mat_type)
 
     return drops
@@ -1710,12 +1844,15 @@ def list_tasks():
               k.name AS kid_name, k.avatar AS kid_avatar,
               CASE WHEN t.kid_id IS NULL THEN
                 (SELECT COUNT(*) FROM task_completions tc WHERE tc.task_id=t.id AND tc.kid_id=?)
-              ELSE t.completed END AS completed
+              ELSE t.completed END AS completed,
+              CASE WHEN t.kid_id IS NULL THEN
+                COALESCE((SELECT tc.pending FROM task_completions tc WHERE tc.task_id=t.id AND tc.kid_id=?), 0)
+              ELSE COALESCE(t.pending_approval, 0) END AS pending_approval
             FROM tasks t
             LEFT JOIN kids k ON t.kid_id = k.id
             WHERE (t.kid_id IS NULL OR t.kid_id = ?)
         """
-        params = [kid_id_int, kid_id_int]
+        params = [kid_id_int, kid_id_int, kid_id_int]
     elif actor['role'] == 'parent':
         query = """
             SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar
@@ -1819,31 +1956,149 @@ def _empty_ceremony():
     }
 
 
-def _apply_task_completion_rewards(db, kid_id, task, result):
-    """Award gold + XP/materials. XP is never written to points_log."""
-    result.update(_empty_ceremony())
-    if not kid_id:
+def _ceremony_from_drops(points, drops):
+    return {
+        'points_awarded': int(points or 0),
+        'experience_gained': int(drops.get('experience') or 0),
+        'experience_bonus': int(drops.get('experience_bonus') or 0),
+        'experience_total': int(drops.get('experience_total') or drops.get('experience') or 0),
+        'material_drops': list(drops.get('materials') or []),
+    }
+
+
+def _apply_experience_amount(db, kid_id, total):
+    total = int(total or 0)
+    if total <= 0:
         return
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
     if not kid:
         return
-    points = task['points'] or 0
+    new_exp = (kid['experience'] or 0) + total
+    new_level, _ = calc_level(new_exp)
+    stat_gained = 0
+    if new_level > kid['level']:
+        stat_gained = new_level - kid['level']
+    db.execute(
+        "UPDATE kids SET experience=?, level=?, stat_points=stat_points+? WHERE id=?",
+        (new_exp, new_level, stat_gained, kid_id),
+    )
+
+
+def _grant_task_reward_payload(db, kid_id, task, payload):
+    """Credit previously foreshadowed gold / XP / materials. XP never goes to points_log."""
+    result = _empty_ceremony()
+    if not kid_id:
+        return result
+    kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
+    if not kid:
+        return result
+    points = int(payload.get('points_awarded') if payload.get('points_awarded') is not None else (task['points'] or 0))
     db.execute("UPDATE kids SET points=? WHERE id=?", (kid['points'] + points, kid_id))
     db.execute(
         "INSERT INTO points_log (kid_id, amount, reason) VALUES (?,?,?)",
         (kid_id, points, f"Completed task: {task['title']}"),
     )
     result['points_awarded'] = points
+    _apply_experience_amount(db, kid_id, payload.get('experience_total') or payload.get('experience_gained') or 0)
+    result['experience_gained'] = int(payload.get('experience_gained') or 0)
+    result['experience_bonus'] = int(payload.get('experience_bonus') or 0)
+    result['experience_total'] = int(payload.get('experience_total') or result['experience_gained'])
+    materials = list(payload.get('material_drops') or [])
+    for item in materials:
+        name = item if isinstance(item, str) else (item.get('item_type') or item.get('id'))
+        if name:
+            add_item(kid_id, name, 1, db)
+    result['material_drops'] = materials
     update_streak(kid_id, db)
     result['achievements'] = check_achievements(kid_id, db) or []
-    drops = award_task_drops(kid_id, points, db)
-    result['material_drops'] = drops.get('materials') or []
-    result['experience_gained'] = int(drops.get('experience') or 0)
-    result['experience_bonus'] = int(drops.get('experience_bonus') or 0)
-    result['experience_total'] = int(drops.get('experience_total') or result['experience_gained'])
     result['pending_approval'] = False
     updated = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
     result['kid'] = kid_hud(updated)
+    return result
+
+
+def _preview_task_rewards(db, kid_id, task):
+    """Roll ceremony amounts without mutating economy (approval foreshadow)."""
+    result = _empty_ceremony()
+    if not kid_id:
+        return result
+    kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
+    if not kid:
+        return result
+    points = task['points'] or 0
+    drops = award_task_drops(kid_id, points, db, apply=False)
+    result.update(_ceremony_from_drops(points, drops))
+    result['pending_approval'] = True
+    result['achievements'] = []
+    result['kid'] = kid_hud(kid)
+    return result
+
+
+def _apply_task_completion_rewards(db, kid_id, task, result, grant=True):
+    """Award gold + XP/materials, or foreshadow them when grant=False. XP is never written to points_log."""
+    if grant:
+        preview = _preview_task_rewards(db, kid_id, task)
+        granted = _grant_task_reward_payload(db, kid_id, task, preview)
+        result.update(granted)
+        return
+    result.update(_preview_task_rewards(db, kid_id, task))
+
+
+def _store_pending_rewards(db, task_id, kid_id, payload, global_task=False):
+    blob = json.dumps({
+        'points_awarded': payload.get('points_awarded'),
+        'experience_gained': payload.get('experience_gained'),
+        'experience_bonus': payload.get('experience_bonus'),
+        'experience_total': payload.get('experience_total'),
+        'material_drops': payload.get('material_drops') or [],
+        'kid_id': kid_id,
+    })
+    if global_task:
+        db.execute(
+            "UPDATE task_completions SET pending=1, pending_rewards=? WHERE task_id=? AND kid_id=?",
+            (blob, task_id, kid_id),
+        )
+    else:
+        db.execute(
+            "UPDATE tasks SET pending_approval=1, pending_rewards=?, reject_reason=NULL WHERE id=?",
+            (blob, task_id),
+        )
+
+
+def _load_pending_rewards(task_or_row):
+    raw = None
+    if task_or_row is not None:
+        try:
+            raw = task_or_row['pending_rewards']
+        except (KeyError, IndexError, TypeError):
+            raw = None
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def _clear_task_pending(db, task_id, kid_id=None, global_task=False):
+    if global_task:
+        db.execute(
+            "UPDATE task_completions SET pending=0, pending_rewards=NULL WHERE task_id=? AND kid_id=?",
+            (task_id, kid_id),
+        )
+    else:
+        db.execute(
+            "UPDATE tasks SET pending_approval=0, pending_rewards=NULL WHERE id=?",
+            (task_id,),
+        )
+
+
+def _task_row_after(db, task_id):
+    return row_to_dict(db.execute(
+        "SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar FROM tasks t LEFT JOIN kids k ON t.kid_id=k.id WHERE t.id=?",
+        (task_id,),
+    ).fetchone())
 
 
 @app.route('/api/tasks/<int:task_id>/complete', methods=['POST'])
@@ -1890,22 +2145,30 @@ def complete_task(task_id):
             return jsonify({'error': 'Task already completed'}), 400
         db.execute("INSERT INTO task_completions (task_id, kid_id, completed_at) VALUES (?, ?, ?)", (task_id, kid_id, now))
         result = {'task': row_to_dict(task)}
-        _apply_task_completion_rewards(db, kid_id, task, result)
+        pending = _kid_requires_approval(db, kid_id)
+        _apply_task_completion_rewards(db, kid_id, task, result, grant=not pending)
+        if pending:
+            _store_pending_rewards(db, task_id, kid_id, result, global_task=True)
         db.commit()
-        result['task'] = row_to_dict(db.execute("SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar FROM tasks t LEFT JOIN kids k ON t.kid_id=k.id WHERE t.id=?", (task_id,)).fetchone())
+        result['task'] = _task_row_after(db, task_id)
         result['task']['completed'] = 1
+        result['task']['pending_approval'] = bool(pending)
         return jsonify(result), 200
     
     # Handle recurring tasks: mark done, award points, set due_date to tomorrow
     if task['recurring']:
-        db.execute("UPDATE tasks SET completed=1, completed_at=? WHERE id=?", (now, task_id))
         kid_id = task['kid_id']
+        pending = _kid_requires_approval(db, kid_id)
+        db.execute("UPDATE tasks SET completed=1, completed_at=? WHERE id=?", (now, task_id))
         result = {'task': row_to_dict(task)}
-        _apply_task_completion_rewards(db, kid_id, task, result)
-        tomorrow = (datetime.utcnow() + timedelta(days=1)).strftime('%Y-%m-%d')
-        db.execute("UPDATE tasks SET due_date=? WHERE id=?", (tomorrow, task_id))
+        _apply_task_completion_rewards(db, kid_id, task, result, grant=not pending)
+        if pending:
+            _store_pending_rewards(db, task_id, kid_id, result, global_task=False)
+        else:
+            tomorrow = (datetime.utcnow() + timedelta(days=1)).strftime('%Y-%m-%d')
+            db.execute("UPDATE tasks SET due_date=? WHERE id=?", (tomorrow, task_id))
         db.commit()
-        result['task'] = row_to_dict(db.execute("SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar FROM tasks t LEFT JOIN kids k ON t.kid_id=k.id WHERE t.id=?", (task_id,)).fetchone())
+        result['task'] = _task_row_after(db, task_id)
         return jsonify(result), 200
     
     # Regular (non-recurring) task
@@ -1915,15 +2178,116 @@ def complete_task(task_id):
     db.execute("UPDATE tasks SET completed = 1, completed_at = ? WHERE id = ?", (now, task_id))
 
     kid_id = task['kid_id']
+    pending = _kid_requires_approval(db, kid_id)
     result = {'task': row_to_dict(task)}
-    _apply_task_completion_rewards(db, kid_id, task, result)
+    _apply_task_completion_rewards(db, kid_id, task, result, grant=not pending)
+    if pending:
+        _store_pending_rewards(db, task_id, kid_id, result, global_task=False)
     if kid_id:
         streak_row = db.execute("SELECT * FROM streaks WHERE kid_id=?", (kid_id,)).fetchone()
         if streak_row:
             result['streak'] = row_to_dict(streak_row)
 
     db.commit()
-    result['task'] = row_to_dict(db.execute("SELECT t.*, k.name AS kid_name, k.avatar AS kid_avatar FROM tasks t LEFT JOIN kids k ON t.kid_id=k.id WHERE t.id=?", (task_id,)).fetchone())
+    result['task'] = _task_row_after(db, task_id)
+    return jsonify(result), 200
+
+
+def _moderate_task_auth(task_id):
+    """Shared auth for approve/reject. Returns (actor, db, task, kid_id, err_response)."""
+    actor = current_actor()
+    if not actor:
+        return None, None, None, None, _unauthorized()
+    if actor['role'] == 'kid':
+        return None, None, None, None, _forbidden()
+    if actor['role'] not in ('parent', 'admin'):
+        return None, None, None, None, _forbidden()
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    task = db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    if not task:
+        return None, None, None, None, (jsonify({'error': 'Task not found'}), 404)
+    kid_id = task['kid_id'] if task['kid_id'] is not None else data.get('kid_id')
+    if actor['role'] == 'parent':
+        if task['kid_id'] is not None and not parent_owns_kid(actor['parent_id'], int(task['kid_id'])):
+            return None, None, None, None, _forbidden()
+        if kid_id is not None and not parent_owns_kid(actor['parent_id'], int(kid_id)):
+            return None, None, None, None, _forbidden()
+        if task['kid_id'] is None and kid_id is None:
+            return None, None, None, None, _forbidden()
+    return actor, db, task, kid_id, None
+
+
+@app.route('/api/tasks/<int:task_id>/approve', methods=['POST'])
+def approve_task(task_id):
+    actor, db, task, kid_id, err = _moderate_task_auth(task_id)
+    if err:
+        return err
+    global_task = task['kid_id'] is None
+    pending_row = task
+    if global_task:
+        if not kid_id:
+            return jsonify({'error': 'kid_id required'}), 400
+        pending_row = db.execute(
+            "SELECT * FROM task_completions WHERE task_id=? AND kid_id=?",
+            (task_id, kid_id),
+        ).fetchone()
+        is_pending = bool(pending_row and pending_row['pending'])
+    else:
+        is_pending = bool(task['pending_approval'])
+    if not is_pending:
+        return jsonify({'error': 'not_pending'}), 400
+    stored = _load_pending_rewards(pending_row)
+    if not stored:
+        stored = _preview_task_rewards(db, kid_id, task)
+    result = _grant_task_reward_payload(db, kid_id, task, stored)
+    _clear_task_pending(db, task_id, kid_id, global_task=global_task)
+    if task['recurring'] and not global_task:
+        tomorrow = (datetime.utcnow() + timedelta(days=1)).strftime('%Y-%m-%d')
+        db.execute("UPDATE tasks SET due_date=? WHERE id=?", (tomorrow, task_id))
+    db.commit()
+    result['ok'] = True
+    result['task'] = _task_row_after(db, task_id)
+    if global_task:
+        result['task']['completed'] = 1
+        result['task']['pending_approval'] = False
+    return jsonify(result), 200
+
+
+@app.route('/api/tasks/<int:task_id>/reject', methods=['POST'])
+def reject_task(task_id):
+    actor, db, task, kid_id, err = _moderate_task_auth(task_id)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    reason = data.get('reason') or ''
+    global_task = task['kid_id'] is None
+    if global_task:
+        if not kid_id:
+            return jsonify({'error': 'kid_id required'}), 400
+        pending_row = db.execute(
+            "SELECT * FROM task_completions WHERE task_id=? AND kid_id=?",
+            (task_id, kid_id),
+        ).fetchone()
+        if not pending_row:
+            return jsonify({'error': 'not_pending'}), 400
+        db.execute(
+            "DELETE FROM task_completions WHERE task_id=? AND kid_id=?",
+            (task_id, kid_id),
+        )
+    else:
+        if not task['pending_approval']:
+            return jsonify({'error': 'not_pending'}), 400
+        db.execute(
+            "UPDATE tasks SET completed=0, completed_at=NULL, pending_approval=0, "
+            "pending_rewards=NULL, reject_reason=? WHERE id=?",
+            (reason, task_id),
+        )
+    db.commit()
+    result = {'ok': True, 'rejected': True, 'reason': reason, 'task': _task_row_after(db, task_id)}
+    if global_task and result['task'] is not None:
+        result['task']['completed'] = 0
+        result['task']['pending_approval'] = False
     return jsonify(result), 200
 
 @app.route('/api/tasks/<int:task_id>', methods=['DELETE'])

@@ -1290,12 +1290,22 @@ body{
         <div style="font-size:18px;font-weight:800;" id="mSumOverdue">0</div>
         <div style="font-size:9px;color:#991b1b;">⚠️ 逾期</div>
       </div>
+      <div class="stat-mini" style="flex:1;background:#fff7ed;border:1px solid #f59e0b;border-radius:8px;padding:6px 8px;text-align:center;min-width:60px;">
+        <div style="font-size:18px;font-weight:800;" id="mSumPending">0</div>
+        <div style="font-size:9px;color:#9a3412;">⏳ 待批</div>
+      </div>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#334155;margin:0 0 8px;padding:8px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;cursor:pointer;">
+      <input type="checkbox" id="mgmtRequireApproval" onchange="saveRequireApproval(this.checked)">
+      <span>家課獎勵要家長確認先入帳（預設關閉）</span>
+    </label>
+    <div id="mgmtPendingList"></div>
     <div class="mgmt-filters">
       <input id="mgmtSearch" placeholder="🔍 搜尋任務..." oninput="renderManageTasks()">
       <select id="mgmtFilterKid" onchange="renderManageTasks()"><option value="">全部小朋友</option></select>
       <select id="mgmtFilterStatus" onchange="renderManageTasks()">
         <option value="">全部狀態</option>
+        <option value="pending">⏳ 待批</option>
         <option value="0">⏳ 待完成</option>
         <option value="1">✅ 已完成</option>
         <option value="expired">⚠️ 已逾期</option>
@@ -2991,6 +3001,7 @@ async function renderTasks() {
             ${recurLabel ? `<span class="mc-badge recurring" style="font-size:10px;padding:1px 6px;">${recurLabel}</span>` : ''}
             ${kidLabel ? `<span style="font-size:11px">👤 ${kidLabel}</span>` : ''}
             ${t.due_date ? `<span style="color:${isOverdue ? '#ef4444' : '#94a3b8'};font-weight:${isOverdue ? '700' : '400'};font-size:11px">📅 ${new Date(t.due_date+'T00:00:00').toLocaleDateString('zh-TW',{month:'short',day:'numeric'})}${isOverdue ? ' ⚠️' : ''}</span>` : ''}
+            ${t.pending_approval ? '<span style="color:#d97706;font-weight:700;font-size:11px">⏳ 等爸爸媽媽確認</span>' : ''}
           </div>
         </div>
         <div class="task-actions">
@@ -3014,6 +3025,7 @@ async function renderTasks() {
             <span class="task-points">🪙 +${t.points||10}</span>
             ${kidLabel ? `<span style="font-size:11px">👤 ${kidLabel}</span>` : ''}
             ${t.completed_at ? `<span style="font-size:11px">🕐 ${new Date(t.completed_at).toLocaleDateString()}</span>` : ''}
+            ${t.pending_approval ? '<span style="color:#d97706;font-weight:700;font-size:11px">⏳ 等爸爸媽媽確認就入帳</span>' : ''}
           </div>
         </div>
         <div class="task-actions">
@@ -3146,8 +3158,80 @@ async function mgmtCreateKid() {
 async function renderManage() {
   renderKidList();
   await populateMgmtSelects();
+  try {
+    const settings = await fetchAPI('/api/family/settings');
+    const box = document.getElementById('mgmtRequireApproval');
+    if (box) box.checked = !!settings.require_approval;
+  } catch(e) {}
   await renderManageTasks();
   await loadActivity();
+}
+
+function _isPendingApproval(t) {
+  return t && (t.pending_approval === 1 || t.pending_approval === true || t.pending_approval === '1');
+}
+
+async function saveRequireApproval(on) {
+  try {
+    await fetchAPI('/api/family/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({require_approval: !!on})
+    });
+    showToast(on ? '已開啟：家課要家長確認先入帳' : '已關閉：家課完成即時入帳');
+  } catch(e) {
+    showToast('❌ ' + e.message, 'error');
+  }
+}
+
+async function approveTask(taskId, kidId) {
+  try {
+    await fetchAPI(`/api/tasks/${taskId}/approve`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(kidId ? {kid_id: kidId} : {})
+    });
+    showToast('✅ 已批准，獎勵已入帳');
+    await renderManageTasks();
+    await loadTown();
+  } catch(e) {
+    showToast('❌ ' + e.message, 'error');
+  }
+}
+
+async function rejectTask(taskId, kidId) {
+  try {
+    await fetchAPI(`/api/tasks/${taskId}/reject`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({kid_id: kidId || undefined, reason: 'not_done'})
+    });
+    showToast('已拒絕，任務返未完成');
+    await renderManageTasks();
+    await loadTown();
+  } catch(e) {
+    showToast('❌ ' + e.message, 'error');
+  }
+}
+
+async function approveAllPendingToday() {
+  try {
+    const all = await fetchAPI('/api/tasks');
+    const pending = (all || []).filter(_isPendingApproval);
+    if (!pending.length) { showToast('今日無待批家課'); return; }
+    for (const t of pending) {
+      await fetchAPI(`/api/tasks/${t.id}/approve`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(t.kid_id ? {kid_id: t.kid_id} : {})
+      });
+    }
+    showToast(`✅ 一鍵批今日全部（${pending.length}）`);
+    await renderManageTasks();
+    await loadTown();
+  } catch(e) {
+    showToast('❌ ' + e.message, 'error');
+  }
 }
 
 async function populateMgmtSelects() {
@@ -3210,6 +3294,9 @@ async function renderManageTasks() {
         return new Date(t.due_date + 'T23:59:59') < new Date();
       });
     }
+    if (status === 'pending') {
+      tasks = tasks.filter(_isPendingApproval);
+    }
     
     // Update dashboard summary (use all tasks before client filter)
     const allTasks = await (async () => {
@@ -3220,10 +3307,44 @@ async function renderManageTasks() {
     const done = allTasks.filter(t => t.completed === 1 || t.completed === '1' || t.completed === true);
     const recur = allTasks.filter(t => t.recurring);
     const overdue = active.filter(t => t.due_date && new Date(t.due_date + 'T23:59:59') < new Date());
+    const pendingApproval = allTasks.filter(_isPendingApproval);
     document.getElementById('mSumActive').textContent = active.length;
     document.getElementById('mSumDone').textContent = done.length;
     document.getElementById('mSumRecur').textContent = recur.length;
     document.getElementById('mSumOverdue').textContent = overdue.length;
+    const pendingSum = document.getElementById('mSumPending');
+    if (pendingSum) pendingSum.textContent = pendingApproval.length;
+
+    const pendingBox = document.getElementById('mgmtPendingList');
+    if (pendingBox) {
+      if (pendingApproval.length) {
+        pendingBox.innerHTML = `<div style="background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:8px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+            <div style="font-size:13px;font-weight:700;color:#9a3412;">⏳ 待批核（${pendingApproval.length}）</div>
+            <button class="create-btn" style="background:#f59e0b;padding:4px 10px;font-size:12px;" onclick="approveAllPendingToday()">一鍵批今日全部</button>
+          </div>
+          ${pendingApproval.map(t => `
+            <div class="mgmt-card" style="background:#fff;">
+              <div class="mc-icon">${escapeHtml(t.icon||'✅')}</div>
+              <div class="mc-info">
+                <div class="mc-title">${escapeHtml(t.title)}</div>
+                <div class="mc-meta">
+                  <span class="mc-pts">🪙 ${t.points||10}</span>
+                  ${t.kid_name ? `<span>${escapeHtml(t.kid_avatar||'👤')} ${escapeHtml(t.kid_name)}</span>` : ''}
+                  <span style="color:#d97706;font-weight:700;">待批</span>
+                </div>
+              </div>
+              <div class="mc-actions">
+                <button class="mc-btn edit" onclick="approveTask(${t.id}${t.kid_id ? ', '+t.kid_id : ''})">✅</button>
+                <button class="mc-btn del" onclick="rejectTask(${t.id}${t.kid_id ? ', '+t.kid_id : ''})">✖️</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>`;
+      } else {
+        pendingBox.innerHTML = '';
+      }
+    }
     
     if (!tasks || tasks.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:20px;color:#94a3b8;">📭 搵唔到任務</div>';
@@ -3254,9 +3375,12 @@ async function renderManageTasks() {
               ${t.recurring ? '<span class="mc-badge recurring">🔄 重複</span>' : ''}
               ${t.due_date ? `<span style="color:${!isDone && new Date(t.due_date+'T23:59:59') < new Date() ? '#ef4444' : '#94a3b8'};font-weight:${!isDone && new Date(t.due_date+'T23:59:59') < new Date() ? '700' : '400'}">📅 ${new Date(t.due_date+'T00:00:00').toLocaleDateString('zh-TW',{month:'short',day:'numeric'})}${!isDone && new Date(t.due_date+'T23:59:59') < new Date() ? ' ⚠️逾期' : ''}</span>` : ''}
               ${isDone ? `<span>✅ ${t.completed_at ? new Date(t.completed_at).toLocaleDateString() : ''}</span>` : ''}
+              ${_isPendingApproval(t) ? '<span style="color:#d97706;font-weight:700;">待批</span>' : ''}
             </div>
           </div>
           <div class="mc-actions">
+            ${_isPendingApproval(t) ? `<button class="mc-btn edit" onclick="approveTask(${t.id}${t.kid_id ? ', '+t.kid_id : ''})">✅</button>
+            <button class="mc-btn del" onclick="rejectTask(${t.id}${t.kid_id ? ', '+t.kid_id : ''})">✖️</button>` : ''}
             <button class="mc-btn edit" onclick="editTask(${t.id})">✏️</button>
             <button class="mc-btn del" onclick="deleteManageTask(${t.id})">🗑️</button>
           </div>
@@ -5038,6 +5162,10 @@ window.deleteTask = deleteTask;
 window.renderManage = renderManage;
 window.populateMgmtSelects = populateMgmtSelects;
 window.renderManageTasks = renderManageTasks;
+window.approveTask = approveTask;
+window.rejectTask = rejectTask;
+window.approveAllPendingToday = approveAllPendingToday;
+window.saveRequireApproval = saveRequireApproval;
 window.mgmtAddTask = mgmtAddTask;
 window.addQuickTask = addQuickTask;
 window.editTask = editTask;

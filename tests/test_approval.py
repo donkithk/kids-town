@@ -124,8 +124,9 @@ def _force_running_battle_monsters_hp(test_db, kid_id, hp=1):
         payload = json.loads(row["expedition_data"] or "{}")
         monsters = payload.get("monsters") or []
         assert monsters, payload
-        for monster in monsters:
-            monster["hp"] = hp
+        # Keep a single 1-HP target so one attack wins (region battles spawn 1–3).
+        payload["monsters"] = [monsters[0]]
+        payload["monsters"][0]["hp"] = hp
         db.execute(
             "UPDATE expeditions SET expedition_data=? WHERE id=?",
             (json.dumps(payload), row["id"]),
