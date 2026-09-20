@@ -15,7 +15,9 @@ from tests.phase1_helpers import (
     try_enable_require_approval,
 )
 
-pytestmark = [pytest.mark.phase1]
+# CER-01 / CER-02 stay phase1. P1-TC-CER-03 is Phase 2 leftover (GAMEPLAY_REDESIGN
+# §6.7): marker moved to phase2 so `pytest -m phase1` is not carrying this
+# intentional red. Do not silent-skip.
 
 CEREMONY_KEYS = (
     "points_awarded",
@@ -29,6 +31,7 @@ CEREMONY_KEYS = (
 KID_XP_KEYS = ("experience_in_level", "experience_for_next")
 
 
+@pytest.mark.phase1
 @pytest.mark.case_id("P1-TC-CER-01")
 def test_complete_json_includes_ceremony_fields(client, family, test_db):
     """P1-TC-CER-01 200 body 含儀式欄位；pending_approval is False；XP 唔入 points_log。"""
@@ -53,6 +56,7 @@ def test_complete_json_includes_ceremony_fields(client, family, test_db):
     assert not any("experience_gained" in reason for reason in xp_reasons), xp_reasons
 
 
+@pytest.mark.phase1
 @pytest.mark.case_id("P1-TC-CER-02")
 def test_first_task_achievement_in_complete_response(client, family):
     """P1-TC-CER-02 新號第一次 complete 後 achievements 含 first_task。"""
@@ -66,11 +70,13 @@ def test_first_task_achievement_in_complete_response(client, family):
     assert "first_task" in badges, achs
 
 
+@pytest.mark.phase2
 @pytest.mark.case_id("P1-TC-CER-03")
 def test_require_approval_defers_rewards_until_parent_approves(client, family, test_db):
     """P1-TC-CER-03 批核開啟時唔入帳、pending_approval=true。
 
-    Phase 2 dependency (GAMEPLAY_REDESIGN §6.7 / catalog note on CER-03).
+    Folded into Phase 2 catalog (P2-APR-02 / P2-APR-03; GAMEPLAY_REDESIGN §6.7).
+    Marker is phase2 (not phase1) so `pytest -m phase1` stays green.
     Do not silent-skip: this case must stay visible until Phase 2 ships
     family require_approval (default off) and POST /api/tasks/<id>/approve.
     """

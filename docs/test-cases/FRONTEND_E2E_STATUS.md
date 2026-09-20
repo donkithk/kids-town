@@ -15,7 +15,7 @@
 | Rest of suite | `python3 -m pytest tests/ -m "not phase1" -q` | **105 passed**, 40 deselected, 20 warnings in 38.07s |
 | Collection | `python3 -m pytest tests/ --collect-only -q` (implied) | **145 collected** (was 142; +3 Experience C cases) |
 
-Intentional leftover red: **P1-TC-CER-03** only (Phase 2 `require_approval`). Not skipped. New Experience C cases are **not** `@pytest.mark.phase1` and all **PASS**.
+Intentional leftover red **P1-TC-CER-03** (Phase 2 `require_approval`) was **not skipped**. 2026-09-20: pytest marker moved to `phase2` — see [`PHASE2_APPROVAL_STATUS.md`](PHASE2_APPROVAL_STATUS.md). New Experience C cases are **not** `@pytest.mark.phase1` and all **PASS**.
 
 ## Mapping (pre-existing)
 
