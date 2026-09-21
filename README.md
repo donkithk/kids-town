@@ -2,6 +2,8 @@
 
 Family town / chore-reward game. Flask (`backend_v2.py`) + `index.html`.
 
+視覺 UI 試作（未接線，唔改遊戲邏輯）：[`mocks/ui-refresh/`](mocks/ui-refresh/)
+
 ## Setup
 
 ```bash
