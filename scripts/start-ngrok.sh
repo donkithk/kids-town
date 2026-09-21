@@ -105,6 +105,7 @@ if [[ -n "${NGROK_DOMAIN:-}" ]]; then
 else
   echo "No NGROK_DOMAIN set; requesting a random free URL"
 fi
+echo "Running: ${cmd[*]}"
 
 "${cmd[@]}" >>"$NGROK_LOG" 2>&1 &
 NGROK_PID=$!

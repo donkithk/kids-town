@@ -181,12 +181,8 @@ BEFORE_REQ="$(req_hash)"
 
 echo "== git fetch + reset --hard origin/main =="
 git fetch origin main
-if git show-ref --verify --quiet refs/heads/main; then
-  git checkout main
-  git reset --hard origin/main
-else
-  git checkout -B main origin/main
-fi
+git checkout -B main origin/main
+git reset --hard origin/main
 git status -sb
 
 echo "== Restore demo DB =="
@@ -212,6 +208,23 @@ if [[ "$NEED_PIP" -eq 1 ]]; then
   "$PYTHON" -m pip install -r requirements.txt
 fi
 
+wait_health() {
+  local i
+  for i in $(seq 1 40); do
+    if "$PYTHON" -c '
+import sys, urllib.request
+try:
+    urllib.request.urlopen("http://127.0.0.1:9123/api/health", timeout=1)
+except Exception:
+    sys.exit(1)
+' >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
 echo "== Restart app on 9123 =="
 stop_port 9123
 if [[ -x "$ROOT/scripts/start-app.sh" ]]; then
@@ -222,6 +235,11 @@ else
   nohup "$PYTHON" backend_v2.py >>"$ROOT/logs/kids-town-app.log" 2>&1 &
   echo $! >"$ROOT/logs/kids-town.pid"
   echo "pid $!  (no start-app.sh on this revision of main)"
+  if ! wait_health; then
+    echo "error: backend started but /api/health did not respond; see $ROOT/logs/kids-town-app.log" >&2
+    exit 1
+  fi
+  echo "Ready  http://127.0.0.1:9123/kids/"
 fi
 
 echo "Update complete. Demo DB left unstaged on purpose — do not commit it."
