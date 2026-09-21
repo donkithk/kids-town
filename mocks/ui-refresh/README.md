@@ -15,6 +15,14 @@ python -m http.server 8765 --directory mocks/ui-refresh
 
 手機直開單頁亦可（viewport **准 pinch-zoom**：`width=device-width, initial-scale=1`，冇 `user-scalable=no`）。
 
+靜態截圖（390×844）喺 [`screenshots/`](screenshots/)：
+
+- `01-kid-tasks-mobile.png` — 任務 tab（進行中 + 待確認；已入帳卡喺底部可滑）
+- `01-kid-tasks-credited.png` — 同一畫面拉高，睇到已入帳慶祝條
+- `02-parent-approval-mobile.png` — 家長蓋章列表
+- `02-parent-empty.png` — 空狀態
+- `02-parent-reject.png` — 展開「再試一次」原因 chips
+
 | 檔案 | 畫面 |
 |------|------|
 | [00-index.html](00-index.html) | 圖庫：兩隻手機框 + 對而家 UI 嘅前後對照 |

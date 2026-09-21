@@ -15,18 +15,19 @@
         <div class="status-bar"><span>9:41</span><span>家長模式</span></div>
         <header class="app-header">
           <svg class="mascot is-wait" viewBox="0 0 64 64" aria-hidden="true">
-            <ellipse cx="18" cy="18" rx="9" ry="13" fill="#c4b5fd" transform="rotate(-20 18 18)"/>
-            <ellipse cx="46" cy="18" rx="9" ry="13" fill="#c4b5fd" transform="rotate(20 46 18)"/>
-            <circle cx="32" cy="36" r="22" fill="#e9d5ff"/>
-            <circle cx="24" cy="33" r="3" fill="#3d2a3a"/>
-            <circle cx="40" cy="33" r="3" fill="#3d2a3a"/>
-            <path d="M26 44 Q32 48 38 44" fill="none" stroke="#3d2a3a" stroke-width="2.1" stroke-linecap="round"/>
-            <ellipse cx="18" cy="39" rx="4" ry="2.2" fill="#ffb4c8"/>
-            <ellipse cx="46" cy="39" rx="4" ry="2.2" fill="#ffb4c8"/>
-            <g transform="translate(40 42)">
-              <rect x="0" y="0" width="16" height="14" rx="4" fill="#fb7185" stroke="#9f1239" stroke-width="1.6"/>
-              <circle cx="8" cy="7" r="3.2" fill="#fff"/>
-            </g>
+            <ellipse cx="18" cy="16" rx="9" ry="13" fill="#c4b5fd" transform="rotate(-20 18 16)"/>
+            <ellipse cx="46" cy="16" rx="9" ry="13" fill="#c4b5fd" transform="rotate(20 46 16)"/>
+            <circle cx="32" cy="34" r="22" fill="#e9d5ff"/>
+            <circle cx="24" cy="31" r="3" fill="#3d2a3a"/>
+            <circle cx="40" cy="31" r="3" fill="#3d2a3a"/>
+            <path d="M26 42 Q32 47 38 42" fill="none" stroke="#3d2a3a" stroke-width="2.1" stroke-linecap="round"/>
+            <ellipse cx="18" cy="37" rx="4" ry="2.2" fill="#ffb4c8"/>
+            <ellipse cx="46" cy="37" rx="4" ry="2.2" fill="#ffb4c8"/>
+          </svg>
+          <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
+            <rect x="4" y="8" width="18" height="16" rx="4" fill="#fb7185" stroke="#9f1239" stroke-width="2"/>
+            <circle cx="13" cy="16" r="4" fill="#fff"/>
+            <path d="M22 6h6v6" fill="none" stroke="#ffb703" stroke-width="2.2" stroke-linecap="round"/>
           </svg>
           <div class="header-copy">
             <h1>家長蓋章站</h1>
@@ -173,6 +174,16 @@
     </div>
   </div>
   <script>
+    const params = new URLSearchParams(location.search);
+    if (params.get("empty") === "1") {
+      document.body.classList.add("show-empty");
+      const emptyRadio = document.querySelector('input[name="demo"][value="empty"]');
+      if (emptyRadio) emptyRadio.checked = true;
+    }
+    if (params.get("reject") === "1") {
+      const panel = document.querySelector("details.reason-panel");
+      if (panel) panel.open = true;
+    }
     const radios = document.querySelectorAll('input[name="demo"]');
     radios.forEach((r) => {
       r.addEventListener("change", () => {

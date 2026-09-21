@@ -174,7 +174,7 @@ summary {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: 8px 16px 12px;
+  padding: 4px 16px 8px;
 }
 
 .app-header h1 {
@@ -199,7 +199,7 @@ summary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: var(--tap);
+  min-height: 40px;
   padding: 0 14px;
   background: #fff8dc;
   border: 3px solid #ffe08a;
@@ -214,17 +214,17 @@ summary {
 .page {
   flex: 1;
   overflow: auto;
-  padding: 0 16px calc(var(--nav-h) + 16px);
+  padding: 0 16px calc(var(--nav-h) + 20px);
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .hello {
   background: linear-gradient(135deg, #fff 0%, #ffeef5 100%);
   border: 3px solid #fff;
   border-radius: var(--radius-xl);
-  padding: 14px 16px;
+  padding: 10px 14px;
   box-shadow: var(--shadow-sticker);
   display: flex;
   align-items: center;
@@ -263,12 +263,11 @@ summary {
   background: var(--color-card);
   border: 3px solid #fff;
   border-radius: var(--radius-xl);
-  padding: 16px;
+  padding: 12px 14px;
   box-shadow: var(--shadow-sticker), var(--shadow-soft);
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 12px 14px;
-  overflow: hidden;
+  gap: 8px 12px;
 }
 
 .task-card.is-todo {
@@ -283,6 +282,7 @@ summary {
 .task-card.is-credited {
   background: linear-gradient(180deg, #f3fff8 0%, #dcffec 100%);
   border-color: var(--color-success);
+  overflow: hidden;
 }
 
 .task-icon {
@@ -369,8 +369,8 @@ summary {
 .task-foot {
   grid-column: 1 / -1;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
 }
 
