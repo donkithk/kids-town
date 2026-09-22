@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>榮譽儀式 · Kids Town 方向稿</title>
+  <link rel="stylesheet" href="mock.css">
+</head>
+<body class="page-honour">
+  <a class="skip" href="#main">跳到主要內容</a>
+  <header class="topbar">
+    <a class="brand" href="00-index.html">Kids Town 方向稿</a>
+    <p class="who">家長視角</p>
+  </header>
+  <main id="main" class="shell has-aside" tabindex="-1">
+    <section class="stage">
+      <div class="plaque">
+        <p>家長蓋章</p>
+        <h1>榮譽儀式</h1>
+      </div>
+      <article class="certificate" id="certificate">
+        <p class="cert-kicker">KIDS TOWN</p>
+        <h2>榮譽證書</h2>
+        <p>茲證明</p>
+        <p class="cert-name">小森</p>
+        <p>完成每日任務</p>
+        <p class="cert-task">「晨讀十五分鐘」</p>
+        <p class="reward">金幣 20 · 經驗 +8</p>
+        <div class="seal" aria-hidden="true">
+          <span class="seal-wait">待蓋章</span>
+          <span class="seal-done">已頒獎</span>
+        </div>
+        <p class="cert-status" id="cert-status" aria-live="polite">尚未蓋章。按下面的金色按鈕頒發榮譽。</p>
+      </article>
+      <button class="btn btn-gold btn-stamp" type="button" id="stamp" aria-pressed="false">家長蓋章 · 頒發榮譽</button>
+      <section class="retry" aria-labelledby="retry-title">
+        <h2 id="retry-title">請再試一次</h2>
+        <p class="fine">次要路徑。還沒準備好先用這裡，不會蓋上榮譽章。</p>
+        <div class="retry-list" role="group" aria-label="再試原因">
+          <button type="button" data-reason="還沒做完" aria-pressed="false">還沒做完</button>
+          <button type="button" data-reason="需要再讀一遍" aria-pressed="false">需要再讀一遍</button>
+          <button type="button" data-reason="今日先休息，明天再來" aria-pressed="false">今日先休息，明天再來</button>
+        </div>
+        <p id="retry-result" hidden></p>
+      </section>
+    </section>
+    <figure class="hero">
+      <img src="../../docs/ui-direction/03-honour-reward.png" width="1280" height="720" alt="已鎖定的榮譽儀式概念圖：獎章、證書，同金色蓋章的肯定時刻。">
+      <figcaption>已鎖定概念 · 榮譽儀式</figcaption>
+    </figure>
+  </main>
+  <footer class="tabbar">
+    <nav aria-label="方向稿">
+      <a class="tab" href="00-index.html">目錄</a>
+      <a class="tab" href="01-guild-quest-board.html">任務板</a>
+      <a class="tab" href="02-wilderness-adventure.html">荒野</a>
+      <a class="tab" href="03-honour-reward.html" aria-current="page">榮譽</a>
+    </nav>
+  </footer>
+  <script>
+    (function () {
+      var cert = document.getElementById("certificate");
+      var stamp = document.getElementById("stamp");
+      var status = document.getElementById("cert-status");
+      var result = document.getElementById("retry-result");
+      var reasons = Array.prototype.slice.call(document.querySelectorAll("[data-reason]"));
+
+      function clearReasons() {
+        reasons.forEach(function (btn) { btn.setAttribute("aria-pressed", "false"); });
+        result.hidden = true;
+        result.textContent = "";
+      }
+
+      function setStamped(on) {
+        cert.classList.toggle("is-stamped", on);
+        stamp.setAttribute("aria-pressed", on ? "true" : "false");
+        stamp.textContent = on ? "已頒獎" : "家長蓋章 · 頒發榮譽";
+        status.textContent = on
+          ? "已頒獎。金色榮譽章已蓋上，金幣同經驗可以入帳。"
+          : "尚未蓋章。按下面的金色按鈕頒發榮譽。";
+      }
+
+      stamp.addEventListener("click", function () {
+        clearReasons();
+        setStamped(true);
+      });
+
+      reasons.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var reason = btn.getAttribute("data-reason");
+          reasons.forEach(function (item) {
+            item.setAttribute("aria-pressed", item === btn ? "true" : "false");
+          });
+          setStamped(false);
+          result.hidden = false;
+          result.textContent = "已記下：「" + reason + "」。任務回到未完成，尚未頒獎。";
+        });
+      });
+    }());
+  </script>
+</body>
+</html>

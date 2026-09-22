@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>任務板 · Kids Town 方向稿</title>
+  <link rel="stylesheet" href="mock.css">
+</head>
+<body class="page-guild">
+  <a class="skip" href="#main">跳到主要內容</a>
+  <header class="topbar">
+    <a class="brand" href="00-index.html">Kids Town 方向稿</a>
+    <p class="who">小森 · 4 等</p>
+  </header>
+  <main id="main" class="shell has-aside" tabindex="-1">
+    <section class="stage">
+      <div class="plaque">
+        <p>公會大廳</p>
+        <h1>任務板</h1>
+      </div>
+      <div class="board">
+        <div class="filters" role="toolbar" aria-label="任務分類">
+          <button type="button" data-filter="daily" aria-pressed="true">每日任務 <span class="count" data-count="daily">4</span></button>
+          <button type="button" data-filter="pending" aria-pressed="false">待家長確認 <span class="count" data-count="pending">1</span></button>
+          <button type="button" data-filter="awarded" aria-pressed="false">已頒獎 <span class="count" data-count="awarded">1</span></button>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="need-parent" checked>
+          <span>示範：領取後要家長確認</span>
+        </label>
+        <p class="hint">開着時，領取會變成待家長確認。關着時，直接已頒獎。</p>
+        <p class="status-live" id="live" aria-live="polite">點「領取」可以示範兩種結果。</p>
+        <div class="slips" id="board">
+          <article class="slip" data-state="ready" data-initial="ready" style="--tilt: -0.6deg">
+            <span class="pin" aria-hidden="true"></span>
+            <p class="kicker">每日任務</p>
+            <h2>晨讀十五分鐘</h2>
+            <p class="reward">預告　金幣 20　經驗 +8</p>
+            <p class="state-line state-ready">完成就可以領取</p>
+            <p class="state-line state-pending">待家長確認 · 等爸爸媽媽確認就入帳</p>
+            <p class="state-line state-awarded">已頒獎 · 金幣同經驗已入帳</p>
+            <p class="stamp-mark" aria-hidden="true">已頒獎</p>
+            <button class="btn btn-gold state-ready" type="button" data-act="claim">領取</button>
+            <button class="btn btn-gold state-pending" type="button" data-act="award">確認頒獎</button>
+          </article>
+          <article class="slip" data-state="pending" data-initial="pending" style="--tilt: 0.7deg">
+            <span class="pin" aria-hidden="true"></span>
+            <p class="kicker">每日任務</p>
+            <h2>收拾書包</h2>
+            <p class="reward">預告　金幣 15　經驗 +6</p>
+            <p class="state-line state-ready">完成就可以領取</p>
+            <p class="state-line state-pending">待家長確認 · 等爸爸媽媽確認就入帳</p>
+            <p class="state-line state-awarded">已頒獎 · 金幣同經驗已入帳</p>
+            <p class="stamp-mark" aria-hidden="true">已頒獎</p>
+            <button class="btn btn-gold state-ready" type="button" data-act="claim">領取</button>
+            <button class="btn btn-gold state-pending" type="button" data-act="award">確認頒獎</button>
+          </article>
+          <article class="slip" data-state="awarded" data-initial="awarded" style="--tilt: -0.4deg">
+            <span class="pin" aria-hidden="true"></span>
+            <p class="kicker">每日任務</p>
+            <h2>數學練習一頁</h2>
+            <p class="reward">金幣 25　經驗 +10</p>
+            <p class="state-line state-ready">完成就可以領取</p>
+            <p class="state-line state-pending">待家長確認 · 等爸爸媽媽確認就入帳</p>
+            <p class="state-line state-awarded">已頒獎 · 金幣同經驗已入帳</p>
+            <p class="stamp-mark" aria-hidden="true">已頒獎</p>
+            <button class="btn btn-gold state-ready" type="button" data-act="claim">領取</button>
+            <button class="btn btn-gold state-pending" type="button" data-act="award">確認頒獎</button>
+          </article>
+          <article class="slip" data-state="ready" data-initial="ready" style="--tilt: 0.5deg">
+            <span class="pin" aria-hidden="true"></span>
+            <p class="kicker">每日任務</p>
+            <h2>幫家人擺碗筷</h2>
+            <p class="reward">預告　金幣 10　經驗 +5</p>
+            <p class="state-line state-ready">完成就可以領取</p>
+            <p class="state-line state-pending">待家長確認 · 等爸爸媽媽確認就入帳</p>
+            <p class="state-line state-awarded">已頒獎 · 金幣同經驗已入帳</p>
+            <p class="stamp-mark" aria-hidden="true">已頒獎</p>
+            <button class="btn btn-gold state-ready" type="button" data-act="claim">領取</button>
+            <button class="btn btn-gold state-pending" type="button" data-act="award">確認頒獎</button>
+          </article>
+        </div>
+        <p class="empty" id="empty" hidden>這個分類還沒有任務。</p>
+        <button class="btn btn-quiet" type="button" id="reset">重置示範</button>
+        <p class="fine">數字同句子是方向稿，方便睇狀態，不是正式獎勵。</p>
+      </div>
+    </section>
+    <figure class="hero">
+      <img src="../../docs/ui-direction/01-guild-quest-board.png" width="1280" height="720" alt="已鎖定的公會任務板概念圖：木質大廳、釘着的任務紙、金色領取按鈕。">
+      <figcaption>已鎖定概念 · 任務板</figcaption>
+    </figure>
+  </main>
+  <footer class="tabbar">
+    <nav aria-label="方向稿">
+      <a class="tab" href="00-index.html">目錄</a>
+      <a class="tab" href="01-guild-quest-board.html" aria-current="page">任務板</a>
+      <a class="tab" href="02-wilderness-adventure.html">荒野</a>
+      <a class="tab" href="03-honour-reward.html">榮譽</a>
+    </nav>
+  </footer>
+  <script>
+    (function () {
+      var slips = Array.prototype.slice.call(document.querySelectorAll(".slip"));
+      var filters = Array.prototype.slice.call(document.querySelectorAll("[data-filter]"));
+      var empty = document.getElementById("empty");
+      var live = document.getElementById("live");
+      var approval = document.getElementById("need-parent");
+      var current = "daily";
+
+      function count(state) {
+        return slips.filter(function (slip) { return slip.dataset.state === state; }).length;
+      }
+
+      function refreshCounts() {
+        document.querySelector('[data-count="daily"]').textContent = String(slips.length);
+        document.querySelector('[data-count="pending"]').textContent = String(count("pending"));
+        document.querySelector('[data-count="awarded"]').textContent = String(count("awarded"));
+      }
+
+      function applyFilter() {
+        var shown = 0;
+        slips.forEach(function (slip) {
+          var ok = current === "daily" || slip.dataset.state === current;
+          slip.hidden = !ok;
+          if (ok) shown += 1;
+        });
+        empty.hidden = shown !== 0;
+        refreshCounts();
+      }
+
+      filters.forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          current = btn.getAttribute("data-filter");
+          filters.forEach(function (item) {
+            item.setAttribute("aria-pressed", item === btn ? "true" : "false");
+          });
+          applyFilter();
+        });
+      });
+
+      document.getElementById("board").addEventListener("click", function (event) {
+        var btn = event.target.closest("[data-act]");
+        if (!btn) return;
+        var slip = btn.closest(".slip");
+        var title = slip.querySelector("h2").textContent;
+        if (btn.getAttribute("data-act") === "claim") {
+          if (approval.checked) {
+            slip.dataset.state = "pending";
+            live.textContent = "「" + title + "」已完成，待家長確認。金幣暫時未入帳。";
+          } else {
+            slip.dataset.state = "awarded";
+            live.textContent = "「" + title + "」已頒獎。金幣同經驗已入帳。";
+          }
+        } else {
+          slip.dataset.state = "awarded";
+          live.textContent = "家長已確認。「" + title + "」已頒獎。";
+        }
+        applyFilter();
+      });
+
+      document.getElementById("reset").addEventListener("click", function () {
+        slips.forEach(function (slip) {
+          slip.dataset.state = slip.dataset.initial;
+        });
+        live.textContent = "已重置示範。";
+        applyFilter();
+      });
+
+      applyFilter();
+    }());
+  </script>
+</body>
+</html>
