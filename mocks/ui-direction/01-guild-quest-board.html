@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>任務板 · Kids Town 方向稿</title>
+  <link rel="stylesheet" href="mock.css">
+</head>
+<body>
+  <a class="skip" href="#board">跳到任務板</a>
+  <main class="stage" id="board">
+    <h1 class="vh">任務板</h1>
+    <img class="art" src="./art/01-guild-quest-board.png" width="1280" height="720" alt="">
+    <p class="toast" id="toast" aria-live="polite"></p>
+
+    <button class="hot" type="button" data-claim data-name="採集香草" aria-label="領取：採集香草" style="left:66.9%;top:31.4%;width:9.7%;height:6.2%"><span class="tag"></span></button>
+    <button class="hot" type="button" data-claim data-name="幫助居民" aria-label="領取：幫助居民" style="left:66.9%;top:41.8%;width:9.7%;height:5.8%"><span class="tag"></span></button>
+    <button class="hot" type="button" data-claim data-name="挑戰訓練場" aria-label="領取：挑戰訓練場" style="left:67%;top:51.5%;width:9.6%;height:6.1%"><span class="tag"></span></button>
+    <button class="hot" type="button" disabled aria-label="公會互助，已完成" style="left:67%;top:61.9%;width:9.6%;height:5.6%"></button>
+
+    <button class="hot" type="button" id="all-quests" aria-label="查看所有公會任務" style="left:36.7%;top:77.6%;width:27%;height:4.9%"></button>
+    <button class="hot" type="button" id="menu" aria-label="選單" style="left:93.5%;top:6.2%;width:5.2%;height:8%"></button>
+
+    <button class="hot" type="button" data-nav="城鎮首頁" aria-label="城鎮首頁" style="left:10%;top:84%;width:12%;height:14%"></button>
+    <button class="hot" type="button" data-nav="公會大廳" aria-label="公會大廳" style="left:25.5%;top:84%;width:12%;height:14%"></button>
+    <button class="hot" type="button" data-nav="任務板" aria-label="任務板" aria-current="page" style="left:41.6%;top:83.5%;width:16.6%;height:14.5%"></button>
+    <button class="hot" type="button" data-nav="商店" aria-label="商店" style="left:61%;top:84%;width:12%;height:14%"></button>
+    <button class="hot" type="button" data-nav="背包" aria-label="背包" style="left:76.5%;top:84%;width:12%;height:14%"></button>
+  </main>
+  <script>
+    (function () {
+      var toast = document.getElementById("toast");
+
+      function say(text) {
+        toast.textContent = text;
+      }
+
+      document.querySelectorAll("[data-claim]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          var name = button.getAttribute("data-name");
+          var tag = button.querySelector(".tag");
+          if (!button.classList.contains("is-pending")) {
+            button.classList.add("is-pending");
+            tag.textContent = "待確認";
+            button.setAttribute("aria-label", name + "，待家長確認。再按一次由家長頒獎");
+            say("「" + name + "」已領取，等家長確認。");
+          } else {
+            button.classList.remove("is-pending");
+            button.classList.add("is-awarded");
+            tag.textContent = "已頒獎";
+            button.disabled = true;
+            button.setAttribute("aria-label", name + "，已頒獎");
+            say("家長已確認。「" + name + "」已頒獎。");
+          }
+        });
+      });
+
+      document.getElementById("all-quests").addEventListener("click", function () {
+        say("畫面上已是全部公會任務。");
+      });
+
+      document.getElementById("menu").addEventListener("click", function () {
+        say("選單尚未接上這份方向稿。");
+      });
+
+      document.querySelectorAll("[data-nav]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          var name = button.getAttribute("data-nav");
+          if (button.getAttribute("aria-current") === "page") {
+            say("而家喺「" + name + "」。");
+          } else {
+            say("「" + name + "」尚未在這份方向稿裡。");
+          }
+        });
+      });
+    }());
+  </script>
+</body>
+</html>

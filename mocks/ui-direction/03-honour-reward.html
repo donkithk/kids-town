@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>榮譽儀式 · Kids Town 方向稿</title>
+  <link rel="stylesheet" href="mock.css">
+</head>
+<body>
+  <a class="skip" href="#honour">跳到榮譽儀式</a>
+  <main class="stage" id="honour">
+    <h1 class="vh">榮譽儀式</h1>
+    <img class="art" src="./art/03-honour-reward.png" width="1280" height="720" alt="">
+    <p class="toast" id="toast" aria-live="polite"></p>
+
+    <button class="hot" type="button" id="stamp" aria-label="家長蓋章核准，領取獎勵" aria-pressed="false" style="left:30.4%;top:58.6%;width:38.3%;height:7.5%"><span class="tag"></span></button>
+
+    <button class="hot" type="button" data-nav="城鎮" aria-label="城鎮" style="left:10%;top:88%;width:15%;height:11%"></button>
+    <a class="hot" href="01-guild-quest-board.html" aria-label="任務" style="left:25.6%;top:88%;width:15.6%;height:11%"></a>
+    <button class="hot" type="button" data-nav="公會" aria-label="公會" style="left:41.2%;top:88%;width:15.6%;height:11%"></button>
+    <button class="hot" type="button" aria-label="獎勵" aria-current="page" style="left:56.8%;top:88%;width:15.6%;height:11%"></button>
+    <button class="hot" type="button" data-nav="家長" aria-label="家長" style="left:72.4%;top:88%;width:15.6%;height:11%"></button>
+  </main>
+  <script>
+    (function () {
+      var toast = document.getElementById("toast");
+      var stamp = document.getElementById("stamp");
+      stamp.addEventListener("click", function () {
+        if (stamp.getAttribute("aria-pressed") === "true") return;
+        stamp.setAttribute("aria-pressed", "true");
+        stamp.classList.add("is-awarded");
+        stamp.querySelector(".tag").textContent = "已蓋章";
+        stamp.setAttribute("aria-label", "已蓋章核准，獎勵已領取");
+        stamp.disabled = true;
+        toast.textContent = "已蓋章核准。金幣、寶石同榮譽徽章可以入帳。";
+      });
+      var rewards = document.querySelector("[aria-current='page']");
+      rewards.addEventListener("click", function () {
+        toast.textContent = "而家喺獎勵頁。";
+      });
+      document.querySelectorAll("[data-nav]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          toast.textContent = "「" + button.getAttribute("data-nav") + "」尚未在這份方向稿裡。";
+        });
+      });
+    }());
+  </script>
+</body>
+</html>

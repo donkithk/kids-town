@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>荒野探險 · Kids Town 方向稿</title>
+  <link rel="stylesheet" href="mock.css">
+</head>
+<body>
+  <a class="skip" href="#wild">跳到荒野</a>
+  <main class="stage" id="wild">
+    <h1 class="vh">荒野探險</h1>
+    <img class="art" src="./art/02-wilderness-adventure.png" width="1280" height="720" alt="">
+    <p class="toast" id="toast" aria-live="polite"></p>
+    <div class="hp-deplete" aria-hidden="true"><span id="hp-cover"></span></div>
+
+    <button class="hot" type="button" data-side="背包" aria-label="背包" style="left:3.5%;top:44%;width:9%;height:11.3%"></button>
+    <button class="hot" type="button" data-side="地圖" aria-label="地圖" style="left:3.5%;top:56.9%;width:9%;height:11%"></button>
+    <button class="hot" type="button" data-side="任務" aria-label="任務" style="left:3.5%;top:69.9%;width:9%;height:11.1%"></button>
+    <button class="hot" type="button" id="auto" aria-pressed="false" aria-label="自動尋路" style="left:1.5%;top:83.2%;width:17.5%;height:8.6%"></button>
+
+    <button class="hot" type="button" data-skill="旋風斬" aria-label="旋風斬" style="left:40.5%;top:73.5%;width:9.5%;height:14%"></button>
+    <button class="hot" type="button" data-skill="機敏閃避" aria-label="機敏閃避" style="left:57.5%;top:73.5%;width:9%;height:14%"></button>
+    <button class="hot" type="button" data-skill="勇氣激勵" aria-label="勇氣激勵" style="left:69%;top:73.5%;width:8.5%;height:14%"></button>
+    <button class="hot" type="button" id="attack" aria-label="攻擊草原野豬" style="left:79.5%;top:72%;width:14.5%;height:20%"></button>
+
+    <div class="vh" role="meter" id="hp-meter" aria-label="草原野豬生命" aria-valuemin="0" aria-valuemax="3" aria-valuenow="3">3 / 3</div>
+  </main>
+  <script>
+    (function () {
+      var toast = document.getElementById("toast");
+      var hp = 3;
+      var cover = document.getElementById("hp-cover");
+      var meter = document.getElementById("hp-meter");
+      var attack = document.getElementById("attack");
+      var skills = Array.prototype.slice.call(document.querySelectorAll("[data-skill]"));
+      var auto = document.getElementById("auto");
+
+      function paint() {
+        var gone = (3 - hp) / 3 * 100;
+        cover.style.width = gone + "%";
+        meter.setAttribute("aria-valuenow", String(hp));
+        meter.textContent = hp + " / 3";
+      }
+
+      function finish(message) {
+        toast.textContent = message;
+        if (hp > 0) return;
+        attack.disabled = true;
+        attack.setAttribute("aria-label", "草原野豬已被打敗");
+        skills.forEach(function (button) { button.disabled = true; });
+      }
+
+      function hit(name) {
+        if (hp <= 0) return;
+        hp -= 1;
+        paint();
+        if (hp === 0) finish(name + "打中。勝利，草原野豬倒地。");
+        else finish(name + "打中。野豬生命 " + hp + " / 3。");
+      }
+
+      attack.addEventListener("click", function () { hit("攻擊"); });
+      skills.forEach(function (button) {
+        button.addEventListener("click", function () {
+          hit(button.getAttribute("data-skill"));
+        });
+      });
+
+      document.querySelectorAll("[data-side]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          toast.textContent = "「" + button.getAttribute("data-side") + "」尚未在這份方向稿裡打開。";
+        });
+      });
+
+      auto.addEventListener("click", function () {
+        var on = auto.getAttribute("aria-pressed") === "true";
+        var next = !on;
+        auto.setAttribute("aria-pressed", next ? "true" : "false");
+        auto.classList.toggle("is-on", next);
+        if (!auto.querySelector(".tag")) {
+          var tag = document.createElement("span");
+          tag.className = "tag";
+          auto.appendChild(tag);
+        }
+        auto.querySelector(".tag").textContent = next ? "尋路中" : "";
+        toast.textContent = next ? "開始自動尋路。" : "已停止自動尋路。";
+      });
+
+      paint();
+    }());
+  </script>
+</body>
+</html>
