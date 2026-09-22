@@ -1089,9 +1089,38 @@ body{
    UI DIRECTION — design-faithful hotspot stages
    Approved concept art is the picture; hotspots only.
    ═══════════════════════════════════════ */
-body.kt-landscape{max-width:min(960px,100vw)}
-body.kt-landscape .gsw{max-width:min(960px,100vw);overflow:visible}
+/* Landscape-first: concept art is 1280×720. The stage is a centered 16:9 frame, not a 480px portrait column. */
+body.kt-landscape{
+  max-width:none;width:100%;min-height:100dvh;margin:0;
+  background:#2c1c10;overflow-x:hidden;
+}
+body.kt-landscape .gsw{
+  width:min(100vw, calc(100dvh * 16 / 9));
+  max-width:none;margin:0 auto;overflow:visible;
+  background:transparent;border-radius:0;
+}
+body.kt-artstage .gsw{
+  min-height:100dvh;display:flex;flex-direction:column;justify-content:center;
+}
 body.kt-landscape .gs{overflow:visible}
+body.kt-landscape .kt-stage{width:100%;margin:0 auto}
+body.kt-landscape .kt-art{width:100%;height:auto;aspect-ratio:16/9;object-fit:cover}
+.kt-rotate{display:none}
+@media (orientation: portrait){
+  body.kt-landscape .kt-rotate{
+    display:flex;position:fixed;inset:0;z-index:500;
+    align-items:center;justify-content:center;text-align:center;
+    padding:28px 22px;background:#2c1c10;color:#f7edd8;
+  }
+}
+.kt-rotate-card{
+  width:min(360px,100%);background:#f7edd8;color:#3a2616;
+  border:3px solid #c4a574;border-radius:18px;padding:28px 22px;
+  box-shadow:0 12px 32px rgba(0,0,0,.35);
+}
+.kt-rotate-ico{font-size:42px;line-height:1;margin-bottom:8px}
+.kt-rotate-title{font-size:28px;font-weight:900;margin-bottom:8px}
+.kt-rotate-card p{font-weight:700;line-height:1.45}
 #tab-tasks.tab-content.active,
 #tab-honour.tab-content.active,
 #tab-expedition.tab-content.active.kt-wild-on{padding:0;overflow:hidden}
@@ -1281,6 +1310,13 @@ body.kt-battle .act{display:none !important}
 </style>
 </head>
 <body>
+<div class="kt-rotate" id="ktRotate" role="dialog" aria-label="請轉橫向">
+  <div class="kt-rotate-card">
+    <div class="kt-rotate-ico" aria-hidden="true">📱</div>
+    <p class="kt-rotate-title">請轉橫向</p>
+    <p>任務板、荒野同榮譽係橫向畫面。轉側手機，木板就會鋪滿。</p>
+  </div>
+</div>
 
 <div id="loginScreen">
   <div class="login-card">
@@ -1875,6 +1911,8 @@ async function doLogin() {
       currentKidId = data.user.id;
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('app').style.display = 'block';
+      document.body.classList.add('kt-landscape');
+      ktPreferLandscape();
       updateHeader();  // Show name immediately, don't wait for loadTown
       Audio.startAmbient('town');
       await loadTown();
@@ -2223,8 +2261,9 @@ function st(name) {
   const tab = document.getElementById(`tab-${name}`);
   if (!tab) { showToast('頁面尚未開放', 'error'); return; }
   tab.classList.add('active');
-  const landscape = (name === 'tasks' || name === 'honour' || name === 'expedition');
+  const landscape = (name === 'tasks' || name === 'honour' || name === 'expedition' || name === 'town' || name === 'shop' || name === 'buildings');
   document.body.classList.toggle('kt-landscape', landscape);
+  if (landscape) ktPreferLandscape();
   if (name !== 'expedition') document.body.classList.remove('kt-battle');
   ktSyncArtStage();
   if (name === 'town') {} // town scene is static HTML now
@@ -3222,6 +3261,14 @@ function ktGuildSay(text) {
 function ktHonourSay(text) {
   const toast = document.getElementById('honourToast');
   if (toast) toast.textContent = text || '';
+}
+
+function ktPreferLandscape() {
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(function () {});
+    }
+  } catch (e) {}
 }
 
 function ktSyncArtStage() {
