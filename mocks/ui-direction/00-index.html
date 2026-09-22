@@ -12,33 +12,57 @@
     <a class="brand" href="00-index.html" aria-current="page">Kids Town 方向稿</a>
     <p class="who">未接遊戲</p>
   </header>
-  <main id="main" class="shell" tabindex="-1">
+  <main id="main" class="app" tabindex="-1">
     <section class="lead">
       <h1>視覺方向互動稿</h1>
-      <p>三頁靜態畫面，跟 <code>docs/ui-direction/</code> 已鎖定的溫暖木屋、日光荒野、榮譽儀式。用來睇版面同手感，沒有接入 <code>index.html</code> 或玩法。</p>
+      <p>三頁可以用的畫面，用 HTML、CSS 同 SVG 砌出溫暖木屋、日光荒野、榮譽儀式。色調同構圖參考已鎖定方向，呢幾頁本身冇放概念圖。</p>
     </section>
 
     <section class="gallery" aria-label="三個畫面">
       <a class="card" href="01-guild-quest-board.html">
-        <img src="../../docs/ui-direction/01-guild-quest-board.png" width="1280" height="720" alt="已鎖定概念：溫暖木屋公會大廳，奶油色任務紙同金色領取按鈕。">
+        <div class="preview preview-guild" aria-hidden="true">
+          <span class="pv-rope"></span>
+          <span class="pv-lantern l"></span>
+          <span class="pv-lantern r"></span>
+          <span class="pv-sign">任務板</span>
+          <span class="pv-slip s1"><i></i></span>
+          <span class="pv-slip s2"><i></i></span>
+          <span class="pv-slip s3"><i></i></span>
+        </div>
         <h2>任務板</h2>
-        <p>每日任務、待家長確認、已頒獎。大按鈕，可以試領取。</p>
+        <p>木板上釘住羊皮紙。可以篩選全部、進行中、待家長確認、已頒獎。領取之後要等家長確認。</p>
+        <span class="open">打開</span>
       </a>
       <a class="card" href="02-wilderness-adventure.html">
-        <img src="../../docs/ui-direction/02-wilderness-adventure.png" width="1280" height="720" alt="已鎖定概念：白天開闊草地，遠山、藍天，戶外探索與戰鬥。">
+        <div class="preview preview-wild" aria-hidden="true">
+          <span class="pv-sun"></span>
+          <span class="pv-cloud"></span>
+          <span class="pv-hill far"></span>
+          <span class="pv-hill near"></span>
+          <span class="pv-path"></span>
+          <span class="pv-flower a"></span>
+          <span class="pv-flower b"></span>
+          <span class="pv-flower c"></span>
+          <span class="pv-kid"></span>
+        </div>
         <h2>荒野</h2>
-        <p>日光草地、任務追蹤、探索同戰鬥的戶外介面。</p>
+        <p>天空、山丘同小路用漸層同向量圖砌成。有任務追蹤、生命同體力條，可以向前探索同攻擊。</p>
+        <span class="open">打開</span>
       </a>
       <a class="card" href="03-honour-reward.html">
-        <img src="../../docs/ui-direction/03-honour-reward.png" width="1280" height="720" alt="已鎖定概念：榮譽儀式，獎章、證書同金色蓋章。">
+        <div class="preview preview-honour" aria-hidden="true">
+          <span class="pv-medal"></span>
+          <span class="pv-cert"><b></b></span>
+        </div>
         <h2>榮譽</h2>
-        <p>證書同金色家長蓋章。再試一次的原因放在次要位置。</p>
+        <p>證書同金印。家長可以蓋章核准，或者揀一個再試一次的原因。</p>
+        <span class="open">打開</span>
       </a>
     </section>
 
     <section class="swatch-card" aria-labelledby="palette-title">
       <h2 id="palette-title">色盤</h2>
-      <p>同方向說明一致：暖木、奶油紙、金色、明亮日光。不是糖果粉彩，也不是深夜戰鬥介面。</p>
+      <p>暖木、奶油紙、金色、明亮日光。唔係糖果粉彩，亦唔係深夜戰鬥介面。</p>
       <ul class="swatches">
         <li><span class="swatch swatch-wood"></span>暖木色</li>
         <li><span class="swatch swatch-cream"></span>奶油紙色</li>
@@ -51,12 +75,12 @@
     <section class="howto" aria-labelledby="howto-title">
       <h2 id="howto-title">在本機打開</h2>
       <ol>
-        <li>用瀏覽器直接打開 <code>mocks/ui-direction/00-index.html</code>（<code>file://</code> 可以）。</li>
-        <li>或在專案根目錄執行下面指令，再打開連結。</li>
+        <li>喺專案根目錄開本地伺服器。</li>
+        <li>用瀏覽器打開下面網址。可以放大縮小。</li>
       </ol>
       <pre><code>python -m http.server 8765</code></pre>
       <p>然後前往 <code>http://127.0.0.1:8765/mocks/ui-direction/00-index.html</code></p>
-      <p>概念圖用相對路徑連到 <code>docs/ui-direction/</code>。請從專案根目錄開伺服器。如果只在 <code>mocks/ui-direction/</code> 裡面開，圖片會找不到。</p>
+      <p>直接打開 <code>mocks/ui-direction/00-index.html</code> 都得。呢幾頁唔靠外面的圖片。</p>
     </section>
   </main>
   <footer class="tabbar">
