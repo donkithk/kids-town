@@ -1181,10 +1181,18 @@ body.kt-landscape .gs{overflow:visible}
   min-height:0;display:block;background:#120e0b;border-radius:0;
 }
 .battle-scene.kt-wild .kt-art{border-radius:0}
+.battle-scene.kt-wild .battle-content{
+  position:absolute;inset:0;display:block;z-index:2;pointer-events:none;
+}
+.battle-scene.kt-wild .monster-zone,
+.battle-scene.kt-wild .monster-row{
+  position:absolute;inset:0;display:block;min-height:0;padding:0;
+  justify-content:unset;align-items:unset;flex:none;pointer-events:none;
+}
 .battle-scene.kt-wild .monster-card{
   position:absolute;width:auto;height:auto;padding:0;margin:0;
   border:2px solid transparent;background:transparent;z-index:2;
-  color:transparent;
+  color:transparent;pointer-events:auto;
 }
 .battle-scene.kt-wild .monster-card .m-img,
 .battle-scene.kt-wild .monster-card .m-hp-bar,
@@ -1203,13 +1211,13 @@ body.kt-landscape .gs{overflow:visible}
 .battle-scene.kt-wild .dbt-footer,
 .battle-scene.kt-wild .battle-bg{display:none!important}
 .battle-scene.kt-wild .cmd-menu{
-  position:absolute;inset:auto;display:block;padding:0;gap:0;z-index:2;
-  grid-template-columns:unset;
+  position:absolute;inset:0;display:block;padding:0;gap:0;z-index:3;
+  grid-template-columns:unset;pointer-events:none;
 }
 .battle-scene.kt-wild .cmd-btn{
   position:absolute;background:transparent;border:0;color:transparent;
   box-shadow:none;padding:0;margin:0;font-size:12px;font-weight:800;
-  border-radius:0.6rem;cursor:pointer;
+  border-radius:0.6rem;cursor:pointer;pointer-events:auto;
 }
 .battle-scene.kt-wild .result-overlay{
   background:rgba(18,14,11,0.55);
@@ -4346,7 +4354,7 @@ function renderBattleMode(exp) {
 
   let toastMsg = '';
   if (lastTurn && lastTurn.log && lastTurn.log.length) toastMsg = lastTurn.log.join(' ');
-  else if (result === 'fighting') toastMsg = window._battleTargetMode === 'attack' ? '點擊怪獸選擇目標' : '選擇攻擊或技能';
+  else if (result === 'fighting') toastMsg = window._battleTargetMode === 'attack' ? '點擊怪獸選擇目標' : '選擇指令或技能';
   else if (result === 'won') toastMsg = '勝利！';
   else if (result === 'lost') toastMsg = '戰敗...';
   else if (result === 'fled') toastMsg = '逃走了！';
