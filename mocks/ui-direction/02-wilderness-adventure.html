@@ -6,261 +6,87 @@
   <title>荒野探險 · Kids Town 方向稿</title>
   <link rel="stylesheet" href="mock.css">
 </head>
-<body class="page-wild">
-  <a class="skip" href="#main">跳到主要內容</a>
-  <header class="topbar">
-    <a class="brand" href="00-index.html">Kids Town 方向稿</a>
-    <p class="who">小森 · 4 等</p>
-  </header>
-  <main id="main" class="app" tabindex="-1">
-    <section class="wild-scene" aria-label="日光草地">
-      <svg class="scene-svg" viewBox="0 0 390 480" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-        <defs>
-          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#6ec8f5"/>
-            <stop offset="0.55" stop-color="#d7f3ff"/>
-            <stop offset="1" stop-color="#fff4d4"/>
-          </linearGradient>
-          <linearGradient id="farHill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#b7e4e4"/>
-            <stop offset="1" stop-color="#7eb8c4"/>
-          </linearGradient>
-          <linearGradient id="midHill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#b6e986"/>
-            <stop offset="1" stop-color="#6fbf57"/>
-          </linearGradient>
-          <linearGradient id="nearGrass" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#7dcc55"/>
-            <stop offset="1" stop-color="#3d9434"/>
-          </linearGradient>
-        </defs>
-        <rect width="390" height="480" fill="url(#sky)"/>
-        <circle cx="318" cy="74" r="28" fill="#ffe08a"/>
-        <circle cx="318" cy="74" r="44" fill="#ffe08a" opacity="0.35"/>
-        <g class="clouds" fill="#ffffff">
-          <g transform="translate(36,58)">
-            <ellipse cx="28" cy="16" rx="26" ry="14"/>
-            <ellipse cx="50" cy="14" rx="20" ry="12"/>
-            <ellipse cx="14" cy="18" rx="14" ry="10"/>
-          </g>
-          <g transform="translate(150,96)" opacity="0.95">
-            <ellipse cx="24" cy="12" rx="20" ry="11"/>
-            <ellipse cx="42" cy="12" rx="14" ry="9"/>
-          </g>
-        </g>
-        <path fill="url(#farHill)" d="M0 210 C50 160 90 188 140 156 C190 124 220 176 270 150 C320 126 350 168 390 146 L390 480 L0 480 Z"/>
-        <path fill="url(#midHill)" d="M0 268 C70 214 110 246 170 210 C230 176 260 230 320 204 C355 186 370 220 390 206 L390 480 L0 480 Z"/>
-        <path fill="url(#nearGrass)" d="M0 330 C80 292 130 324 200 300 C270 276 310 318 390 292 L390 480 L0 480 Z"/>
-        <path d="M0 400 C90 372 160 410 240 384 C300 366 340 390 390 376 L390 480 L0 480 Z" fill="#3d9434"/>
-        <g transform="translate(28,236)">
-          <polygon points="6,36 40,8 74,36" fill="#8c3d32"/>
-          <rect x="16" y="34" width="48" height="34" rx="2" fill="#f4e4c8" stroke="#6b4224" stroke-width="2"/>
-          <rect x="34" y="46" width="12" height="22" fill="#6b4224"/>
-        </g>
-        <g transform="translate(18,188)">
-          <rect x="18" y="46" width="8" height="28" rx="2" fill="#6b4224"/>
-          <circle cx="22" cy="36" r="22" fill="#2f7a32"/>
-          <circle cx="8" cy="44" r="14" fill="#3d9140"/>
-          <circle cx="36" cy="46" r="13" fill="#4ea04a"/>
-        </g>
-        <g transform="translate(300,210)">
-          <rect x="16" y="40" width="8" height="26" rx="2" fill="#6b4224"/>
-          <circle cx="20" cy="32" r="20" fill="#2f7a32"/>
-          <circle cx="8" cy="40" r="12" fill="#46a044"/>
-        </g>
-        <path d="M198 470 C170 410 236 372 206 328 C172 280 248 258 228 214 C210 176 168 168 184 132" fill="none" stroke="#e7d2a4" stroke-width="30" stroke-linecap="round"/>
-        <path d="M198 470 C170 410 236 372 206 328 C172 280 248 258 228 214 C210 176 168 168 184 132" fill="none" stroke="#f3e2c0" stroke-width="12" stroke-linecap="round"/>
-        <g transform="translate(214,248)" stroke="#6b4224" fill="none" stroke-linecap="round">
-          <path d="M0 16 Q28 0 56 16" stroke-width="7"/>
-          <path d="M6 16 V28 M50 16 V28" stroke-width="4"/>
-        </g>
-        <g fill="#f2d36a">
-          <circle cx="78" cy="348" r="5"/>
-          <circle cx="108" cy="366" r="4"/>
-          <circle cx="292" cy="356" r="5"/>
-          <circle cx="324" cy="340" r="4"/>
-        </g>
-        <g fill="#e07a92">
-          <circle cx="92" cy="372" r="4"/>
-          <circle cx="306" cy="372" r="5"/>
-        </g>
-        <g fill="#ffffff">
-          <circle cx="64" cy="360" r="4"/>
-          <circle cx="340" cy="358" r="4"/>
-        </g>
-        <g fill="#c89be0">
-          <circle cx="124" cy="352" r="4"/>
-          <circle cx="274" cy="368" r="4"/>
-        </g>
-      </svg>
-      <div class="hud-panel">
-        <h1>荒野探險</h1>
-        <div class="hud-row">
-          <span>4 等</span>
-          <span>金幣 <strong id="coins">128</strong></span>
-        </div>
-        <div class="bar-row">
-          <span id="hp-label">生命</span>
-          <span class="track" role="meter" aria-labelledby="hp-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" id="hp-meter"><span class="fill fill-hp" id="hp-fill"></span></span>
-          <span id="hp-num">100</span>
-        </div>
-        <div class="bar-row">
-          <span id="sta-label">體力</span>
-          <span class="track" role="meter" aria-labelledby="sta-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" id="sta-meter"><span class="fill fill-sta" id="sta-fill"></span></span>
-          <span id="sta-num">100</span>
-        </div>
-        <p class="place-line" id="place">而家：公會門外的草地</p>
-      </div>
-      <div class="kid" id="kid" data-step="0" aria-hidden="true">
-        <div class="kid-head"></div>
-        <div class="kid-body"></div>
-      </div>
-      <div class="slime" id="slime" hidden aria-hidden="true">
-        <i></i><i></i><span class="shine"></span>
-      </div>
-      <section class="tracker" aria-labelledby="track-title">
-        <h2 id="track-title">任務追蹤</h2>
-        <ol class="track-list">
-          <li data-quest="gate" class="is-done"><span class="mark" aria-hidden="true"></span>走出公會大門<span class="done-label">，已完成</span></li>
-          <li data-quest="bridge"><span class="mark" aria-hidden="true"></span>行過木橋<span class="done-label">，已完成</span></li>
-          <li data-quest="field"><span class="mark" aria-hidden="true"></span>穿過花田<span class="done-label">，已完成</span></li>
-          <li data-quest="slime"><span class="mark" aria-hidden="true"></span>打贏草地史萊姆<span class="done-label">，已完成</span></li>
-        </ol>
-        <div class="enemy" id="enemy" hidden>
-          <p id="enemy-label">草地史萊姆</p>
-          <div class="bar-row">
-            <span>生命</span>
-            <span class="track" role="meter" aria-labelledby="enemy-label" aria-valuemin="0" aria-valuemax="3" aria-valuenow="3" id="enemy-meter"><span class="fill fill-enemy" id="enemy-fill" style="width:100%"></span></span>
-            <span id="enemy-num">3</span>
-          </div>
-        </div>
-        <p class="victory" id="victory" hidden>勝利 · 金幣 +15</p>
-      </section>
-    </section>
-    <div class="dock">
-      <p class="status-live" id="wild-live" aria-live="polite">沿住小路向前探索。遇到史萊姆就可以攻擊。</p>
-      <div class="dock-actions">
-        <button class="btn btn-gold" type="button" id="explore">向前探索</button>
-        <button class="btn btn-attack" type="button" id="attack" disabled>攻擊</button>
-      </div>
-    </div>
+<body>
+  <a class="skip" href="#wild">跳到荒野</a>
+  <main class="stage" id="wild">
+    <h1 class="vh">荒野探險</h1>
+    <img class="art" src="../../docs/ui-direction/02-wilderness-adventure.png" width="1280" height="720" alt="">
+    <p class="toast" id="toast" aria-live="polite"></p>
+    <div class="hp-deplete" aria-hidden="true"><span id="hp-cover"></span></div>
+
+    <button class="hot" type="button" data-side="背包" aria-label="背包" style="left:3.5%;top:44%;width:9%;height:11.3%"></button>
+    <button class="hot" type="button" data-side="地圖" aria-label="地圖" style="left:3.5%;top:56.9%;width:9%;height:11%"></button>
+    <button class="hot" type="button" data-side="任務" aria-label="任務" style="left:3.5%;top:69.9%;width:9%;height:11.1%"></button>
+    <button class="hot" type="button" id="auto" aria-pressed="false" aria-label="自動尋路" style="left:1.5%;top:83.2%;width:17.5%;height:8.6%"></button>
+
+    <button class="hot" type="button" data-skill="旋風斬" aria-label="旋風斬" style="left:40.5%;top:73.5%;width:9.5%;height:14%"></button>
+    <button class="hot" type="button" data-skill="機敏閃避" aria-label="機敏閃避" style="left:57.5%;top:73.5%;width:9%;height:14%"></button>
+    <button class="hot" type="button" data-skill="勇氣激勵" aria-label="勇氣激勵" style="left:69%;top:73.5%;width:8.5%;height:14%"></button>
+    <button class="hot" type="button" id="attack" aria-label="攻擊草原野豬" style="left:79.5%;top:72%;width:14.5%;height:20%"></button>
+
+    <div class="vh" role="meter" id="hp-meter" aria-label="草原野豬生命" aria-valuemin="0" aria-valuemax="3" aria-valuenow="3">3 / 3</div>
   </main>
-  <footer class="tabbar">
-    <nav aria-label="方向稿">
-      <a class="tab" href="00-index.html">目錄</a>
-      <a class="tab" href="01-guild-quest-board.html">任務板</a>
-      <a class="tab" href="02-wilderness-adventure.html" aria-current="page">荒野</a>
-      <a class="tab" href="03-honour-reward.html">榮譽</a>
-    </nav>
-  </footer>
   <script>
     (function () {
-      var places = ["公會門外的草地", "小木橋", "向陽花田", "史萊姆草地"];
-      var step = 0;
-      var reached = 0;
-      var hp = 100;
-      var stamina = 100;
-      var slimeHp = 3;
-      var coins = 128;
-      var rewarded = false;
-      var kid = document.getElementById("kid");
-      var slime = document.getElementById("slime");
-      var place = document.getElementById("place");
-      var live = document.getElementById("wild-live");
+      var toast = document.getElementById("toast");
+      var hp = 3;
+      var cover = document.getElementById("hp-cover");
+      var meter = document.getElementById("hp-meter");
       var attack = document.getElementById("attack");
-      var enemy = document.getElementById("enemy");
-      var victory = document.getElementById("victory");
-      var hpFill = document.getElementById("hp-fill");
-      var staFill = document.getElementById("sta-fill");
-      var enemyFill = document.getElementById("enemy-fill");
-      var hpNum = document.getElementById("hp-num");
-      var staNum = document.getElementById("sta-num");
-      var enemyNum = document.getElementById("enemy-num");
-      var hpMeter = document.getElementById("hp-meter");
-      var staMeter = document.getElementById("sta-meter");
-      var enemyMeter = document.getElementById("enemy-meter");
-      var coinsEl = document.getElementById("coins");
-      var quests = {
-        gate: document.querySelector('[data-quest="gate"]'),
-        bridge: document.querySelector('[data-quest="bridge"]'),
-        field: document.querySelector('[data-quest="field"]'),
-        slime: document.querySelector('[data-quest="slime"]')
-      };
+      var skills = Array.prototype.slice.call(document.querySelectorAll("[data-skill]"));
+      var auto = document.getElementById("auto");
 
-      function clamp(n) {
-        return Math.max(0, Math.min(100, n));
+      function paint() {
+        var gone = (3 - hp) / 3 * 100;
+        cover.style.width = gone + "%";
+        meter.setAttribute("aria-valuenow", String(hp));
+        meter.textContent = hp + " / 3";
       }
 
-      function mark(el, on) {
-        el.classList.toggle("is-done", on);
+      function finish(message) {
+        toast.textContent = message;
+        if (hp > 0) return;
+        attack.disabled = true;
+        attack.setAttribute("aria-label", "草原野豬已被打敗");
+        skills.forEach(function (button) { button.disabled = true; });
       }
 
-      function render() {
-        kid.dataset.step = String(step);
-        place.textContent = "而家：" + places[step];
-        var fighting = step === 3 && slimeHp > 0;
-        slime.hidden = !fighting;
-        enemy.hidden = !fighting;
-        victory.hidden = slimeHp > 0;
-        attack.disabled = !fighting;
-        hp = clamp(hp);
-        stamina = clamp(stamina);
-        hpFill.style.width = hp + "%";
-        staFill.style.width = stamina + "%";
-        enemyFill.style.width = (slimeHp / 3 * 100) + "%";
-        hpNum.textContent = String(hp);
-        staNum.textContent = String(stamina);
-        enemyNum.textContent = String(Math.max(slimeHp, 0));
-        hpMeter.setAttribute("aria-valuenow", String(hp));
-        staMeter.setAttribute("aria-valuenow", String(stamina));
-        enemyMeter.setAttribute("aria-valuenow", String(Math.max(slimeHp, 0)));
-        coinsEl.textContent = String(coins);
-        mark(quests.gate, true);
-        mark(quests.bridge, reached >= 1);
-        mark(quests.field, reached >= 2);
-        mark(quests.slime, slimeHp <= 0);
+      function hit(name) {
+        if (hp <= 0) return;
+        hp -= 1;
+        paint();
+        if (hp === 0) finish(name + "打中。勝利，草原野豬倒地。");
+        else finish(name + "打中。野豬生命 " + hp + " / 3。");
       }
 
-      document.getElementById("explore").addEventListener("click", function () {
-        step = (step + 1) % places.length;
-        if (step > reached) reached = step;
-        stamina -= 8;
-        if (step === 3 && slimeHp > 0) {
-          live.textContent = "草地史萊姆出現了！可以攻擊。";
-        } else if (step === 3 && slimeHp <= 0) {
-          live.textContent = "史萊姆草地已經清靜了。";
-        } else if (step === 0 && reached >= 3) {
-          live.textContent = "你行返公會門外的草地。";
-        } else {
-          live.textContent = "你行到" + places[step] + "。";
-        }
-        if (stamina <= 0) {
-          live.textContent += " 體力好低。";
-        }
-        render();
+      attack.addEventListener("click", function () { hit("攻擊"); });
+      skills.forEach(function (button) {
+        button.addEventListener("click", function () {
+          hit(button.getAttribute("data-skill"));
+        });
       });
 
-      attack.addEventListener("click", function () {
-        if (attack.disabled || slimeHp <= 0) return;
-        slimeHp -= 1;
-        hp -= 6;
-        stamina -= 12;
-        slime.classList.remove("is-hit");
-        void slime.offsetWidth;
-        slime.classList.add("is-hit");
-        if (slimeHp <= 0) {
-          if (!rewarded) {
-            coins += 15;
-            rewarded = true;
-          }
-          live.textContent = "勝利！草地史萊姆倒地，金幣 +15。";
-        } else {
-          live.textContent = "你打中史萊姆。佢仲有 " + slimeHp + " 點生命。";
-        }
-        render();
+      document.querySelectorAll("[data-side]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          toast.textContent = "「" + button.getAttribute("data-side") + "」尚未在這份方向稿裡打開。";
+        });
       });
 
-      render();
+      auto.addEventListener("click", function () {
+        var on = auto.getAttribute("aria-pressed") === "true";
+        var next = !on;
+        auto.setAttribute("aria-pressed", next ? "true" : "false");
+        auto.classList.toggle("is-on", next);
+        if (!auto.querySelector(".tag")) {
+          var tag = document.createElement("span");
+          tag.className = "tag";
+          auto.appendChild(tag);
+        }
+        auto.querySelector(".tag").textContent = next ? "尋路中" : "";
+        toast.textContent = next ? "開始自動尋路。" : "已停止自動尋路。";
+      });
+
+      paint();
     }());
   </script>
 </body>
