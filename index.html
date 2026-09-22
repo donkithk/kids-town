@@ -1100,7 +1100,12 @@ body.kt-landscape .gsw{
   background:transparent;border-radius:0;
 }
 body.kt-artstage .gsw{
-  min-height:100dvh;display:flex;flex-direction:column;justify-content:center;
+  min-height:100dvh;display:flex;flex-direction:column;justify-content:flex-start;
+}
+body.kt-artstage #tab-tasks.tab-content.active,
+body.kt-artstage #tab-honour.tab-content.active,
+body.kt-artstage #tab-expedition.tab-content.active.kt-wild-on{
+  flex:1;min-height:0;display:flex;flex-direction:column;
 }
 body.kt-landscape .gs{overflow:visible}
 body.kt-landscape .kt-stage{width:100%;margin:0 auto}
@@ -1195,64 +1200,81 @@ body.kt-artstage .act,
 body.kt-battle .dbx,
 body.kt-battle .act{display:none !important}
 .kt-scene{
-  position:relative;display:grid;gap:12px;padding:12px;
-  grid-template-columns:minmax(108px,20%) minmax(0,1fr);
+  position:relative;display:grid;gap:10px;padding:12px 12px 8px;
+  grid-template-columns:1fr;
   grid-template-rows:auto minmax(0,1fr) auto;
-  min-height:min(68dvh,640px);
-  background:
-    radial-gradient(circle at 18% 78%, rgba(255,255,255,.18) 0 8%, transparent 9%),
-    linear-gradient(180deg,#8ec8ef 0%,#e7f6ff 36%,#7dba6a 36%,#5b9846 100%);
+  flex:1;min-height:0;height:100%;
+  background-color:#5c3d28;
+  background-position:center;background-size:cover;background-repeat:no-repeat;
   border-radius:18px;overflow:hidden;
 }
-.kt-scene-title{grid-column:1 / -1;margin:0;color:#3a2616;font-size:clamp(18px,2vw,26px);font-weight:900;text-shadow:0 1px 0 #fff6}
+.kt-guild{background-image:url("mocks/ui-direction/kit/bg/bg-guild-quest-room.png")}
+.kt-honour{background-image:url("mocks/ui-direction/kit/bg/bg-honour-ceremony.png")}
+.kt-scene-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.kt-scene-title{
+  margin:0;color:#faf6ef;font-size:clamp(18px,2vw,26px);font-weight:900;
+  background:rgba(92,61,40,.78);padding:4px 14px;border-radius:999px;
+  text-shadow:0 1px 0 rgba(59,42,26,.35);
+}
 @media (max-height:520px){
-  .kt-scene{grid-template-columns:84px minmax(0,1fr);min-height:0;padding:8px;gap:8px}
+  .kt-scene{min-height:0;padding:8px;gap:6px}
   .kt-dock-btn{padding:6px 4px}
 }
-.kt-hero-slot{grid-column:1;grid-row:2;align-self:end;justify-self:center;width:min(180px,100%)}
 .kt-sprite{display:block;width:100%;height:auto;background:transparent;object-fit:contain}
 .kt-wood{
-  grid-column:2;grid-row:2;min-height:0;
-  display:flex;flex-direction:column;gap:8px;
-  background:linear-gradient(180deg,#e7b56a 0%,#c4843c 18%,#a86b32 100%);
-  border:6px solid #5c3a1e;border-radius:18px;padding:12px;
-  box-shadow:inset 0 0 0 3px rgba(255,236,196,.35);
+  grid-column:1;grid-row:2;min-height:0;
+  width:min(760px,82%);margin:0 auto;
+  display:flex;flex-direction:column;gap:8px;justify-content:center;
+  background:transparent;border:0;box-shadow:none;padding:4px;
 }
-.kt-wood h2{margin:0;color:#fff8e8;font-size:clamp(16px,1.8vw,22px);font-weight:900;text-align:center}
+.kt-wood h2{margin:0;color:#3b2a1a;font-size:clamp(16px,1.8vw,22px);font-weight:900;text-align:center}
 .kt-wallet{display:flex;justify-content:flex-end;gap:8px;color:#3a2616;font-weight:800}
 .kt-wallet span{background:#fff8e8;border-radius:999px;padding:2px 8px}
-.kt-dock{grid-column:1 / -1;display:flex;gap:8px;justify-content:center}
+.kt-dock{
+  grid-column:1;display:flex;gap:8px;justify-content:center;
+  background:linear-gradient(180deg,#a67c52,#8b5e3c);
+  border:2px solid #5c3d28;border-radius:16px 16px 10px 10px;padding:8px;
+}
 .kt-dock-btn,.kt-text-btn{
-  flex:1;max-width:150px;background:#f4e2c0;color:#3a2616;
-  border:2px solid #8d6230;border-radius:14px;padding:10px 8px;
+  flex:1;max-width:160px;min-height:44px;background:#faf6ef;color:#3b2a1a;
+  border:2px solid #5c3d28;border-radius:14px;padding:10px 8px;
   font-weight:800;cursor:pointer;font-family:inherit;
 }
-.kt-dock-btn[aria-current="page"]{background:#f8d56a}
-.kt-text-btn{max-width:none;background:transparent;border-style:dashed}
+.kt-dock-btn[aria-current="page"]{background:#f0c14b}
+.kt-dock-btn:focus-visible,.kt-text-btn:focus-visible,#honourStamp:focus-visible,.task-complete-btn:focus-visible{
+  outline:3px solid #c45c26;outline-offset:2px;
+}
+.kt-text-btn{flex:0 0 auto;max-width:none;background:rgba(250,246,239,.88);border-style:solid}
 #tab-tasks #taskList{
   position:static;inset:auto;margin:0;padding:0;background:transparent;
   display:flex;flex-direction:column;gap:8px;flex:1;min-height:0;pointer-events:auto;
 }
 #tab-tasks #taskList .task-card{
   pointer-events:auto;position:relative;left:auto;top:auto;width:auto;height:auto;margin:0;
-  flex:1;min-height:48px;
-  background:#f4e2c0;color:#3a2616;border-radius:12px;box-shadow:none;
-  border:2px solid #c4a574;box-sizing:border-box;overflow:hidden;
+  flex:1;min-height:52px;
+  background:#faf6ef;color:#3b2a1a;border-radius:14px;
+  border:2px solid #c4a06a;box-sizing:border-box;overflow:hidden;
+  box-shadow:0 4px 10px rgba(92,61,40,.18);
   display:flex;align-items:center;gap:8px;padding:6px 8px 6px 10px;
 }
 #tab-tasks #taskList .task-title{color:#3a2616;font-weight:800;font-size:clamp(13px,1.7vw,20px)}
 #tab-tasks #taskList .task-meta{color:#7a5a32;font-size:clamp(11px,1.3vw,14px)}
 #tab-tasks #taskList .task-points{color:#8a5a12;font-weight:800}
 #tab-tasks #taskList .task-complete-btn{
-  background:linear-gradient(180deg,#f8d56a,#e2a322);color:#4a3208;
-  border:2px solid #8d6230;border-radius:999px;padding:8px 14px;
+  background:linear-gradient(180deg,#f0c14b,#d4a017);color:#3b2a1a;
+  border:2px solid #8b5e3c;border-radius:999px;padding:8px 14px;
+  min-height:44px;min-width:72px;
   font-weight:800;font-size:clamp(12px,1.4vw,16px);cursor:pointer;
 }
 #tab-tasks #taskList .task-card.is-pending{box-shadow:inset 0 0 0 2px #d97706}
 #tab-tasks #taskList .task-card.is-awarded .task-title{text-decoration:line-through}
 #tab-tasks #taskList .task-card.kt-empty{justify-content:center;color:#a08060}
-.kt-honour{grid-template-columns:minmax(0,1fr)}
-.kt-honour .kt-wood{grid-column:1;grid-row:2;background:linear-gradient(180deg,#f7edd8,#f4e2c0);align-items:center;text-align:center}
+.kt-honour .kt-wood{
+  width:min(480px,88%);max-height:none;
+  background:rgba(255,245,224,.94);align-items:center;text-align:center;
+  border:6px solid #8b5e3c;border-radius:20px;padding:16px 18px;
+  box-shadow:0 10px 24px rgba(59,42,26,.28);
+}
 .kt-honour .kt-wood h2{color:#3a2616}
 #honourSheet,#honourRewards{pointer-events:none;color:#3a2616;font-weight:800;font-size:clamp(16px,2vw,24px)}
 #honourRewards{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
@@ -1262,48 +1284,56 @@ body.kt-battle .act{display:none !important}
   font-size:clamp(14px,1.6vw,18px);padding:12px 28px;cursor:pointer;font-family:inherit;
 }
 #honourStamp.kt-stamp:disabled{opacity:.7;cursor:default}
+#tab-expedition.tab-content.active.kt-wild-on .expedition-area,
+#tab-expedition.tab-content.active.kt-wild-on #expTypePanel{
+  flex:1;min-height:0;display:flex;flex-direction:column;
+}
 .battle-scene.kt-wild{
   position:relative;display:flex;flex-direction:column;
-  min-height:min(70dvh,640px);background:transparent;border-radius:18px;overflow:hidden;
+  flex:1;min-height:0;height:100%;background:transparent;border-radius:18px;overflow:hidden;
 }
 .battle-scene.kt-wild .kt-grass{
   position:absolute;inset:0;z-index:0;
-  background:
-    radial-gradient(circle at 12% 72%, #9ed86a 0 14%, transparent 15%),
-    radial-gradient(circle at 78% 64%, #8ccc5c 0 18%, transparent 19%),
-    linear-gradient(180deg,#8fd0f2 0%,#e7f6ff 34%,#6fbf55 34%,#4e9a3e 100%);
+  background:#7cb342 url("mocks/ui-direction/kit/bg/bg-wilderness-grass.png") center/cover no-repeat;
 }
 .battle-scene.kt-wild .kt-toast{position:relative;left:auto;top:auto;transform:none;z-index:2;margin:10px auto 0}
 .battle-scene.kt-wild .kt-field-stage{
   position:relative;z-index:1;flex:1;display:flex;align-items:flex-end;justify-content:space-between;
   gap:16px;padding:8px 16px 4px;
 }
-.battle-scene.kt-wild .kt-hero-actor{width:min(200px,28vw);flex:0 0 auto}
+.battle-scene.kt-wild .kt-hero-actor{width:min(280px,32vw);flex:0 0 auto;align-self:flex-end}
 .battle-scene.kt-wild .kt-actor-hp{background:#f7edd8;border:2px solid #c4a574;border-radius:10px;padding:4px 8px;font-weight:800;color:#3a2616;font-size:13px}
 .battle-scene.kt-wild .kt-bar{height:8px;background:#e7d3ae;border-radius:99px;overflow:hidden;margin-top:3px}
 .battle-scene.kt-wild .kt-bar span{display:block;height:100%;background:linear-gradient(90deg,#e85d4c,#f0a202)}
 .battle-scene.kt-wild .battle-content{position:relative;inset:auto;display:contents;pointer-events:none}
-.battle-scene.kt-wild .monster-zone,
+.battle-scene.kt-wild .monster-zone{
+  position:static;inset:auto;display:flex;flex-direction:row;flex-wrap:wrap;
+  align-items:flex-end;justify-content:flex-end;min-height:0;min-width:0;padding:0;
+  flex:1 1 auto;pointer-events:auto;
+}
 .battle-scene.kt-wild .monster-row{
-  position:static;inset:auto;display:flex;flex-wrap:wrap;gap:10px;
-  align-items:flex-end;justify-content:flex-end;min-height:0;padding:0;flex:1;pointer-events:auto;
+  position:static;inset:auto;display:flex;flex-direction:row;flex-wrap:wrap;gap:10px;
+  align-items:flex-end;justify-content:flex-end;width:auto;max-width:100%;height:auto;
+  margin-left:auto;padding:0;flex:0 1 auto;pointer-events:auto;
 }
 .battle-scene.kt-wild .monster-card{
-  position:relative;left:auto;top:auto;width:min(168px,26vw);height:auto;margin:0;padding:6px;
-  background:#f7edd8;color:#3a2616;border:2px solid #c4a574;border-radius:14px;
+  position:relative;left:auto;top:auto;width:min(300px,36vw);height:auto;margin:0;padding:0;
+  background:transparent;color:#3a2616;border:0;border-radius:14px;
   display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
-  pointer-events:auto;box-shadow:0 4px 10px rgba(58,38,22,.16);
+  align-self:flex-end;flex:0 0 auto;height:auto;
+  pointer-events:auto;box-shadow:none;
 }
-.battle-scene.kt-wild .monster-card .m-img{display:block;width:min(140px,22vw);height:auto;overflow:visible;background:transparent}
+.battle-scene.kt-wild .monster-card .m-img{display:block;width:min(280px,34vw);height:auto;overflow:visible;background:transparent}
 .battle-scene.kt-wild .monster-card .m-img img{width:100%;height:auto;object-fit:contain}
 .battle-scene.kt-wild .monster-card .m-hp-bar{display:block;width:100%;height:8px;background:#e7d3ae;border-radius:99px;margin-top:4px}
 .battle-scene.kt-wild .monster-card .m-hp-fill{background:#e85d4c}
 .battle-scene.kt-wild .monster-card .m-name,
 .battle-scene.kt-wild .monster-card .m-hp-text{
   display:block;color:#3a2616;font-size:clamp(12px,1.5vw,18px);font-weight:800;
-  text-shadow:none;width:auto;height:auto;overflow:visible;margin:0;
+  text-shadow:none;width:auto;height:auto;overflow:visible;margin:2px 0 0;
+  background:#faf6ef;border-radius:999px;padding:2px 10px;
 }
-.battle-scene.kt-wild .monster-card.targetable{border-color:#143e78;background:#fff6d0;animation:none}
+.battle-scene.kt-wild .monster-card.targetable{outline:3px solid #143e78;background:transparent;animation:none}
 .battle-scene.kt-wild .monster-card.dead{animation:none;opacity:0.35;pointer-events:none}
 .battle-scene.kt-wild .player-zone,
 .battle-scene.kt-wild .log-window,
@@ -1519,11 +1549,12 @@ body.kt-battle .act{display:none !important}
 <!-- Tab: Tasks — wood board built from panels, not a concept photo -->
 <div class="tab-content" id="tab-tasks">
   <main class="kt-scene kt-guild" id="guildBoard">
-    <h1 class="kt-scene-title">公會任務板</h1>
-    <img class="kt-sprite kt-hero-slot" src="mocks/ui-direction/sprites/hero.png" alt="">
-    <section class="kt-wood">
-      <h2>今日任務</h2>
+    <div class="kt-scene-top">
+      <h1 class="kt-scene-title">公會任務板</h1>
       <div class="kt-wallet" id="guildWallet"></div>
+    </div>
+    <section class="kt-wood">
+      <h2 class="vh">今日任務</h2>
       <p class="kt-toast" id="guildToast" aria-live="polite"></p>
       <div class="task-list" id="taskList"></div>
       <button type="button" class="kt-text-btn" id="guildAllQuests">查看所有公會任務</button>
@@ -4537,7 +4568,7 @@ function renderBattleMode(exp) {
     const isDead = m.hp <= 0;
     if (isDead) window._deathPlayed[m.id] = true;
     const pct = Math.max(0, Math.round(m.hp / (m.max_hp || 1) * 100));
-    const sprite = /豬|boar/i.test(m.name || '') ? 'mocks/ui-direction/sprites/boar.png' : 'mocks/ui-direction/sprites/wolf.png';
+    const sprite = 'mocks/ui-direction/kit/sprites/sprite-boar.png';
     return `<div class="monster-card${isDead ? ' dead' : ''}${showMonsterTarget && !isDead ? ' targetable' : ''}" data-idx="${m.id}" onclick="${!isDead ? 'onMonsterClick('+m.id+')' : ''}">
       <div class="target-arrow">▼</div>
       <div class="m-img"><img src="${sprite}" alt=""></div>
@@ -4613,7 +4644,7 @@ function renderBattleMode(exp) {
     <div class="vh" role="meter" id="hp-meter" aria-label="${escapeHtml(primary.name||'怪物')}生命" aria-valuemin="0" aria-valuemax="${primary.max_hp||0}" aria-valuenow="${Math.max(0, primary.hp||0)}">${Math.max(0, primary.hp||0)} / ${primary.max_hp||0}</div>
     <div class="kt-field-stage" id="mainContent">
       <div class="kt-hero-actor">
-        <img class="kt-sprite" src="mocks/ui-direction/sprites/hero.png" alt="">
+        <img class="kt-sprite" src="mocks/ui-direction/kit/sprites/sprite-hero.png" alt="">
         <div class="kt-actor-hp">HP ${pHp}/${pMax} · MP ${pMp} · 🪙 ${kid.points || 0}
           <div class="kt-bar"><span style="width:${playerPct}%"></span></div>
         </div>
