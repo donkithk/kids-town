@@ -181,7 +181,7 @@ button {
   z-index: 6;
   display: flex;
   justify-content: center;
-  background: rgba(255, 249, 239, 0.97);
+  background: #fff9ef;
   border-top: 3px solid var(--wood-deep);
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -662,14 +662,29 @@ body.page-guild {
 /* ---------- Wilderness ---------- */
 
 body.page-wild {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
   background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 42%, var(--hill) 72%, var(--grass-deep) 100%);
+}
+
+body.page-wild .topbar,
+body.page-wild .dock {
+  flex: 0 0 auto;
+}
+
+body.page-wild .app {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .wild-scene {
   position: relative;
+  flex: 1 1 auto;
   margin: 0.55rem 0.55rem 0;
-  min-height: 28rem;
-  height: calc(100dvh - 13.5rem);
+  min-height: 18rem;
   border-radius: 1.15rem;
   overflow: hidden;
   border: 3px solid #2f6e28;
@@ -778,10 +793,10 @@ body.page-wild {
   width: 3.1rem;
 }
 
-.kid[data-step="0"] { left: 46%; bottom: 36%; transform: translateX(-50%) scale(1.08); }
-.kid[data-step="1"] { left: 66%; bottom: 48%; transform: translateX(-50%) scale(1); }
-.kid[data-step="2"] { left: 34%; bottom: 57%; transform: translateX(-50%) scale(0.94); }
-.kid[data-step="3"] { left: 48%; bottom: 66%; transform: translateX(-50%) scale(0.9); }
+.kid[data-step="0"] { left: 48%; bottom: 44%; transform: translateX(-50%) scale(1.05); }
+.kid[data-step="1"] { left: 64%; bottom: 54%; transform: translateX(-50%) scale(1); }
+.kid[data-step="2"] { left: 36%; bottom: 62%; transform: translateX(-50%) scale(0.94); }
+.kid[data-step="3"] { left: 50%; bottom: 70%; transform: translateX(-50%) scale(0.9); }
 
 .kid-head {
   position: relative;
@@ -825,8 +840,8 @@ body.page-wild {
 }
 
 .slime {
-  left: 70%;
-  bottom: 62%;
+  left: 68%;
+  bottom: 66%;
   width: 4.5rem;
   height: 3.15rem;
   border-radius: 50% 50% 42% 42%;
@@ -1003,8 +1018,8 @@ body.page-honour {
 
 .plaque {
   width: fit-content;
-  margin: 0.2rem auto 0.35rem;
-  padding: 0.3rem 1.1rem 0.45rem;
+  margin: 0.1rem auto 0.2rem;
+  padding: 0.2rem 1rem 0.35rem;
   text-align: center;
   color: var(--gold-ink);
   background: linear-gradient(180deg, var(--gold-bright), var(--gold) 58%, #c4962a);
@@ -1020,15 +1035,15 @@ body.page-honour {
 
 .medal {
   display: block;
-  width: 6.4rem;
+  width: 3.8rem;
   height: auto;
-  margin: 0.35rem auto 0.15rem;
+  margin: 0.1rem auto 0;
 }
 
 .certificate {
   position: relative;
   margin-top: 0.35rem;
-  padding: 1.35rem 0.95rem 1rem;
+  padding: 0.85rem 0.8rem 0.55rem;
   text-align: center;
   background:
     radial-gradient(circle at 50% 0%, rgba(248, 220, 134, 0.35), transparent 48%),
@@ -1062,9 +1077,9 @@ body.page-honour {
 
 .certificate h2 {
   font-family: var(--font-display);
-  font-size: 1.85rem;
-  letter-spacing: 0.22em;
-  margin: 0.1rem 0 0.45rem;
+  font-size: 1.5rem;
+  letter-spacing: 0.16em;
+  margin: 0 0 0.2rem;
 }
 
 .cert-lead {
@@ -1073,8 +1088,8 @@ body.page-honour {
 
 .cert-name {
   font-family: var(--font-display);
-  font-size: 1.85rem;
-  margin: 0.1rem 0;
+  font-size: 1.45rem;
+  margin: 0;
 }
 
 .cert-task {
@@ -1084,9 +1099,9 @@ body.page-honour {
 }
 
 .seal {
-  width: 6.3rem;
-  height: 6.3rem;
-  margin: 0.75rem auto 0.25rem;
+  width: 4.2rem;
+  height: 4.2rem;
+  margin: 0.35rem auto 0.05rem;
   border-radius: 50%;
   border: 3px dashed var(--gold-deep);
   display: grid;
@@ -1123,16 +1138,15 @@ body.page-honour {
 }
 
 .cert-status {
-  margin-top: 0.35rem;
+  margin-top: 0.25rem;
   color: var(--ink-soft);
   font-weight: 700;
-  min-height: 3em;
 }
 
 .btn-stamp {
-  min-height: 4rem;
-  margin-top: 0.85rem;
-  font-size: 1.15rem;
+  min-height: 3.25rem;
+  margin-top: 0.45rem;
+  font-size: 1.08rem;
 }
 
 .btn-stamp[aria-pressed="true"] {
@@ -1140,8 +1154,8 @@ body.page-honour {
 }
 
 .retry {
-  margin-top: 0.9rem;
-  padding: 0.75rem 0.15rem 0.2rem;
+  margin-top: 0.45rem;
+  padding: 0.4rem 0.15rem 0.15rem;
   border-top: 1px dashed rgba(90, 58, 32, 0.35);
 }
 
@@ -1159,7 +1173,7 @@ body.page-honour {
 
 .retry-list {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.9rem;
 }
 
 .retry button {
