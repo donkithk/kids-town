@@ -1,15 +1,23 @@
 # 視覺方向熱點稿
 
-這三頁是對住已核准概念圖的互動熱點稿，不是另一套重畫的介面。
+畫面就是已核准的概念圖。圖檔放在這個資料夾的 `art/`，HTML 用 `./art/...png` 引用，所以只打開 `mocks/ui-direction/` 都睇到圖。按鈕是透明熱點，疊在領取、攻擊、蓋章同導覽上面。沒有另一套重畫的介面。
 
-畫面本體是 `docs/ui-direction/` 的三張圖。HTML 只在圖上的按鈕位置放透明熱點：領取、查看任務、底部導覽、攻擊、技能、蓋章領獎。點下去會改狀態、出提示，或把按鈕停用。
+## 點樣打開
 
-從專案根目錄：
+在 `mocks/ui-direction/` 裡面：
 
 ```bash
+cd mocks/ui-direction
 python -m http.server 8765
 ```
 
-打開 http://127.0.0.1:8765/mocks/ui-direction/00-index.html
+然後打開：
 
-Hotspot mock keyed to the approved art in `docs/ui-direction/`. The PNGs are the visuals. Buttons are transparent hit targets on the designed controls.
+- http://127.0.0.1:8765/00-index.html
+- http://127.0.0.1:8765/01-guild-quest-board.html
+- http://127.0.0.1:8765/02-wilderness-adventure.html
+- http://127.0.0.1:8765/03-honour-reward.html
+
+也可以直接用瀏覽器打開 `01-guild-quest-board.html`（`file://` 可以，圖在旁邊的 `art/`）。
+
+Art files live in `art/` next to these pages (`./art/01-guild-quest-board.png`, `02-wilderness-adventure.png`, `03-honour-reward.png`). They are copies of the approved concept art. Hotspots only; no separate painted UI.
