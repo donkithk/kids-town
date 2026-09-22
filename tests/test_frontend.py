@@ -1013,7 +1013,7 @@ def test_parent_assigns_task_kid_completes_hud_gold(page, base_url, test_db_path
     card = page.locator(".task-card", has_text=JOURNEY_TASK_TITLE).first
     card.wait_for(state="visible", timeout=8000)
     gold_before = int(page.locator("#hudCo").inner_text().strip() or "0")
-    card.get_by_text("完成", exact=False).click()
+    card.locator(".task-complete-btn").click()
     page.get_by_text("任務完成", exact=False).first.wait_for(state="visible", timeout=8000)
     page.wait_for_function(
         "(before) => parseInt((document.getElementById('hudCo') || {}).textContent, 10) > before",
@@ -1198,7 +1198,7 @@ def test_complete_task_ceremony_shows_xp_materials_achievements(
     page.locator("button.q", has_text="任務").first.click()
     card = page.locator(".task-card", has_text=CEREMONY_TASK_TITLE).first
     card.wait_for(state="visible", timeout=8000)
-    card.get_by_text("完成", exact=False).click()
+    card.locator(".task-complete-btn").click()
     page.locator("#toast").wait_for(state="visible", timeout=8000)
     visible = _visible_text(page) + (page.locator("#toast").inner_text() or "")
     assert "7" in visible or "XP" in visible or "經驗" in visible or "+2" in visible, (
@@ -1241,7 +1241,7 @@ def test_real_task_complete_ceremony_shows_gold_xp_and_materials(
     with page.expect_response(
         lambda r: r.request.method == "POST" and "/complete" in r.url
     ) as resp_info:
-        card.get_by_text("完成", exact=False).click()
+        card.locator(".task-complete-btn").click()
     assert resp_info.value.ok, resp_info.value.text()
     payload = resp_info.value.json()
     awarded = int(payload.get("points_awarded") or 0)

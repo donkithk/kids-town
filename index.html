@@ -1095,6 +1095,8 @@ body.kt-landscape .gs{overflow:visible}
 #tab-tasks.tab-content.active,
 #tab-honour.tab-content.active,
 #tab-expedition.tab-content.active.kt-wild-on{padding:0;overflow:hidden}
+#tab-expedition.tab-content.active.kt-wild-on #expTypeSelector,
+#tab-expedition.tab-content.active.kt-wild-on #expStatusCard{display:none !important}
 .kt-stage{position:relative;width:100%;margin:0 auto;background:#120e0b}
 .kt-art{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none}
 .kt-hot{
@@ -1113,7 +1115,7 @@ body.kt-landscape .gs{overflow:visible}
 .kt-hot.is-pending .kt-tag,.kt-hot.is-awarded .kt-tag,.kt-hot.is-on .kt-tag{display:flex}
 .kt-hot.is-awarded .kt-tag{color:#1d5c24;background:rgba(232,245,220,0.94)}
 .kt-toast{
-  position:absolute;z-index:3;left:50%;top:2.2%;transform:translateX(-50%);
+  position:absolute;z-index:3;left:50%;top:23%;transform:translateX(-50%);
   max-width:86%;margin:0;padding:0.45rem 0.9rem;border-radius:999px;
   background:rgba(255,249,239,0.96);color:#3a2616;font-weight:800;
   font-size:clamp(0.8rem,1.6vw,1.1rem);text-align:center;
@@ -1132,18 +1134,82 @@ body.kt-landscape .gs{overflow:visible}
   display:block;margin-left:auto;height:100%;width:0%;
   background:rgba(28,14,8,0.78);border-radius:99px;
 }
-/* Claim hotspots sit on the art. The task list is below the picture so it
-   cannot cover the painted 領取 buttons. */
-#tab-tasks #taskList{
-  position:relative;z-index:1;margin:0;padding:8px 10px 16px;
-  background:#fff9ef;color:#3a2616;
+/* Live data sits ON the art. Collapse the old header bar so it does not stack above the picture. */
+body.kt-artstage .gs{
+  position:relative;z-index:5;height:0;min-height:0;margin:0;padding:0;
+  border:0;background:transparent;box-shadow:none;overflow:visible;
 }
-#tab-tasks #taskList .task-card{
-  background:#fff;color:#1e293b;
+body.kt-artstage #offlineBanner,
+body.kt-artstage #syncQueueBadge{display:none !important}
+body.kt-artstage .gh{
+  position:absolute;z-index:6;top:6px;left:6px;width:min(520px,54%);height:118px;
+  background:#f7edd8;color:#3a2616;border:2px solid #c4a574;border-radius:14px;
+  padding:8px 10px;box-shadow:0 4px 12px rgba(58,38,22,.18);overflow:hidden;
+  flex-wrap:nowrap;box-sizing:border-box;pointer-events:auto;
 }
-body.kt-battle .gh,
+body.kt-artstage .gh .nm{color:#3a2616;font-family:var(--body-font);font-size:clamp(16px,2.2vw,26px);font-weight:800}
+body.kt-artstage .gh .nm-lv,
+body.kt-artstage .gh .nm-hp,
+body.kt-artstage .gh .xp-num{color:#7a5a32;font-family:var(--body-font);font-size:clamp(12px,1.4vw,16px);font-weight:800}
+body.kt-artstage .gh .nm-hp:empty,
+body.kt-artstage .gh .xp-num:empty{display:none}
+body.kt-artstage .gh .hdr-mid{flex:1;min-width:0}
+body.kt-artstage .gh .mat{display:none}
+body.kt-artstage .gh .xp{flex:1;width:auto;min-width:36px;height:8px;background:#e7d3ae;border-color:#c4a574}
+body.kt-artstage .gh .xf{background:linear-gradient(90deg,#e7b84a,#c4842a)}
+body.kt-artstage .hdr-res span{background:#fff;color:#3a2616;font-size:clamp(12px,1.4vw,16px)}
+body.kt-artstage .hdr-res span .n{color:#3a2616;font-size:clamp(12px,1.4vw,16px);font-family:var(--body-font)}
+body.kt-artstage .gh .mb{color:#3a2616;border-color:#c4a574}
+body.kt-artstage .dbx,
+body.kt-artstage .act,
 body.kt-battle .dbx,
 body.kt-battle .act{display:none !important}
+.kt-cover{
+  position:absolute;z-index:4;background:#f7edd8;color:#3a2616;
+  border:2px solid #c4a574;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  font-weight:800;padding:4px 8px;box-sizing:border-box;
+  font-size:clamp(12px,1.5vw,18px);
+  pointer-events:none;
+}
+#tab-tasks #taskList{
+  position:absolute;inset:0;margin:0;padding:0;background:transparent;z-index:4;
+  pointer-events:none;
+}
+#tab-tasks #taskList .task-card{
+  pointer-events:auto;position:absolute;left:13%;width:74%;margin:0;
+  background:#f4e2c0;color:#3a2616;border-radius:12px;box-shadow:none;
+  border:2px solid #c4a574;box-sizing:border-box;overflow:hidden;
+  display:flex;align-items:center;gap:8px;padding:0 8px 0 10px;
+}
+#tab-tasks #taskList .task-title{color:#3a2616;font-weight:800;font-size:clamp(13px,1.7vw,20px)}
+#tab-tasks #taskList .task-meta{color:#7a5a32;font-size:clamp(11px,1.3vw,14px)}
+#tab-tasks #taskList .task-points{color:#8a5a12;font-weight:800}
+#tab-tasks #taskList .task-complete-btn{
+  background:linear-gradient(180deg,#f8d56a,#e2a322);color:#4a3208;
+  border:2px solid #8d6230;border-radius:999px;padding:8px 14px;
+  font-weight:800;font-size:clamp(12px,1.4vw,16px);cursor:pointer;
+}
+#tab-tasks #taskList .task-card.is-pending{box-shadow:inset 0 0 0 2px #d97706}
+#tab-tasks #taskList .task-card.is-awarded .task-title{text-decoration:line-through}
+#tab-tasks #taskList .task-card.kt-empty{justify-content:center;color:#a08060}
+#honourSheet,#honourRewards{pointer-events:none}
+#honourStamp.kt-stamp{
+  z-index:5;background:linear-gradient(180deg,#8fd18a,#3f9d55);color:#143e22 !important;
+  border:2px solid #246b34;border-radius:999px;font-weight:800;
+  font-size:clamp(13px,1.6vw,18px);display:flex;align-items:center;justify-content:center;
+}
+#honourStamp.kt-stamp .kt-tag{position:static;width:auto;height:auto;background:transparent;color:inherit}
+.battle-scene.kt-wild .monster-card{
+  background:#f7edd8;color:#3a2616;border:2px solid #c4a574;border-radius:10px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  pointer-events:auto;
+}
+.battle-scene.kt-wild .monster-card .m-name,
+.battle-scene.kt-wild .monster-card .m-hp-text{
+  display:block;color:#3a2616;font-size:clamp(12px,1.5vw,18px);font-weight:800;
+  text-shadow:none;width:auto;height:auto;overflow:visible;
+}
 .battle-scene.kt-wild{
   min-height:0;display:block;background:#120e0b;border-radius:0;
 }
@@ -1157,17 +1223,18 @@ body.kt-battle .act{display:none !important}
   justify-content:unset;align-items:unset;flex:none;pointer-events:none;
 }
 .battle-scene.kt-wild .monster-card{
-  position:absolute;width:auto;height:auto;padding:0;margin:0;
-  border:2px solid transparent;background:transparent;z-index:2;
-  color:transparent;pointer-events:auto;
+  position:absolute;margin:0;padding:4px 6px;z-index:4;
+  background:#f7edd8;color:#3a2616;border:2px solid #c4a574;border-radius:10px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  pointer-events:auto;box-shadow:0 2px 8px rgba(58,38,22,.18);
 }
 .battle-scene.kt-wild .monster-card .m-img,
 .battle-scene.kt-wild .monster-card .m-hp-bar,
-.battle-scene.kt-wild .monster-card .m-hp-text,
 .battle-scene.kt-wild .monster-card .target-arrow{display:none}
-.battle-scene.kt-wild .monster-card .m-name{
-  color:transparent;font-size:12px;text-shadow:none;margin:0;
-  width:100%;height:100%;overflow:hidden;
+.battle-scene.kt-wild .monster-card .m-name,
+.battle-scene.kt-wild .monster-card .m-hp-text{
+  display:block;color:#3a2616;font-size:clamp(12px,1.5vw,18px);font-weight:800;
+  text-shadow:none;width:auto;height:auto;overflow:visible;margin:0;
 }
 .battle-scene.kt-wild .monster-card.targetable{
   border-color:#143e78;background:rgba(255,246,208,0.15);animation:none;
@@ -1182,10 +1249,17 @@ body.kt-battle .act{display:none !important}
   grid-template-columns:unset;pointer-events:none;
 }
 .battle-scene.kt-wild .cmd-btn{
-  position:absolute;background:transparent !important;border:0 !important;
-  color:transparent !important;text-shadow:none !important;
-  box-shadow:none !important;padding:0;margin:0;font-size:0 !important;
-  line-height:0;border-radius:0.6rem;cursor:pointer;pointer-events:auto;
+  position:absolute;background:#f4e2c0 !important;border:2px solid #8d6230 !important;
+  color:#4a3208 !important;text-shadow:none !important;
+  box-shadow:none !important;padding:4px;margin:0;
+  font-size:clamp(13px,1.5vw,18px) !important;font-weight:800;line-height:1.15;
+  border-radius:12px;cursor:pointer;pointer-events:auto;
+  display:flex;align-items:center;justify-content:center;text-align:center;
+}
+.battle-scene.kt-wild .kt-skill{
+  color:#3a2616;background:#f7edd8;border:2px solid #c4a574;
+  font-size:clamp(11px,1.2vw,15px);font-weight:800;line-height:1.1;
+  display:flex;align-items:center;justify-content:center;text-align:center;
 }
 .battle-scene.kt-wild .cmd-btn.active{background:transparent !important;border-color:transparent !important}
 .battle-scene.kt-wild .skill-overlay,
@@ -1284,10 +1358,12 @@ body.kt-battle .act{display:none !important}
         <div class="in">
           <div class="nm" id="hudNm">小強</div>
           <div class="nm-lv" id="hudLv">Lv.1</div>
+          <div class="nm-hp" id="hudHp"></div>
         </div>
         <div class="hdr-mid">
           <div class="rw">
             <div class="xp"><div class="xf" id="hudXp"></div></div>
+            <span class="xp-num" id="hudXpNum"></span>
           </div>
           <div class="hdr-res" id="hdrRes">
             <span>💰<span class="n" id="hudCo">0</span></span>
@@ -1376,10 +1452,8 @@ body.kt-battle .act{display:none !important}
     <h1 class="vh">任務板</h1>
     <img class="kt-art" src="mocks/ui-direction/art/01-guild-quest-board.png" width="1280" height="720" alt="">
     <p class="kt-toast" id="guildToast" aria-live="polite"></p>
-    <button class="kt-hot" type="button" data-claim="0" aria-label="領取" style="left:66.9%;top:31.4%;width:9.7%;height:6.2%"><span class="kt-tag"></span></button>
-    <button class="kt-hot" type="button" data-claim="1" aria-label="領取" style="left:66.9%;top:41.8%;width:9.7%;height:5.8%"><span class="kt-tag"></span></button>
-    <button class="kt-hot" type="button" data-claim="2" aria-label="領取" style="left:67%;top:51.5%;width:9.6%;height:6.1%"><span class="kt-tag"></span></button>
-    <button class="kt-hot" type="button" data-claim="3" aria-label="領取" disabled style="left:67%;top:61.9%;width:9.6%;height:5.6%"><span class="kt-tag"></span></button>
+    <div class="kt-cover" id="guildWallet" style="left:58%;top:0.6%;width:34%;height:20%"></div>
+    <div class="task-list" id="taskList"></div>
     <button class="kt-hot" type="button" id="guildAllQuests" aria-label="查看所有公會任務" style="left:36.7%;top:77.6%;width:27%;height:4.9%"></button>
     <button class="kt-hot" type="button" id="guildMenu" aria-label="選單" style="left:93.5%;top:6.2%;width:5.2%;height:8%" onclick="td()"></button>
     <button class="kt-hot" type="button" data-kt-nav="town" aria-label="城鎮首頁" style="left:10%;top:84%;width:12%;height:14%"></button>
@@ -1388,7 +1462,6 @@ body.kt-battle .act{display:none !important}
     <button class="kt-hot" type="button" data-kt-nav="shop" aria-label="商店" style="left:61%;top:84%;width:12%;height:14%"></button>
     <button class="kt-hot" type="button" data-kt-nav="honour" aria-label="榮譽" style="left:76.5%;top:84%;width:12%;height:14%"></button>
   </main>
-  <div class="task-list" id="taskList"></div>
 </div>
 
 <!-- Tab: Honour — parent stamp ceremony (approved concept art + hotspots) -->
@@ -1397,7 +1470,9 @@ body.kt-battle .act{display:none !important}
     <h1 class="vh">榮譽儀式</h1>
     <img class="kt-art" src="mocks/ui-direction/art/03-honour-reward.png" width="1280" height="720" alt="">
     <p class="kt-toast" id="honourToast" aria-live="polite"></p>
-    <button class="kt-hot" type="button" id="honourStamp" aria-label="家長蓋章核准，領取獎勵" aria-pressed="false" style="left:30.4%;top:58.6%;width:38.3%;height:7.5%"><span class="kt-tag"></span></button>
+    <div class="kt-cover" id="honourSheet" style="left:12%;top:17%;width:76%;height:38%;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:12px 16px"></div>
+    <button class="kt-hot kt-stamp" type="button" id="honourStamp" aria-label="家長蓋章核准，領取獎勵" aria-pressed="false" style="left:22%;top:54%;width:56%;height:14%">家長蓋章<span class="kt-tag"></span></button>
+    <div class="kt-cover" id="honourRewards" style="left:6%;top:68%;width:88%;height:17%"></div>
     <div id="honourPendingMeta" class="vh" aria-live="polite"></div>
     <button class="kt-hot" type="button" data-kt-nav="town" aria-label="城鎮" style="left:10%;top:88%;width:15%;height:11%"></button>
     <button class="kt-hot" type="button" data-kt-nav="tasks" aria-label="任務" style="left:25.6%;top:88%;width:15.6%;height:11%"></button>
@@ -2032,7 +2107,16 @@ function updateHeader() {
       pct = 0;
     }
     xfEl.style.width = pct + '%';
+    const numEl = document.getElementById('hudXpNum');
+    if (numEl) {
+      if (typeof inLevel === 'number' && typeof forNext === 'number') {
+        numEl.textContent = forNext === 0 ? 'XP 滿' : ('XP ' + inLevel + '/' + forNext);
+      } else {
+        numEl.textContent = 'XP ' + pct + '%';
+      }
+    }
   }
+  if (typeof paintGuildChrome === 'function') paintGuildChrome();
   // Materials inventory
   const inv = townData.inventory || [];
   document.querySelectorAll('#hdrRes .mat .n').forEach(el => {
@@ -2142,12 +2226,14 @@ function st(name) {
   const landscape = (name === 'tasks' || name === 'honour' || name === 'expedition');
   document.body.classList.toggle('kt-landscape', landscape);
   if (name !== 'expedition') document.body.classList.remove('kt-battle');
+  ktSyncArtStage();
   if (name === 'town') {} // town scene is static HTML now
   if (name === 'expedition') renderExpedition();
   if (name === 'store') renderStoredBuildings();
   if (name === 'manage') renderManage();
   if (name === 'tasks') renderTasks();
   if (name === 'honour') renderHonour();
+  ktSyncArtStage();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3138,53 +3224,110 @@ function ktHonourSay(text) {
   if (toast) toast.textContent = text || '';
 }
 
+function ktSyncArtStage() {
+  const tab = document.querySelector('.tab-content.active');
+  const id = tab && tab.id;
+  const battle = document.body.classList.contains('kt-battle');
+  const on = battle || id === 'tab-tasks' || id === 'tab-honour';
+  document.body.classList.toggle('kt-artstage', on);
+  const gh = document.querySelector('.gh');
+  const img = tab && tab.querySelector('.kt-art');
+  const gs = document.querySelector('.gs');
+  const hpEl = document.getElementById('hudHp');
+  if (hpEl && !battle) hpEl.textContent = '';
+  if (!gh) return;
+  const clear = () => {
+    gh.style.position = '';
+    gh.style.top = '';
+    gh.style.left = '';
+    gh.style.width = '';
+    gh.style.height = '';
+    gh.style.zIndex = '';
+  };
+  if (!on || !img || !gs) { clear(); return; }
+  const place = () => {
+    const ir = img.getBoundingClientRect();
+    const gr = gs.getBoundingClientRect();
+    if (ir.height < 40) return;
+    gh.style.position = 'absolute';
+    gh.style.zIndex = '6';
+    gh.style.top = (ir.top - gr.top + ir.height * 0.004) + 'px';
+    gh.style.left = (ir.left - gr.left + ir.width * 0.008) + 'px';
+    gh.style.width = (ir.width * 0.56) + 'px';
+    gh.style.height = (ir.height * 0.23) + 'px';
+  };
+  place();
+  requestAnimationFrame(place);
+  if (!img.complete) img.addEventListener('load', () => requestAnimationFrame(place), {once: true});
+}
+window.addEventListener('resize', () => { if (typeof ktSyncArtStage === 'function') ktSyncArtStage(); });
+
+function ktKid() {
+  return (townData && townData.kid) || currentUser || {};
+}
+
+function paintGuildChrome() {
+  const kid = ktKid();
+  const wallet = document.getElementById('guildWallet');
+  if (wallet) {
+    wallet.innerHTML = `<span>🪙 ${kid.points || 0}</span><span>⭐ ${kid.stars || 0}</span>`;
+  }
+}
+
 function ktIsParentActor() {
   return !!(currentUser && (currentUser.role === 'parent' || currentUser.role === 'admin'));
 }
 
+const KT_BOARD_ROWS = [
+  {top:'28.2%', height:'11.2%'},
+  {top:'39.6%', height:'10.6%'},
+  {top:'50.4%', height:'10.4%'},
+  {top:'61%', height:'10.2%'},
+];
+
 async function renderTasks() {
   const container = document.getElementById('taskList');
   if (!container) return;
+  paintGuildChrome();
 
-  if (!tasks || tasks.length === 0) {
-    container.className = 'task-list';
-    container.innerHTML = '<div class="task-card"><div class="task-info"><div class="task-title">未有任務，等家長新增任務比你啦！👨‍👩‍👧‍👦</div></div></div>';
-    syncClaimHotspots([]);
-    ktGuildSay('未有任務');
-    return;
-  }
-
-  const actionable = tasks.filter(t => !t.completed || _isPendingApproval(t));
-  const done = tasks.filter(t => t.completed && !_isPendingApproval(t));
-  syncClaimHotspots(actionable.slice(0, KT_CLAIM_COUNT));
-
-  const card = (t, completedLook) => {
-    const canComplete = t.kid_id === null || t.kid_id === currentKidId;
-    const pending = _isPendingApproval(t);
-    const kidArg = t.kid_id != null ? ', ' + t.kid_id : '';
-    let btn = '';
-    if (!completedLook && canComplete && !t.completed) {
-      btn = `<button class="task-complete-btn" onclick="completeTask(${t.id})">✅ 完成</button>`;
-    } else if (!completedLook && pending && ktIsParentActor()) {
-      btn = `<button class="task-complete-btn" onclick="approveTask(${t.id}${kidArg})">✅ 完成</button>`;
-    }
-    return `<div class="task-card${completedLook ? ' completed' : ''}${pending ? ' is-pending' : ''}${!canComplete && !pending ? ' faded' : ''}">
-      <div class="task-icon">${escapeHtml(t.icon||'✅')}</div>
-      <div class="task-info">
-        <div class="task-title"${completedLook ? ' style="text-decoration:line-through;opacity:0.7"' : ''}>${escapeHtml(t.title)}</div>
-        <div class="task-meta">
-          <span class="task-points">🪙 +${t.points||10}</span>
-          ${pending ? '<span style="color:#d97706;font-weight:700;font-size:11px">⏳ 等爸爸媽媽確認</span>' : ''}
-          ${completedLook && t.pending_approval ? '<span style="color:#d97706;font-weight:700;font-size:11px">⏳ 等爸爸媽媽確認就入帳</span>' : ''}
-        </div>
-      </div>
-      <div class="task-actions">${completedLook ? '<span style="font-size:14px">✅</span>' : btn}</div>
-    </div>`;
-  };
+  const actionable = (tasks || []).filter(t => !t.completed || _isPendingApproval(t));
+  const board = [];
+  for (let i = 0; i < KT_CLAIM_COUNT; i++) board.push(actionable[i] || null);
 
   container.className = 'task-list';
-  container.innerHTML = actionable.map(t => card(t, false)).join('')
-    + done.slice(0, 12).map(t => card(t, true)).join('');
+  container.innerHTML = board.map((t, i) => {
+    const row = KT_BOARD_ROWS[i];
+    const pos = `left:13%;width:74%;top:${row.top};height:${row.height}`;
+    if (!t) {
+      return `<div class="task-card kt-empty" style="${pos}"><div class="task-info"><div class="task-title">空位</div></div></div>`;
+    }
+    const pending = _isPendingApproval(t);
+    const awarded = !!t.completed && !pending;
+    const canComplete = t.kid_id === null || t.kid_id === currentKidId;
+    const kidArg = t.kid_id != null ? ', ' + t.kid_id : '';
+    let status = '可領取';
+    let btn = '';
+    if (awarded) status = '已頒獎';
+    else if (pending && ktIsParentActor()) {
+      status = '待家長確認';
+      btn = `<button class="task-complete-btn" onclick="approveTask(${t.id}${kidArg})">領取</button>`;
+    } else if (pending) {
+      status = '待家長確認';
+      btn = `<button class="task-complete-btn" disabled>待確認</button>`;
+    } else if (canComplete) {
+      btn = `<button class="task-complete-btn" onclick="completeTask(${t.id})">領取</button>`;
+    }
+    const desc = t.description ? escapeHtml(String(t.description).slice(0, 28)) : '';
+    return `<div class="task-card${pending ? ' is-pending' : ''}${awarded ? ' is-awarded completed' : ''}" style="${pos}">
+      <div class="task-icon">${escapeHtml(t.icon || '📜')}</div>
+      <div class="task-info">
+        <div class="task-title">${escapeHtml(t.title)}</div>
+        <div class="task-meta"><span class="task-points">🪙 +${t.points || 10}</span> · ${status}${desc ? ' · ' + desc : ''}</div>
+      </div>
+      <div class="task-actions">${btn}</div>
+    </div>`;
+  }).join('');
+  if (!actionable.length) ktGuildSay('未有任務');
 }
 
 function syncClaimHotspots(board) {
@@ -3253,6 +3396,8 @@ async function ktQuestHotspot(taskId, kidId) {
 async function renderHonour() {
   const stamp = document.getElementById('honourStamp');
   const meta = document.getElementById('honourPendingMeta');
+  const sheet = document.getElementById('honourSheet');
+  const rewards = document.getElementById('honourRewards');
   if (!stamp) return;
   const pending = (tasks || []).filter(_isPendingApproval);
   const first = pending[0];
@@ -3266,9 +3411,10 @@ async function renderHonour() {
     stamp.classList.remove('is-pending');
     stamp.classList.add('is-awarded');
     stamp.setAttribute('aria-pressed', 'true');
+    stamp.textContent = '暫無待批';
     stamp.setAttribute('aria-label', '而家冇待批家課');
-    const tag = stamp.querySelector('.kt-tag');
-    if (tag) tag.textContent = '暫無';
+    if (sheet) sheet.innerHTML = `<div>${escapeHtml(ktKid().name || '')}</div><div>而家冇待批家課</div>`;
+    if (rewards) rewards.innerHTML = '<span>獎勵未入帳</span>';
     ktHonourSay('而家冇待家長蓋章嘅獎勵。');
     return;
   }
@@ -3276,11 +3422,17 @@ async function renderHonour() {
   stamp.classList.add('is-pending');
   stamp.classList.remove('is-awarded');
   stamp.setAttribute('aria-pressed', 'false');
+  stamp.textContent = '家長蓋章';
   stamp.setAttribute('aria-label', '家長蓋章核准：' + first.title);
   stamp.dataset.taskId = String(first.id);
   stamp.dataset.kidId = first.kid_id != null ? String(first.kid_id) : '';
-  const tag = stamp.querySelector('.kt-tag');
-  if (tag) tag.textContent = '待蓋章';
+  if (sheet) {
+    const who = ktKid().name || '';
+    sheet.innerHTML = `<div style="letter-spacing:.12em;font-size:.8em">榮譽獎勵</div><div>${escapeHtml(who)}</div><div style="margin-top:6px">${escapeHtml(first.title)}</div><div style="font-weight:700;margin-top:4px">🪙 +${first.points || 10} · 待家長蓋章</div>`;
+  }
+  if (rewards) {
+    rewards.innerHTML = `<span>🪙 +${first.points || 10}</span><span>⭐ 待入帳</span><span>${escapeHtml(first.title)}</span>`;
+  }
   ktHonourSay(ktIsParentActor()
     ? ('請蓋章核准「' + first.title + '」')
     : ('「' + first.title + '」等家長蓋章'));
@@ -3302,7 +3454,7 @@ async function honourStampClick() {
     stamp.setAttribute('aria-pressed', 'true');
     stamp.classList.remove('is-pending');
     stamp.classList.add('is-awarded');
-    stamp.querySelector('.kt-tag').textContent = '已蓋章';
+    stamp.textContent = '已蓋章';
     stamp.setAttribute('aria-label', '已蓋章核准，獎勵已領取');
     stamp.disabled = true;
     ktHonourSay('已蓋章核准。金幣、寶石同榮譽徽章可以入帳。');
@@ -4136,10 +4288,12 @@ async function renderExpedition() {
       progressPanel.innerHTML = '';
       statusCard.style.display = 'none';
       container.innerHTML = renderBattleMode(exp);
+      ktSyncArtStage();
     } else {
       const expTab = document.getElementById('tab-expedition');
       if (expTab) expTab.classList.remove('kt-wild-on');
       document.body.classList.remove('kt-battle');
+      ktSyncArtStage();
       progressPanel.innerHTML = renderExpeditionProgress(exp);
       container.innerHTML = renderExploreMode(exp);
     }
@@ -4157,6 +4311,7 @@ async function renderExpedition() {
   const expTabClear = document.getElementById('tab-expedition');
   if (expTabClear) expTabClear.classList.remove('kt-wild-on');
   document.body.classList.remove('kt-battle');
+  ktSyncArtStage();
   if (currentExpType === 'explore') {
     container.innerHTML = renderExploreMode(null);
   } else if (currentExpType === 'quiz') {
@@ -4305,6 +4460,8 @@ function renderBattleMode(exp) {
   if (typeof bd === 'string') return renderBattleLobby();
 
   const monsters = bd.monsters || [];
+  const pHp = bd.player_hp || 0;
+  const pMax = bd.player_max_hp || 1;
   const pMp = bd.player_mp || 0;
   const result = bd.battle_result || bd.status || exp.battle_result || exp.status;
   const turns = bd.turns || [];
@@ -4317,9 +4474,9 @@ function renderBattleMode(exp) {
   if (!window._deathPlayed) window._deathPlayed = {};
 
   const mSlots = [
-    {left:'46%', top:'24%', width:'22%', height:'32%'},
-    {left:'34%', top:'28%', width:'16%', height:'26%'},
-    {left:'64%', top:'28%', width:'16%', height:'26%'},
+    {left:'36%', top:'33%', width:'32%', height:'16%'},
+    {left:'71%', top:'30%', width:'26%', height:'12%'},
+    {left:'71%', top:'44%', width:'26%', height:'12%'},
   ];
   const monstersHtml = monsters.map((m, i) => {
     const slot = mSlots[i] || mSlots[0];
@@ -4342,20 +4499,21 @@ function renderBattleMode(exp) {
   else if (result === 'fled') toastMsg = '逃走了！';
 
   const skillSlots = [
-    {left:'40.5%',top:'73.5%',width:'9.5%',height:'14%'},
-    {left:'57.5%',top:'73.5%',width:'9%',height:'14%'},
-    {left:'69%',top:'73.5%',width:'8.5%',height:'14%'},
+    {left:'39%',top:'72%',width:'12%',height:'16%'},
+    {left:'55.5%',top:'72%',width:'12%',height:'16%'},
+    {left:'68%',top:'72%',width:'11%',height:'16%'},
   ];
   const skillHotspots = skillSlots.map((slot, i) => {
     const sk = skills[i];
-    if (!sk) return `<button class="kt-hot" type="button" disabled aria-label="未解鎖技能" style="left:${slot.left};top:${slot.top};width:${slot.width};height:${slot.height}"></button>`;
+    const box = `left:${slot.left};top:${slot.top};width:${slot.width};height:${slot.height}`;
+    if (!sk) return `<button class="kt-hot kt-skill" type="button" disabled aria-label="未解鎖技能" style="${box}">未解鎖</button>`;
     const enough = pMp >= sk.mp_cost;
-    return `<button class="kt-hot" type="button" ${enough && result==='fighting' ? '' : 'disabled '}aria-label="${escapeHtml(sk.name)}" onclick="selectSkill('${sk.id}')" style="left:${slot.left};top:${slot.top};width:${slot.width};height:${slot.height}"></button>`;
+    return `<button class="kt-hot kt-skill" type="button" ${enough && result==='fighting' ? '' : 'disabled '}aria-label="${escapeHtml(sk.name)}" onclick="selectSkill('${sk.id}')" style="${box}">${escapeHtml(sk.name)}</button>`;
   }).join('');
 
   const cmdHtml = result === 'fighting' ? `<div class="cmd-menu">
-    <button type="button" class="cmd-btn kt-hot${window._battleTargetMode==='attack'?' active':''}" onclick="startTarget('attack')" style="left:79.5%;top:72%;width:14.5%;height:20%" aria-label="攻擊${escapeHtml(primary.name||'')}">⚔️ 攻擊</button>
-    <button type="button" class="cmd-btn kt-hot" onclick="battleAction('flee')" style="left:1.5%;top:83.2%;width:17.5%;height:8.6%" aria-label="逃走">🏃 逃走</button>
+    <button type="button" class="cmd-btn kt-hot${window._battleTargetMode==='attack'?' active':''}" onclick="startTarget('attack')" style="left:78%;top:70%;width:20%;height:24%" aria-label="攻擊${escapeHtml(primary.name||'')}">⚔️ 攻擊</button>
+    <button type="button" class="cmd-btn kt-hot" onclick="battleAction('flee')" style="left:1%;top:81%;width:20%;height:12%" aria-label="逃走">🏃 逃走</button>
   </div>` : '';
 
   let resultHtml = '';
@@ -4394,10 +4552,19 @@ function renderBattleMode(exp) {
   const expTab = document.getElementById('tab-expedition');
   if (expTab) expTab.classList.add('kt-wild-on');
   document.body.classList.add('kt-battle');
+  const kid = ktKid();
+  const hpEl = document.getElementById('hudHp');
+  if (hpEl) hpEl.textContent = `HP ${pHp}/${pMax} · MP ${pMp}`;
 
   return `<div class="battle-scene kt-wild kt-stage region-${bd.region_id || 1}" id="battleScene">
     <img class="kt-art" src="mocks/ui-direction/art/02-wilderness-adventure.png" width="1280" height="720" alt="">
     <p class="kt-toast" id="wildToast" aria-live="polite">${escapeHtml(toastMsg)}</p>
+    <div class="kt-cover" style="left:62%;top:0.4%;width:36%;height:13%">🪙 ${kid.points || 0}</div>
+    <div class="kt-cover" style="left:70%;top:15%;width:28%;height:46%;flex-direction:column;align-items:flex-start;justify-content:flex-start;padding:10px">
+      <div>你的 HP ${pHp}/${pMax}</div>
+      <div>MP ${pMp}</div>
+      <div>${escapeHtml(primary.name || '')} ${Math.max(0, primary.hp || 0)}/${primary.max_hp || 0}</div>
+    </div>
     <div class="kt-hp-deplete" aria-hidden="true"><span id="hp-cover" style="width:${gone}%"></span></div>
     <div class="vh" role="meter" id="hp-meter" aria-label="${escapeHtml(primary.name||'怪物')}生命" aria-valuemin="0" aria-valuemax="${primary.max_hp||0}" aria-valuenow="${Math.max(0, primary.hp||0)}">${Math.max(0, primary.hp||0)} / ${primary.max_hp||0}</div>
     <div class="battle-content" id="mainContent">
@@ -4968,9 +5135,10 @@ document.addEventListener('click', function (e) {
     return;
   }
   if (e.target.closest && e.target.closest('#guildAllQuests')) {
-    const list = document.getElementById('taskList');
-    if (list) list.scrollIntoView({behavior:'smooth', block:'nearest'});
-    ktGuildSay('任務列表喺任務板下面。領取掣喺畫面上。');
+    const extra = (tasks || []).filter(t => !t.completed || _isPendingApproval(t)).slice(KT_CLAIM_COUNT);
+    ktGuildSay(extra.length
+      ? ('任務板顯示頭四項。仲有：' + extra.map(t => t.title).join('、'))
+      : '任務板已經顯示全部任務。');
   }
 });
 
