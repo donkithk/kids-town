@@ -4,29 +4,34 @@ See [`../ASSETS.md`](../ASSETS.md).
 
 ## Approved product sprites
 
-- `sprite-hero.png` — hero only.
-- **Zero approved enemy body sprites** for #20 until the user re-approves one. Do not wire any wolf, boar, bear, or scorpion into product. Battle stays on the emoji fallback.
+The user formally approved the soft v1 four for product / #20. Each formal file is a byte-for-byte copy of the matching `preview-monsters/sprite-*-preview.png`. The scorpion is the original soft v1 only.
 
-`sprite-boar.png` remains in this folder as a legacy file. It is **not** an approved enemy body.
+- `sprite-hero.png` — hero
+- `sprite-boar.png` — **APPROVED** 野豬（soft v1）
+- `sprite-wolf.png` — **APPROVED** 野狼（soft v1）
+- `sprite-bear.png` — **APPROVED** 白熊（soft v1）
+- `sprite-scorpion.png` — **APPROVED** 巨蠍（soft v1 original only）
 
-## Soft v1 — candidate style set (not product)
+Builder may wire these four monster records to the formal files above. Do not wire annoyed, fierce-v2, or cute-hold.
 
-Intended preview direction: boar, wolf, bear, and the original scorpion. Still **not** approved for #20.
+## Preview archive (history only, not extra product files)
 
-- `preview-monsters/sprite-boar-preview.png` — 野豬
-- `preview-monsters/sprite-wolf-preview.png` — 野狼
-- `preview-monsters/sprite-bear-preview.png` — 白熊
-- `preview-monsters/sprite-scorpion-preview.png` — 巨蠍（original）
+Soft v1 sources, kept as-is:
+
+- `preview-monsters/sprite-boar-preview.png`
+- `preview-monsters/sprite-wolf-preview.png`
+- `preview-monsters/sprite-bear-preview.png`
+- `preview-monsters/sprite-scorpion-preview.png`
 - `preview-monsters/00-preview.html`
-- `preview-monsters/sprite-wolf-cute-hold.png` — same soft wolf, held off `sprites/sprite-wolf.png` so it is not a product path. **NOT approved.**
+- `preview-monsters/sprite-wolf-cute-hold.png` — historical hold of the soft wolf. Not a separate approved file. Do not wire this path.
 
-## Awaiting approval (not product)
+## Not approved
 
-- `preview-monsters/sprite-scorpion-annoyed-preview.png` — soft-style 巨蠍 with a mildly annoyed face. Pending user approval. Do not ship any enemy body, including this one, until that approval.
+- `preview-monsters/sprite-scorpion-annoyed-preview.png` — mildly annoyed scorpion. **Not approved.** Do not use it in place of `sprite-scorpion.png`.
 
 ## Fierce v2 — discarded direction (archived preview only)
 
-Not a candidate, not for approval, and not for product. Left in the folder so the rejected pass is not lost.
+Not for approval and not for product.
 
 - `preview-monsters/sprite-boar-fierce-v2.png`
 - `preview-monsters/sprite-wolf-fierce-v2.png`
