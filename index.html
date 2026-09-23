@@ -1205,13 +1205,11 @@ body.kt-artstage .hdr-res span{background:#fff;color:#3a2616;font-size:16px}
 body.kt-artstage .hdr-res span .n{color:#3a2616;font-size:16px;font-family:var(--body-font)}
 body.kt-artstage .gh .mb{color:#3a2616;border-color:#c4a574}
 body.kt-artstage .dbx,
-body.kt-artstage .act,
-body.kt-battle .dbx,
-body.kt-battle .act{display:none !important}
+body.kt-battle .dbx{display:none !important}
 .kt-scene{
-  position:relative;display:grid;gap:8px;padding:84px 48px 12px;
+  position:relative;display:grid;gap:8px;padding:84px 48px 96px;
   grid-template-columns:1fr;
-  grid-template-rows:40px minmax(0,1fr) 88px;
+  grid-template-rows:40px minmax(0,1fr);
   width:1280px;height:720px;box-sizing:border-box;
   background-color:#5c3d28;
   background-position:center;background-size:cover;background-repeat:no-repeat;
@@ -1236,22 +1234,49 @@ body.kt-battle .act{display:none !important}
 .kt-wood h2{margin:0;color:#3b2a1a;font-size:22px;font-weight:900;text-align:center}
 .kt-wallet{display:flex;justify-content:flex-end;gap:8px;color:#3a2616;font-weight:800}
 .kt-wallet span{background:#fff8e8;border-radius:999px;padding:2px 8px}
-.kt-dock{
-  grid-column:1;grid-row:3;display:flex;gap:8px;justify-content:center;align-items:center;
-  height:88px;box-sizing:border-box;
+/* One shared kids footer. Same five tabs on every screen. Gold border = selected.
+   Icon slot: img.kt-footer-icon stays hidden until ktFooterSetIcon(nav, url). */
+#ktFooter{
+  position:sticky;bottom:0;z-index:40;
+  display:flex;gap:8px;align-items:stretch;justify-content:stretch;
+  height:88px;box-sizing:border-box;flex:none;
+  margin:0;padding:8px 10px 10px;
   background:linear-gradient(180deg,#a67c52,#8b5e3c);
-  border:2px solid #5c3d28;border-radius:16px 16px 10px 10px;padding:8px;
+  border-top:3px solid #5c3d28;
 }
-.kt-dock-btn,.kt-text-btn{
-  flex:1;max-width:160px;min-height:44px;background:#faf6ef;color:#3b2a1a;
+body.kt-artstage #ktFooter{
+  position:absolute;left:0;right:0;bottom:0;width:100%;
+  border-radius:18px 18px 0 0;
+}
+#ktFooter .kt-footer-tab{
+  flex:1 1 0;min-width:0;min-height:44px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  background:#faf6ef;color:#3b2a1a;
+  border:3px solid #8d6230;border-radius:14px;
+  padding:6px 4px;margin:0;
+  font-family:var(--body-font);font-size:16px;font-weight:800;line-height:1.15;
+  cursor:pointer;white-space:nowrap;
+}
+body.kt-artstage #ktFooter .kt-footer-tab{font-size:20px}
+#ktFooter .kt-footer-tab[aria-current="page"],
+#ktFooter .kt-footer-tab.is-selected{
+  border-color:#f0c14b;
+  box-shadow:inset 0 0 0 2px #c4922a;
+  background:#fff6d0;
+}
+#ktFooter .kt-footer-icon{width:28px;height:28px;object-fit:contain;display:none;pointer-events:none}
+#ktFooter .kt-footer-tab.has-icon .kt-footer-icon{display:block}
+body.kt-pane-shop .kt-backpack-block{display:none}
+#ktFooter .kt-footer-label{pointer-events:none}
+#ktFooter .kt-footer-tab:focus-visible,
+.kt-text-btn:focus-visible,#honourStamp:focus-visible,.task-complete-btn:focus-visible{
+  outline:3px solid #c45c26;outline-offset:2px;
+}
+.kt-text-btn{
+  flex:0 0 auto;max-width:none;min-height:44px;background:rgba(250,246,239,.88);color:#3b2a1a;
   border:2px solid #5c3d28;border-radius:14px;padding:10px 8px;
   font-weight:800;cursor:pointer;font-family:inherit;
 }
-.kt-dock-btn[aria-current="page"]{background:#f0c14b}
-.kt-dock-btn:focus-visible,.kt-text-btn:focus-visible,#honourStamp:focus-visible,.task-complete-btn:focus-visible{
-  outline:3px solid #c45c26;outline-offset:2px;
-}
-.kt-text-btn{flex:0 0 auto;max-width:none;background:rgba(250,246,239,.88);border-style:solid}
 #tab-tasks #taskList{
   position:static;inset:auto;margin:0;padding:0;background:transparent;
   display:flex;flex-direction:column;gap:8px;flex:1;min-height:0;pointer-events:auto;
@@ -1298,7 +1323,7 @@ body.kt-battle .act{display:none !important}
 }
 .battle-scene.kt-wild{
   position:relative;display:flex;flex-direction:column;
-  width:1280px;height:720px;flex:none;box-sizing:border-box;padding-top:84px;
+  width:1280px;height:720px;flex:none;box-sizing:border-box;padding-top:84px;padding-bottom:88px;
   border-radius:0;overflow:hidden;
   background-color:#7cb342;
   background-image:url("/kids/mocks/ui-direction/kit/bg/bg-wilderness-grass.png?v=2");
@@ -1319,7 +1344,7 @@ body.kt-battle .act{display:none !important}
 }
 .battle-scene.kt-wild .kt-toast{position:relative;left:auto;top:auto;transform:none;z-index:2;margin:10px auto 0}
 .battle-scene.kt-wild .kt-field-stage{
-  position:relative;z-index:2;flex:1;display:grid;
+  position:relative;z-index:2;flex:1;min-height:0;overflow:hidden;display:grid;
   grid-template-columns:300px 1fr auto;
   align-items:end;justify-content:stretch;
   gap:16px;padding:8px 24px 4px;background:transparent;
@@ -1372,7 +1397,7 @@ body.kt-battle .act{display:none !important}
 .battle-scene.kt-wild .dbt-footer,
 .battle-scene.kt-wild .battle-bg{display:none!important}
 .battle-scene.kt-wild .kt-command-bar{
-  position:relative;z-index:2;display:flex;flex-wrap:nowrap;gap:8px;
+  position:relative;z-index:2;flex:none;display:flex;flex-wrap:nowrap;gap:8px;
   height:88px;box-sizing:border-box;align-items:center;
   padding:10px;background:#f7edd8;border-top:3px solid #c4a574;
 }
@@ -1573,10 +1598,14 @@ body.kt-battle .act{display:none !important}
 
 <!-- Tab: Shop / Inventory -->
 <div class="tab-content" id="tab-shop">
-  <div class="section-title">🎒 材料背包</div>
-  <div class="inv-grid" id="inventoryGrid"></div>
-  <div class="section-title" style="margin-top:16px;">🏪 建築商店</div>
-  <div class="shop-grid" id="shopGrid"></div>
+  <div class="kt-backpack-block">
+    <div class="section-title">🎒 材料背包</div>
+    <div class="inv-grid" id="inventoryGrid"></div>
+  </div>
+  <div class="kt-shop-block">
+    <div class="section-title">🏪 建築商店</div>
+    <div class="shop-grid" id="shopGrid"></div>
+  </div>
 </div>
 
 <!-- Tab: Tasks — wood board built from panels, not a concept photo -->
@@ -1592,13 +1621,6 @@ body.kt-battle .act{display:none !important}
       <div class="task-list" id="taskList"></div>
       <button type="button" class="kt-text-btn" id="guildAllQuests">查看所有公會任務</button>
     </section>
-    <nav class="kt-dock" aria-label="場景">
-      <button type="button" class="kt-dock-btn" data-kt-nav="town">城鎮</button>
-      <button type="button" class="kt-dock-btn" data-kt-nav="expedition">荒野</button>
-      <button type="button" class="kt-dock-btn" data-kt-nav="tasks" aria-current="page">任務</button>
-      <button type="button" class="kt-dock-btn" data-kt-nav="shop">背包</button>
-      <button type="button" class="kt-dock-btn" data-kt-nav="honour">榮譽</button>
-    </nav>
   </main>
 </div>
 
@@ -1614,13 +1636,6 @@ body.kt-battle .act{display:none !important}
       <div id="honourRewards"></div>
       <div id="honourPendingMeta" class="vh" aria-live="polite"></div>
     </section>
-    <nav class="kt-dock" aria-label="場景">
-      <button type="button" class="kt-dock-btn" data-kt-nav="town">城鎮</button>
-      <button type="button" class="kt-dock-btn" data-kt-nav="tasks">任務</button>
-      <button type="button" class="kt-dock-btn" data-kt-nav="expedition">荒野</button>
-      <button type="button" class="kt-dock-btn" data-kt-nav="honour" aria-current="page">榮譽</button>
-      <button type="button" class="kt-dock-btn" data-kt-nav="manage">家長</button>
-    </nav>
   </main>
 </div>
 
@@ -1865,11 +1880,28 @@ body.kt-battle .act{display:none !important}
       <div class="dbx">
         <div class="dbt" id="dbt">🌟 歡迎返嚟！今日有 <span class="h">新任務</span> 等緊你！</div>
       </div>
-      <div class="act">
-        <button class="e" onclick="st('expedition')"><img src="assets-c/btn-explore.png" class="btn-icon" alt="">探索</button>
-        <button class="q" onclick="st('tasks')"><img src="assets-c/btn-tasks.png" class="btn-icon" alt="">任務</button>
-        <button class="b" onclick="st('shop')"><img src="assets-c/btn-backpack.png" class="btn-icon" alt="">背包</button>
-      </div>
+      <nav id="ktFooter" class="kt-footer" aria-label="主選單">
+        <button type="button" class="kt-footer-tab" data-kt-nav="town" data-kt-icon="town" aria-current="page">
+          <img class="kt-footer-icon" alt="" hidden>
+          <span class="kt-footer-label">城鎮首頁</span>
+        </button>
+        <button type="button" class="kt-footer-tab" data-kt-nav="expedition" data-kt-icon="guild">
+          <img class="kt-footer-icon" alt="" hidden>
+          <span class="kt-footer-label">公會大廳</span>
+        </button>
+        <button type="button" class="kt-footer-tab q" data-kt-nav="tasks" data-kt-icon="tasks">
+          <img class="kt-footer-icon" alt="" hidden>
+          <span class="kt-footer-label">任務板</span>
+        </button>
+        <button type="button" class="kt-footer-tab" data-kt-nav="shop" data-kt-icon="shop">
+          <img class="kt-footer-icon" alt="" hidden>
+          <span class="kt-footer-label">商店</span>
+        </button>
+        <button type="button" class="kt-footer-tab b" data-kt-nav="backpack" data-kt-icon="backpack">
+          <img class="kt-footer-icon" alt="" hidden>
+          <span class="kt-footer-label">背包</span>
+        </button>
+      </nav>
     </div>
     <div class="dov" id="dov" onclick="td()"></div>
     <div class="dr" id="dr">
@@ -1880,7 +1912,7 @@ body.kt-battle .act{display:none !important}
       <button class="di" onclick="st('expedition');td()"><span class="ic">🗺️</span> 探索</button>
       <button class="di" onclick="st('tasks');td()"><span class="ic">📋</span> 任務</button>
       <button class="di" onclick="st('honour');td()"><span class="ic">🏅</span> 榮譽</button>
-      <button class="di" onclick="st('shop');td()"><span class="ic">🎒</span> 背包</button>
+      <button class="di" onclick="st('backpack');td()"><span class="ic">🎒</span> 背包</button>
       <button class="di" onclick="st('achievements');td()"><span class="ic">🏆</span> 成就</button>
       <button class="di" onclick="st('savings');td()"><span class="ic">🎯</span> 儲蓄目標</button>
       <button class="di" onclick="st('ledger');td()"><span class="ic">📊</span> 帳本</button>
@@ -2349,9 +2381,18 @@ function hideTip(){
 // ═══════════════════════════════════════════════════════════════
 // TAB SWITCHING
 // ═══════════════════════════════════════════════════════════════
+let ktShopPane = 'shop';
+
 function st(name) {
   if(typeof Audio!=='undefined'&&Audio.buttonClick)try{Audio.buttonClick()}catch(e){}
-  
+
+  if (name === 'backpack') {
+    ktShopPane = 'backpack';
+    name = 'shop';
+  } else if (name === 'shop') {
+    ktShopPane = 'shop';
+  }
+
   // PIN gate for management tab (parent-only)
   if (name === 'manage' && !isParentSession) {
     const enteredPin = prompt('家長請輸入密碼：');
@@ -3386,6 +3427,7 @@ function ktSyncArtStage() {
   const gh = document.querySelector('.gh');
   const hpEl = document.getElementById('hudHp');
   if (hpEl && !battle) hpEl.textContent = '';
+  ktSyncFooter();
   if (!gh) return;
   gh.style.position = '';
   gh.style.top = '';
@@ -3395,6 +3437,36 @@ function ktSyncArtStage() {
   gh.style.zIndex = '';
 }
 window.addEventListener('resize', () => { if (typeof ktSyncArtStage === 'function') ktSyncArtStage(); });
+
+function ktSyncFooter() {
+  const tab = document.querySelector('.tab-content.active');
+  const id = tab && tab.id;
+  const battle = document.body.classList.contains('kt-battle');
+  let current = '';
+  if (battle || id === 'tab-expedition') current = 'expedition';
+  else if (id === 'tab-town') current = 'town';
+  else if (id === 'tab-tasks') current = 'tasks';
+  else if (id === 'tab-shop') current = ktShopPane === 'backpack' ? 'backpack' : 'shop';
+  document.querySelectorAll('#ktFooter [data-kt-nav]').forEach(function (btn) {
+    const on = btn.getAttribute('data-kt-nav') === current;
+    btn.classList.toggle('is-selected', on);
+    if (on) btn.setAttribute('aria-current', 'page');
+    else btn.removeAttribute('aria-current');
+  });
+  document.body.classList.toggle('kt-pane-shop', id === 'tab-shop' && ktShopPane !== 'backpack');
+  document.body.classList.toggle('kt-pane-backpack', id === 'tab-shop' && ktShopPane === 'backpack');
+}
+
+function ktFooterSetIcon(nav, src) {
+  const btn = document.querySelector('#ktFooter [data-kt-nav="' + nav + '"]');
+  const img = btn && btn.querySelector('.kt-footer-icon');
+  if (!img || !src) return;
+  img.src = src;
+  img.hidden = false;
+  btn.classList.add('has-icon');
+}
+window.ktFooterSetIcon = ktFooterSetIcon;
+window.ktSyncFooter = ktSyncFooter;
 
 function ktKid() {
   return (townData && townData.kid) || currentUser || {};
@@ -4688,9 +4760,6 @@ function renderBattleMode(exp) {
     <div class="kt-command-bar">
       ${cmdHtml}
       ${skillHotspots}
-      <button type="button" class="kt-dock-btn" data-kt-nav="town">地圖</button>
-      <button type="button" class="kt-dock-btn" data-kt-nav="tasks">任務</button>
-      <button type="button" class="kt-dock-btn" data-kt-nav="shop">背包</button>
     </div>
     ${resultHtml}
   </div>`;
@@ -5228,6 +5297,7 @@ document.querySelector('.dbx')?.addEventListener('click', () => {
 loadBuildingDefs();
 
 // UI-direction hotspot navigation + honour stamp (delegated)
+ktSyncFooter();
 document.addEventListener('click', function (e) {
   const nav = e.target.closest && e.target.closest('[data-kt-nav]');
   if (nav) {
