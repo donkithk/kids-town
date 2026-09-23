@@ -1,7 +1,15 @@
-# UI 元件
+# Kids Town UI assets
 
-這一層暫時**沒有** PNG 或 SVG。
+Shared footer assets for the fixed 5-tab bottom navigation live here. Start with [`FOOTER.md`](./FOOTER.md) for the builder-facing contract and accessibility rules.
 
-按鈕、任務卡、tab bar、徽章、HUD chip、榮譽面板用 [`ASSETS.md`](../ASSETS.md) 的 CSS color tokens 與尺寸規格，由 builder 用 DOM／CSS 疊在背景上。圖內不要畫字。
+| File | Purpose |
+|---|---|
+| [`FOOTER.md`](./FOOTER.md) | Layout, tokens, states, HTML/CSS guidance, and PR #20 handoff |
+| [`footer-strip.html`](./footer-strip.html) | Self-contained zoomable mock: `quest-board` selected and `shop` selected |
+| [`icon-town-home.svg`](./icon-town-home.svg) | 城鎮首頁 house icon |
+| [`icon-guild-hall.svg`](./icon-guild-hall.svg) | 公會大廳 group icon; supports optional badge |
+| [`icon-quest-board.svg`](./icon-quest-board.svg) | 任務板 scroll/map icon |
+| [`icon-shop.svg`](./icon-shop.svg) | 商店 market stall icon |
+| [`icon-backpack.svg`](./icon-backpack.svg) | 背包 satchel icon |
 
-若之後要畫紋理，英文 prompt 在 [`GENERATE_PROMPTS.md`](../GENERATE_PROMPTS.md) 的 UI 段。
+The selected chrome is documented as pure CSS; no separate frame asset is required. SVGs are transparent, text-free, and use a 64×64 viewBox.

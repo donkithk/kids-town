@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kids Town shared footer strip</title>
+<style>
+  :root { --wood:#8b5e3c; --wood-mid:#a67c52; --gold:#d4a017; --gold-bright:#f0c14b; --cream:#faf6ef; --ink:#3b2a1a; --muted:#806b58; --badge:#b52b2b; --focus:#c45c26; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px; color:var(--ink); background:#ead8b8; font-family:ui-rounded,"Noto Sans TC",system-ui,sans-serif; }
+  h1 { margin:0 0 8px; font-size:clamp(1.25rem,2vw,1.8rem); }
+  .intro { max-width:900px; margin:0 auto 18px; }
+  .controls { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:10px 0 18px; }
+  .controls button { min-width:44px; min-height:44px; border:2px solid var(--wood); border-radius:10px; background:var(--cream); color:var(--ink); font:inherit; cursor:pointer; }
+  .controls button:focus-visible, .footer-tab:focus-visible { outline:3px solid var(--focus); outline-offset:3px; }
+  .viewport { overflow:auto; padding:12px; background:rgb(59 42 26 / 10%); border-radius:14px; }
+  .zoom-stage { width:1280px; transform-origin:top left; transition:transform .15s ease; }
+  .demo { position:relative; width:1280px; height:720px; margin:0 0 24px; overflow:hidden; background:linear-gradient(145deg,#f7e8c5 0%,#ead0a0 52%,#d4aa70 100%); border:5px solid var(--wood); border-radius:18px; box-shadow:0 8px 18px rgb(59 42 26 / 18%); }
+  .demo:last-child { margin-bottom:0; }
+  .demo-copy { position:absolute; inset:150px 0 auto; text-align:center; color:rgb(59 42 26 / 45%); }
+  .demo-copy strong { display:block; font-size:28px; }
+  .demo-copy span { font-size:18px; }
+  .shared-footer { position:absolute; inset:auto 0 0; height:88px; padding:6px 12px 8px; background:var(--cream); border-top:3px solid var(--wood-mid); border-radius:18px 18px 0 0; box-shadow:0 -5px 16px rgb(59 42 26 / 14%); }
+  .footer-tabs { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; height:100%; margin:0; padding:0; list-style:none; }
+  .footer-tab { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; min-width:44px; min-height:44px; border:2px solid transparent; border-radius:14px; color:var(--muted); background:transparent; font:inherit; font-size:17px; line-height:1.1; cursor:pointer; }
+  .footer-tab img { width:42px; height:42px; display:block; margin:-2px auto 1px; }
+  .footer-tab[aria-current="page"] { color:var(--ink); background:#fff0c7; border-color:var(--gold); box-shadow:inset 0 0 0 2px rgb(240 193 75 / 45%); font-weight:700; }
+  .tab-icon-wrap { position:relative; display:block; height:42px; }
+  .tab-icon-wrap img { margin:0; }
+  .tab-badge { position:absolute; top:-3px; right:-10px; display:grid; place-items:center; min-width:22px; height:22px; padding:0 5px; border:2px solid var(--cream); border-radius:999px; background:var(--badge); color:#fff; font-size:12px; font-weight:800; line-height:1; }
+  @media (max-width:680px) { body { padding:12px; } .viewport { padding:6px; } }
+  @media (prefers-reduced-motion:reduce) { .zoom-stage { transition:none; } }
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>Kids Town — shared footer strip</h1>
+    <p>同一個固定五分頁 footer：上方示範「任務板」selected，下方示範「商店」selected。只有 selected state 改變，footer 設計與順序不變。</p>
+    <div class="controls" aria-label="縮放控制">
+      <strong>Zoom</strong>
+      <button type="button" data-zoom="0.75">75%</button>
+      <button type="button" data-zoom="1">100%</button>
+      <button type="button" data-zoom="1.25">125%</button>
+      <button type="button" data-zoom="1.5">150%</button>
+    </div>
+  </div>
+
+  <main class="viewport" aria-label="可水平捲動的 1280×720 footer mock viewport">
+    <div class="zoom-stage" id="zoom-stage">
+      <section class="demo" aria-label="任務板 selected 範例">
+        <div class="demo-copy"><strong>任務板 selected</strong><span>固定 5-tab footer / quest-board</span></div>
+        <nav class="shared-footer" aria-label="主要導覽 — 任務板範例">
+          <ul class="footer-tabs">
+            <li><button class="footer-tab" type="button" data-tab-id="town-home"><img src="icon-town-home.svg" alt=""><span>城鎮首頁</span></button></li>
+            <li><button class="footer-tab" type="button" data-tab-id="guild-hall"><span class="tab-icon-wrap"><img src="icon-guild-hall.svg" alt=""><span class="tab-badge" aria-label="3 則新通知">3</span></span><span>公會大廳</span></button></li>
+            <li><button class="footer-tab" type="button" data-tab-id="quest-board" aria-current="page"><img src="icon-quest-board.svg" alt=""><span>任務板</span></button></li>
+            <li><button class="footer-tab" type="button" data-tab-id="shop"><img src="icon-shop.svg" alt=""><span>商店</span></button></li>
+            <li><button class="footer-tab" type="button" data-tab-id="backpack"><img src="icon-backpack.svg" alt=""><span>背包</span></button></li>
+          </ul>
+        </nav>
+      </section>
+
+      <section class="demo" aria-label="商店 selected 範例">
+        <div class="demo-copy"><strong>商店 selected</strong><span>固定 5-tab footer / shop</span></div>
+        <nav class="shared-footer" aria-label="主要導覽 — 商店範例">
+          <ul class="footer-tabs">
+            <li><button class="footer-tab" type="button" data-tab-id="town-home"><img src="icon-town-home.svg" alt=""><span>城鎮首頁</span></button></li>
+            <li><button class="footer-tab" type="button" data-tab-id="guild-hall"><span class="tab-icon-wrap"><img src="icon-guild-hall.svg" alt=""><span class="tab-badge" aria-label="3 則新通知">3</span></span><span>公會大廳</span></button></li>
+            <li><button class="footer-tab" type="button" data-tab-id="quest-board"><img src="icon-quest-board.svg" alt=""><span>任務板</span></button></li>
+            <li><button class="footer-tab" type="button" data-tab-id="shop" aria-current="page"><img src="icon-shop.svg" alt=""><span>商店</span></button></li>
+            <li><button class="footer-tab" type="button" data-tab-id="backpack"><img src="icon-backpack.svg" alt=""><span>背包</span></button></li>
+          </ul>
+        </nav>
+      </section>
+    </div>
+  </main>
+<script>
+  const stage = document.querySelector('#zoom-stage');
+  document.querySelectorAll('[data-zoom]').forEach((button) => button.addEventListener('click', () => {
+    const zoom = Number(button.dataset.zoom);
+    stage.style.transform = `scale(${zoom})`;
+    stage.parentElement.style.minHeight = `${(720 * 2 + 24) * zoom}px`;
+  }));
+</script>
+</body>
+</html>

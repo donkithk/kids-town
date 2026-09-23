@@ -228,3 +228,10 @@
 - [ ] UI 對得上 tokens；按鈕／tab hit ≥ 44px
 - [ ] 精靈透明底、朝向正確、可疊在草地 BG
 - [ ] 檔名符合上表 id
+
+
+---
+
+## 6. Shared footer assets — fixed 5-tab navigation
+
+The approved shared footer is specified in [`ui/FOOTER.md`](./ui/FOOTER.md) and previewed in [`ui/footer-strip.html`](./ui/footer-strip.html). It is one cream/parchment component reused on every page at the 1280×720 bottom safe zone (~y=624–720), with the fixed order `town-home`／`guild-hall`／`quest-board`／`shop`／`backpack` and labels 城鎮首頁／公會大廳／任務板／商店／背包. The five transparent SVG icons are in `ui/`; selected chrome is pure CSS. Builder implements the shared component in PR #20. 「查看所有公會任務」 remains a quest-board page CTA, not footer UI.

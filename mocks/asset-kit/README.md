@@ -17,7 +17,7 @@
 | [`ASSETS.md`](./ASSETS.md) | 背景／UI／精靈完整規格（尺寸、安全區、tokens） |
 | [`GENERATE_PROMPTS.md`](./GENERATE_PROMPTS.md) | 可直接貼上的英文產圖 prompt |
 | `bg/` | 背景層（1280×720，無角色／無文字） |
-| `ui/` | UI 元件（目前以 CSS tokens 為準，見 [`ui/README.md`](./ui/README.md)） |
+| `ui/` | UI 元件。共用 footer 見 [`ui/FOOTER.md`](./ui/FOOTER.md)；其餘卡片／按鈕仍以 CSS tokens 為準 |
 | `sprites/` | 戰鬥精靈（與背景分開，供 builder 疊加） |
 
 ---
@@ -115,6 +115,14 @@ mocks/asset-kit/
     bg-honour-ceremony.png
     bg-wilderness-grass.png
   ui/
+    README.md
+    FOOTER.md
+    footer-strip.html
+    icon-town-home.svg
+    icon-guild-hall.svg
+    icon-quest-board.svg
+    icon-shop.svg
+    icon-backpack.svg
     ui-quest-card.png|svg
     ui-tab-bar.png|svg
     ui-btn-claim.png|svg
@@ -130,7 +138,7 @@ mocks/asset-kit/
     sprite-generic-monster.png   # optional
 ```
 
-目前已放入：三張背景、`sprites/sprite-hero.png`、`sprites/sprite-boar.png`，以及 [`ui/README.md`](./ui/README.md)（UI 仍以 CSS tokens 為準，沒有 PNG／SVG）。
+目前已放入：三張背景、`sprites/sprite-hero.png`、`sprites/sprite-boar.png`，以及共用 footer（[`ui/FOOTER.md`](./ui/FOOTER.md)、[`ui/footer-strip.html`](./ui/footer-strip.html)、五個透明 SVG icon）。任務卡、領取鈕、徽章等其餘 UI 仍以 CSS tokens 為準，沒有獨立 PNG。
 
 ---
 
@@ -150,3 +158,9 @@ mocks/asset-kit/
 - ❌ 不修改 production `index.html`、backend 或 gameplay
 - ❌ 不把任務名、小孩名、按鈕字畫進背景
 - ✅ 規格、prompt，以及已拆層的背景／精靈放在 `mocks/asset-kit/`，由 builder 組裝
+
+---
+
+## 6. Shared footer inventory
+
+The fixed, shared 5-tab bottom navigation assets now live in [`ui/`](./ui/): [`FOOTER.md`](./ui/FOOTER.md) is the builder contract, [`footer-strip.html`](./ui/footer-strip.html) is a zoomable two-state mock, and five transparent SVG icons cover 城鎮首頁、公會大廳、任務板、商店、背包. The same cream footer is reused on every page; only the selected tab changes. Builder implementation is planned for PR #20.
