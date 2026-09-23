@@ -1437,10 +1437,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 .battle-scene.kt-wild .monster-card .m-img.kt-enemy-icon{
   display:flex;align-items:center;justify-content:center;font-size:140px;line-height:1;
 }
-.battle-scene.kt-wild .monster-card .m-img img{
-  width:220px !important;height:220px !important;max-width:none;
-  object-fit:contain;object-position:bottom center;image-rendering:auto;
-}
+.battle-scene.kt-wild .monster-card .m-img img{display:none !important}
 .battle-scene.kt-wild .monster-card .m-hp-bar{display:block;width:100%;height:8px;background:#e7d3ae;border-radius:99px;margin-top:4px}
 .battle-scene.kt-wild .monster-card .m-hp-fill{background:#e85d4c}
 .battle-scene.kt-wild .monster-card .m-name,
@@ -4742,10 +4739,7 @@ function renderBattleMode(exp) {
     const isDead = m.hp <= 0;
     if (isDead) window._deathPlayed[m.id] = true;
     const pct = Math.max(0, Math.round(m.hp / (m.max_hp || 1) * 100));
-    const sprite = (m.sprite && String(m.sprite).indexOf('sprite-boar.png') !== -1) ? m.sprite : '';
-    const picture = sprite
-      ? `<div class="m-img"><img src="${sprite}" alt=""></div>`
-      : `<div class="m-img kt-enemy-icon">${escapeHtml(m.icon || '')}</div>`;
+    const picture = `<div class="m-img kt-enemy-icon">${escapeHtml(m.icon || '')}</div>`;
     return `<div class="monster-card${isDead ? ' dead' : ''}${showMonsterTarget && !isDead ? ' targetable' : ''}" data-idx="${m.id}" onclick="${!isDead ? 'onMonsterClick('+m.id+')' : ''}">
       <div class="target-arrow">▼</div>
       ${picture}

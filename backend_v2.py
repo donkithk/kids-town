@@ -3603,16 +3603,12 @@ def get_kid_skills(kid_id):
 
 BOSS_SUMMON_COST = {'gem': 1}  # 召喚 Boss 材料
 
-# Approved enemy art already in the kit. sprite-boar.png is 草原野豬 only.
-# 野狼, 白熊, 巨蠍, and bosses have no matching file yet — sprite stays None.
-_SPRITE_BOAR = '/kids/mocks/ui-direction/kit/sprites/sprite-boar.png?v=2'
-
-
 def enemy_sprite(name):
-    """Image attribute for this monster definition. Never a different animal's file."""
-    name = name or ''
-    if '豬' in name or '猪' in name:
-        return _SPRITE_BOAR
+    """Monster body image on this record.
+
+    No same-style enemy sprite is approved yet (the kit boar PNG clashes with
+    the wood/cream UI). sprite stays None so the fight shows this record's icon.
+    """
     return None
 
 
