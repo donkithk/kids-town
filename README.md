@@ -31,6 +31,21 @@ Or `./scripts/start-app.sh` (see below). Use a **fresh / empty** SQLite file for
 三步方便本機示範與公網預覽。**不要**把 `NGROK_AUTHTOKEN`、`.env`、或本機／示範用的 `kids_town.db` 提交進 git。
 Three steps for a local demo and an optional public preview. **Never** commit tokens, `.env`, or a machine-local `kids_town.db`.
 
+### Preview demo kid
+
+`python backend_v2.py` and `./scripts/seed_preview_kid.py` ensure one demo account. Other kids stay on the normal 120-gold starter pack.
+
+| | |
+| --- | --- |
+| Username | `preview_kid` |
+| PIN | `2468` only when this seed **creates** the account. An existing PIN is left as-is. |
+| Gold | at least **200** (never lowered if they already have more) |
+| Level | at least **2**, so wilderness region 1 can start |
+| Guild | **探險公會** placed on the town (not stored) |
+| Bag | wood×8 and brick×5 when the seed creates the account |
+
+Log in at `/kids/` with that username and open **荒野**. The grass background, hero sprite, and boar sprite are the battle screen.
+
 公網／ngrok 示範前，**Phase 0 及以上**已鎖定測試必須保持全綠（至少 `python -m pytest tests/ -m phase0 -v`）。未綠不要轉發 `0.0.0.0` 或 ngrok。
 Keep **Phase 0+** green before any public demo. Do not expose the app until that gate passes.
 

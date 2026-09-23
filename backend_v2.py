@@ -1298,6 +1298,13 @@ GUILD_COST_GOLD = 150
 DEFAULT_GUILD_MATERIALS = '{"wood":10,"brick":5}'
 STARTER_POINTS = 120
 STARTER_MATERIALS = {'wood': 8, 'brick': 5}
+# Preview demo only. Other kids still get the 120-gold starter pack.
+PREVIEW_KID_USERNAME = 'preview_kid'
+PREVIEW_KID_NAME = 'Preview'
+PREVIEW_KID_PIN = '2468'
+PREVIEW_MIN_POINTS = 200
+PREVIEW_MIN_LEVEL = 2
+PREVIEW_MIN_EXPERIENCE = 25  # calc_level(25) is Lv.2, so region 1 can open
 
 
 def canonicalize_item_type(item_type):
@@ -1404,6 +1411,107 @@ def grant_starter_pack_once(db, kid_id):
     for item_type, qty in STARTER_MATERIALS.items():
         add_item(kid_id, item_type, qty, db)
     return True
+
+
+def _ensure_building_placement_columns(db):
+    """buildings.cell_x/cell_y/stored exist on live DBs; add them if a fresh file lacks them."""
+    cols = [row[1] for row in db.execute("PRAGMA table_info(buildings)").fetchall()]
+    if 'cell_x' not in cols:
+        db.execute("ALTER TABLE buildings ADD COLUMN cell_x INTEGER DEFAULT 0")
+    if 'cell_y' not in cols:
+        db.execute("ALTER TABLE buildings ADD COLUMN cell_y INTEGER DEFAULT 0")
+    if 'stored' not in cols:
+        db.execute("ALTER TABLE buildings ADD COLUMN stored INTEGER DEFAULT 0")
+
+
+def _preview_guild_cell(db, kid_id):
+    """First free 2×2 plot, preferring the usual guild cell (6, 0)."""
+    occupied = set()
+    for row in db.execute(
+        "SELECT cell_x, cell_y FROM buildings WHERE kid_id=? AND COALESCE(stored, 0)=0",
+        (kid_id,),
+    ):
+        occupied.add((row['cell_x'] or 0, row['cell_y'] or 0))
+    candidates = [(6, 0)] + [(x, y) for y in range(0, 13) for x in range(0, 21)]
+    for x, y in candidates:
+        if all((x + dx, y + dy) not in occupied for dy in range(2) for dx in range(2)):
+            return x, y
+    return 6, 0
+
+
+def ensure_preview_kid(db):
+    """Give the Preview demo kid enough gold and a placed exploration guild.
+
+    Idempotent. Other kids are untouched. An existing PIN is not replaced.
+    Gold is raised to at least PREVIEW_MIN_POINTS and never lowered.
+    Level is raised to at least 2 so region 1 wilderness can start.
+    """
+    _ensure_building_placement_columns(db)
+    row = db.execute(
+        "SELECT id, points, level, experience FROM kids WHERE username=?",
+        (PREVIEW_KID_USERNAME,),
+    ).fetchone()
+    created = False
+    if not row:
+        cur = db.execute(
+            "INSERT INTO kids (name, username, avatar, color, points, level, experience, starter_granted) "
+            "VALUES (?, ?, '👦', '#3b82f6', ?, ?, ?, 1)",
+            (
+                PREVIEW_KID_NAME,
+                PREVIEW_KID_USERNAME,
+                PREVIEW_MIN_POINTS,
+                PREVIEW_MIN_LEVEL,
+                PREVIEW_MIN_EXPERIENCE,
+            ),
+        )
+        kid_id = cur.lastrowid
+        db.execute(
+            "INSERT INTO kid_auth (kid_id, pin) VALUES (?, ?)",
+            (kid_id, hash_password(PREVIEW_KID_PIN)),
+        )
+        for item_type, qty in STARTER_MATERIALS.items():
+            add_item(kid_id, item_type, qty, db)
+        created = True
+    else:
+        kid_id = row['id']
+        points = row['points'] or 0
+        level = row['level'] or 1
+        experience = row['experience'] or 0
+        if points < PREVIEW_MIN_POINTS:
+            db.execute(
+                "UPDATE kids SET points=? WHERE id=?",
+                (PREVIEW_MIN_POINTS, kid_id),
+            )
+        if level < PREVIEW_MIN_LEVEL:
+            db.execute(
+                "UPDATE kids SET level=?, experience=? WHERE id=?",
+                (PREVIEW_MIN_LEVEL, max(experience, PREVIEW_MIN_EXPERIENCE), kid_id),
+            )
+
+    guild = db.execute(
+        "SELECT id FROM building_defs WHERE name=? OR buff_type='unlock_explore' ORDER BY id LIMIT 1",
+        ('探險公會',),
+    ).fetchone()
+    if guild and not has_active_guild(kid_id, db):
+        stored = db.execute(
+            "SELECT id FROM buildings WHERE kid_id=? AND def_id=? AND COALESCE(stored, 0)=1 LIMIT 1",
+            (kid_id, guild['id']),
+        ).fetchone()
+        if stored:
+            cell_x, cell_y = _preview_guild_cell(db, kid_id)
+            db.execute(
+                "UPDATE buildings SET stored=0, cell_x=?, cell_y=? WHERE id=?",
+                (cell_x, cell_y, stored['id']),
+            )
+        else:
+            cell_x, cell_y = _preview_guild_cell(db, kid_id)
+            db.execute(
+                "INSERT INTO buildings (kid_id, def_id, plot_idx, level, cell_x, cell_y, stored) "
+                "VALUES (?, ?, 0, 1, ?, ?, 0)",
+                (kid_id, guild['id'], cell_x, cell_y),
+            )
+    db.commit()
+    return {'kid_id': kid_id, 'created': created}
 
 
 def _migrate_inventory_item_types(db):
@@ -4760,6 +4868,8 @@ def create_kid():
     # auto-link 到呢個家長
     db.execute("INSERT INTO parent_kid (parent_id, kid_id) VALUES (?, ?)", (parent_id, kid_id))
     grant_starter_pack_once(db, kid_id)
+    if username == PREVIEW_KID_USERNAME:
+        ensure_preview_kid(db)
     db.commit()
 
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
@@ -4852,6 +4962,10 @@ if __name__ == '__main__':
     seed_building_defs()
     seed_skill_defs()
     bootstrap_admin_if_configured()
+    _preview_db = sqlite3.connect(DB_PATH)
+    _preview_db.row_factory = sqlite3.Row
+    ensure_preview_kid(_preview_db)
+    _preview_db.close()
 
     # Auto‑clean stale expeditions (status='running' but past end_time)
     _clean_stale_expeditions()
