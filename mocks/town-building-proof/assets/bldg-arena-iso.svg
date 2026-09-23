@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 210" fill="none">
+  <ellipse cx="120" cy="198" rx="84" ry="12" fill="#5c3d28" opacity=".16"/>
+  <polygon points="120,190 206,150 120,110 34,150" fill="#e6c48a" stroke="#8b5e3c" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="120,176 178,150 120,124 62,150" fill="#f6e0b0" stroke="#c4a06a" stroke-width="2.5" stroke-linejoin="round"/>
+  <polygon points="62,150 120,124 120,108 48,134" fill="#a67c52" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="178,150 120,124 120,108 192,134" fill="#c4a06a" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="48,134 120,168 120,156 48,122" fill="#8b5e3c" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
+  <polygon points="192,134 120,168 120,156 192,122" fill="#d4b278" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
+  <polygon points="46,150 52,148 52,92 46,94" fill="#6b4428" stroke="#5c3d28" stroke-width="2"/>
+  <polygon points="52,96 90,108 82,124 52,114" fill="#d4453a" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
+  <polygon points="194,132 200,128 200,70 194,74" fill="#6b4428" stroke="#5c3d28" stroke-width="2"/>
+  <polygon points="200,74 230,64 222,82 200,90" fill="#f0c14b" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
+  <circle cx="46" cy="150" r="5" fill="#8b5e3c" stroke="#5c3d28" stroke-width="2"/>
+  <circle cx="194" cy="132" r="5" fill="#c4a06a" stroke="#5c3d28" stroke-width="2"/>
+  <circle cx="120" cy="190" r="5" fill="#a67c52" stroke="#5c3d28" stroke-width="2"/>
+  <circle cx="120" cy="110" r="5" fill="#8b5e3c" stroke="#5c3d28" stroke-width="2"/>
+  <polygon points="108,186 132,176 132,158 108,168" fill="#6b4428" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M114 176h12" stroke="#f0c14b" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="120" cy="148" r="8" fill="#f0c14b" stroke="#5c3d28" stroke-width="2"/>
+  <circle cx="120" cy="148" r="3" fill="#fff8e7"/>
+</svg>

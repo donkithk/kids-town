@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>建築證明 · 柔和等角</title>
+  <link rel="stylesheet" href="../town-style-compare/mock.css">
+  <link rel="stylesheet" href="demo.css">
+</head>
+<body class="stage-page">
+  <div class="stage">
+    <a class="skip" href="#palette">跳到建築清單</a>
+    <header class="gh">
+      <div class="av" aria-hidden="true"><img src="assets/avatar.svg" alt=""></div>
+      <div class="in">
+        <div class="nm">Preview</div>
+        <div class="nm-lv">Lv.6</div>
+      </div>
+      <div class="hdr-mid">
+        <div class="rw">
+          <div class="xp" aria-hidden="true"><div class="xf"></div></div>
+          <span class="xp-num">XP 0/150</span>
+        </div>
+        <div class="hdr-res" aria-label="資源（只係演示籌碼）">
+          <span class="chip-gold">💰 <span class="n" id="res-gold">6000</span></span>
+          <span>🪵 <span class="n" id="res-wood">240</span></span>
+          <span>🧱 <span class="n" id="res-brick">180</span></span>
+          <span>🪟 <span class="n" id="res-glass">12</span></span>
+          <span>⚙️ <span class="n" id="res-gear">90</span></span>
+        </div>
+      </div>
+      <button class="mb" type="button" aria-label="主目錄">☰</button>
+    </header>
+
+    <section class="map" id="townMap" aria-label="柔和等角空白城鎮">
+      <h1 class="sr-only">建築證明：十座種子建築嘅等角剪影，可以放置、搬移、取消</h1>
+      <img class="meadow" src="assets/meadow.svg" alt="">
+      <div class="vignette" aria-hidden="true"></div>
+      <p class="scene-chip">建築證明</p>
+
+      <aside class="palette" id="palette" tabindex="-1">
+        <div class="palette-head">
+          <h2>揀一座</h2>
+          <p id="placedCount">已起 0/10</p>
+        </div>
+        <div class="palette-grid" id="paletteGrid"></div>
+        <p class="legend">金框可放 · 紅框唔得</p>
+        <button class="btn-reset" id="btnReset" type="button">重置地圖</button>
+        <a class="text-link" href="catalog.html">十座剪影一覽</a>
+      </aside>
+
+      <div class="village is-iso" id="village"></div>
+      <p class="empty-hint" id="emptyHint">空白城鎮。先從左邊揀一座建築。</p>
+      <div class="oob-mark" id="oobMark" hidden>
+        <img src="assets/cell-illegal.svg" alt="">
+        <span>出界</span>
+      </div>
+      <div class="place-bar" id="placeBar" hidden>
+        <button id="btnCancel" type="button">取消</button>
+        <p id="placeStatus" aria-live="polite"></p>
+        <button id="btnConfirm" type="button">確定放置</button>
+      </div>
+    </section>
+
+    <p class="toast" id="toast" role="status" hidden></p>
+
+    <nav class="kt-footer" aria-label="主要導覽">
+      <button class="footer-tab" type="button" aria-current="page">
+        <img src="../asset-kit/ui/icon-town-home.svg" alt=""><span>城鎮首頁</span>
+      </button>
+      <button class="footer-tab" type="button">
+        <img src="../asset-kit/ui/icon-guild-hall.svg" alt=""><span>公會大廳</span>
+      </button>
+      <button class="footer-tab" type="button">
+        <img src="../asset-kit/ui/icon-quest-board.svg" alt=""><span>任務板</span>
+      </button>
+      <button class="footer-tab" type="button">
+        <img src="../asset-kit/ui/icon-shop.svg" alt=""><span>商店</span>
+      </button>
+      <button class="footer-tab" type="button">
+        <img src="../asset-kit/ui/icon-backpack.svg" alt=""><span>背包</span>
+      </button>
+    </nav>
+  </div>
+  <script src="demo.js"></script>
+</body>
+</html>
