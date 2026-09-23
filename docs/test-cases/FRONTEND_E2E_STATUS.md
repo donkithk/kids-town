@@ -17,9 +17,9 @@
 
 | Suite | Command | Result on this PR (base main `ec6df09`) |
 |-------|---------|----------------------------------------|
-| Town chrome | `python3 -m pytest tests/test_frontend.py -q -k town_home --tb=short` | recorded after the verification run on this tip |
-| Full frontend | `python3 -m pytest tests/test_frontend.py -q` | recorded after the verification run on this tip |
-| Preview seed | `python3 -m pytest tests/test_preview_seed.py -q` | recorded after the verification run on this tip |
+| Town chrome | `python3 -m pytest tests/test_frontend.py -q -k town_home --tb=short` | **3 passed**, 26 deselected in 3.75s |
+| Full frontend | `python3 -m pytest tests/test_frontend.py -q` | **29 passed**, 4 warnings in 30.83s |
+| Preview seed | `python3 -m pytest tests/test_preview_seed.py -q` | **6 passed**, 10 warnings in 2.57s |
 
 Do not weaken the 6px tolerance or delete asserts. This branch does not change product code. Do not merge from the test author; KT reviews.
 
