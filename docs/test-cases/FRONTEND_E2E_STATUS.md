@@ -1,5 +1,30 @@
 # Frontend E2E status
 
+## Town home shared chrome (2026-09-23)
+
+> Tests only. Product fix is builder PR #22 tip `7d5b9d9` (`cursor/town-artstage-chrome-1654`).  
+> Red run: tests applied on main `81763b1` (no #22). Green run: same tests on `7d5b9d9`.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Viewport 1100×800.  
+> Synthetic `test_fe_kid` only. Production `kids_town.db` is never copied.
+
+| Case ID | Pytest node id | main `81763b1` | #22 `7d5b9d9` | Notes |
+|---------|----------------|----------------|---------------|-------|
+| TC-FE-TOWN-CHROME-01 | `test_town_home_header_matches_guild_chrome` | **FAIL** | **PASS** | Header top 0.0px vs 公會大廳 90.6px (delta 90.6px > 6). `#hdrRes` slots (wood/brick/glass/gear + gold) already matched. |
+| TC-FE-TOWN-CHROME-02 | `test_town_home_footer_aligns_with_guild_stage` | **FAIL** | **PASS** | Footer bottom 730.2px vs 公會 709.4px (delta 20.8px). Five tabs already present. |
+| TC-FE-TOWN-CHROME-03 | `test_town_home_uses_shared_1280x720_stage` | **FAIL** | **PASS** | Town left `body.kt-artstage` false. Guild and quest reference shell already 1280×720. |
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Red on main | `python3 -m pytest tests/test_frontend.py -q -k town_home --tb=short` | **3 failed**, 26 deselected in 3.87s |
+| Green on #22 | `python3 -m pytest tests/test_frontend.py -q -k town_home --tb=short` | **3 passed**, 26 deselected in 3.52s |
+| Full frontend on #22 | `python3 -m pytest tests/test_frontend.py -q` | **29 passed**, 4 warnings in 30.75s |
+
+Do not merge this test PR on its own ahead of #22 if the base is `main`: without the product change the three cases stay red. This branch is based on #22 so the suite is green.
+
+---
+
+# Frontend E2E status (earlier runs)
+
 > Recorded against branch `cursor/harden-ceremony-place-e2e-17ad` (Experience C — real-device hardening).  
 > Base: latest `main` (`4f6cdda`, Phase 1 merged).  
 > Date: 2026-09-19  
