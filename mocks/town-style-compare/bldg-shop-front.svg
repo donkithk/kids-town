@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 220" fill="none">
+  <ellipse cx="140" cy="206" rx="92" ry="10" fill="#5c3d28" opacity=".16"/>
+  <rect x="44" y="176" width="192" height="24" rx="8" fill="#e4d2a4" stroke="#8b5e3c" stroke-width="3"/>
+  <rect x="64" y="96" width="152" height="86" rx="4" fill="#f8efdc" stroke="#5c3d28" stroke-width="4"/>
+  <path d="M40 118h200l-16 28H56l-16-28Z" fill="#f0c14b" stroke="#5c3d28" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M62 118l14 28M92 118l10 28M122 118l6 28M156 118l-2 28M186 118l-8 28M214 118l-12 28" stroke="#fff8e7" stroke-width="6"/>
+  <path d="M48 78h184" stroke="#8b5e3c" stroke-width="6" stroke-linecap="round"/>
+  <rect x="118" y="150" width="44" height="32" rx="6" fill="#6b4428" stroke="#5c3d28" stroke-width="3"/>
+  <circle cx="150" cy="168" r="2.4" fill="#f0c14b"/>
+  <rect x="78" y="124" width="28" height="22" rx="3" fill="#c5e8f7" stroke="#5c3d28" stroke-width="2.5"/>
+  <path d="M92 124v22M78 135h28" stroke="#5c3d28" stroke-width="2"/>
+  <rect x="176" y="158" width="34" height="22" rx="3" fill="#a67c52" stroke="#5c3d28" stroke-width="2.5"/>
+  <rect x="180" y="162" width="26" height="8" rx="2" fill="#c4a06a"/>
+</svg>
