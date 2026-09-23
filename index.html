@@ -1116,10 +1116,33 @@ body.kt-artstage .gsw{
 }
 body.kt-artstage #tab-tasks.tab-content.active,
 body.kt-artstage #tab-honour.tab-content.active,
+body.kt-artstage #tab-shop.tab-content.active,
+body.kt-artstage #tab-expedition.tab-content.active,
 body.kt-artstage #tab-expedition.tab-content.active.kt-wild-on{
   position:absolute;inset:0;width:1280px;height:720px;
   margin:0;padding:0;overflow:hidden;display:block;
 }
+body.kt-artstage #tab-shop.tab-content.active,
+body.kt-artstage #tab-expedition.tab-content.active:not(.kt-wild-on){
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  padding:96px 48px 104px;box-sizing:border-box;
+  background:
+    linear-gradient(180deg, rgba(255,236,206,.28), rgba(92,61,40,0) 140px),
+    #8b5e3c;
+}
+body.kt-artstage #tab-shop .kt-stage-panel,
+body.kt-artstage #tab-expedition:not(.kt-wild-on) .kt-stage-panel{
+  width:880px;max-width:100%;flex:1;min-height:0;overflow:auto;
+  background:rgba(255,245,224,.96);
+  border:6px solid #8b5e3c;border-radius:20px;
+  padding:16px 18px;box-sizing:border-box;
+}
+body.kt-artstage #tab-expedition.kt-wild-on .kt-stage-panel{
+  position:absolute;inset:0;width:1280px;height:720px;max-width:none;
+  margin:0;padding:0;border:0;border-radius:0;background:transparent;
+  overflow:hidden;flex:none;
+}
+body.kt-artstage #tab-shop .shop-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 body.kt-landscape .gs{overflow:visible}
 body.kt-landscape .kt-stage{width:100%;margin:0 auto}
 body.kt-landscape .kt-art{width:100%;height:auto;aspect-ratio:16/9;object-fit:cover}
@@ -1239,13 +1262,17 @@ body.kt-battle .dbx{display:none !important}
    Icons load through ktFooterSetIcon on boot. Gold border = selected. */
 #ktFooter{
   position:sticky;bottom:0;z-index:80;
-  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;
   height:88px;box-sizing:border-box;flex:none;width:100%;
-  margin:0;padding:6px 12px 8px;
-  background:#faf6ef;
-  border-top:3px solid #a67c52;
+  margin:0;padding:8px 14px 10px;
+  background:
+    linear-gradient(180deg, rgba(255,248,236,.55), rgba(255,248,236,0) 16px),
+    repeating-linear-gradient(90deg, #faf6ef 0 14px, #f3e6d0 14px 15px),
+    #faf6ef;
+  border:3px solid #8b5e3c;
+  border-bottom:0;
   border-radius:18px 18px 0 0;
-  box-shadow:0 -5px 16px rgb(59 42 26 / 14%);
+  box-shadow:inset 0 1px 0 #fff8ec, 0 -6px 14px rgba(59,42,26,.16);
 }
 body.kt-artstage #ktFooter{
   position:absolute;left:0;right:0;bottom:0;width:100%;
@@ -1253,8 +1280,8 @@ body.kt-artstage #ktFooter{
 #ktFooter .kt-footer-tab{
   position:relative;min-width:44px;min-height:44px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
-  background:transparent;color:#806b58;
-  border:3px solid transparent;border-radius:14px;
+  background:transparent;color:#7a5b43;
+  border:4px solid transparent;border-radius:16px;
   padding:2px 4px;margin:0;
   font-family:var(--body-font);font-size:16px;font-weight:700;line-height:1.1;
   cursor:pointer;white-space:nowrap;
@@ -1263,13 +1290,25 @@ body.kt-artstage #ktFooter .kt-footer-tab{font-size:18px}
 #ktFooter .kt-footer-tab[aria-current="page"],
 #ktFooter .kt-footer-tab.is-selected{
   color:#3b2a1a;
-  background:#fff0c7;
-  border-color:#f0c14b;
-  box-shadow:inset 0 0 0 2px #d4a017;
+  border-color:transparent;
+  background:
+    linear-gradient(180deg,#fff6d2,#ffe3a0) padding-box,
+    linear-gradient(165deg,#f0c14b,#d4a017) border-box;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.85),
+    inset 0 -3px 0 rgba(168,112,18,.28),
+    0 2px 0 rgba(139,94,60,.22);
   font-weight:800;
 }
-#ktFooter .kt-footer-icon{width:40px;height:40px;object-fit:contain;display:none;pointer-events:none;margin:0 auto}
+#ktFooter .kt-footer-icon-wrap{position:relative;display:block;width:36px;height:36px}
+#ktFooter .kt-footer-icon{width:36px;height:36px;object-fit:contain;display:none;pointer-events:none;margin:0 auto}
 #ktFooter .kt-footer-tab.has-icon .kt-footer-icon{display:block}
+#ktFooter .kt-footer-badge{
+  position:absolute;top:-2px;right:-7px;width:12px;height:12px;
+  border-radius:999px;background:#b52b2b;border:2px solid #faf6ef;
+  box-shadow:0 1px 0 rgba(90,20,20,.25);pointer-events:none;
+}
+#ktFooter .kt-footer-badge[hidden]{display:none !important}
 body.kt-pane-shop .kt-backpack-block{display:none}
 #ktFooter .kt-footer-label{pointer-events:none}
 #ktFooter .kt-footer-tab:focus-visible,
@@ -1588,8 +1627,9 @@ body.kt-pane-shop .kt-backpack-block{display:none}
   <div class="buildings-list" id="availableBuildingsList"></div>
 </div>
 
-<!-- Tab: Expedition -->
+<!-- Tab: Expedition / guild hall — same 1280×720 stage as the quest board -->
 <div class="tab-content" id="tab-expedition">
+  <div class="kt-stage-panel" id="guildStage">
   <div class="expedition-area" id="expeditionArea">
     <!-- Expedition type selector (rendered by JS) -->
     <div class="exp-type-selector" id="expTypeSelector"></div>
@@ -1598,10 +1638,12 @@ body.kt-pane-shop .kt-backpack-block{display:none}
     </div>
     <div id="expTypePanel"></div>
   </div>
+  </div>
 </div>
 
-<!-- Tab: Shop / Inventory -->
+<!-- Tab: Shop / Inventory — same 1280×720 stage as the quest board -->
 <div class="tab-content" id="tab-shop">
+  <div class="kt-stage-panel" id="shopStage">
   <div class="kt-backpack-block">
     <div class="section-title">🎒 材料背包</div>
     <div class="inv-grid" id="inventoryGrid"></div>
@@ -1609,6 +1651,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
   <div class="kt-shop-block">
     <div class="section-title">🏪 建築商店</div>
     <div class="shop-grid" id="shopGrid"></div>
+  </div>
   </div>
 </div>
 
@@ -1890,7 +1933,10 @@ body.kt-pane-shop .kt-backpack-block{display:none}
           <span class="kt-footer-label">城鎮首頁</span>
         </button>
         <button type="button" class="kt-footer-tab" data-kt-nav="expedition" data-kt-icon="guild">
-          <img class="kt-footer-icon" alt="" hidden>
+          <span class="kt-footer-icon-wrap">
+            <img class="kt-footer-icon" alt="" hidden>
+            <span class="kt-footer-badge" hidden></span>
+          </span>
           <span class="kt-footer-label">公會大廳</span>
         </button>
         <button type="button" class="kt-footer-tab q" data-kt-nav="tasks" data-kt-icon="tasks">
@@ -3426,7 +3472,7 @@ function ktSyncArtStage() {
   const tab = document.querySelector('.tab-content.active');
   const id = tab && tab.id;
   const battle = document.body.classList.contains('kt-battle');
-  const on = battle || id === 'tab-tasks' || id === 'tab-honour';
+  const on = battle || id === 'tab-tasks' || id === 'tab-honour' || id === 'tab-shop' || id === 'tab-expedition';
   document.body.classList.toggle('kt-artstage', on);
   const gh = document.querySelector('.gh');
   const hpEl = document.getElementById('hudHp');
@@ -3473,11 +3519,11 @@ function ktFooterSetIcon(nav, src) {
 }
 function ktFooterMountIcons() {
   const base = '/kids/mocks/ui-direction/kit/ui/';
-  ktFooterSetIcon('town', base + 'icon-town-home.svg');
-  ktFooterSetIcon('expedition', base + 'icon-guild-hall.svg');
-  ktFooterSetIcon('tasks', base + 'icon-quest-board.svg');
-  ktFooterSetIcon('shop', base + 'icon-shop.svg');
-  ktFooterSetIcon('backpack', base + 'icon-backpack.svg');
+  ktFooterSetIcon('town', base + 'icon-town-home.svg?v=3');
+  ktFooterSetIcon('expedition', base + 'icon-guild-hall.svg?v=3');
+  ktFooterSetIcon('tasks', base + 'icon-quest-board.svg?v=3');
+  ktFooterSetIcon('shop', base + 'icon-shop.svg?v=3');
+  ktFooterSetIcon('backpack', base + 'icon-backpack.svg?v=3');
 }
 window.ktFooterSetIcon = ktFooterSetIcon;
 window.ktFooterMountIcons = ktFooterMountIcons;

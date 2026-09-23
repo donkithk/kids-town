@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
-  <title id="title">Guild hall</title><desc id="desc">A friendly group of people</desc>
-  <circle cx="23" cy="23" r="7" fill="#f0c14b" fill-opacity=".35" stroke="#8b5e3c" stroke-width="3.5"/>
-  <circle cx="42" cy="25" r="6" fill="#f0c14b" fill-opacity=".22" stroke="#8b5e3c" stroke-width="3.5"/>
-  <path d="M10 51c1-9 6-14 13-14s12 5 13 14" fill="#a67c52" fill-opacity=".35" stroke="#8b5e3c" stroke-width="4" stroke-linecap="round"/>
-  <path d="M32 51c1-7 5-11 10-11 6 0 10 4 12 11" fill="#a67c52" fill-opacity=".2" stroke="#8b5e3c" stroke-width="4" stroke-linecap="round"/>
-  <path d="M18 12c3-3 7-3 10 0M37 15c3-2 6-2 9 0" fill="none" stroke="#d4a017" stroke-width="3" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <path d="M11 52.5c.6-10.2 6.4-16.4 13.6-16.2 7.4.2 12.2 6.2 13.2 16.4Z" fill="#c48a55" stroke="#6b3a22" stroke-width="2.3" stroke-linejoin="round"/>
+  <path d="M31.5 52.8c.8-8.4 5.2-13.2 10.6-13 6.2.2 10.4 5 11.6 13.2Z" fill="#a67c52" stroke="#6b3a22" stroke-width="2.3" stroke-linejoin="round"/>
+  <circle cx="24.2" cy="22.4" r="8.2" fill="#f6e2b8" stroke="#8b5e3c" stroke-width="2.3"/>
+  <circle cx="42.6" cy="24.2" r="6.6" fill="#f3d7a4" stroke="#8b5e3c" stroke-width="2.3"/>
+  <path d="M21.2 22.2c.6 1.4 2.2 2 3.6 1.2M40.6 23.8c.5 1.1 1.8 1.6 2.8.8" fill="none" stroke="#6b3a22" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M18.4 12.2c3.2-3.4 8.2-3.1 10.6.4M36.8 14.4c2.6-2.6 6.6-2.2 8.8.6" fill="none" stroke="#d4a017" stroke-width="2.4" stroke-linecap="round"/>
 </svg>
