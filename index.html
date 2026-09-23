@@ -1141,6 +1141,7 @@ body.kt-artstage .gsw{
   transform-origin:center center;
   transform:translate(-50%, -50%) scale(min(100vw / 1280px, 100dvh / 720px));
 }
+body.kt-artstage #tab-town.tab-content.active,
 body.kt-artstage #tab-tasks.tab-content.active,
 body.kt-artstage #tab-honour.tab-content.active,
 body.kt-artstage #tab-shop.tab-content.active,
@@ -1148,6 +1149,22 @@ body.kt-artstage #tab-expedition.tab-content.active,
 body.kt-artstage #tab-expedition.tab-content.active.kt-wild-on{
   position:absolute;inset:0;width:1280px;height:720px;
   margin:0;padding:0;overflow:hidden;display:block;
+}
+/* Town home uses the same stage chrome as shop/guild: header 72px, footer 88px. */
+body.kt-artstage #tab-town.tab-content.active{
+  display:flex;flex-direction:column;box-sizing:border-box;
+  padding:96px 48px 104px;
+  background:#5c3d28;
+}
+body.kt-artstage #tab-town .mp{
+  flex:1;min-height:0;margin:0;
+  display:flex;flex-direction:column;
+}
+body.kt-artstage #tab-town #townCanvasWrapper{
+  flex:1;height:auto;min-height:0;max-height:none;margin-bottom:0;
+}
+body.kt-artstage #tab-town .town-scene-inner{
+  width:auto;height:100%;max-width:100%;max-height:100%;
 }
 body.kt-artstage #tab-shop.tab-content.active,
 body.kt-artstage #tab-expedition.tab-content.active:not(.kt-wild-on){
@@ -2115,6 +2132,7 @@ async function doLogin() {
       document.getElementById('app').style.display = 'block';
       document.body.classList.add('kt-landscape');
       ktPreferLandscape();
+      ktSyncArtStage();
       updateHeader();  // Show name immediately, don't wait for loadTown
       Audio.startAmbient('town');
       await loadTown();
@@ -2263,6 +2281,7 @@ async function loadTown() {
     if (tasksRes2 && tasksRes2.ok) tasks = await tasksRes2.json();
     updateHeader();
     renderAll();
+    ktSyncArtStage();
   } catch(e) { console.error('loadTown error:', e); }
 }
 
@@ -3484,7 +3503,7 @@ function ktSyncArtStage() {
   const tab = document.querySelector('.tab-content.active');
   const id = tab && tab.id;
   const battle = document.body.classList.contains('kt-battle');
-  const on = battle || id === 'tab-tasks' || id === 'tab-honour' || id === 'tab-shop' || id === 'tab-expedition';
+  const on = battle || id === 'tab-town' || id === 'tab-tasks' || id === 'tab-honour' || id === 'tab-shop' || id === 'tab-expedition';
   document.body.classList.toggle('kt-artstage', on);
   const gh = document.querySelector('.gh');
   const hpEl = document.getElementById('hudHp');
