@@ -3603,12 +3603,24 @@ def get_kid_skills(kid_id):
 
 BOSS_SUMMON_COST = {'gem': 1}  # 召喚 Boss 材料
 
-def enemy_sprite(name):
-    """Monster body image on this record.
+# Approved soft-v1 bodies. Anything else stays on the record's icon.
+_SPRITE_WOLF = '/kids/mocks/ui-direction/kit/sprites/sprite-wolf.png?v=5'
+_SPRITE_BEAR = '/kids/mocks/ui-direction/kit/sprites/sprite-bear.png?v=5'
+_SPRITE_SCORPION = '/kids/mocks/ui-direction/kit/sprites/sprite-scorpion.png?v=5'
+_SPRITE_BOAR = '/kids/mocks/ui-direction/kit/sprites/sprite-boar.png?v=5'
 
-    No same-style enemy sprite is approved yet (the kit boar PNG clashes with
-    the wood/cream UI). sprite stays None so the fight shows this record's icon.
-    """
+
+def enemy_sprite(name, monster_id=None):
+    """Sprite bound to this monster definition. None means show its icon."""
+    name = name or ''
+    if monster_id == 1 or '狼' in name:
+        return _SPRITE_WOLF
+    if monster_id == 2 or '熊' in name:
+        return _SPRITE_BEAR
+    if monster_id == 3 or '蠍' in name or '蝎' in name:
+        return _SPRITE_SCORPION
+    if '豬' in name or '猪' in name:
+        return _SPRITE_BOAR
     return None
 
 
@@ -3691,7 +3703,7 @@ def boss_summon(kid_id):
     boss = [{
         'id': 0, 'monster_id': -1,
         'name': boss_name, 'icon': '👑',
-        'sprite': enemy_sprite(boss_name),
+        'sprite': enemy_sprite(boss_name, -1),
         'max_hp': bstats['hp'], 'hp': bstats['hp'],
         'atk': bstats['atk'], 'def': bstats['def'],
         'spd': region_id + 3,
@@ -3829,7 +3841,7 @@ def battle_start(kid_id):
             'monster_id': monster['id'],
             'name': monster['name'],
             'icon': monster['icon'],
-            'sprite': enemy_sprite(monster['name']),
+            'sprite': enemy_sprite(monster['name'], monster['id']),
             'max_hp': max(1, mstats['hp'] + hp_var),
             'hp': max(1, mstats['hp'] + hp_var),
             'atk': mstats['atk'],
