@@ -1434,6 +1434,9 @@ body.kt-pane-shop .kt-backpack-block{display:none}
   display:block;width:220px !important;height:220px !important;min-height:220px;
   overflow:visible !important;background:transparent;margin:0;
 }
+.battle-scene.kt-wild .monster-card .m-img.kt-enemy-icon{
+  display:flex;align-items:center;justify-content:center;font-size:140px;line-height:1;
+}
 .battle-scene.kt-wild .monster-card .m-img img{
   width:220px !important;height:220px !important;max-width:none;
   object-fit:contain;object-position:bottom center;image-rendering:auto;
@@ -4716,19 +4719,6 @@ async function summonBoss(regionId) {
   } catch(e) { showToast('⚠️ 網絡錯誤: '+e.message, 'error'); }
 }
 
-/* Sprite follows the same enemy record as the name and HP (monster_id / name). */
-function ktEnemySprite(m) {
-  if (m && m.sprite) return m.sprite;
-  const name = String((m && m.name) || '');
-  const mid = m && m.monster_id;
-  const base = '/kids/mocks/ui-direction/kit/sprites/';
-  if (mid === 1 || name.indexOf('狼') >= 0) return base + 'sprite-wolf.svg?v=1';
-  if (name.indexOf('豬') >= 0 || name.indexOf('猪') >= 0) return base + 'sprite-boar.png?v=2';
-  if (mid === 2 || name.indexOf('熊') >= 0) return base + 'sprite-bear.svg?v=1';
-  if (mid === 3 || name.indexOf('蠍') >= 0 || name.indexOf('蝎') >= 0) return base + 'sprite-scorpion.svg?v=1';
-  return base + 'sprite-boss.svg?v=1';
-}
-
 function renderBattleMode(exp) {
   const bd = (typeof exp.expedition_data === 'string')
     ? JSON.parse(exp.expedition_data)
@@ -4752,10 +4742,13 @@ function renderBattleMode(exp) {
     const isDead = m.hp <= 0;
     if (isDead) window._deathPlayed[m.id] = true;
     const pct = Math.max(0, Math.round(m.hp / (m.max_hp || 1) * 100));
-    const sprite = ktEnemySprite(m);
+    const sprite = (m.sprite && String(m.sprite).indexOf('sprite-boar.png') !== -1) ? m.sprite : '';
+    const picture = sprite
+      ? `<div class="m-img"><img src="${sprite}" alt=""></div>`
+      : `<div class="m-img kt-enemy-icon">${escapeHtml(m.icon || '')}</div>`;
     return `<div class="monster-card${isDead ? ' dead' : ''}${showMonsterTarget && !isDead ? ' targetable' : ''}" data-idx="${m.id}" onclick="${!isDead ? 'onMonsterClick('+m.id+')' : ''}">
       <div class="target-arrow">▼</div>
-      <div class="m-img"><img src="${sprite}" alt=""></div>
+      ${picture}
       <div class="m-name">${m.icon||''} ${m.name}</div>
       <div class="m-hp-bar"><div class="m-hp-fill" style="width:${pct}%"></div></div>
       <div class="m-hp-text">${m.hp}/${m.max_hp}</div>

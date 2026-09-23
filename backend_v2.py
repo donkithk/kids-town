@@ -3603,29 +3603,17 @@ def get_kid_skills(kid_id):
 
 BOSS_SUMMON_COST = {'gem': 1}  # 召喚 Boss 材料
 
-_ENEMY_SPRITES = {
-    1: '/kids/mocks/ui-direction/kit/sprites/sprite-wolf.svg?v=1',
-    2: '/kids/mocks/ui-direction/kit/sprites/sprite-bear.svg?v=1',
-    3: '/kids/mocks/ui-direction/kit/sprites/sprite-scorpion.svg?v=1',
-}
+# Approved enemy art already in the kit. sprite-boar.png is 草原野豬 only.
+# 野狼, 白熊, 巨蠍, and bosses have no matching file yet — sprite stays None.
 _SPRITE_BOAR = '/kids/mocks/ui-direction/kit/sprites/sprite-boar.png?v=2'
-_SPRITE_BOSS = '/kids/mocks/ui-direction/kit/sprites/sprite-boss.svg?v=1'
 
 
-def enemy_sprite(monster_id, name):
-    """Pick the fight sprite from the same enemy id/name that labels the HUD."""
-    if monster_id in _ENEMY_SPRITES:
-        return _ENEMY_SPRITES[monster_id]
+def enemy_sprite(name):
+    """Image attribute for this monster definition. Never a different animal's file."""
     name = name or ''
-    if '狼' in name:
-        return _ENEMY_SPRITES[1]
     if '豬' in name or '猪' in name:
         return _SPRITE_BOAR
-    if '熊' in name:
-        return _ENEMY_SPRITES[2]
-    if '蠍' in name or '蝎' in name:
-        return _ENEMY_SPRITES[3]
-    return _SPRITE_BOSS
+    return None
 
 
 def boss_is_unlocked(db, kid_id, region_id):
@@ -3707,7 +3695,7 @@ def boss_summon(kid_id):
     boss = [{
         'id': 0, 'monster_id': -1,
         'name': boss_name, 'icon': '👑',
-        'sprite': enemy_sprite(-1, boss_name),
+        'sprite': enemy_sprite(boss_name),
         'max_hp': bstats['hp'], 'hp': bstats['hp'],
         'atk': bstats['atk'], 'def': bstats['def'],
         'spd': region_id + 3,
@@ -3845,7 +3833,7 @@ def battle_start(kid_id):
             'monster_id': monster['id'],
             'name': monster['name'],
             'icon': monster['icon'],
-            'sprite': enemy_sprite(monster['id'], monster['name']),
+            'sprite': enemy_sprite(monster['name']),
             'max_hp': max(1, mstats['hp'] + hp_var),
             'hp': max(1, mstats['hp'] + hp_var),
             'atk': mstats['atk'],
