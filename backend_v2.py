@@ -57,7 +57,12 @@ def serve_kids_index():
     for fname in ['index_v2.html', 'index.html']:
         path = os.path.join(HTML_DIR, fname)
         if os.path.isfile(path):
-            return open(path, encoding='utf-8').read()
+            with open(path, encoding='utf-8') as f:
+                html = f.read()
+            resp = make_response(html)
+            resp.headers['Content-Type'] = 'text/html; charset=utf-8'
+            resp.headers['Cache-Control'] = 'no-store'
+            return resp
     return jsonify({'error': 'index not found'}), 404
 
 def _denied_static_filename(filename):
