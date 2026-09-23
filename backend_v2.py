@@ -3604,10 +3604,10 @@ def get_kid_skills(kid_id):
 BOSS_SUMMON_COST = {'gem': 1}  # 召喚 Boss 材料
 
 # Approved soft-v1 bodies. Anything else stays on the record's icon.
-_SPRITE_WOLF = '/kids/mocks/ui-direction/kit/sprites/sprite-wolf.png?v=5'
-_SPRITE_BEAR = '/kids/mocks/ui-direction/kit/sprites/sprite-bear.png?v=5'
-_SPRITE_SCORPION = '/kids/mocks/ui-direction/kit/sprites/sprite-scorpion.png?v=5'
-_SPRITE_BOAR = '/kids/mocks/ui-direction/kit/sprites/sprite-boar.png?v=5'
+_SPRITE_WOLF = '/kids/mocks/ui-direction/kit/sprites/sprite-wolf.png?v=6'
+_SPRITE_BEAR = '/kids/mocks/ui-direction/kit/sprites/sprite-bear.png?v=6'
+_SPRITE_SCORPION = '/kids/mocks/ui-direction/kit/sprites/sprite-scorpion.png?v=6'
+_SPRITE_BOAR = '/kids/mocks/ui-direction/kit/sprites/sprite-boar.png?v=6'
 
 
 def enemy_sprite(name, monster_id=None):
