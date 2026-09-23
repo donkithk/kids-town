@@ -9,7 +9,7 @@
 Status map after a run: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).  
 Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01`、`TC-FE-PLACE-BUILD-01`；(B) [`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md).
 
-城鎮首頁共享 chrome（builder #22，TDD red）: `TC-FE-TOWN-CHROME-01`（header）、`TC-FE-TOWN-CHROME-02`（footer）、`TC-FE-TOWN-CHROME-03`（1280×720 stage）。呢三條喺而家 main **故意紅**；唔好放寬 tolerance 去遷就舊綠色地圖。
+城鎮首頁共享 chrome（builder #22）: `TC-FE-TOWN-CHROME-01`（header）、`TC-FE-TOWN-CHROME-02`（footer）、`TC-FE-TOWN-CHROME-03`（1280×720 stage）。喺 main `81763b1`（未有 #22）**紅**；喺 #22 tip `7d5b9d9` **綠**。唔好放寬 tolerance 去遷就舊綠色地圖。數字見 [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md)。
 
 共用前置（除另註）：
 
@@ -271,12 +271,12 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | 欄 | 內容 |
 |----|------|
 | **ID** | TC-FE-TOWN-CHROME-01 |
-| **優先級** | P0（builder #22 前置，TDD red） |
+| **優先級** | P0（builder #22） |
 | **建議模組** | `tests/test_frontend.py` |
 | **前置** | 空庫合成 kid `test_fe_kid` / PIN fixture。Viewport 固定 1100×800（1280×720 舞台會 letterbox，scale &lt; 1）。 |
 | **步驟** | 1. 小朋友 PIN 登入，停喺 **城鎮首頁**（`#tab-town` active） 2. 讀 `#hdrRes` 3. 底欄撳「公會大廳」 4. 再讀同一條 header |
 | **預期** | `#hdrRes` 可見，材料格同公會一樣：wood／brick／glass／gear，加金幣（`#hudCo`、💰）。`.gh` 同 `#hdrRes` 嘅 on-screen top／height／width 同公會大廳相差 ≤ 6px。公會大廳本身已經係 `body.kt-artstage` 嘅 1280×720 shell。 |
-| **而家** | **RED**。`#hdrRes` 槽位已經係共用 DOM，但城鎮首頁冇入 art-stage，header 唔會跟舞台 scale／letterbox，高度同垂直位置同公會唔同。Builder #22 應令呢條變綠。唔好放寬 tolerance。 |
+| **結果** | main `81763b1` **FAIL**（header top 0.0px vs 公會 90.6px，delta 90.6px）。#22 `7d5b9d9` **PASS**。唔好放寬 tolerance。 |
 
 ---
 
@@ -285,12 +285,12 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | 欄 | 內容 |
 |----|------|
 | **ID** | TC-FE-TOWN-CHROME-02 |
-| **優先級** | P0（builder #22 前置，TDD red） |
+| **優先級** | P0（builder #22） |
 | **建議模組** | `tests/test_frontend.py` |
 | **前置** | 同 TC-FE-TOWN-CHROME-01 |
 | **步驟** | 1. 登入城鎮首頁 2. 讀 `#ktFooter` 五個標籤同底邊 3. 撳「公會大廳」 4. 比較 footer bottom 同 viewport 底下空隙 |
 | **預期** | Footer 五個 tab，順序固定：**城鎮首頁｜公會大廳｜任務板｜商店｜背包**。城鎮首頁 footer 底邊同公會大廳一樣貼住 1280×720 舞台底（`position`／`bottom` 同 on-screen bottom 相差 ≤ 6px）。舞台框下面唔好再多一截啡色空位。 |
-| **而家** | **RED**。五個 tab 已經喺共用 `#ktFooter`，但城鎮首頁 footer 跟住舊地圖欄流動（sticky），底邊唔貼公會嗰個舞台底，下面見到啡色空隙。Builder #22 應令呢條變綠。 |
+| **結果** | main `81763b1` **FAIL**（footer bottom 730.2px vs 公會 709.4px，delta 20.8px）。#22 `7d5b9d9` **PASS**。 |
 
 ---
 
@@ -299,12 +299,12 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | 欄 | 內容 |
 |----|------|
 | **ID** | TC-FE-TOWN-CHROME-03 |
-| **優先級** | P0（builder #22 前置，TDD red） |
+| **優先級** | P0（builder #22） |
 | **建議模組** | `tests/test_frontend.py` |
 | **前置** | 同 TC-FE-TOWN-CHROME-01。對照頁：公會大廳（`#tab-expedition`，冇 `#tab-guild`）同任務板（`#tab-tasks`）。 |
-| **步驟** | 1. 登入城鎮首頁 2. 撳「公會大廳」確認 shell（`body.kt-artstage`、`.gsw` letterbox、面板 CSS 1280×720、`position:absolute`） 3. 撳「任務板」確認同公會同一個 shell 4. 返「城鎮首頁」 |
-| **預期** | 城鎮首頁都開 `body.kt-artstage`。`#tab-town` 喺 `.gsw` 入面，CSS 同公會面板一樣係 absolute 1280×720。`.gsw` 同面板嘅 on-screen 尺寸同公會相差 ≤ 6px。任務板必須先同公會一致（參考壳冇變）。 |
-| **而家** | **RED**。`ktSyncArtStage()` 唔會為 `#tab-town` 加 `kt-artstage`；absolute 1280×720 規則冇包括 `#tab-town`。城鎮內容仍然係 `.mp` / `#townCanvasWrapper` 綠色地圖，喺普通文件流，唔係共享舞台。Builder #22 應令呢條變綠。唔好刪斷言去遷就舊地圖。 |
+| **步驟** | 1. 登入城鎮首頁 2. 撳「公會大廳」確認 shell（`body.kt-artstage`、`.gsw` letterbox、面板 layout 1280×720、`position:absolute`） 3. 撳「任務板」確認同公會同一個 shell 4. 返「城鎮首頁」 |
+| **預期** | 城鎮首頁都開 `body.kt-artstage`。`#tab-town` 喺 `.gsw` 入面，layout 同公會面板一樣係 absolute 1280×720。`.gsw` 同面板嘅 on-screen 尺寸同公會相差 ≤ 6px。任務板必須先同公會一致（參考壳冇變）。 |
+| **結果** | main `81763b1` **FAIL**（`body.kt-artstage` 係 false；`#tab-town` 仍係 `.mp` / `#townCanvasWrapper` 普通流）。#22 `7d5b9d9` **PASS**。唔好刪斷言去遷就舊地圖。 |
 
 ---
 
