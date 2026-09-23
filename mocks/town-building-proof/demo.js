@@ -143,23 +143,64 @@
     });
   }
 
+  function buildGround() {
+    var layer = document.createElement("div");
+    layer.className = "ground";
+    layer.setAttribute("aria-hidden", "true");
+    village.appendChild(layer);
+    for (var r = -2; r <= 5; r += 1) {
+      for (var c = -3; c <= 6; c += 1) {
+        if (c >= 0 && c < COLS && r >= 0 && r < ROWS) continue;
+        var diff = c - r;
+        var sum = c + r;
+        if (diff < -4 || diff > 5 || sum < -1 || sum > 6) continue;
+        var tile = document.createElement("div");
+        tile.className = "ground-tile";
+        tile.style.setProperty("--c", String(c));
+        tile.style.setProperty("--r", String(r));
+        var img = document.createElement("img");
+        img.alt = "";
+        img.className = "slab";
+        var raised = sum <= 1 && ((c + r + 5) % 3 === 0);
+        if (r >= 3) img.src = "assets/ground-path.svg";
+        else if (raised) {
+          img.src = "assets/ground-step.svg";
+          tile.classList.add("is-raised");
+        } else if ((c + r) % 2) img.src = "assets/ground-tile-alt.svg";
+        else img.src = "assets/ground-tile.svg";
+        tile.appendChild(img);
+        layer.appendChild(tile);
+      }
+    }
+  }
+
   function buildGrid() {
+    buildGround();
     for (var r = 0; r < ROWS; r += 1) {
       for (var c = 0; c < COLS; c += 1) {
         var pad = document.createElement("div");
         pad.className = "pad";
         pad.style.setProperty("--c", String(c));
         pad.style.setProperty("--r", String(r));
+        var slab = document.createElement("img");
+        slab.className = "slab";
+        slab.alt = "";
+        slab.src = "assets/ground-plot.svg";
+        var shadow = document.createElement("img");
+        shadow.className = "shadow";
+        shadow.alt = "";
+        shadow.src = "assets/shadow-iso.svg";
+        shadow.hidden = true;
+        var mark = document.createElement("img");
+        mark.className = "mark";
+        mark.alt = "";
+        mark.hidden = true;
         var cap = document.createElement("p");
         cap.className = "cap";
         cap.hidden = true;
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = "cell-btn";
-        var mark = document.createElement("img");
-        mark.className = "mark";
-        mark.alt = "";
-        mark.hidden = true;
         var sprite = document.createElement("img");
         sprite.className = "sprite";
         sprite.alt = "";
@@ -171,14 +212,16 @@
         var badge = document.createElement("span");
         badge.className = "badge";
         badge.hidden = true;
-        btn.appendChild(mark);
         btn.appendChild(sprite);
         btn.appendChild(ghost);
         btn.appendChild(badge);
+        pad.appendChild(slab);
+        pad.appendChild(shadow);
+        pad.appendChild(mark);
         pad.appendChild(cap);
         pad.appendChild(btn);
         village.appendChild(pad);
-        var cell = { c: c, r: r, el: pad, btn: btn, mark: mark, sprite: sprite, ghost: ghost, cap: cap, badge: badge };
+        var cell = { c: c, r: r, el: pad, btn: btn, mark: mark, shadow: shadow, sprite: sprite, ghost: ghost, cap: cap, badge: badge };
         pads.push(cell);
         (function (cell) {
           btn.addEventListener("click", function () { onCell(cell.c, cell.r); });
@@ -358,6 +401,8 @@
     } else {
       cell.ghost.hidden = true;
     }
+
+    cell.shadow.hidden = !(shown || showGhost);
 
     if (shown) {
       cell.sprite.hidden = false;

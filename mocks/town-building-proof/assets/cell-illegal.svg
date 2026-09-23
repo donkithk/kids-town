@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 210" fill="none">
-  <polygon points="120,188 196,152 120,116 44,152" fill="#f6cfc8" fill-opacity=".82" stroke="#b33a2b" stroke-width="4" stroke-dasharray="8 6" stroke-linejoin="round"/>
-  <path d="M104 140l32 22M136 140l-32 22" stroke="#b33a2b" stroke-width="5" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-84 -50 168 120" fill="none">
+  <polygon points="0,-50 84,0 0,50 -84,0" fill="#f6cfc8" fill-opacity=".78" stroke="#b33a2b" stroke-width="4" stroke-dasharray="8 6" stroke-linejoin="round"/>
+  <path d="M-14-6l28 22M14-6l-28 22" stroke="#b33a2b" stroke-width="5" stroke-linecap="round"/>
 </svg>

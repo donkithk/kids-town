@@ -148,11 +148,52 @@
   bottom: 84px;
 }
 
-.village.is-iso .pad {
+.village.is-iso .pad,
+.ground-tile {
   width: 160px;
   height: 158px;
   left: calc(45% + (var(--c) - var(--r)) * 84px - 80px);
   top: calc((var(--c) + var(--r)) * 50px);
+}
+
+/* Footprint center inside the 160×158 pad is (80px, 121px).
+   Slab viewBox center (0,0) is 84px across and 50px down. */
+.pad > .slab,
+.ground-tile > .slab,
+.pad > .mark {
+  position: absolute;
+  width: 168px;
+  height: 120px;
+  left: -4px;
+  top: 71px;
+  pointer-events: none;
+}
+
+.ground-tile.is-raised > .slab { top: 63px; }
+
+.pad > .shadow {
+  position: absolute;
+  z-index: 1;
+  width: 200px;
+  height: 100px;
+  left: -20px;
+  top: 71px;
+  pointer-events: none;
+}
+
+.pad > .mark { z-index: 2; }
+
+.ground {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.ground-tile {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .pad.is-locked,
@@ -170,16 +211,15 @@
 
 .cell-btn {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   width: 100%;
-  height: 142px;
+  height: 100%;
   min-height: 44px;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: pointer;
+  z-index: 3;
 }
 
 .pad.is-idle-empty .cell-btn {
@@ -206,7 +246,7 @@
   position: absolute;
   z-index: 5;
   left: 50%;
-  top: 62%;
+  top: 78%;
   margin: 0;
   padding: 2px 8px;
   border: 2px solid var(--gold);
@@ -229,6 +269,8 @@
 }
 
 .cell-btn img[hidden],
+.pad > .shadow[hidden],
+.pad > .mark[hidden],
 .cap[hidden],
 .badge[hidden],
 .oob-mark[hidden],
@@ -250,8 +292,8 @@
 .empty-hint {
   position: absolute;
   z-index: 5;
-  left: 62%;
-  top: 46%;
+  left: 58%;
+  top: 14px;
   margin: 0;
   padding: 8px 14px;
   border: 3px solid var(--wood);
@@ -260,7 +302,7 @@
   font-size: 16px;
   font-weight: 800;
   pointer-events: none;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
 }
 
 .oob-mark {
@@ -399,7 +441,7 @@ body.sheet-page {
 .cutouts .art {
   width: 100%;
   border-radius: 12px;
-  background: #9ec56a url("assets/meadow.svg") center/cover no-repeat;
+  background: #6d9844 url("assets/ground-tile.svg") center 70% / 118% auto no-repeat;
 }
 
 .cutouts img { width: 100%; height: auto; display: block; }

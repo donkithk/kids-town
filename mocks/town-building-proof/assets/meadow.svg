@@ -1,42 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1184 520" fill="none">
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#d9f3fc"/>
-      <stop offset="1" stop-color="#b7e4f6"/>
+      <stop offset="0" stop-color="#d7f2fc"/>
+      <stop offset="1" stop-color="#b7e3f4"/>
     </linearGradient>
-    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#c6e092"/>
-      <stop offset=".55" stop-color="#9ec56a"/>
-      <stop offset="1" stop-color="#7eae52"/>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fb85a"/>
+      <stop offset="1" stop-color="#6d9844"/>
     </linearGradient>
   </defs>
   <rect width="1184" height="520" fill="url(#sky)"/>
-  <g fill="#fff" opacity=".88">
-    <ellipse cx="160" cy="54" rx="74" ry="20"/>
-    <ellipse cx="214" cy="46" rx="46" ry="16"/>
-    <ellipse cx="900" cy="62" rx="90" ry="22"/>
-    <ellipse cx="968" cy="54" rx="48" ry="15"/>
+  <g fill="#fff" opacity=".9">
+    <ellipse cx="180" cy="48" rx="78" ry="20"/>
+    <ellipse cx="236" cy="40" rx="46" ry="16"/>
+    <ellipse cx="860" cy="56" rx="96" ry="22"/>
+    <ellipse cx="934" cy="48" rx="50" ry="15"/>
   </g>
-  <path d="M0 150c120-46 220-18 340-40 140-26 200 22 340 2 120-18 220 8 504 36v48H0v-46Z" fill="#b7d48a"/>
-  <path d="M0 196c150-28 250 8 390-12 160-22 230 26 400 6 130-16 220 12 394 28v36H0v-58Z" fill="#a4c978"/>
-  <path d="M0 230c180 16 260-36 420-8 170 30 240-20 420 4 150 18 220-8 344 24v270H0V230Z" fill="url(#grass)"/>
-  <ellipse cx="592" cy="300" rx="460" ry="150" fill="#e7d7a4" opacity=".28"/>
-  <ellipse cx="220" cy="390" rx="180" ry="60" fill="#b7d67e" opacity=".45"/>
-  <ellipse cx="980" cy="360" rx="200" ry="70" fill="#8fbf5c" opacity=".35"/>
-  <path d="M80 470c180-20 260 16 420-6 170-24 250 20 420 4 80-8 140 6 184 16" stroke="#d8bc84" stroke-width="18" stroke-linecap="round" opacity=".8"/>
+  <!-- Distant hills only. The play surface is the iso tile field on top. -->
+  <path d="M0 132c90-28 170-8 250-22 110-18 160 16 270 4 120-14 190 10 310 2 100-8 180 6 354 24v28H0v-36Z" fill="#b7d48a"/>
+  <path d="M0 168c140-22 230 10 360-8 150-20 220 18 380 2 120-12 210 8 444 22v40H0v-56Z" fill="#8fb86a"/>
+  <path d="M0 210c160 8 250-24 400-4 160 22 230-16 400 6 140 16 200-6 384 18v286H0V210Z" fill="url(#far)"/>
   <g>
-    <rect x="78" y="250" width="10" height="42" rx="3" fill="#8b5e3c"/>
-    <circle cx="83" cy="242" r="26" fill="#6fa344"/>
-    <circle cx="66" cy="252" r="16" fill="#8fbf55"/>
-    <rect x="1088" y="236" width="12" height="52" rx="3" fill="#6b4428"/>
-    <circle cx="1094" cy="220" r="34" fill="#6ea04a"/>
-    <circle cx="1068" cy="236" r="20" fill="#8fbf55"/>
+    <rect x="70" y="188" width="10" height="36" rx="3" fill="#8b5e3c"/>
+    <circle cx="75" cy="180" r="22" fill="#6fa344"/>
+    <circle cx="60" cy="188" r="14" fill="#8fbf55"/>
+    <rect x="1096" y="176" width="12" height="46" rx="3" fill="#6b4428"/>
+    <circle cx="1102" cy="164" r="28" fill="#6ea04a"/>
+    <circle cx="1078" cy="176" r="16" fill="#8fbf55"/>
   </g>
   <g>
-    <circle cx="250" cy="430" r="4" fill="#e07a8a"/>
-    <circle cx="270" cy="442" r="3.5" fill="#f0c14b"/>
-    <circle cx="900" cy="448" r="4" fill="#fff8e7"/>
-    <circle cx="924" cy="436" r="3.5" fill="#e07a8a"/>
-    <circle cx="360" cy="210" r="3" fill="#fff"/>
+    <circle cx="210" cy="400" r="3.5" fill="#e07a8a"/>
+    <circle cx="248" cy="430" r="3" fill="#f0c14b"/>
+    <circle cx="980" cy="420" r="3.5" fill="#fff8e7"/>
+    <circle cx="1010" cy="448" r="3" fill="#e07a8a"/>
   </g>
 </svg>

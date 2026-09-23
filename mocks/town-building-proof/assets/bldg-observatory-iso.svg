@@ -1,5 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 210" fill="none">
-  <ellipse cx="120" cy="198" rx="72" ry="12" fill="#5c3d28" opacity=".18"/>
   <polygon points="120,188 186,156 120,124 54,156" fill="#e4d2a4" stroke="#8b5e3c" stroke-width="3" stroke-linejoin="round"/>
   <polygon points="120,176 62,150 62,102 120,128" fill="#e8d7b6" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
   <polygon points="120,176 178,150 178,102 120,128" fill="#f8efdc" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
