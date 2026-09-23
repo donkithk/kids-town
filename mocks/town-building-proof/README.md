@@ -51,6 +51,8 @@ python -m http.server 8767
 | 9 | 競技場 | `assets/bldg-arena-iso.svg` | 💰1000 🪵40 🧱30 ⚙️20 💎5 |
 | 10 | 天文台 | `assets/bldg-observatory-iso.svg` | 💰1500 🪵50 🧱40 ⚙️25 💎10 🪟3 |
 
+Header／Footer 樣式係 #22／#25 嘅 `chrome.css` 快照，圖示喺 `assets/ui/`，所以喺呢個資料夾開 server 都載到，唔使靠上一層路徑。
+
 共用格仔（由 #25 A 再改）：
 
 | 檔 | 用途 |

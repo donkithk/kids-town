@@ -1,6 +1,5 @@
-/* Building proof pack. Chrome comes from ../town-style-compare/mock.css
-   (locked 1280×720 header / footer / letterbox). This file only adds the
-   place / move demo and the catalog sheet. */
+/* Building proof pack. Locked chrome is chrome.css (1280×720 header / footer /
+   letterbox). This file only adds the place / move demo and the catalog sheet. */
 
 .sr-only {
   position: absolute;

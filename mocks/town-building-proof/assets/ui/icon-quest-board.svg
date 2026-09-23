@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Quest board</title><desc id="desc">A scroll and map</desc>
+  <path d="M17 12c-4 0-6 3-6 7v30c0-4 3-6 6-6h34V12Z" fill="#faf6ef" stroke="#8b5e3c" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M51 12c4 0 6 3 6 7v30c0-4-3-6-6-6H17" fill="#f0c14b" fill-opacity=".25" stroke="#8b5e3c" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M22 22h20M22 29h13M22 36h24" stroke="#a67c52" stroke-width="3" stroke-linecap="round"/>
+  <path d="m39 21 5 5-5 5-5-5Z" fill="#d4a017" stroke="#8b5e3c" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M11 49h46" stroke="#8b5e3c" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

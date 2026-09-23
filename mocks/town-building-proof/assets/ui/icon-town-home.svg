@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Town home</title><desc id="desc">A cozy little house</desc>
+  <path d="M10 30.5 32 12l22 18.5" fill="none" stroke="#8b5e3c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M15 28v25h34V28" fill="#f0c14b" fill-opacity=".28" stroke="#8b5e3c" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M27 53V38h10v15M22 29h20" fill="none" stroke="#8b5e3c" stroke-width="4" stroke-linecap="round"/>
+  <path d="M29 18v-6h7v5" fill="none" stroke="#a67c52" stroke-width="3.5" stroke-linecap="round"/>
+</svg>
