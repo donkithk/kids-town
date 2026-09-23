@@ -1299,31 +1299,48 @@ body.kt-battle .act{display:none !important}
 .battle-scene.kt-wild{
   position:relative;display:flex;flex-direction:column;
   width:1280px;height:720px;flex:none;box-sizing:border-box;padding-top:84px;
-  background:transparent;border-radius:0;overflow:hidden;
+  border-radius:0;overflow:hidden;
+  background-color:#7cb342;
+  background-image:url("/kids/mocks/ui-direction/kit/bg/bg-wilderness-grass.png?v=2");
+  background-position:center;background-size:cover;background-repeat:no-repeat;
+}
+.battle-scene.kt-wild .kt-grass,
+.battle-scene.kt-wild .kt-grass-img{
+  position:absolute;inset:0;z-index:0;width:100%;height:100%;
+  pointer-events:none;
 }
 .battle-scene.kt-wild .kt-grass{
-  position:absolute;inset:0;z-index:0;
-  background:#7cb342 url("mocks/ui-direction/kit/bg/bg-wilderness-grass.png") center/cover no-repeat;
+  background-color:transparent;
+  background-image:url("/kids/mocks/ui-direction/kit/bg/bg-wilderness-grass.png?v=2");
+  background-position:center;background-size:cover;background-repeat:no-repeat;
+}
+.battle-scene.kt-wild .kt-grass-img{
+  display:block;object-fit:cover;object-position:center;
 }
 .battle-scene.kt-wild .kt-toast{position:relative;left:auto;top:auto;transform:none;z-index:2;margin:10px auto 0}
 .battle-scene.kt-wild .kt-field-stage{
-  position:relative;z-index:1;flex:1;display:flex;align-items:flex-end;justify-content:space-between;
-  gap:16px;padding:8px 16px 4px;
+  position:relative;z-index:2;flex:1;display:grid;
+  grid-template-columns:300px 1fr auto;
+  align-items:end;justify-content:stretch;
+  gap:16px;padding:8px 24px 4px;background:transparent;
 }
-.battle-scene.kt-wild .kt-hero-actor{width:280px;flex:0 0 auto;align-self:flex-end}
+.battle-scene.kt-wild .kt-hero-actor{grid-column:1;width:300px;justify-self:start;align-self:end;z-index:2}
+.battle-scene.kt-wild .kt-hero-actor .kt-sprite{
+  display:block;width:300px;height:390px;object-fit:contain;object-position:bottom center;background:transparent;
+}
 .battle-scene.kt-wild .kt-actor-hp{background:#f7edd8;border:2px solid #c4a574;border-radius:10px;padding:4px 8px;font-weight:800;color:#3a2616;font-size:13px}
 .battle-scene.kt-wild .kt-bar{height:8px;background:#e7d3ae;border-radius:99px;overflow:hidden;margin-top:3px}
 .battle-scene.kt-wild .kt-bar span{display:block;height:100%;background:linear-gradient(90deg,#e85d4c,#f0a202)}
 .battle-scene.kt-wild .battle-content{position:relative;inset:auto;display:contents;pointer-events:none}
 .battle-scene.kt-wild .monster-zone{
-  position:static;inset:auto;display:flex;flex-direction:row;flex-wrap:wrap;
-  align-items:flex-end;justify-content:flex-end;min-height:0;min-width:0;padding:0;
-  flex:1 1 auto;pointer-events:auto;
+  grid-column:3;position:static;inset:auto;display:flex;flex-direction:row;flex-wrap:nowrap;
+  align-items:flex-end;justify-content:flex-end;min-height:0;min-width:0;padding:0;margin:0;
+  width:auto;justify-self:end;align-self:end;z-index:2;pointer-events:auto;
 }
 .battle-scene.kt-wild .monster-row{
-  position:static;inset:auto;display:flex;flex-direction:row;flex-wrap:wrap;gap:10px;
-  align-items:flex-end;justify-content:flex-end;width:auto;max-width:100%;height:auto;
-  margin-left:auto;padding:0;flex:0 1 auto;pointer-events:auto;
+  position:static;inset:auto;display:flex;flex-direction:row;flex-wrap:nowrap;gap:12px;
+  align-items:flex-end;justify-content:flex-end;width:auto;max-width:none;height:auto;
+  margin:0;padding:0;flex:0 0 auto;pointer-events:auto;
 }
 .battle-scene.kt-wild .monster-card{
   position:relative;left:auto;top:auto;width:300px;height:auto;margin:0;padding:0;
@@ -1332,8 +1349,14 @@ body.kt-battle .act{display:none !important}
   align-self:flex-end;flex:0 0 auto;height:auto;
   pointer-events:auto;box-shadow:none;
 }
-.battle-scene.kt-wild .monster-card .m-img{display:block;width:260px;height:auto;overflow:visible;background:transparent}
-.battle-scene.kt-wild .monster-card .m-img img{width:100%;height:auto;object-fit:contain}
+.battle-scene.kt-wild .monster-card .m-img{
+  display:block;width:220px !important;height:220px !important;min-height:220px;
+  overflow:visible !important;background:transparent;margin:0;
+}
+.battle-scene.kt-wild .monster-card .m-img img{
+  width:220px !important;height:220px !important;max-width:none;
+  object-fit:contain;object-position:bottom center;image-rendering:auto;
+}
 .battle-scene.kt-wild .monster-card .m-hp-bar{display:block;width:100%;height:8px;background:#e7d3ae;border-radius:99px;margin-top:4px}
 .battle-scene.kt-wild .monster-card .m-hp-fill{background:#e85d4c}
 .battle-scene.kt-wild .monster-card .m-name,
@@ -4578,7 +4601,7 @@ function renderBattleMode(exp) {
     const isDead = m.hp <= 0;
     if (isDead) window._deathPlayed[m.id] = true;
     const pct = Math.max(0, Math.round(m.hp / (m.max_hp || 1) * 100));
-    const sprite = 'mocks/ui-direction/kit/sprites/sprite-boar.png';
+    const sprite = '/kids/mocks/ui-direction/kit/sprites/sprite-boar.png?v=2';
     return `<div class="monster-card${isDead ? ' dead' : ''}${showMonsterTarget && !isDead ? ' targetable' : ''}" data-idx="${m.id}" onclick="${!isDead ? 'onMonsterClick('+m.id+')' : ''}">
       <div class="target-arrow">▼</div>
       <div class="m-img"><img src="${sprite}" alt=""></div>
@@ -4649,12 +4672,13 @@ function renderBattleMode(exp) {
 
   const playerPct = Math.max(0, Math.min(100, Math.round(pHp / (pMax || 1) * 100)));
   return `<div class="battle-scene kt-wild kt-field region-${bd.region_id || 1}" id="battleScene">
+    <img class="kt-grass-img" alt="" src="/kids/mocks/ui-direction/kit/bg/bg-wilderness-grass.png?v=2">
     <div class="kt-grass" aria-hidden="true"></div>
     <p class="kt-toast" id="wildToast" aria-live="polite">${escapeHtml(toastMsg)}</p>
     <div class="vh" role="meter" id="hp-meter" aria-label="${escapeHtml(primary.name||'怪物')}生命" aria-valuemin="0" aria-valuemax="${primary.max_hp||0}" aria-valuenow="${Math.max(0, primary.hp||0)}">${Math.max(0, primary.hp||0)} / ${primary.max_hp||0}</div>
     <div class="kt-field-stage" id="mainContent">
       <div class="kt-hero-actor">
-        <img class="kt-sprite" src="mocks/ui-direction/kit/sprites/sprite-hero.png" alt="">
+        <img class="kt-sprite" src="/kids/mocks/ui-direction/kit/sprites/sprite-hero.png?v=2" alt="">
         <div class="kt-actor-hp">HP ${pHp}/${pMax} · MP ${pMp} · 🪙 ${kid.points || 0}
           <div class="kt-bar"><span style="width:${playerPct}%"></span></div>
         </div>

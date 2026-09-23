@@ -107,10 +107,22 @@ def serve_kids_static(filename):
         '.ico': 'image/x-icon',
         '.woff2': 'font/woff2',
         '.webp': 'image/webp',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
     }
+    # Some kit "png" files were JPEG bytes. Sniff so the battle background decodes.
+    if data[:3] == b'\xff\xd8\xff':
+        mime = 'image/jpeg'
+    elif data[:8] == b'\x89PNG\r\n\x1a\n':
+        mime = 'image/png'
+    else:
+        mime = mime_map.get(ext, 'application/octet-stream')
     resp = make_response(data)
-    resp.headers['Content-Type'] = mime_map.get(ext, 'application/octet-stream')
-    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    resp.headers['Content-Type'] = mime
+    if filename.startswith('mocks/ui-direction/kit/'):
+        resp.headers['Cache-Control'] = 'no-cache'
+    else:
+        resp.headers['Cache-Control'] = 'public, max-age=86400'
     return resp
 
 @app.route('/assets-c/<path:filename>')
