@@ -1089,8 +1089,8 @@ body{
    UI DIRECTION — design-faithful hotspot stages
    Approved concept art is the picture; hotspots only.
    ═══════════════════════════════════════ */
-/* One design size: 1280×720. The window only scales this canvas and letterboxes it.
-   A second preset would be a discrete breakpoint, not a continuous reflow. */
+/* The only design size is 1280×720. Do not add another stage preset.
+   Window resize only scales this canvas uniformly and letterboxes it. */
 body.kt-landscape{
   max-width:none;width:100%;min-height:100dvh;margin:0;
   background:#2c1c10;overflow-x:hidden;
