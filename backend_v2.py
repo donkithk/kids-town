@@ -3603,6 +3603,30 @@ def get_kid_skills(kid_id):
 
 BOSS_SUMMON_COST = {'gem': 1}  # 召喚 Boss 材料
 
+_ENEMY_SPRITES = {
+    1: '/kids/mocks/ui-direction/kit/sprites/sprite-wolf.svg?v=1',
+    2: '/kids/mocks/ui-direction/kit/sprites/sprite-bear.svg?v=1',
+    3: '/kids/mocks/ui-direction/kit/sprites/sprite-scorpion.svg?v=1',
+}
+_SPRITE_BOAR = '/kids/mocks/ui-direction/kit/sprites/sprite-boar.png?v=2'
+_SPRITE_BOSS = '/kids/mocks/ui-direction/kit/sprites/sprite-boss.svg?v=1'
+
+
+def enemy_sprite(monster_id, name):
+    """Pick the fight sprite from the same enemy id/name that labels the HUD."""
+    if monster_id in _ENEMY_SPRITES:
+        return _ENEMY_SPRITES[monster_id]
+    name = name or ''
+    if '狼' in name:
+        return _ENEMY_SPRITES[1]
+    if '豬' in name or '猪' in name:
+        return _SPRITE_BOAR
+    if '熊' in name:
+        return _ENEMY_SPRITES[2]
+    if '蠍' in name or '蝎' in name:
+        return _ENEMY_SPRITES[3]
+    return _SPRITE_BOSS
+
 
 def boss_is_unlocked(db, kid_id, region_id):
     """Region 1 boss always available; higher regions need previous boss first-kill."""
@@ -3679,9 +3703,11 @@ def boss_summon(kid_id):
 
     # Boss 怪物 = 3x HP, 1.5x ATK/DEF
     bstats = calc_boss_stats(calc_monster_stats(region_id))
+    boss_name = f'第{region_id}區 Boss'
     boss = [{
         'id': 0, 'monster_id': -1,
-        'name': f'第{region_id}區 Boss', 'icon': '👑',
+        'name': boss_name, 'icon': '👑',
+        'sprite': enemy_sprite(-1, boss_name),
         'max_hp': bstats['hp'], 'hp': bstats['hp'],
         'atk': bstats['atk'], 'def': bstats['def'],
         'spd': region_id + 3,
@@ -3819,6 +3845,7 @@ def battle_start(kid_id):
             'monster_id': monster['id'],
             'name': monster['name'],
             'icon': monster['icon'],
+            'sprite': enemy_sprite(monster['id'], monster['name']),
             'max_hp': max(1, mstats['hp'] + hp_var),
             'hp': max(1, mstats['hp'] + hp_var),
             'atk': mstats['atk'],

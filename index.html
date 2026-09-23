@@ -967,7 +967,9 @@ body{
 .di:active{background:var(--theme-tab-active-bg,#d0e0f0)}
 .di .ic{font-size:15px;width:22px;text-align:center;flex-shrink:0}
 .di .sb{font-size:6px;font-family:var(--pixel-font);color:var(--theme-text-secondary,#6a8aaa);margin-left:auto;opacity:.6}
-/* ── Header: one cream bar on every kids screen ── */
+/* ── Header: one cream bar on every kids screen ──
+   XP absorbs leftover space. Chips stay content-sized and shrink only
+   after the bar, so they cannot slide under the menu. */
 .gh{
   background:
     linear-gradient(180deg, rgba(255,248,236,.7), rgba(255,248,236,0) 14px),
@@ -975,10 +977,14 @@ body{
   color:#3b2a1a;
   border:3px solid #8b5e3c;
   border-radius:0 0 18px 18px;
-  padding:6px 12px;display:flex;align-items:center;gap:10px;
-  flex-wrap:nowrap;box-sizing:border-box;min-height:72px;height:72px;
+  padding:4px 8px;
+  display:flex;align-items:center;gap:8px;
+  flex-wrap:nowrap;
+  box-sizing:border-box;min-height:72px;height:72px;
+  overflow:hidden;
+  container-type:inline-size;
 }
-.gh .av{width:44px;height:44px;background:#fff;border:2px solid #8b5e3c;border-radius:14px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;position:relative;cursor:pointer}
+.gh .av{width:44px;height:44px;background:#fff;border:2px solid #8b5e3c;border-radius:14px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 44px;position:relative;cursor:pointer}
 .gh .av img{width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
 /* Ability tooltip */
 .av-tip{display:none;position:fixed;z-index:999;background:rgba(0,0,0,0.88);backdrop-filter:blur(6px);color:#fff;border-radius:10px;padding:10px 12px;font-size:11px;line-height:1.6;min-width:150px;box-shadow:0 4px 20px rgba(0,0,0,0.3);pointer-events:none}
@@ -988,22 +994,28 @@ body{
 .av-tip .rl .c{color:#94a3b8}
 .av-tip .rl .v{color:#fff;font-weight:700}
 .av-tip .bl{color:#22c55e;font-size:10px}
-.gh .in{display:flex;flex-direction:row;align-items:baseline;gap:6px;flex-shrink:0;min-width:0}
-.gh .nm{font-size:20px;font-weight:800;font-family:var(--body-font);color:#3b2a1a;line-height:1.1}
-.gh .nm-lv{font-size:15px;color:#7a5b43;font-family:var(--body-font);font-weight:800}
-.gh .nm-hp{font-size:14px;color:#7a5b43;font-family:var(--body-font);font-weight:800}
+.gh .in{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:6px;flex:0 1 150px;min-width:0}
+.gh .nm{font-size:18px;font-weight:800;font-family:var(--body-font);color:#3b2a1a;line-height:1.1;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gh .nm-lv{font-size:14px;color:#7a5b43;font-family:var(--body-font);font-weight:800;white-space:nowrap}
+.gh .nm-hp{flex-basis:100%;font-size:12px;color:#7a5b43;font-family:var(--body-font);font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gh .nm-hp:empty{display:none}
-.gh .hdr-mid{flex:1;min-width:0;display:flex;flex-direction:row;align-items:center;gap:8px}
-.gh .rw{display:flex;align-items:center;gap:6px;flex:1;min-width:72px}
-.gh .xp{height:10px;flex:1;width:auto;min-width:48px;background:#e7d3ae;border-radius:999px;overflow:hidden;border:2px solid #c4a574}
+.gh .hdr-mid{flex:1 1 auto;min-width:0;display:flex;flex-direction:row;align-items:center;gap:8px;overflow:hidden}
+.gh .rw{display:flex;align-items:center;gap:6px;flex:1 1 0;min-width:0;overflow:hidden}
+.gh .xp{height:10px;flex:1 1 auto;width:auto;min-width:0;background:#e7d3ae;border-radius:999px;overflow:hidden;border:2px solid #c4a574}
 .gh .xf{height:100%;width:0%;background:linear-gradient(90deg,#e7b84a,#c4842a);border-radius:999px;transition:width .3s}
-.gh .xp-num{font-size:13px;font-weight:800;color:#7a5b43;font-family:var(--body-font);white-space:nowrap}
+.gh .xp-num{flex:0 0 auto;font-size:13px;font-weight:800;color:#7a5b43;font-family:var(--body-font);white-space:nowrap}
 .gh .xp-num:empty{display:none}
-.hdr-res{display:flex;gap:6px;flex-wrap:nowrap;align-items:center;flex-shrink:0}
-.hdr-res span{font-size:18px;display:flex;align-items:center;gap:4px;background:#fff;color:#3b2a1a;padding:4px 10px;border-radius:999px;border:2px solid #c4a574;font-weight:800;line-height:1}
-.hdr-res span .n{font-family:var(--body-font);font-size:18px;color:#3b2a1a;font-weight:800}
+.hdr-res{display:flex;gap:6px;flex-wrap:nowrap;align-items:center;flex:0 1 auto;min-width:0}
+.hdr-res > span{font-size:16px;display:flex;align-items:center;gap:3px;background:#fff;color:#3b2a1a;padding:4px 8px;border-radius:999px;border:2px solid #c4a574;font-weight:800;line-height:1;flex:0 0 auto;white-space:nowrap}
+.hdr-res > span .n{font-family:var(--body-font);font-size:1em;color:#3b2a1a;font-weight:800;background:none;border:0;padding:0;display:inline;line-height:1}
 .gh .mat{display:flex}
-.gh .mb{background:#fff;border:2px solid #8b5e3c;color:#3b2a1a;font-size:20px;min-width:44px;min-height:44px;padding:0 10px;border-radius:14px;cursor:pointer;flex-shrink:0;line-height:1}
+.gh .mb{background:#fff;border:2px solid #8b5e3c;color:#3b2a1a;font-size:20px;width:44px;min-width:44px;height:44px;min-height:44px;padding:0;border-radius:14px;cursor:pointer;flex:0 0 44px;line-height:1}
+@container (max-width: 1100px){
+  .gh{gap:6px;padding:4px 6px}
+  .hdr-res{gap:4px}
+  .hdr-res > span{font-size:14px;padding:3px 6px}
+  .gh .nm{font-size:16px}
+}
 .gh .mb:focus-visible,.gh .av:focus-visible{outline:3px solid #c45c26;outline-offset:2px}
 /* ── Set Screen ── */
 .ss{padding:12px}
@@ -4704,6 +4716,19 @@ async function summonBoss(regionId) {
   } catch(e) { showToast('⚠️ 網絡錯誤: '+e.message, 'error'); }
 }
 
+/* Sprite follows the same enemy record as the name and HP (monster_id / name). */
+function ktEnemySprite(m) {
+  if (m && m.sprite) return m.sprite;
+  const name = String((m && m.name) || '');
+  const mid = m && m.monster_id;
+  const base = '/kids/mocks/ui-direction/kit/sprites/';
+  if (mid === 1 || name.indexOf('狼') >= 0) return base + 'sprite-wolf.svg?v=1';
+  if (name.indexOf('豬') >= 0 || name.indexOf('猪') >= 0) return base + 'sprite-boar.png?v=2';
+  if (mid === 2 || name.indexOf('熊') >= 0) return base + 'sprite-bear.svg?v=1';
+  if (mid === 3 || name.indexOf('蠍') >= 0 || name.indexOf('蝎') >= 0) return base + 'sprite-scorpion.svg?v=1';
+  return base + 'sprite-boss.svg?v=1';
+}
+
 function renderBattleMode(exp) {
   const bd = (typeof exp.expedition_data === 'string')
     ? JSON.parse(exp.expedition_data)
@@ -4727,7 +4752,7 @@ function renderBattleMode(exp) {
     const isDead = m.hp <= 0;
     if (isDead) window._deathPlayed[m.id] = true;
     const pct = Math.max(0, Math.round(m.hp / (m.max_hp || 1) * 100));
-    const sprite = '/kids/mocks/ui-direction/kit/sprites/sprite-boar.png?v=2';
+    const sprite = ktEnemySprite(m);
     return `<div class="monster-card${isDead ? ' dead' : ''}${showMonsterTarget && !isDead ? ' targetable' : ''}" data-idx="${m.id}" onclick="${!isDead ? 'onMonsterClick('+m.id+')' : ''}">
       <div class="target-arrow">▼</div>
       <div class="m-img"><img src="${sprite}" alt=""></div>
