@@ -1,5 +1,32 @@
 # Frontend E2E status
 
+## Town home shared chrome (2026-09-23)
+
+> Tests and docs only. Product fix #22 is already on main `ec6df09` (product commit `7d5b9d9`, `cursor/town-artstage-chrome-1654`).  
+> Ported from closed PR #23 tip `bf83adc` (`cursor/town-home-chrome-red-1180`). That PR merged into the feature branch, not into main.  
+> This PR base is main `ec6df09`. TC-FE-TOWN-CHROME-01/02/03 are **PASS** on this tip.  
+> Historical red run (before #22): same asserts on main `81763b1` — 3 failed. Historical green run on #22 tip `7d5b9d9`: 3 passed; full frontend 29 passed in 30.75s.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Viewport 1100×800.  
+> Synthetic `test_fe_kid` only. Empty DB. Production `kids_town.db` is never copied.
+
+| Case ID | Pytest node id | This PR (base main `ec6df09`) | Historical main `81763b1` (before #22) | Notes |
+|---------|----------------|-------------------------------|----------------------------------------|-------|
+| TC-FE-TOWN-CHROME-01 | `test_town_home_header_matches_guild_chrome` | **PASS** | **FAIL** | Before #22: header top 0.0px vs 公會大廳 90.6px (delta 90.6px > 6). `#hdrRes` slots (wood/brick/glass/gear + gold) already matched. |
+| TC-FE-TOWN-CHROME-02 | `test_town_home_footer_aligns_with_guild_stage` | **PASS** | **FAIL** | Before #22: footer bottom 730.2px vs 公會 709.4px (delta 20.8px). Five tabs already present. |
+| TC-FE-TOWN-CHROME-03 | `test_town_home_uses_shared_1280x720_stage` | **PASS** | **FAIL** | Before #22: town left `body.kt-artstage` false. Guild and quest reference shell already 1280×720. |
+
+| Suite | Command | Result on this PR (base main `ec6df09`) |
+|-------|---------|----------------------------------------|
+| Town chrome | `python3 -m pytest tests/test_frontend.py -q -k town_home --tb=short` | recorded after the verification run on this tip |
+| Full frontend | `python3 -m pytest tests/test_frontend.py -q` | recorded after the verification run on this tip |
+| Preview seed | `python3 -m pytest tests/test_preview_seed.py -q` | recorded after the verification run on this tip |
+
+Do not weaken the 6px tolerance or delete asserts. This branch does not change product code. Do not merge from the test author; KT reviews.
+
+---
+
+# Frontend E2E status (earlier runs)
+
 > Recorded against branch `cursor/harden-ceremony-place-e2e-17ad` (Experience C — real-device hardening).  
 > Base: latest `main` (`4f6cdda`, Phase 1 merged).  
 > Date: 2026-09-19  
