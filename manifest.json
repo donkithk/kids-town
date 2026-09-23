@@ -5,7 +5,7 @@
   "start_url": "/kids/",
   "display": "standalone",
   "display_override": ["standalone", "window-controls-overlay"],
-  "orientation": "portrait",
+  "orientation": "landscape",
   "background_color": "#fef3c7",
   "theme_color": "#f97316",
   "scope": "/kids/",
