@@ -40,11 +40,13 @@ Three steps for a local demo and an optional public preview. **Never** commit to
 | Username | `preview_kid` |
 | PIN | `2468` only when this seed **creates** the account. An existing PIN is left as-is. |
 | Gold | at least **200** (never lowered if they already have more) |
-| Level | at least **2**, so wilderness region 1 can start |
+| Level | at least **6**, so wilderness regions 1–3 can start |
+| Explored | regions **1** and **2** marked, so 雪山 / 沙漠 unlock in the battle lobby |
 | Guild | **探險公會** placed on the town (not stored) |
 | Bag | wood×8 and brick×5 when the seed creates the account |
+| Soft-v1 | Preview-only battle lobby buttons + `preview_monster` on `battle-start` for 野豬 / 野狼 / 白熊 / 巨蠍 |
 
-Log in at `/kids/` with that username and open **荒野**. The grass background, hero sprite, and boar sprite are the battle screen.
+Log in at `/kids/` with that username → **荒野** → **戰鬥**. Use the dashed **Preview soft-v1 身體** buttons to see each body sprite (including 野豬, which is not a production region monster). Or start the normal region fights: 靜謐森林→野狼, 雪山→白熊, 沙漠→巨蠍.
 
 公網／ngrok 示範前，**Phase 0 及以上**已鎖定測試必須保持全綠（至少 `python -m pytest tests/ -m phase0 -v`）。未綠不要轉發 `0.0.0.0` 或 ngrok。
 Keep **Phase 0+** green before any public demo. Do not expose the app until that gate passes.

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Ensure the Preview demo kid can open the wilderness.
+"""Ensure the Preview demo kid can fight soft-v1 wilderness monsters.
 
+Unlocks regions 1–3 (Lv.6 + explored 1–2) and clears today's daily battle locks.
 Safe to run more than once. Does not change other kids or an existing PIN.
 See README "Preview demo kid".
 """
@@ -28,7 +29,8 @@ def main():
     db.close()
     print(
         f"preview_kid id={info['kid_id']} created={info['created']} "
-        f"points>={b.PREVIEW_MIN_POINTS} guild=placed level>={b.PREVIEW_MIN_LEVEL}"
+        f"points>={b.PREVIEW_MIN_POINTS} guild=placed level>={b.PREVIEW_MIN_LEVEL} "
+        f"explored=1,2 soft-v1=野豬/野狼/白熊/巨蠍"
     )
     return 0
 

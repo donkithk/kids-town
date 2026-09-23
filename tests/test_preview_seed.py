@@ -91,3 +91,68 @@ def test_create_kid_preview_username_is_topped_up(client, test_db):
     level = db.execute("SELECT level FROM kids WHERE id=?", (kid_id,)).fetchone()["level"]
     assert level >= 2
     db.close()
+
+
+def test_preview_seed_unlocks_regions_1_to_3(tmp_path):
+    db_path = str(tmp_path / "preview.db")
+    init_empty_db(b, db_path)
+    db = connect_db(db_path)
+    info = b.ensure_preview_kid(db)
+    row = db.execute(
+        "SELECT points, level, experience FROM kids WHERE id=?",
+        (info["kid_id"],),
+    ).fetchone()
+    assert row["level"] >= 6
+    assert row["experience"] >= 375
+    explored = {
+        r["region_id"]
+        for r in db.execute(
+            "SELECT region_id FROM explored_regions WHERE kid_id=?",
+            (info["kid_id"],),
+        )
+    }
+    assert {1, 2}.issubset(explored)
+    db.close()
+
+
+def test_preview_battle_start_soft_v1_bodies(client, test_db):
+    """preview_kid can start fixed soft-v1 fights including art-only 野豬."""
+    db = connect_db(test_db)
+    info = b.ensure_preview_kid(db)
+    kid_id = info["kid_id"]
+    db.close()
+
+    login = client.post(
+        "/api/auth/login",
+        json={"username": b.PREVIEW_KID_USERNAME, "password": b.PREVIEW_KID_PIN},
+    )
+    assert login.status_code == 200, login.get_data(as_text=True)
+
+    expected = {
+        "boar": "野豬",
+        "wolf": "野狼",
+        "bear": "白熊",
+        "scorpion": "巨蠍",
+    }
+    for key, name in expected.items():
+        r = client.post(
+            f"/api/kids/{kid_id}/expedition/battle-start",
+            json={"region_id": 1, "preview_monster": key},
+        )
+        assert r.status_code == 201, (key, r.get_data(as_text=True))
+        data = r.get_json()
+        assert len(data["monsters"]) == 1
+        m = data["monsters"][0]
+        assert m["name"] == name
+        assert m["sprite"]
+        # battle-start auto-abandons a prior running battle for this kid
+
+
+def test_preview_monster_ignored_for_normal_kid(battle_client, battle_kid):
+    """Real kids ignore preview_monster and still fight the region monster."""
+    r = battle_client.post(
+        f"/api/kids/{battle_kid['id']}/expedition/battle-start",
+        json={"region_id": 1, "preview_monster": "boar"},
+    )
+    assert r.status_code == 201, r.get_data(as_text=True)
+    assert r.get_json()["monsters"][0]["name"] == "野狼"

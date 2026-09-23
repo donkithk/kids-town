@@ -4626,10 +4626,26 @@ function renderQuizLobby() {
   </div>`;
 }
 
+function isPreviewKid() {
+  const u = ((currentUser && currentUser.username) || (townData.kid && townData.kid.username) || '').toLowerCase();
+  return u === 'preview_kid';
+}
+
 function renderBattleLobby() {
   const explored = (townData.explored||[]).map(e => e.region_id);
+  const softV1 = isPreviewKid()
+    ? `<div style="margin:0 0 12px;padding:10px;border:2px dashed #143e78;border-radius:12px;background:#f8fafc;">
+        <div style="font-weight:700;font-size:12px;margin-bottom:6px;">🎨 Preview soft-v1 身體（只限 preview_kid）</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${[['野豬','boar'],['野狼','wolf'],['白熊','bear'],['巨蠍','scorpion']].map(([label,key]) =>
+            `<button class="exp-btn go" onclick="startBattle(1,'${key}')" style="flex:none;padding:6px 10px;font-size:11px;">${label}</button>`
+          ).join('')}
+        </div>
+      </div>`
+    : '';
   return `<div class="section-title">⚔️ 戰鬥挑戰</div>
     <p style="font-size:12px;color:#64748b;margin-bottom:10px;">擊敗每個區域嘅怪物，贏取稀有材料！</p>
+    ${softV1}
     ${REGIONS.map(r => {
       const contentLocked = !!r.locked || r.id >= 4;
       const unlocked = !contentLocked && (!r.required_region || explored.includes(r.required_region) || r.id === 1);
@@ -4654,7 +4670,7 @@ function renderBattleLobby() {
     }).join('')}</div>`;
 }
 
-async function startBattle(regionId) {
+async function startBattle(regionId, previewMonster) {
   const kidId = currentKidId || currentUser?.id || townData?.kid?.id;
   if (!kidId) return;
   if (townData.expedition && (townData.expedition.status === 'running' || townData.expedition.status === 'fighting')) {
@@ -4662,9 +4678,11 @@ async function startBattle(regionId) {
     townData.expedition = null;
   }
   try {
+    const body = {region_id: regionId};
+    if (previewMonster) body.preview_monster = previewMonster;
     const r = await fetch(`${API}/api/kids/${kidId}/expedition/battle-start`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({region_id: regionId})
+      body: JSON.stringify(body)
     });
     const data = await r.json();
     if (data.error) {

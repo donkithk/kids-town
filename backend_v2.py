@@ -1320,8 +1320,24 @@ PREVIEW_KID_USERNAME = 'preview_kid'
 PREVIEW_KID_NAME = 'Preview'
 PREVIEW_KID_PIN = '2468'
 PREVIEW_MIN_POINTS = 200
-PREVIEW_MIN_LEVEL = 2
-PREVIEW_MIN_EXPERIENCE = 25  # calc_level(25) is Lv.2, so region 1 can open
+# Lv.6 unlocks region 3 (region_unlock_level = region_id * 2).
+PREVIEW_MIN_LEVEL = 6
+PREVIEW_MIN_EXPERIENCE = 375  # calc_level(375) is Lv.6
+# Soft-v1 bodies designers need on Preview. 野豬 is art-only (not a production region monster).
+PREVIEW_SOFT_V1_ALIASES = {
+    '野豬': 'boar', 'boar': 'boar', '豬': 'boar', '猪': 'boar',
+    '野狼': 'wolf', 'wolf': 'wolf', '狼': 'wolf',
+    '白熊': 'bear', 'bear': 'bear', '熊': 'bear',
+    '巨蠍': 'scorpion', 'scorpion': 'scorpion', '蠍': 'scorpion', '蝎': 'scorpion',
+}
+PREVIEW_BOAR_MONSTER = {
+    'id': 101,
+    'name': '野豬',
+    'icon': '🐗',
+    'region_id': 1,
+    'gold_reward': 20,
+    'mat_reward': '{"wood":2}',
+}
 
 
 def canonicalize_item_type(item_type):
@@ -1457,11 +1473,13 @@ def _preview_guild_cell(db, kid_id):
 
 
 def ensure_preview_kid(db):
-    """Give the Preview demo kid enough gold and a placed exploration guild.
+    """Give the Preview demo kid wilderness access for soft-v1 art review.
 
     Idempotent. Other kids are untouched. An existing PIN is not replaced.
     Gold is raised to at least PREVIEW_MIN_POINTS and never lowered.
-    Level is raised to at least 2 so region 1 wilderness can start.
+    Level is raised to at least 6 so regions 1–3 can start.
+    Explored regions 1–2 are marked so the battle lobby unlocks 雪山/沙漠.
+    Today's daily battle locks for this kid are cleared (Preview only).
     """
     _ensure_building_placement_columns(db)
     row = db.execute(
@@ -1527,6 +1545,26 @@ def ensure_preview_kid(db):
                 "VALUES (?, ?, 0, 1, ?, ?, 0)",
                 (kid_id, guild['id'], cell_x, cell_y),
             )
+
+    # Unlock battle lobby regions 2–3 (UI requires prior explored region).
+    for region_id in (1, 2):
+        db.execute(
+            "INSERT OR IGNORE INTO explored_regions (kid_id, region_id) VALUES (?, ?)",
+            (kid_id, region_id),
+        )
+
+    # Preview-only: clear today's daily locks so designers can re-fight all soft-v1 bodies.
+    today = date.today().isoformat()
+    db.execute(
+        "DELETE FROM daily_battles WHERE kid_id=? AND battle_date=?",
+        (kid_id, today),
+    )
+    # Clear any running expedition (explore included) so Preview battles are not blocked.
+    db.execute(
+        "UPDATE expeditions SET status='completed' WHERE kid_id=? AND status='running'",
+        (kid_id,),
+    )
+
     db.commit()
     return {'kid_id': kid_id, 'created': created}
 
@@ -3610,6 +3648,26 @@ _SPRITE_SCORPION = '/kids/mocks/ui-direction/kit/sprites/sprite-scorpion.png?v=6
 _SPRITE_BOAR = '/kids/mocks/ui-direction/kit/sprites/sprite-boar.png?v=6'
 
 
+def kid_is_preview(db, kid_id):
+    row = db.execute("SELECT username FROM kids WHERE id=?", (kid_id,)).fetchone()
+    return bool(row) and row['username'] == PREVIEW_KID_USERNAME
+
+
+def resolve_preview_soft_v1_monster(db, key):
+    """Map a Preview-only soft-v1 key to a monster row/dict. None if unknown."""
+    if key is None:
+        return None
+    alias = PREVIEW_SOFT_V1_ALIASES.get(str(key).strip().lower()) or PREVIEW_SOFT_V1_ALIASES.get(str(key).strip())
+    if not alias:
+        return None
+    if alias == 'boar':
+        return dict(PREVIEW_BOAR_MONSTER)
+    region_by_alias = {'wolf': 1, 'bear': 2, 'scorpion': 3}
+    region_id = region_by_alias[alias]
+    row = db.execute("SELECT * FROM monsters WHERE region_id=?", (region_id,)).fetchone()
+    return dict(row) if row else None
+
+
 def enemy_sprite(name, monster_id=None):
     """Sprite bound to this monster definition. None means show its icon."""
     name = name or ''
@@ -3778,6 +3836,16 @@ def battle_start(kid_id):
     data = request.get_json(silent=True) or {}
     region_id = data.get('region_id', 1)
     db = get_db()
+    preview = kid_is_preview(db, kid_id)
+    preview_key = data.get('preview_monster')
+
+    # Preview-only soft-v1 picker (野豬/野狼/白熊/巨蠍). No effect on real kids.
+    preview_monster = None
+    if preview and preview_key:
+        preview_monster = resolve_preview_soft_v1_monster(db, preview_key)
+        if not preview_monster:
+            return jsonify({'error': 'unknown_preview_monster', 'preview_monster': preview_key}), 400
+        region_id = int(preview_monster.get('region_id') or region_id or 1)
 
     if region_content_locked(region_id):
         return jsonify({'error': 'region_locked', 'region_id': int(region_id)}), 400
@@ -3791,25 +3859,30 @@ def battle_start(kid_id):
     if running:
         return jsonify({'error': 'Expedition already running'}), 400
 
-    # 每區一日一次 (打贏先計)
+    # 每區一日一次 (打贏先計). Preview demo kid skips so soft-v1 art can be re-checked.
     today = date.today().isoformat()
-    won_today = db.execute("SELECT 1 FROM daily_battles WHERE kid_id=? AND region_id=? AND battle_date=?",
-                           (kid_id, region_id, today)).fetchone()
-    if won_today:
-        return jsonify({'error': '今日已打過此區，聽日再嚟'}), 400
+    if not preview:
+        won_today = db.execute("SELECT 1 FROM daily_battles WHERE kid_id=? AND region_id=? AND battle_date=?",
+                               (kid_id, region_id, today)).fetchone()
+        if won_today:
+            return jsonify({'error': '今日已打過此區，聽日再嚟'}), 400
 
-    # Get monster for this region
-    monster = db.execute("SELECT * FROM monsters WHERE region_id=?", (region_id,)).fetchone()
-    if not monster:
-        return jsonify({'error': 'No monster for this region'}), 404
+    # Get monster for this region (or Preview soft-v1 override)
+    if preview_monster is not None:
+        monster = preview_monster
+    else:
+        monster = db.execute("SELECT * FROM monsters WHERE region_id=?", (region_id,)).fetchone()
+        if not monster:
+            return jsonify({'error': 'No monster for this region'}), 404
+        monster = dict(monster)
 
     # Get kid stats
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
     if not kid:
         return jsonify({'error': 'Kid not found'}), 404
 
-    # 區域解鎖門檻 (level gate, t*2)
-    if kid['level'] < region_unlock_level(region_id):
+    # 區域解鎖門檻 (level gate, t*2). Preview soft-v1 picker bypasses for art review only.
+    if not (preview and preview_key) and kid['level'] < region_unlock_level(region_id):
         return jsonify({'error': f'需要 Lv{region_unlock_level(region_id)} 先解鎖此區'}), 400
 
     # Get available skills
@@ -3830,12 +3903,12 @@ def battle_start(kid_id):
     p_stats = calc_battle_stats(kid)
     p_hp = p_stats['hp']
     p_mp = 10 + kid['level'] * 3  # Base MP: 10 + 3/level
-    # Multiple monsters (1-3), stats from tier formula
-    num_monsters = random.randint(1, 3)
+    # Multiple monsters (1-3), stats from tier formula. Preview forces 1 so the body sprite is clear.
+    num_monsters = 1 if preview else random.randint(1, 3)
     mstats = calc_monster_stats(region_id)  # tier = region number
     monsters = []
     for mi in range(num_monsters):
-        hp_var = random.randint(-5, 5)
+        hp_var = 0 if preview else random.randint(-5, 5)
         monsters.append({
             'id': mi,
             'monster_id': monster['id'],
