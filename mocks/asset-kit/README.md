@@ -80,7 +80,7 @@
 
 ## 3. 戰鬥精靈（Battle sprites）
 
-與背景分開的戰鬥物件，可疊在 `bg-wilderness-grass` 上。規格要求透明 PNG（見 [`ASSETS.md`](./ASSETS.md)）。
+與背景分開的戰鬥物件，可疊在 `bg-wilderness-grass` 上。規格要求透明 PNG（見 [`ASSETS.md`](./ASSETS.md)）。已核准的 soft v1 四張正式檔 `sprites/sprite-boar.png`、`sprite-wolf.png`、`sprite-bear.png`、`sprite-scorpion.png` 是真 RGBA 去背切圖，可疊在草地／戰鬥底上。`sprites/preview-monsters/` 裡的棋盤預覽只留歷史，**不要**拿來當正式精靈。
 
 | File id | 說明 | 建議像素 | 朝向 |
 |---------|------|----------|------|
@@ -138,7 +138,7 @@ mocks/asset-kit/
     sprite-generic-monster.png   # optional
 ```
 
-目前已放入：三張背景、`sprites/sprite-hero.png`、`sprites/sprite-boar.png`，以及共用 footer（[`ui/FOOTER.md`](./ui/FOOTER.md)、[`ui/footer-strip.html`](./ui/footer-strip.html)、五個透明 SVG icon）。任務卡、領取鈕、徽章等其餘 UI 仍以 CSS tokens 為準，沒有獨立 PNG。
+目前已放入：三張背景、`sprites/sprite-hero.png`、已核准的 soft v1 RGBA 切圖（`sprite-boar.png`、`sprite-wolf.png`、`sprite-bear.png`、`sprite-scorpion.png`），以及共用 footer（[`ui/FOOTER.md`](./ui/FOOTER.md)、[`ui/footer-strip.html`](./ui/footer-strip.html)、五個透明 SVG icon）。任務卡、領取鈕、徽章等其餘 UI 仍以 CSS tokens 為準，沒有獨立 PNG。棋盤預覽留在 `sprites/preview-monsters/`，不是正式檔。
 
 ---
 
