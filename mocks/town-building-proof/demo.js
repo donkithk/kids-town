@@ -2,8 +2,8 @@
    header chips (gold / wood / brick / glass / gear). Gems on lighthouse,
    arena, and observatory stay in the README — the locked header has no gem chip. */
 (function () {
-  var COLS = 4;
-  var ROWS = 3;
+  var COLS = 6;
+  var ROWS = 5;
   var START = { gold: 6000, wood: 240, brick: 180, glass: 12, gear: 90 };
 
   /* Order and ids follow backend_v2.seed_building_defs (bank id 11 is out of scope). */
@@ -148,12 +148,11 @@
     layer.className = "ground";
     layer.setAttribute("aria-hidden", "true");
     village.appendChild(layer);
-    for (var r = -2; r <= 5; r += 1) {
-      for (var c = -3; c <= 6; c += 1) {
-        if (c >= 0 && c < COLS && r >= 0 && r < ROWS) continue;
+    for (var r = -1; r <= ROWS; r += 1) {
+      for (var c = 0; c < COLS; c += 1) {
+        if (r >= 0 && r < ROWS) continue;
         var diff = c - r;
-        var sum = c + r;
-        if (diff < -4 || diff > 5 || sum < -1 || sum > 6) continue;
+        if (diff < -4 || diff > 5) continue;
         var tile = document.createElement("div");
         tile.className = "ground-tile";
         tile.style.setProperty("--c", String(c));
@@ -161,9 +160,8 @@
         var img = document.createElement("img");
         img.alt = "";
         img.className = "slab";
-        var raised = sum <= 1 && ((c + r + 5) % 3 === 0);
-        if (r >= 3) img.src = "assets/ground-path.svg";
-        else if (raised) {
+        if (r >= ROWS) img.src = "assets/ground-path.svg";
+        else if (r < 0) {
           img.src = "assets/ground-step.svg";
           tile.classList.add("is-raised");
         } else if ((c + r) % 2) img.src = "assets/ground-tile-alt.svg";

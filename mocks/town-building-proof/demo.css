@@ -19,11 +19,11 @@
 
 .palette {
   position: absolute;
-  z-index: 8;
+  z-index: 20;
   left: 10px;
   top: 44px;
   bottom: 10px;
-  width: 236px;
+  width: 208px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -57,20 +57,25 @@
 .palette-grid {
   flex: 1 1 auto;
   min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   align-content: start;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .pal-btn {
+  flex: 0 0 auto;
+  width: 100%;
   min-width: 44px;
-  min-height: 52px;
+  min-height: 48px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 6px 4px 4px;
+  gap: 8px;
+  padding: 6px 10px;
   border: 3px solid transparent;
   border-radius: 12px;
   background: #fff;
@@ -80,27 +85,27 @@
 }
 
 .pal-btn img {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
+  width: 48px;
+  height: 44px;
+  flex: 0 0 48px;
   object-fit: contain;
   pointer-events: none;
 }
 
 .pal-name {
   display: block;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.2;
 }
 
 .pal-cost {
   display: block;
   margin-top: 1px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--ink-soft);
-  line-height: 1.15;
+  line-height: 1.2;
 }
 
 .pal-btn[aria-pressed="true"] {
@@ -142,42 +147,54 @@
 }
 
 .village.is-iso {
-  left: 252px;
-  right: 8px;
-  top: 8px;
-  bottom: 84px;
+  /* Same diamond size as tip 3ff954a. A 6×5 court fills the map width;
+     scroll down to the front path. Padding clears the confirm bar. */
+  --s: 1;
+  --step-x: calc(var(--s) * 84px);
+  --step-y: calc(var(--s) * 50px);
+  --pad-w: calc(var(--s) * 160px);
+  --pad-h: calc(var(--s) * 158px);
+  left: 224px;
+  right: 6px;
+  top: 4px;
+  bottom: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: 88px;
+  scroll-padding-bottom: 88px;
+  scrollbar-width: thin;
 }
 
 .village.is-iso .pad,
 .ground-tile {
-  width: 160px;
-  height: 158px;
-  left: calc(45% + (var(--c) - var(--r)) * 84px - 80px);
-  top: calc((var(--c) + var(--r)) * 50px);
+  width: var(--pad-w);
+  height: var(--pad-h);
+  left: calc(50% + (var(--c) - var(--r) - 0.5) * var(--step-x) - var(--pad-w) / 2);
+  top: calc((var(--c) + var(--r) + 1) * var(--step-y));
 }
 
-/* Footprint center inside the 160×158 pad is (80px, 121px).
+/* Footprint center inside the unscaled 160×158 pad is (80px, 121px).
    Slab viewBox center (0,0) is 84px across and 50px down. */
 .pad > .slab,
 .ground-tile > .slab,
 .pad > .mark {
   position: absolute;
-  width: 168px;
-  height: 120px;
-  left: -4px;
-  top: 71px;
+  width: calc(var(--s) * 168px);
+  height: calc(var(--s) * 120px);
+  left: calc(var(--s) * -4px);
+  top: calc(var(--s) * 71px);
   pointer-events: none;
 }
 
-.ground-tile.is-raised > .slab { top: 63px; }
+.ground-tile.is-raised > .slab { top: calc(var(--s) * 63px); }
 
 .pad > .shadow {
   position: absolute;
   z-index: 1;
-  width: 200px;
-  height: 100px;
-  left: -20px;
-  top: 71px;
+  width: calc(var(--s) * 200px);
+  height: calc(var(--s) * 100px);
+  left: calc(var(--s) * -20px);
+  top: calc(var(--s) * 71px);
   pointer-events: none;
 }
 
@@ -291,10 +308,12 @@
 
 .empty-hint {
   position: absolute;
-  z-index: 5;
-  left: 58%;
-  top: 14px;
+  z-index: 21;
+  left: auto;
+  right: 12px;
+  top: 46px;
   margin: 0;
+  max-width: 280px;
   padding: 8px 14px;
   border: 3px solid var(--wood);
   border-radius: 999px;
@@ -302,7 +321,6 @@
   font-size: 16px;
   font-weight: 800;
   pointer-events: none;
-  transform: translateX(-50%);
 }
 
 .oob-mark {
@@ -335,8 +353,8 @@
 
 .place-bar {
   position: absolute;
-  z-index: 12;
-  left: 258px;
+  z-index: 30;
+  left: 232px;
   right: 12px;
   bottom: 10px;
   min-height: 56px;
