@@ -944,7 +944,7 @@ body{
       #C49A6C 100%
     )
 }
-.gs{background:var(--theme-bg,rgba(200,224,248,0.85));margin:6px;border-radius:10px;overflow:hidden;border:3px solid #5a3a1a;box-shadow:inset 0 0 0 2px rgba(255,255,255,.08);transition:background .4s,color .3s}
+.gs{background:transparent;margin:0;border:0;border-radius:0;overflow:visible;box-shadow:none}
 .mp{margin:0 5px 5px;border:3px solid #5a3a1a;border-radius:6px;overflow:hidden;box-shadow:inset 0 0 0 2px #8a7a5a,0 0 0 2px #3a2a1a}
 .dbx{margin:5px 6px;background:#1a1a2e;border:2px solid #fff;border-radius:8px;padding:12px 14px;position:relative;min-height:64px;cursor:pointer}
 .dbx::before{display:none}
@@ -967,9 +967,18 @@ body{
 .di:active{background:var(--theme-tab-active-bg,#d0e0f0)}
 .di .ic{font-size:15px;width:22px;text-align:center;flex-shrink:0}
 .di .sb{font-size:6px;font-family:var(--pixel-font);color:var(--theme-text-secondary,#6a8aaa);margin-left:auto;opacity:.6}
-/* ── Header (Wood style) ── */
-.gh{background:linear-gradient(90deg,#3a2a1a,#5a3a1a);padding:4px 6px;display:flex;align-items:center;gap:5px;color:#f0e8d0;flex-wrap:wrap}
-.gh .av{width:32px;height:32px;background:rgba(255,255,255,.12);border:2px solid #f0e8d0;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;position:relative;cursor:pointer}
+/* ── Header: one cream bar on every kids screen ── */
+.gh{
+  background:
+    linear-gradient(180deg, rgba(255,248,236,.7), rgba(255,248,236,0) 14px),
+    #faf6ef;
+  color:#3b2a1a;
+  border:3px solid #8b5e3c;
+  border-radius:0 0 18px 18px;
+  padding:6px 12px;display:flex;align-items:center;gap:10px;
+  flex-wrap:nowrap;box-sizing:border-box;min-height:72px;height:72px;
+}
+.gh .av{width:44px;height:44px;background:#fff;border:2px solid #8b5e3c;border-radius:14px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;position:relative;cursor:pointer}
 .gh .av img{width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
 /* Ability tooltip */
 .av-tip{display:none;position:fixed;z-index:999;background:rgba(0,0,0,0.88);backdrop-filter:blur(6px);color:#fff;border-radius:10px;padding:10px 12px;font-size:11px;line-height:1.6;min-width:150px;box-shadow:0 4px 20px rgba(0,0,0,0.3);pointer-events:none}
@@ -979,17 +988,23 @@ body{
 .av-tip .rl .c{color:#94a3b8}
 .av-tip .rl .v{color:#fff;font-weight:700}
 .av-tip .bl{color:#22c55e;font-size:10px}
-.gh .in{display:flex;flex-direction:row;align-items:baseline;gap:4px;flex-shrink:0}
-.gh .nm{font-size:12px;font-weight:800;font-family:var(--pixel-font);color:#f0e8d0;line-height:1.2}
-.gh .nm-lv{font-size:8px;color:#c4a060;font-family:var(--pixel-font)}
-.gh .hdr-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.gh .rw{display:flex;align-items:center;gap:3px}
-.gh .xp{height:5px;width:60px;background:rgba(0,0,0,.3);border-radius:3px;overflow:hidden;border:1px solid rgba(255,255,255,.1)}
-.gh .xf{height:100%;width:0%;background:linear-gradient(90deg,#a29bfe,#6c5ce7);border-radius:3px;transition:width .3s}
-.hdr-res{display:flex;gap:2px;flex-wrap:wrap;align-items:center}
-.hdr-res span{font-size:8px;display:flex;align-items:center;gap:1px;background:rgba(0,0,0,.15);padding:1px 4px;border-radius:3px;color:#fff}
-.hdr-res span .n{font-family:var(--pixel-font);font-size:7px;color:#fff;font-weight:700}
-.gh .mb{background:none;border:2px solid rgba(255,255,255,.2);color:#f0e8d0;font-size:16px;padding:2px 6px;border-radius:4px;cursor:pointer;flex-shrink:0;line-height:1}
+.gh .in{display:flex;flex-direction:row;align-items:baseline;gap:6px;flex-shrink:0;min-width:0}
+.gh .nm{font-size:20px;font-weight:800;font-family:var(--body-font);color:#3b2a1a;line-height:1.1}
+.gh .nm-lv{font-size:15px;color:#7a5b43;font-family:var(--body-font);font-weight:800}
+.gh .nm-hp{font-size:14px;color:#7a5b43;font-family:var(--body-font);font-weight:800}
+.gh .nm-hp:empty{display:none}
+.gh .hdr-mid{flex:1;min-width:0;display:flex;flex-direction:row;align-items:center;gap:8px}
+.gh .rw{display:flex;align-items:center;gap:6px;flex:1;min-width:72px}
+.gh .xp{height:10px;flex:1;width:auto;min-width:48px;background:#e7d3ae;border-radius:999px;overflow:hidden;border:2px solid #c4a574}
+.gh .xf{height:100%;width:0%;background:linear-gradient(90deg,#e7b84a,#c4842a);border-radius:999px;transition:width .3s}
+.gh .xp-num{font-size:13px;font-weight:800;color:#7a5b43;font-family:var(--body-font);white-space:nowrap}
+.gh .xp-num:empty{display:none}
+.hdr-res{display:flex;gap:6px;flex-wrap:nowrap;align-items:center;flex-shrink:0}
+.hdr-res span{font-size:18px;display:flex;align-items:center;gap:4px;background:#fff;color:#3b2a1a;padding:4px 10px;border-radius:999px;border:2px solid #c4a574;font-weight:800;line-height:1}
+.hdr-res span .n{font-family:var(--body-font);font-size:18px;color:#3b2a1a;font-weight:800}
+.gh .mat{display:flex}
+.gh .mb{background:#fff;border:2px solid #8b5e3c;color:#3b2a1a;font-size:20px;min-width:44px;min-height:44px;padding:0 10px;border-radius:14px;cursor:pointer;flex-shrink:0;line-height:1}
+.gh .mb:focus-visible,.gh .av:focus-visible{outline:3px solid #c45c26;outline-offset:2px}
 /* ── Set Screen ── */
 .ss{padding:12px}
 .ss .s{margin-bottom:10px}
@@ -1203,30 +1218,16 @@ body.kt-artstage .dov{position:absolute}
 }
 /* Component shell: HUD, wood panels, sprites, and dock are separate. No full-bleed concept frame. */
 body.kt-artstage .gs{
-  position:absolute;z-index:6;top:12px;left:20px;right:20px;height:72px;
+  position:absolute;z-index:30;top:0;left:0;right:0;height:72px;
   margin:0;padding:0;border:0;background:transparent;box-shadow:none;overflow:visible;
 }
 body.kt-artstage #offlineBanner,
 body.kt-artstage #syncQueueBadge{display:none !important}
 body.kt-artstage .gh{
-  position:relative;z-index:6;width:100%;height:72px;
-  background:#f7edd8;color:#3a2616;border:2px solid #c4a574;border-radius:14px;
-  padding:8px 12px;box-shadow:0 4px 12px rgba(58,38,22,.18);overflow:hidden;
-  flex-wrap:nowrap;box-sizing:border-box;
+  position:relative;z-index:30;width:100%;height:72px;
+  border-radius:0 0 18px 18px;
+  box-shadow:0 4px 12px rgba(58,38,22,.16);
 }
-body.kt-artstage .gh .nm{color:#3a2616;font-family:var(--body-font);font-size:22px;font-weight:800}
-body.kt-artstage .gh .nm-lv,
-body.kt-artstage .gh .nm-hp,
-body.kt-artstage .gh .xp-num{color:#7a5a32;font-family:var(--body-font);font-size:14px;font-weight:800}
-body.kt-artstage .gh .nm-hp:empty,
-body.kt-artstage .gh .xp-num:empty{display:none}
-body.kt-artstage .gh .hdr-mid{flex:1;min-width:0}
-body.kt-artstage .gh .mat{display:none}
-body.kt-artstage .gh .xp{flex:1;width:auto;min-width:36px;height:8px;background:#e7d3ae;border-color:#c4a574}
-body.kt-artstage .gh .xf{background:linear-gradient(90deg,#e7b84a,#c4842a)}
-body.kt-artstage .hdr-res span{background:#fff;color:#3a2616;font-size:16px}
-body.kt-artstage .hdr-res span .n{color:#3a2616;font-size:16px;font-family:var(--body-font)}
-body.kt-artstage .gh .mb{color:#3a2616;border-color:#c4a574}
 body.kt-artstage .dbx,
 body.kt-battle .dbx{display:none !important}
 .kt-scene{
@@ -1568,7 +1569,6 @@ body.kt-pane-shop .kt-backpack-block{display:none}
           </div>
           <div class="hdr-res" id="hdrRes">
             <span>💰<span class="n" id="hudCo">0</span></span>
-            <span>⭐<span class="n" id="hudSt">0</span></span>
             <span class="mat" data-mat="wood">🪵<span class="n">0</span></span>
             <span class="mat" data-mat="brick">🧱<span class="n">0</span></span>
             <span class="mat" data-mat="glass">🪟<span class="n">0</span></span>
@@ -1660,7 +1660,6 @@ body.kt-pane-shop .kt-backpack-block{display:none}
   <main class="kt-scene kt-guild" id="guildBoard">
     <div class="kt-scene-top">
       <h1 class="kt-scene-title">公會任務板</h1>
-      <div class="kt-wallet" id="guildWallet"></div>
     </div>
     <section class="kt-wood">
       <h2 class="vh">今日任務</h2>
@@ -2312,11 +2311,8 @@ function updateHeader() {
     };
     avEl.replaceChildren(img);
   }
-  // Coins & Stars
   const coEl = document.getElementById('hudCo');
-  if (coEl) coEl.textContent = kid.points || 0;
-  const stEl = document.getElementById('hudSt');
-  if (stEl) stEl.textContent = kid.stars || 0;
+  if (coEl) coEl.textContent = (kid.points == null ? 0 : kid.points);
   // EXP bar — in-level / for-next (EXP_PER_LEVEL=25), never total/(level*100)
   const xfEl = document.getElementById('hudXp');
   if (xfEl) {
@@ -2348,7 +2344,8 @@ function updateHeader() {
   document.querySelectorAll('#hdrRes .mat .n').forEach(el => {
     const mat = el.closest('.mat').dataset.mat;
     const item = inv.find(i => i.item_type === mat);
-    el.textContent = item ? item.quantity : 0;
+    const qty = item && item.quantity != null ? item.quantity : 0;
+    el.textContent = qty;
   });
   // Town character sprite (unchanged)
   const charSprite = document.getElementById('charSprite');
@@ -3534,11 +3531,7 @@ function ktKid() {
 }
 
 function paintGuildChrome() {
-  const kid = ktKid();
-  const wallet = document.getElementById('guildWallet');
-  if (wallet) {
-    wallet.innerHTML = `<span>🪙 ${kid.points || 0}</span><span>⭐ ${kid.stars || 0}</span>`;
-  }
+  /* Resources live only in the shared header (.gh / #hdrRes). */
 }
 
 function ktIsParentActor() {
@@ -4812,7 +4805,7 @@ function renderBattleMode(exp) {
     <div class="kt-field-stage" id="mainContent">
       <div class="kt-hero-actor">
         <img class="kt-sprite" src="/kids/mocks/ui-direction/kit/sprites/sprite-hero.png?v=2" alt="">
-        <div class="kt-actor-hp">HP ${pHp}/${pMax} · MP ${pMp} · 🪙 ${kid.points || 0}
+        <div class="kt-actor-hp">HP ${pHp}/${pMax} · MP ${pMp}
           <div class="kt-bar"><span style="width:${playerPct}%"></span></div>
         </div>
       </div>
