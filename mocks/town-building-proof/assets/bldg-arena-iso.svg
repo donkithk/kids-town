@@ -8,8 +8,8 @@
     .spar-a { animation: hopa 2.4s ease-in-out infinite; }
     .spar-b { animation: hopb 2.4s ease-in-out infinite; }
     .arm-a, .arm-b { transform-box: fill-box; }
-    .arm-a { transform-origin: 0% 60%; animation: puncha 2.4s ease-in-out infinite; }
-    .arm-b { transform-origin: 100% 60%; animation: punchb 2.4s ease-in-out infinite; }
+    .arm-a { transform-origin: 22% 12%; animation: puncha 2.4s ease-in-out infinite; }
+    .arm-b { transform-origin: 78% 12%; animation: punchb 2.4s ease-in-out infinite; }
     .spark { transform-box: fill-box; transform-origin: 50% 50%; animation: pop 2.4s ease-in-out infinite; }
     @keyframes wave {
       0%, 100% { transform: rotate(-28deg); }
@@ -17,25 +17,25 @@
     }
     @keyframes hopa {
       0%, 100% { transform: translate(0, 0) rotate(0deg); }
-      38% { transform: translate(8px, -3px) rotate(-4deg); }
-      52% { transform: translate(10px, -1px) rotate(4deg); }
-      68% { transform: translate(4px, -2px) rotate(-2deg); }
+      38% { transform: translate(6px, -2px) rotate(-3deg); }
+      52% { transform: translate(8px, -1px) rotate(3deg); }
+      68% { transform: translate(3px, -1px) rotate(-1deg); }
     }
     @keyframes hopb {
       0%, 100% { transform: translate(0, 0) rotate(0deg); }
-      38% { transform: translate(-8px, -3px) rotate(4deg); }
-      52% { transform: translate(-10px, -1px) rotate(-4deg); }
-      68% { transform: translate(-4px, -2px) rotate(2deg); }
+      38% { transform: translate(-6px, -2px) rotate(3deg); }
+      52% { transform: translate(-8px, -1px) rotate(-3deg); }
+      68% { transform: translate(-3px, -1px) rotate(1deg); }
     }
     @keyframes puncha {
-      0%, 100% { transform: rotate(20deg); }
-      38% { transform: rotate(-6deg); }
-      52% { transform: rotate(-48deg); }
+      0%, 100% { transform: rotate(0deg); }
+      38% { transform: rotate(-36deg); }
+      52% { transform: rotate(-78deg); }
     }
     @keyframes punchb {
-      0%, 100% { transform: rotate(-20deg); }
-      38% { transform: rotate(6deg); }
-      52% { transform: rotate(48deg); }
+      0%, 100% { transform: rotate(0deg); }
+      38% { transform: rotate(36deg); }
+      52% { transform: rotate(78deg); }
     }
     @keyframes pop {
       0%, 28%, 72%, 100% { opacity: 0; transform: scale(0.3); }
@@ -44,10 +44,10 @@
   </style>
   <polygon points="120,190 206,150 120,110 34,150" fill="#e6c48a" stroke="#8b5e3c" stroke-width="3" stroke-linejoin="round"/>
   <path d="M70 158c18-8 28-8 46 0M128 146c16-8 26-6 40 2M90 138c14-6 22-4 30 4" stroke="#d7b27a" stroke-width="2" stroke-linecap="round" opacity=".7"/>
-  <polygon points="62,150 120,124 120,108 48,134" fill="#a67c52" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="178,150 120,124 120,108 192,134" fill="#c4a06a" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M70 140h28M150 128h26M86 128h18" stroke="#8b5e3c" stroke-width="1.4" stroke-linecap="round" opacity=".55"/>
-  <circle cx="120" cy="110" r="5" fill="#8b5e3c" stroke="#5c3d28" stroke-width="2"/>
+  <polygon points="62,150 120,124 120,88 48,104" fill="#a67c52" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="178,150 120,124 120,88 192,104" fill="#c4a06a" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M68 126h26M148 114h24M84 114h16" stroke="#8b5e3c" stroke-width="1.4" stroke-linecap="round" opacity=".55"/>
+  <circle cx="120" cy="90" r="5" fill="#8b5e3c" stroke="#5c3d28" stroke-width="2"/>
   <polygon points="188,128 194,124 194,62 188,66" fill="#6b4428" stroke="#5c3d28" stroke-width="2"/>
   <path d="M191 74v42" stroke="#e7c98a" stroke-width="1" opacity=".55"/>
   <g class="flag-r">
@@ -55,51 +55,51 @@
     <path d="M204 70c8 2 16 2 24 8" stroke="#fff6c2" stroke-width="2" stroke-linecap="round"/>
   </g>
   <circle cx="194" cy="132" r="5" fill="#c4a06a" stroke="#5c3d28" stroke-width="2"/>
-  <circle cx="78" cy="130" r="6" fill="#f0c14b" stroke="#5c3d28" stroke-width="2"/>
-  <circle cx="78" cy="130" r="2.3" fill="#fff8e7"/>
-  <path d="M74.5 128h7" stroke="#c45c26" stroke-width="1.3" stroke-linecap="round"/>
+  <circle cx="64" cy="118" r="6" fill="#f0c14b" stroke="#5c3d28" stroke-width="2"/>
+  <circle cx="64" cy="118" r="2.3" fill="#fff8e7"/>
+  <path d="M60.5 116h7" stroke="#c45c26" stroke-width="1.3" stroke-linecap="round"/>
   <polygon points="120,176 178,150 120,124 62,150" fill="#f6e0b0" stroke="#c4a06a" stroke-width="2.5" stroke-linejoin="round"/>
   <path d="M86 154h28M104 142h22M138 150h20" stroke="#e7c98a" stroke-width="1.6" stroke-linecap="round" opacity=".8"/>
-  <polygon points="46,150 52,148 52,86 46,88" fill="#6b4428" stroke="#5c3d28" stroke-width="2"/>
+  <polygon points="46,150 52,148 52,62 46,64" fill="#6b4428" stroke="#5c3d28" stroke-width="2"/>
   <path d="M49 96v44" stroke="#c4a06a" stroke-width="1" opacity=".6"/>
   <g class="flag-l">
-    <polygon points="52,90 112,74 104,118 52,108" fill="#d4453a" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
-    <path d="M64 96c12 2 22 2 36 10" stroke="#f6e0b0" stroke-width="2" stroke-linecap="round"/>
+    <polygon points="52,66 108,42 100,68 52,78" fill="#d4453a" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M62 64c16-8 30-8 42 0" stroke="#f6e0b0" stroke-width="2" stroke-linecap="round"/>
   </g>
   <circle cx="46" cy="150" r="5" fill="#8b5e3c" stroke="#5c3d28" stroke-width="2"/>
   <g class="spar-a">
-    <ellipse cx="104" cy="154" rx="16" ry="4.5" fill="#5c3d28" opacity=".18"/>
-    <path d="M96 150l-1-10M112 150l1-10" stroke="#5c3d28" stroke-width="4.6" stroke-linecap="round"/>
-    <ellipse cx="104" cy="148" rx="18" ry="12" fill="#7eb0d4" stroke="#5c3d28" stroke-width="2"/>
-    <circle cx="104" cy="132" r="14" fill="#f3c7a3" stroke="#5c3d28" stroke-width="2"/>
-    <path d="M96 131q8-7 16 0" stroke="#5c3d28" stroke-width="2" fill="none"/>
-    <circle cx="99" cy="130" r="1.6" fill="#5c3d28"/>
-    <circle cx="109" cy="130" r="1.6" fill="#5c3d28"/>
+    <ellipse cx="92" cy="168" rx="14" ry="4" fill="#5c3d28" opacity=".18"/>
+    <path d="M84 166l-1-14M100 166l1-14" stroke="#5c3d28" stroke-width="4" stroke-linecap="round"/>
+    <ellipse cx="92" cy="142" rx="16" ry="16" fill="#7eb0d4" stroke="#5c3d28" stroke-width="2"/>
+    <circle cx="92" cy="118" r="12" fill="#f3c7a3" stroke="#5c3d28" stroke-width="2"/>
+    <path d="M85 116q7-7 14 0" stroke="#5c3d28" stroke-width="2" fill="none"/>
+    <circle cx="88" cy="116" r="1.4" fill="#5c3d28"/>
+    <circle cx="96" cy="116" r="1.4" fill="#5c3d28"/>
     <g class="arm-a">
-      <path d="M112 146l8 3" stroke="#f3c7a3" stroke-width="6" stroke-linecap="round"/>
-      <circle cx="121" cy="150" r="5" fill="#f3c7a3" stroke="#5c3d28" stroke-width="1.6"/>
+      <path d="M104 138l2 12" stroke="#f3c7a3" stroke-width="5.5" stroke-linecap="round"/>
+      <circle cx="106" cy="151" r="4.2" fill="#f3c7a3" stroke="#5c3d28" stroke-width="1.6"/>
     </g>
   </g>
   <g class="spar-b">
-    <ellipse cx="156" cy="150" rx="16" ry="4.5" fill="#5c3d28" opacity=".18"/>
-    <path d="M148 146l-1-10M164 146l1-10" stroke="#5c3d28" stroke-width="4.6" stroke-linecap="round"/>
-    <ellipse cx="156" cy="144" rx="18" ry="12" fill="#e7a3b0" stroke="#5c3d28" stroke-width="2"/>
-    <circle cx="156" cy="138" r="14" fill="#f3c7a3" stroke="#5c3d28" stroke-width="2"/>
-    <path d="M148 137q8-7 16 0" stroke="#5c3d28" stroke-width="2" fill="none"/>
-    <circle cx="151" cy="136" r="1.6" fill="#5c3d28"/>
-    <circle cx="161" cy="136" r="1.6" fill="#5c3d28"/>
+    <ellipse cx="148" cy="168" rx="14" ry="4" fill="#5c3d28" opacity=".18"/>
+    <path d="M140 166l-1-14M156 166l1-14" stroke="#5c3d28" stroke-width="4" stroke-linecap="round"/>
+    <ellipse cx="148" cy="142" rx="16" ry="16" fill="#e7a3b0" stroke="#5c3d28" stroke-width="2"/>
+    <circle cx="148" cy="118" r="12" fill="#f3c7a3" stroke="#5c3d28" stroke-width="2"/>
+    <path d="M141 116q7-7 14 0" stroke="#5c3d28" stroke-width="2" fill="none"/>
+    <circle cx="144" cy="116" r="1.4" fill="#5c3d28"/>
+    <circle cx="152" cy="116" r="1.4" fill="#5c3d28"/>
     <g class="arm-b">
-      <path d="M142 142l-8 3" stroke="#f3c7a3" stroke-width="6" stroke-linecap="round"/>
-      <circle cx="133" cy="146" r="5" fill="#f3c7a3" stroke="#5c3d28" stroke-width="1.6"/>
+      <path d="M136 138l-2 12" stroke="#f3c7a3" stroke-width="5.5" stroke-linecap="round"/>
+      <circle cx="134" cy="151" r="4.2" fill="#f3c7a3" stroke="#5c3d28" stroke-width="1.6"/>
     </g>
   </g>
   <g class="spark">
-    <path d="M124 140l2.4 6.4 6.4 1.2-5 4 1.4 6.4-5.2-3.6-5.2 3.6 1.4-6.4-5-4 6.4-1.2z" fill="#fff6c2" stroke="#e07a3d" stroke-width="1.3" stroke-linejoin="round"/>
+    <path d="M120 128l2.2 6 6 1.1-4.6 3.6 1.3 6-4.9-3.4-4.9 3.4 1.3-6-4.6-3.6 6-1.1z" fill="#fff6c2" stroke="#e07a3d" stroke-width="1.3" stroke-linejoin="round"/>
   </g>
-  <polygon points="48,134 120,168 120,156 48,122" fill="#8b5e3c" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
-  <polygon points="192,134 120,168 120,156 192,122" fill="#d4b278" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
-  <path d="M64 140l40 18M150 132l28 12" stroke="#6b4428" stroke-width="1.5" stroke-linecap="round" opacity=".45"/>
-  <path d="M52 146c22 10 40 12 68 4" stroke="#c4a06a" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>
+  <polygon points="48,159 120,187 120,175 48,147" fill="#8b5e3c" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
+  <polygon points="192,159 120,187 120,175 192,147" fill="#d4b278" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M62 158l34 14M154 164l26 10" stroke="#6b4428" stroke-width="1.5" stroke-linecap="round" opacity=".45"/>
+  <path d="M56 164c20 8 40 10 60 4" stroke="#c4a06a" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>
   <polygon points="108,186 132,176 132,158 108,168" fill="#6b4428" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
   <path d="M114 170v12M122 166v12" stroke="#8b5e3c" stroke-width="1.2"/>
   <path d="M114 176h12" stroke="#f0c14b" stroke-width="2" stroke-linecap="round"/>
