@@ -216,16 +216,22 @@
         pad.appendChild(sprite);
         pad.appendChild(ghost);
         pad.appendChild(badge);
+        var ring = document.createElement("span");
+        ring.className = "focus-ring";
+        ring.setAttribute("aria-hidden", "true");
         pad.appendChild(cap);
+        pad.appendChild(ring);
         pad.appendChild(btn);
         village.appendChild(pad);
         var cell = { c: c, r: r, el: pad, btn: btn, mark: mark, shadow: shadow, sprite: sprite, ghost: ghost, cap: cap, badge: badge };
         pads.push(cell);
         (function (cell) {
-          btn.addEventListener("click", function () { onCell(cell.c, cell.r); });
+          btn.addEventListener("click", function (event) {
+            if (event.detail !== 0) return;
+            onCell(cell.c, cell.r);
+          });
           btn.addEventListener("focus", function () { setHover(cell.c, cell.r); });
-          btn.addEventListener("pointerenter", function () { setHover(cell.c, cell.r); });
-          btn.addEventListener("pointerleave", function () {
+          btn.addEventListener("blur", function () {
             if (hover && hover.c === cell.c && hover.r === cell.r) setHover(null, null);
           });
         })(cell);
@@ -349,19 +355,83 @@
     map.classList.remove("is-oob");
   }
 
-  function onMapClick(event) {
-    if (mode === "idle") return;
-    if (event.target.closest("button, a, .palette, .place-bar")) return;
-    var rect = map.getBoundingClientRect();
-    var x = (event.clientX - rect.left) * (map.clientWidth / rect.width);
-    var y = (event.clientY - rect.top) * (map.clientHeight / rect.height);
+  /* Diamond center of cell (0,0) is pad origin + (80s, 121s).
+     Pad left = 50% + (c - r - 0.5) * 84s - 80s. */
+  function gridMetrics() {
+    var pad = pads[0].el;
+    var s = pad.offsetWidth / 160;
+    return {
+      s: s,
+      stepX: 84 * s,
+      stepY: 50 * s,
+      origin: {
+        x: pad.offsetLeft + 80 * s,
+        y: pad.offsetTop + 121 * s
+      }
+    };
+  }
+
+  function localPoint(el, clientX, clientY) {
+    var rect = el.getBoundingClientRect();
+    var scaleX = rect.width / el.offsetWidth;
+    var scaleY = rect.height / el.offsetHeight;
+    return {
+      x: (clientX - rect.left) / scaleX + el.scrollLeft,
+      y: (clientY - rect.top) / scaleY + el.scrollTop
+    };
+  }
+
+  /* Inverse of the iso lattice. The drawn rhombus is the square
+     |c - col| <= 0.5, |r - row| <= 0.5 in this space. */
+  function cellAt(clientX, clientY) {
+    var rect = village.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return null;
+    var scaleX = rect.width / village.offsetWidth;
+    var inside = (clientX - rect.left) / scaleX;
+    if (inside < 0 || inside > village.clientWidth) return null;
+    var point = localPoint(village, clientX, clientY);
+    var metrics = gridMetrics();
+    var dx = point.x - metrics.origin.x;
+    var dy = point.y - metrics.origin.y;
+    var cf = 0.5 * (dx / metrics.stepX + dy / metrics.stepY);
+    var rf = 0.5 * (dy / metrics.stepY - dx / metrics.stepX);
+    var c = Math.round(cf);
+    var r = Math.round(rf);
+    if (Math.abs(cf - c) > 0.501 || Math.abs(rf - r) > 0.501) return null;
+    if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return null;
+    return { c: c, r: r };
+  }
+
+  function showOob(clientX, clientY) {
+    var point = localPoint(map, clientX, clientY);
     oobMark.hidden = false;
-    oobMark.style.left = x + "px";
-    oobMark.style.top = y + "px";
+    oobMark.style.left = point.x + "px";
+    oobMark.style.top = point.y + "px";
     map.classList.add("is-oob");
     showToast("出界，呢度放唔到");
     clearTimeout(oobTimer);
     oobTimer = setTimeout(hideOob, 1200);
+  }
+
+  function onVillagePointer(event) {
+    if (mode === "idle") {
+      if (hover) setHover(null, null);
+      return;
+    }
+    var hit = cellAt(event.clientX, event.clientY);
+    if (!hit) setHover(null, null);
+    else setHover(hit.c, hit.r);
+  }
+
+  function onVillageClick(event) {
+    if (event.target.closest(".cell-btn")) return;
+    var hit = cellAt(event.clientX, event.clientY);
+    if (hit) {
+      onCell(hit.c, hit.r);
+      return;
+    }
+    if (mode === "idle") return;
+    showOob(event.clientX, event.clientY);
   }
 
   function ghostId() {
@@ -533,7 +603,11 @@
   btnCancel.addEventListener("click", cancelAction);
   btnConfirm.addEventListener("click", onConfirm);
   document.getElementById("btnReset").addEventListener("click", onReset);
-  map.addEventListener("click", onMapClick);
+  village.addEventListener("pointermove", onVillagePointer);
+  village.addEventListener("pointerleave", function () {
+    if (hover) setHover(null, null);
+  });
+  village.addEventListener("click", onVillageClick);
   document.addEventListener("keydown", function (event) {
     if (event.key === "Escape" && mode !== "idle") cancelAction();
   });
