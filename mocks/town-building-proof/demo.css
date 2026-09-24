@@ -173,6 +173,10 @@
   top: calc((var(--c) + var(--r) + 1) * var(--step-y));
 }
 
+/* The pad box sits above its diamond and used to steal taps.
+   Only the clipped button is clickable. */
+.village.is-iso .pad { pointer-events: none; }
+
 /* Footprint center inside the unscaled 160×158 pad is (80px, 121px).
    Slab viewBox center (0,0) is 84px across and 50px down. */
 .pad > .slab,
@@ -226,27 +230,35 @@
   pointer-events: none;
 }
 
+/* Hit the drawn rhombus, not the tall pad rectangle above it.
+   The 168×120 slab uses viewBox -84 -50 168 120; the face is
+   (0,-50) (84,0) (0,50) (-84,0). The browser maps taps through
+   stage scale, letterbox, and map scroll. */
 .cell-btn {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  z-index: 3;
+  width: calc(var(--s) * 168px);
+  height: calc(var(--s) * 120px);
+  left: calc(var(--s) * -4px);
+  top: calc(var(--s) * 71px);
+  min-width: 44px;
   min-height: 44px;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: pointer;
-  z-index: 3;
+  pointer-events: auto;
+  clip-path: polygon(50% 0, 100% 41.67%, 50% 83.33%, 0 41.67%);
 }
 
 .pad.is-idle-empty .cell-btn {
   pointer-events: none;
 }
 
-.cell-btn .mark,
-.cell-btn .sprite,
-.cell-btn .ghost {
+.pad > .sprite,
+.pad > .ghost {
   position: absolute;
+  z-index: 4;
   left: 0;
   right: 0;
   bottom: 0;
@@ -255,7 +267,7 @@
   pointer-events: none;
 }
 
-.cell-btn .ghost { opacity: .5; }
+.pad > .ghost { opacity: .5; }
 
 .pad.is-illegal .ghost { opacity: .72; }
 
@@ -263,7 +275,7 @@
   position: absolute;
   z-index: 5;
   left: 50%;
-  top: 78%;
+  top: calc(var(--s) * 121px);
   margin: 0;
   padding: 2px 8px;
   border: 2px solid var(--gold);
@@ -279,12 +291,14 @@
 }
 
 .badge.is-bad {
-  top: 22%;
+  top: calc(var(--s) * 78px);
   border-color: #b33a2b;
   background: #fde8e4;
   color: #7a241c;
 }
 
+.pad > .sprite[hidden],
+.pad > .ghost[hidden],
 .cell-btn img[hidden],
 .pad > .shadow[hidden],
 .pad > .mark[hidden],

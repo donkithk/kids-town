@@ -210,12 +210,12 @@
         var badge = document.createElement("span");
         badge.className = "badge";
         badge.hidden = true;
-        btn.appendChild(sprite);
-        btn.appendChild(ghost);
-        btn.appendChild(badge);
         pad.appendChild(slab);
         pad.appendChild(shadow);
         pad.appendChild(mark);
+        pad.appendChild(sprite);
+        pad.appendChild(ghost);
+        pad.appendChild(badge);
         pad.appendChild(cap);
         pad.appendChild(btn);
         village.appendChild(pad);
