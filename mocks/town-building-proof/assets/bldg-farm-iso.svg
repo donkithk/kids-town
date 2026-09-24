@@ -1,15 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 210" fill="none">
+  <style>
+    .blades, .hen, .hen-head { pointer-events: none; }
+    .blades { transform-box: view-box; transform-origin: 54px 64px; animation: spin 12s linear infinite; }
+    .hen { animation: stroll 6s ease-in-out infinite; }
+    .hen-head { transform-box: fill-box; transform-origin: 20% 60%; animation: peck 6s ease-in-out infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes stroll {
+      0%, 100% { transform: translate(0, 0); }
+      45% { transform: translate(12px, 2px); }
+      58% { transform: translate(12px, 4px); }
+      78% { transform: translate(6px, 1px); }
+    }
+    @keyframes peck {
+      0%, 42%, 68%, 100% { transform: rotate(0deg); }
+      54% { transform: rotate(26deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .blades, .hen, .hen-head { animation: none; }
+    }
+  </style>
   <polygon points="120,188 196,156 120,124 44,156" fill="#c9b27a" stroke="#8b5e3c" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M70 164c16-6 24-6 36 0M140 156c12-5 20-4 28 2" stroke="#b89a62" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>
   <polygon points="120,188 44,156 44,108 120,140" fill="#e7d3ae" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
   <polygon points="120,188 196,156 196,108 120,140" fill="#f4e6c8" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M60 150h40M70 136h28M148 148h32M160 132h24" stroke="#d7c4a2" stroke-width="1.5" stroke-linecap="round" opacity=".8"/>
+  <rect x="154" y="128" width="16" height="12" rx="1.5" fill="#9fd0e0" stroke="#5c3d28" stroke-width="1.6" transform="skewY(-18)"/>
+  <path d="M160 124l8 10M156 130l14-4" stroke="#fffaf2" stroke-width="1.2"/>
   <polygon points="44,108 120,76 120,48 34,78" fill="#a67c52" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
   <polygon points="196,108 120,76 120,48 206,78" fill="#c4a06a" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M56 92l40-16M72 100l36-14M150 86l36 12M164 96l28 10" stroke="#8b5e3c" stroke-width="1.3" stroke-linecap="round" opacity=".45"/>
   <polygon points="44,108 120,140 120,48" fill="#b8925c" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
   <polygon points="196,108 120,140 120,48" fill="#d4b278" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
   <path d="M48 70c8-10 14-8 18 0M70 62c8-12 16-8 18 2M188 66c-8-10-16-6-16 4" stroke="#c4a06a" stroke-width="3" stroke-linecap="round"/>
   <polygon points="78,176 58,166 58,132 78,142" fill="#6b4428" stroke="#5c3d28" stroke-width="2.5"/>
+  <path d="M64 140v28M72 144v24" stroke="#8b5e3c" stroke-width="1.2"/>
   <polygon points="98,166 80,157 80,128 98,137" fill="#8b5e3c" stroke="#5c3d28" stroke-width="2.5"/>
   <ellipse cx="156" cy="128" rx="14" ry="9" fill="#f0c14b" stroke="#5c3d28" stroke-width="2"/>
+  <path d="M146 128h20" stroke="#fff6c2" stroke-width="1.4" stroke-linecap="round"/>
   <g stroke="#6fa344" stroke-width="3" stroke-linecap="round">
     <path d="M150 176c2-16 6-16 8 0"/>
     <path d="M164 180c2-18 6-18 8 0"/>
@@ -22,4 +49,26 @@
   </g>
   <path d="M36 168h28M176 160h30" stroke="#8b5e3c" stroke-width="3" stroke-linecap="round"/>
   <path d="M42 160v16M56 158v16M184 152v16M198 154v14" stroke="#6b4428" stroke-width="3" stroke-linecap="round"/>
+  <polygon points="50,96 58,92 58,64 50,68" fill="#8b5e3c" stroke="#5c3d28" stroke-width="1.6"/>
+  <g class="blades">
+    <rect x="52" y="38" width="4" height="52" rx="2" fill="#f4e6c8" stroke="#5c3d28" stroke-width="1.4"/>
+    <rect x="28" y="62" width="52" height="4" rx="2" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.4"/>
+  </g>
+  <circle cx="54" cy="64" r="4" fill="#f0c14b" stroke="#5c3d28" stroke-width="1.4"/>
+  <g class="hen">
+    <ellipse cx="128" cy="176" rx="6" ry="2" fill="#5c3d28" opacity=".15"/>
+    <path d="M124 174l-1 4M132 174l1 4" stroke="#e07a3d" stroke-width="1.4" stroke-linecap="round"/>
+    <ellipse cx="128" cy="170" rx="8" ry="5" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.4"/>
+    <g class="hen-head">
+      <circle cx="136" cy="166" r="3.4" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.3"/>
+      <path d="M139 166l4 1.2-4 1" fill="#e07a3d"/>
+      <path d="M134 163q2-4 5-1" stroke="#c45c48" stroke-width="1.2" fill="none"/>
+    </g>
+  </g>
+  <g fill="#e07a3d" stroke="#5c3d28" stroke-width=".8">
+    <circle cx="40" cy="152" r="1.8"/>
+    <circle cx="48" cy="148" r="1.4" fill="#f0c14b"/>
+    <circle cx="208" cy="150" r="1.7"/>
+  </g>
+  <path d="M36 156c2-5 4-5 5 0M206 154c2-5 3-5 5 0" stroke="#6fa344" stroke-width="1.5" stroke-linecap="round"/>
 </svg>

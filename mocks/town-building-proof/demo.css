@@ -496,6 +496,35 @@ body.sheet-page {
 
 .cutouts img { width: 100%; height: auto; display: block; }
 
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 18px;
+  margin: 8px 0 28px;
+}
+
+.compare figure { margin: 0; }
+
+.compare figcaption {
+  margin-bottom: 6px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.compare .art {
+  border-radius: 12px;
+  background: #6d9844 url("assets/ground-tile.svg") center 78% / 78% auto no-repeat;
+}
+
+.compare img {
+  width: 100%;
+  height: auto;
+  display: block;
+  pointer-events: none;
+}
+
+.sheet h2 { margin: 22px 0 8px; font-size: 1.35rem; }
+
 .cutouts strong { font-size: 16px; }
 
 .cutouts code {
