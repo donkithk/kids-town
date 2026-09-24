@@ -1,23 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 210" fill="none">
-  <style>
-    .beam, .gull, .wing { pointer-events: none; }
-    .beam { transform-box: view-box; transform-origin: 120px 40px; animation: sweep 8s linear infinite; }
-    .gull { animation: fly 7s ease-in-out infinite; }
-    .wing { transform-box: fill-box; transform-origin: 8% 80%; animation: flap 0.9s ease-in-out infinite; }
-    .wing.r { transform-origin: 92% 80%; animation-delay: .08s; }
-    @keyframes sweep { to { transform: rotate(360deg); } }
-    @keyframes fly {
-      0% { transform: translate(0, 10px) scaleX(1); }
-      25% { transform: translate(78px, -18px) scaleX(1); }
-      50% { transform: translate(96px, 8px) scaleX(-1); }
-      75% { transform: translate(18px, -26px) scaleX(-1); }
-      100% { transform: translate(0, 10px) scaleX(1); }
-    }
-    @keyframes flap {
-      0%, 100% { transform: rotate(36deg); }
-      50% { transform: rotate(-42deg); }
-    }
-  </style>
   <polygon points="120,192 170,168 120,144 70,168" fill="#e4d2a4" stroke="#8b5e3c" stroke-width="3" stroke-linejoin="round"/>
   <path d="M96 176c8-3 12-3 20 0M128 168c6-2 10-2 16 1" stroke="#cbb892" stroke-width="1.4" stroke-linecap="round"/>
   <polygon points="120,178 98,168 98,52 120,62" fill="#f3e6c8" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>

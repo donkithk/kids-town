@@ -129,6 +129,33 @@
   text-align: center;
 }
 
+.btn-motion[aria-pressed="true"] {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #fff6d2, #ffe3a0);
+}
+
+.motion-os {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.motion-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 4px 0 12px;
+}
+
+.motion-bar .btn-motion { min-width: 132px; }
+
+.motion-bar .motion-os { text-align: left; }
+
+.btn-motion,
 .btn-reset,
 .text-link {
   min-height: 44px;

@@ -115,7 +115,24 @@
     toastTimer = setTimeout(function () { toast.hidden = true; }, 2800);
   }
 
-  function asset(id) { return "assets/bldg-" + id + "-iso.svg"; }
+  var MOTION_IDS = { arena: 1, farm: 1, lighthouse: 1 };
+
+  function asset(id) {
+    var still = MOTION_IDS[id] && window.townMotionOn && !window.townMotionOn();
+    return "assets/bldg-" + id + "-iso" + (still ? "-still" : "") + ".svg";
+  }
+
+  function refreshMotionArt() {
+    DEFS.forEach(function (def) {
+      var img = palBtns[def.id] && palBtns[def.id].querySelector("img");
+      if (!img) return;
+      var next = asset(def.id);
+      if (img.getAttribute("src") !== next) img.src = next;
+    });
+    if (pads.length) render();
+  }
+
+  window.townRefreshMotion = refreshMotionArt;
 
   function buildPalette() {
     DEFS.forEach(function (def) {
