@@ -39,8 +39,8 @@
   <path d="M52,98 L126,128 L122,136 L56,106 Z" fill="none" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
   <path d="M188,98 L114,128 L118,136 L184,106 Z" fill="none" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
 
-  <ellipse cx="152" cy="96" rx="22" ry="6" fill="#5c5146"/>
   <g class="bell">
+    <g transform="translate(148,86) scale(1.34) translate(-152,-84)">
     <ellipse cx="142" cy="92" rx="13" ry="9" fill="#2a2d31" stroke="#1c1a18" stroke-width="2.1"/>
     <ellipse cx="140" cy="89" rx="12.2" ry="8.4" fill="#3e444b" stroke="#1c1a18" stroke-width="2.2"/>
     <ellipse cx="140" cy="89" rx="7" ry="4.6" fill="#2c3136" stroke="#1c1a18" stroke-width="1.15"/>
@@ -62,5 +62,6 @@
     <ellipse cx="177" cy="70.8" rx="3.5" ry="2.4" fill="#e7eef2" stroke="#1c1a18" stroke-width="1.3"/>
     <ellipse cx="150" cy="70" rx="2.3" ry="3.5" fill="#f0b429" stroke="#1c1a18" stroke-width="1.15" transform="rotate(-24 150 70)"/>
     <ellipse cx="157" cy="65.5" rx="1.8" ry="2.7" fill="#ffc44d" stroke="#1c1a18" stroke-width="1.05" transform="rotate(16 157 65.5)"/>
+    </g>
   </g>
 </svg>
