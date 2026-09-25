@@ -1,20 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 210" fill="none">
   <style>
     svg, svg * { pointer-events: none; }
-    .bell { transform-box: view-box; transform-origin: 120px 78px; animation: bob 3.4s ease-in-out infinite; }
-    .glint { animation: glint 2.6s ease-in-out infinite; animation-delay: -0.4s; }
-    .lamp { animation: breathe 2.9s ease-in-out infinite; animation-delay: -1.1s; }
+    .bell { transform-box: view-box; transform-origin: 120px 78px; animation: bob 3.2s ease-in-out infinite; }
+    .glint { animation: glint 2.8s ease-in-out infinite; }
+    .lamp { animation: breathe 3.6s ease-in-out infinite; }
     @keyframes bob {
-      0%, 100% { transform: translate(0, 0) rotate(-2deg); }
-      50% { transform: translate(0, -3px) rotate(2.5deg); }
+      0%, 100% { transform: translate(0, 0) rotate(-3.5deg); }
+      50% { transform: translate(0, -7px) rotate(4.5deg); }
     }
     @keyframes glint {
-      0%, 100% { opacity: .12; }
-      42% { opacity: .95; }
+      0%, 100% { opacity: .08; }
+      50% { opacity: 1; }
     }
     @keyframes breathe {
-      0%, 100% { opacity: .28; }
-      50% { opacity: .92; }
+      0%, 100% { opacity: .22; }
+      50% { opacity: 1; }
     }
   </style>
   <polygon points="120,186 188,154 120,122 52,154" fill="#d9c7a0" stroke="#8b5e3c" stroke-width="3" stroke-linejoin="round"/>
