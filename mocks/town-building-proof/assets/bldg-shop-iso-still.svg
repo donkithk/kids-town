@@ -1,26 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 210" fill="none">
   <polygon points="120,186 188,154 120,122 52,154" fill="#e4d2a4" stroke="#8b5e3c" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="120,186 52,154 52,92 120,124" fill="#eadcc0" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="120,186 188,154 188,92 120,124" fill="#f8efdc" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="52,92 120,58 120,28 44,62" fill="#8b5e3c" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="188,92 120,58 120,28 196,62" fill="#a67c52" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="52,92 120,124 120,28" fill="#7a5236" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="188,92 120,124 120,28" fill="#c4a06a" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="86,168 66,158 66,122 86,132" fill="#6b4428" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
-  <circle cx="80" cy="148" r="2" fill="#f0c14b"/>
+  <polygon points="118,174 66,152 66,128 118,150" fill="#eadcc0" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="118,174 172,152 172,128 118,150" fill="#f8efdc" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="66,128 118,104 118,88 54,114" fill="#8b5e3c" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="172,128 118,104 118,88 184,114" fill="#a67c52" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="86,166 72,160 72,142 86,148" fill="#6b4428" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
+  <circle cx="80" cy="156" r="1.6" fill="#f0c14b"/>
   <g class="awning">
-    <polygon points="136,128 184,108 184,120 136,140" fill="#c45c48" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
-    <path d="M148 124l2 12M160 120l2 12M172 116l2 12" stroke="#fff6c2" stroke-width="2.2" stroke-linecap="round"/>
+    <polygon points="48,122 192,106 208,148 56,168" fill="#c45c48" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M64.2,133.4 L184.6,121.7 M68.6,142.2 L189.8,129.2 M73.1,151.0 L195.0,136.6" stroke="#fff6c2" stroke-width="4.2" stroke-linecap="round"/>
   </g>
-  <ellipse cx="154" cy="112" rx="12" ry="8" fill="#c5e8f7" stroke="#5c3d28" stroke-width="2"/>
-  <path d="M154 104v16M146 112h16" stroke="#5c3d28" stroke-width="1.4"/>
-  <circle cx="160" cy="114" r="3" fill="#f0c14b" stroke="#5c3d28" stroke-width="1"/>
-  <circle class="spark" cx="160" cy="114" r="5" fill="#fff6c2"/>
   <g class="sign">
-    <path d="M96 90v14" stroke="#5c3d28" stroke-width="2" stroke-linecap="round"/>
-    <polygon points="78,102 114,90 114,106 78,118" fill="#f0c14b" stroke="#5c3d28" stroke-width="2" stroke-linejoin="round"/>
-    <path d="M88 100l12-4" stroke="#5c3d28" stroke-width="1.4" stroke-linecap="round"/>
+    <path d="M52,118 v16" stroke="#5c3d28" stroke-width="2.2" stroke-linecap="round"/>
+    <polygon points="34,132 74,122 74,140 34,150" fill="#f0c14b" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
+    <path d="M44,134 l18,-4 M44,140 l18,-4" stroke="#5c3d28" stroke-width="1.4" stroke-linecap="round"/>
   </g>
-  <polygon points="108,176 136,164 140,172 112,184" fill="#a67c52" stroke="#5c3d28" stroke-width="2" stroke-linejoin="round"/>
-  <polygon points="114,170 128,164 128,158 114,164" fill="#c4a06a" stroke="#5c3d28" stroke-width="1.4" stroke-linejoin="round"/>
+  <polygon points="128,180 154,170 162,178 136,188" fill="#a67c52" stroke="#5c3d28" stroke-width="2" stroke-linejoin="round"/>
+  <polygon points="136,174 148,169 148,162 136,167" fill="#c4a06a" stroke="#5c3d28" stroke-width="1.4" stroke-linejoin="round"/>
+  <polygon points="150,176 172,166 178,172 156,182" fill="#8b5e3c" stroke="#5c3d28" stroke-width="2" stroke-linejoin="round"/>
+  <ellipse cx="168" cy="164" rx="7" ry="4.5" fill="#e7c56a" stroke="#5c3d28" stroke-width="1.4"/>
+  <circle cx="168" cy="163" r="2.2" fill="#f0c14b" stroke="#5c3d28" stroke-width="1"/>
+  <circle class="spark" cx="168" cy="163" r="5" fill="#fff6c2"/>
 </svg>

@@ -1,27 +1,34 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 210" fill="none">
   <polygon points="120,186 188,154 120,122 52,154" fill="#f4ead4" stroke="#8b5e3c" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="120,186 52,154 52,92 120,124" fill="#f6efe2" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="120,186 188,154 188,92 120,124" fill="#fffaf3" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="52,92 120,58 120,28 44,62" fill="#a84838" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="188,92 120,58 120,28 196,62" fill="#c45c48" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="52,92 120,124 120,28" fill="#b5523a" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="188,92 120,124 120,28" fill="#d36a52" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="132,172 196,146 196,118 132,144" fill="#fffaf3" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="96,180 132,172 132,144 96,156" fill="#f7f1e6" stroke="#5c3d28" stroke-width="2.6" stroke-linejoin="round"/>
+  <polygon points="132,144 196,124 188,112 124,132" fill="#e7b2a4" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
+  <polygon points="100,176 54,156 54,96 100,116" fill="#f6efe2" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="100,176 146,158 146,98 100,116" fill="#ffffff" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="54,96 100,72 100,44 42,70" fill="#a84838" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="146,98 100,72 100,44 154,74" fill="#c45c48" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="54,96 100,116 100,44" fill="#b5523a" stroke="#5c3d28" stroke-width="2.6" stroke-linejoin="round"/>
+  <polygon points="146,98 100,116 100,44" fill="#d36a52" stroke="#5c3d28" stroke-width="2.6" stroke-linejoin="round"/>
+  <polygon points="92,50 82,46 82,30 92,34" fill="#fffaf3" stroke="#5c3d28" stroke-width="2" stroke-linejoin="round"/>
+  <polygon points="92,50 108,42 108,26 92,34" fill="#ffffff" stroke="#5c3d28" stroke-width="2" stroke-linejoin="round"/>
+  <polygon points="80,32 92,26 92,18 76,24" fill="#a84838" stroke="#5c3d28" stroke-width="1.7" stroke-linejoin="round"/>
+  <polygon points="110,30 92,26 92,18 114,24" fill="#c45c48" stroke="#5c3d28" stroke-width="1.7" stroke-linejoin="round"/>
   <g class="cross">
-    <polygon points="116,34 124,34 124,16 116,16" fill="#e24b4b" stroke="#5c3d28" stroke-width="1.6" stroke-linejoin="round"/>
-    <polygon points="108,28 132,28 132,22 108,22" fill="#e24b4b" stroke="#5c3d28" stroke-width="1.6" stroke-linejoin="round"/>
+    <polygon points="90,20 98,20 98,4 90,4" fill="#e24b4b" stroke="#5c3d28" stroke-width="1.4" stroke-linejoin="round"/>
+    <polygon points="82,16 106,16 106,10 82,10" fill="#e24b4b" stroke="#5c3d28" stroke-width="1.4" stroke-linejoin="round"/>
   </g>
-  <polygon points="86,168 66,158 66,122 86,132" fill="#fff8e7" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
-  <polygon points="74,156 80,156 80,146 74,146" fill="#e24b4b"/>
-  <polygon points="72,154 82,154 82,150 72,150" fill="#e24b4b"/>
-  <ellipse cx="156" cy="116" rx="16" ry="11" fill="#c5e8f7" stroke="#5c3d28" stroke-width="2.2"/>
+  <polygon points="78,166 64,160 64,130 78,136" fill="#fffaf3" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
+  <polygon points="69,154 74,154 74,144 69,144" fill="#e24b4b"/>
+  <polygon points="67,151 76,151 76,147 67,147" fill="#e24b4b"/>
+  <ellipse cx="168" cy="136" rx="16" ry="10" fill="#c5e8f7" stroke="#5c3d28" stroke-width="2.2"/>
   <g class="curtain">
-    <polygon points="142,110 154,106 154,126 142,130" fill="#fff6e8" stroke="#5c3d28" stroke-width="1.4" stroke-linejoin="round"/>
+    <polygon points="154,130 166,126 166,146 154,150" fill="#fff6e8" stroke="#5c3d28" stroke-width="1.5" stroke-linejoin="round"/>
   </g>
-  <path d="M156 105v22" stroke="#5c3d28" stroke-width="1.5"/>
-  <ellipse cx="108" cy="168" rx="10" ry="5" fill="#fff8e7" stroke="#5c3d28" stroke-width="1.6"/>
-  <ellipse cx="108" cy="166" rx="7" ry="3.2" fill="#e7c9a0" stroke="#8b5e3c" stroke-width="1.2"/>
+  <path d="M168,126 v20" stroke="#5c3d28" stroke-width="1.5"/>
+  <ellipse cx="88" cy="174" rx="10" ry="4.6" fill="#fff8e7" stroke="#5c3d28" stroke-width="1.5"/>
+  <ellipse cx="88" cy="172" rx="7" ry="3" fill="#e7c9a0" stroke="#8b5e3c" stroke-width="1.2"/>
   <g class="steam">
-    <path d="M104 160c2-4 0-6 2-10" fill="none" stroke="#fffaf2" stroke-width="1.8" stroke-linecap="round"/>
-    <path d="M112 158c-1-4 1-7 0-11" fill="none" stroke="#fffaf2" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M82,166 c2,-5 0,-8 2,-13" fill="none" stroke="#b7d5d4" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M94,164 c-1,-5 1,-9 0,-14" fill="none" stroke="#d5ecea" stroke-width="1.6" stroke-linecap="round"/>
   </g>
 </svg>
