@@ -1,72 +1,111 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 210" fill="none">
   <style>
-    .blades, .hen, .hen-head { pointer-events: none; }
-    .blades { transform-box: view-box; transform-origin: 46px 58px; animation: spin 6.5s linear infinite; }
-    .hen { animation: stroll 5s ease-in-out infinite; }
-    .hen-head { transform-box: fill-box; transform-origin: 15% 70%; animation: peck 5s ease-in-out infinite; }
+    svg, svg * { pointer-events: none; }
+    .mill { transform-box: view-box; transform-origin: 152px 40px; animation: spin 9s linear infinite; }
+    .sway-a, .sway-b { transform-box: fill-box; transform-origin: 50% 100%; }
+    .sway-a { animation: breeze-a 3.2s ease-in-out infinite; }
+    .sway-b { animation: breeze-b 4.1s ease-in-out infinite; animation-delay: -1.6s; }
+    .hoe { transform-box: view-box; transform-origin: 128px 136px; animation: hoe 2.7s ease-in-out infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes stroll {
-      0%, 100% { transform: translate(-36px, 2px); }
-      40% { transform: translate(52px, 4px); }
-      54% { transform: translate(52px, 10px); }
-      74% { transform: translate(6px, 2px); }
+    @keyframes breeze-a {
+      0%, 100% { transform: skewX(-5deg); }
+      50% { transform: skewX(6deg); }
     }
-    @keyframes peck {
-      0%, 34%, 66%, 100% { transform: rotate(0deg); }
-      48% { transform: rotate(46deg); }
+    @keyframes breeze-b {
+      0%, 100% { transform: skewX(4deg); }
+      46% { transform: skewX(-6deg); }
+    }
+    @keyframes hoe {
+      0%, 100% { transform: rotate(-12deg); }
+      42% { transform: rotate(16deg); }
     }
   </style>
-  <polygon points="120,188 196,156 120,124 44,156" fill="#c9b27a" stroke="#8b5e3c" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M70 164c16-6 24-6 36 0M140 156c12-5 20-4 28 2" stroke="#b89a62" stroke-width="1.6" stroke-linecap="round" opacity=".7"/>
-  <polygon points="120,188 44,156 44,108 120,140" fill="#e7d3ae" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="120,188 196,156 196,108 120,140" fill="#f4e6c8" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M60 150h40M70 136h28M148 148h32M160 132h24" stroke="#d7c4a2" stroke-width="1.5" stroke-linecap="round" opacity=".8"/>
-  <rect x="154" y="128" width="16" height="12" rx="1.5" fill="#9fd0e0" stroke="#5c3d28" stroke-width="1.6" transform="skewY(-18)"/>
-  <path d="M160 124l8 10M156 130l14-4" stroke="#fffaf2" stroke-width="1.2"/>
-  <polygon points="44,108 120,76 120,48 34,78" fill="#a67c52" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="196,108 120,76 120,48 206,78" fill="#c4a06a" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M56 92l40-16M72 100l36-14M150 86l36 12M164 96l28 10" stroke="#8b5e3c" stroke-width="1.3" stroke-linecap="round" opacity=".45"/>
-  <polygon points="44,108 120,140 120,48" fill="#b8925c" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="196,108 120,140 120,48" fill="#d4b278" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M48 70c8-10 14-8 18 0M70 62c8-12 16-8 18 2M188 66c-8-10-16-6-16 4" stroke="#c4a06a" stroke-width="3" stroke-linecap="round"/>
-  <polygon points="78,176 58,166 58,132 78,142" fill="#6b4428" stroke="#5c3d28" stroke-width="2.5"/>
-  <path d="M64 140v28M72 144v24" stroke="#8b5e3c" stroke-width="1.2"/>
-  <polygon points="98,166 80,157 80,128 98,137" fill="#8b5e3c" stroke="#5c3d28" stroke-width="2.5"/>
-  <ellipse cx="156" cy="128" rx="14" ry="9" fill="#f0c14b" stroke="#5c3d28" stroke-width="2"/>
-  <path d="M146 128h20" stroke="#fff6c2" stroke-width="1.4" stroke-linecap="round"/>
-  <g stroke="#6fa344" stroke-width="3" stroke-linecap="round">
-    <path d="M150 176c2-16 6-16 8 0"/>
-    <path d="M164 180c2-18 6-18 8 0"/>
-    <path d="M178 174c2-14 5-14 7 0"/>
+  <polygon points="120,186 188,154 120,122 52,154" fill="#e4d2a4" stroke="#8b5e3c" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- barn, back half of the plot -->
+  <polygon points="76,144 104,158 104,108 76,94" fill="#d7b48a" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="132,144 104,158 104,108 132,94" fill="#f4e6c8" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M84 112l16 8M90 124l12 6M112 118v28M120 114v24" stroke="#8b5e3c" stroke-width="1.5" stroke-linecap="round" opacity=".4"/>
+  <polygon points="104,62 76,94 104,108" fill="#8b5e3c" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="104,62 132,94 104,108" fill="#a67c52" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M84 86l14 8M92 92l10 6M116 74l12-6M122 82l8-4" stroke="#6b4428" stroke-width="1.5" stroke-linecap="round" opacity=".45"/>
+  <polygon points="84,104 94,109 94,120 84,115" fill="#c5e8f7" stroke="#5c3d28" stroke-width="2"/>
+  <path d="M89 104v16M84 112h10" stroke="#5c3d28" stroke-width="1.3"/>
+  <polygon points="82,126 94,132 94,146 82,140" fill="#6b4428" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
+  <circle cx="90" cy="136" r="1.4" fill="#f0c14b"/>
+  <polygon points="78,138 92,131 96,135 82,142" fill="#e7c84a" stroke="#5c3d28" stroke-width="1.8" stroke-linejoin="round"/>
+
+  <!-- windmill tower standing on the ground, right of the hut -->
+  <polygon points="144,150 152,154 152,52 144,48" fill="#c4a06a" stroke="#5c3d28" stroke-width="2.6" stroke-linejoin="round"/>
+  <polygon points="160,150 152,154 152,52 160,48" fill="#f3e6c8" stroke="#5c3d28" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M147 70v70M156 68v72" stroke="#8b5e3c" stroke-width="1.2" stroke-linecap="round" opacity=".45"/>
+  <g class="mill">
+    <polygon points="148,40 156,40 158,26 146,26" fill="#fff6e8" stroke="#5c3d28" stroke-width="2.1" stroke-linejoin="round"/>
+    <polygon points="148,40 156,40 158,54 146,54" fill="#f4e6c8" stroke="#5c3d28" stroke-width="2.1" stroke-linejoin="round"/>
+    <polygon points="152,36 152,44 136,47 136,33" fill="#fff6e8" stroke="#5c3d28" stroke-width="2.1" stroke-linejoin="round"/>
+    <polygon points="152,36 152,44 168,47 168,33" fill="#f4e6c8" stroke="#5c3d28" stroke-width="2.1" stroke-linejoin="round"/>
   </g>
-  <g fill="#e7c84a">
-    <ellipse cx="154" cy="162" rx="3" ry="5"/>
-    <ellipse cx="168" cy="164" rx="3" ry="5"/>
-    <ellipse cx="182" cy="160" rx="3" ry="5"/>
+  <circle cx="152" cy="40" r="5" fill="#f0c14b" stroke="#5c3d28" stroke-width="2"/>
+
+  <polygon points="78,156 108,146 154,152 164,162 136,174 120,180 104,176 90,166" fill="#c4a06a"/>
+  <path d="M88 158c16-4 28-4 42 0M94 164c14-4 24-4 36 0M102 170c10-3 18-3 28 0M112 176c8-2 12-2 18 0" stroke="#8b5e3c" stroke-width="1.7" stroke-linecap="round" opacity=".75"/>
+  <path d="M124 156c12-3 20-3 30 0M132 164c8-2 14-2 20 0" stroke="#6b4428" stroke-width="1.4" stroke-linecap="round" opacity=".4"/>
+
+  <g class="sway-a">
+    <path d="M86 156h3l-.5-12h-2z" fill="#6fa344"/>
+    <ellipse cx="87.4" cy="142" rx="3.2" ry="4.6" fill="#e7c84a" stroke="#5c3d28" stroke-width="1.2"/>
   </g>
-  <path d="M36 168h28M176 160h30" stroke="#8b5e3c" stroke-width="3" stroke-linecap="round"/>
-  <path d="M42 160v16M56 158v16M184 152v16M198 154v14" stroke="#6b4428" stroke-width="3" stroke-linecap="round"/>
-  <polygon points="42,88 52,84 52,46 42,50" fill="#8b5e3c" stroke="#5c3d28" stroke-width="1.8"/>
-  <g class="blades">
-    <rect x="40" y="12" width="12" height="92" rx="5" fill="#f4e6c8" stroke="#5c3d28" stroke-width="2"/>
-    <rect x="4" y="52" width="92" height="12" rx="5" fill="#fffaf2" stroke="#5c3d28" stroke-width="2"/>
+  <g class="sway-a">
+    <path d="M138 154h3l-.5-12h-2z" fill="#5f9238"/>
+    <ellipse cx="139.4" cy="140" rx="3.2" ry="4.6" fill="#f0c14b" stroke="#5c3d28" stroke-width="1.2"/>
   </g>
-  <circle cx="46" cy="58" r="7" fill="#f0c14b" stroke="#5c3d28" stroke-width="2"/>
-  <g class="hen">
-    <ellipse cx="124" cy="178" rx="11" ry="3.5" fill="#5c3d28" opacity=".16"/>
-    <path d="M116 174l-2 8M132 174l2 8" stroke="#e07a3d" stroke-width="2.4" stroke-linecap="round"/>
-    <ellipse cx="124" cy="166" rx="14" ry="9" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.8"/>
-    <g class="hen-head">
-      <circle cx="138" cy="158" r="6.5" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.6"/>
-      <path d="M144 158l8 2-8 2.2z" fill="#e07a3d" stroke="#5c3d28" stroke-width="1"/>
-      <path d="M134 152q4-8 9-1" stroke="#c45c48" stroke-width="2" fill="none" stroke-linecap="round"/>
-      <circle cx="140" cy="156" r="1.1" fill="#5c3d28"/>
+  <g class="sway-a">
+    <path d="M152 160h3l-.5-11h-2z" fill="#6fa344"/>
+    <ellipse cx="153.4" cy="147" rx="3.1" ry="4.4" fill="#8fbf55" stroke="#5c3d28" stroke-width="1.2"/>
+  </g>
+  <g class="sway-b">
+    <path d="M96 166h3.2l-.6-11h-2z" fill="#5f9238"/>
+    <ellipse cx="97.4" cy="153" rx="3.2" ry="4.6" fill="#8fbf55" stroke="#5c3d28" stroke-width="1.2"/>
+  </g>
+  <g class="sway-b">
+    <path d="M134 168h3.2l-.6-12h-2z" fill="#6fa344"/>
+    <ellipse cx="135.4" cy="154" rx="3.3" ry="4.8" fill="#e7c84a" stroke="#5c3d28" stroke-width="1.2"/>
+  </g>
+  <g class="sway-b">
+    <path d="M148 166h3l-.5-10h-2z" fill="#5f9238"/>
+    <ellipse cx="149.4" cy="154" rx="3" ry="4.2" fill="#f0c14b" stroke="#5c3d28" stroke-width="1.2"/>
+  </g>
+
+  <path d="M80 152v12M158 158v12" stroke="#6b4428" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M80 156l16 6M80 162l14 6" stroke="#c4a06a" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M158 162l-12 4M158 168l-14 4" stroke="#c4a06a" stroke-width="2.8" stroke-linecap="round"/>
+
+  <g class="farmer">
+    <ellipse cx="114" cy="168" rx="16" ry="3.2" fill="#5c3d28" opacity=".18"/>
+    <path d="M106 168l1-14M122 168l-1-14" stroke="#5c3d28" stroke-width="4" stroke-linecap="round"/>
+    <ellipse cx="106" cy="168" rx="5.2" ry="2.3" fill="#5c3d28"/>
+    <ellipse cx="122" cy="168" rx="5.2" ry="2.3" fill="#5c3d28"/>
+    <ellipse cx="114" cy="142" rx="16" ry="16" fill="#7eb0d4" stroke="#5c3d28" stroke-width="2"/>
+    <path d="M106 136h16M110 136v10M118 136v10" stroke="#fff6e8" stroke-width="1.7" stroke-linecap="round"/>
+    <circle cx="114" cy="118" r="12" fill="#f3c7a3" stroke="#5c3d28" stroke-width="2"/>
+    <path d="M107 116q7-7 14 0" stroke="#5c3d28" stroke-width="2" fill="none"/>
+    <circle cx="110" cy="116" r="1.4" fill="#5c3d28"/>
+    <circle cx="118" cy="116" r="1.4" fill="#5c3d28"/>
+    <ellipse cx="114" cy="110" rx="15" ry="4.2" fill="#e7c14a" stroke="#5c3d28" stroke-width="1.7"/>
+    <path d="M104 109q10-12 20 0" fill="#f0d060" stroke="#5c3d28" stroke-width="1.7" stroke-linejoin="round"/>
+    <g class="hoe">
+      <path d="M128 136l14 12" stroke="#f3c7a3" stroke-width="5.5" stroke-linecap="round"/>
+      <circle cx="142" cy="148" r="3.6" fill="#f3c7a3" stroke="#5c3d28" stroke-width="1.4"/>
+      <path d="M140 146l8 18" stroke="#6b4428" stroke-width="3.2" stroke-linecap="round"/>
+      <path d="M144 164h12" stroke="#5c3d28" stroke-width="3.4" stroke-linecap="round"/>
     </g>
   </g>
-  <g fill="#e07a3d" stroke="#5c3d28" stroke-width=".8">
-    <circle cx="40" cy="152" r="1.8"/>
-    <circle cx="48" cy="148" r="1.4" fill="#f0c14b"/>
-    <circle cx="208" cy="150" r="1.7"/>
-  </g>
-  <path d="M36 156c2-5 4-5 5 0M206 154c2-5 3-5 5 0" stroke="#6fa344" stroke-width="1.5" stroke-linecap="round"/>
+
+  <path d="M90 168v12M142 172v10" stroke="#6b4428" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M108 174l22 4" stroke="#a67c52" stroke-width="3.2" stroke-linecap="round"/>
+
+  <circle cx="66" cy="158" r="2" fill="#e07a3d" stroke="#5c3d28" stroke-width="1"/>
+  <path d="M62 162c2-5 4-5 6 0" stroke="#6fa344" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="170" cy="152" r="2" fill="#d4453a" stroke="#5c3d28" stroke-width="1"/>
+  <path d="M166 156c2-5 4-5 6 0" stroke="#6fa344" stroke-width="1.5" stroke-linecap="round"/>
 </svg>
