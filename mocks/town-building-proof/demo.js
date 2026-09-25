@@ -115,7 +115,7 @@
     toastTimer = setTimeout(function () { toast.hidden = true; }, 2800);
   }
 
-  var MOTION_IDS = { arena: 1, farm: 1, lighthouse: 1, library: 1, gym: 1, shop: 1, hospital: 1, observatory: 1 };
+  var MOTION_IDS = { arena: 1, farm: 1, lighthouse: 1, library: 1, gym: 1, shop: 1, hospital: 1, observatory: 1, "expedition-guild": 1 };
 
   function asset(id) {
     var still = MOTION_IDS[id] && window.townMotionOn && !window.townMotionOn();
