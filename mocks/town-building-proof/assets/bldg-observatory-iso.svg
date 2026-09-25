@@ -60,12 +60,12 @@
     <!-- skirt arc comes to the front lip so the dome sits on the drum -->
     <path d="M78,108 A42,16 0 0 0 162,108 C160,70 144,44 120,40 C96,44 80,70 78,108 Z" fill="#7b8694" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
     <path d="M120,40 C144,44 160,70 162,108 A42,16 0 0 1 120,124 Z" fill="#9aa6b4"/>
-    <path d="M136,50 C150,62 158,80 160,98" fill="none" stroke="#d5dee8" stroke-width="3" stroke-linecap="round"/>
-    <path d="M118,52 C128,68 136,84 140,100 L130,104 C122,86 112,68 104,54 Z" fill="#2a3440" stroke="#5c3d28" stroke-width="1.7" stroke-linejoin="round"/>
-    <path d="M112,58 C120,74 126,88 130,102" fill="none" stroke="#46525e" stroke-width="1.3" stroke-linecap="round"/>
+    <path d="M126,46 C138,48 148,54 152,64" fill="none" stroke="#d5dee8" stroke-width="3" stroke-linecap="round"/>
+    <path d="M132,56 C144,72 154,86 156,100 L146,104 C142,88 134,74 124,60 Z" fill="#2a3440" stroke="#5c3d28" stroke-width="1.7" stroke-linejoin="round"/>
+    <path d="M128,62 C138,76 146,88 150,100" fill="none" stroke="#46525e" stroke-width="1.3" stroke-linecap="round"/>
 
-    <!-- cylindrical barrel with a flat open lens -->
-    <g transform="translate(128,82) rotate(-30)">
+    <!-- cylindrical barrel with a flat open lens, exiting the right-hand slit -->
+    <g transform="translate(148,86) rotate(-30)">
       <rect x="-6" y="-4" width="14" height="8" rx="1.8" fill="#6a7480" stroke="#5c3d28" stroke-width="1.5"/>
       <rect x="4" y="-5.2" width="34" height="10.4" rx="1.6" fill="#8e99a6" stroke="#5c3d28" stroke-width="2.1"/>
       <path d="M10,-3.2 H32" stroke="#d5dee6" stroke-width="1.7" stroke-linecap="round"/>
