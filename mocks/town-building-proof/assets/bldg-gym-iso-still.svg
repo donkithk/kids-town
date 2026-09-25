@@ -1,22 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 210" fill="none">
-  <style>
-    svg, svg * { pointer-events: none; }
-    .bag { transform-box: view-box; transform-origin: 156px 98px; animation: sway 3.2s ease-in-out infinite; }
-    .towel { transform-box: fill-box; transform-origin: 50% 0%; animation: cloth 3.8s ease-in-out infinite; animation-delay: -1.4s; }
-    .lamp { animation: glow 2.6s ease-in-out infinite; animation-delay: -0.6s; }
-    @keyframes sway {
-      0%, 100% { transform: rotate(-6deg); }
-      50% { transform: rotate(7deg); }
-    }
-    @keyframes cloth {
-      0%, 100% { transform: skewX(-5deg); }
-      50% { transform: skewX(6deg); }
-    }
-    @keyframes glow {
-      0%, 100% { opacity: .28; }
-      50% { opacity: .88; }
-    }
-  </style>
   <polygon points="120,186 188,154 120,122 52,154" fill="#d9c7a0" stroke="#8b5e3c" stroke-width="3" stroke-linejoin="round"/>
   <polygon points="120,186 52,154 52,92 120,124" fill="#e6d2ae" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
   <polygon points="120,186 188,154 188,92 120,124" fill="#f7ecd4" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
