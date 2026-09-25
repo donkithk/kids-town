@@ -65,7 +65,6 @@
     <ellipse cx="106" cy="168" rx="5.2" ry="2.3" fill="#5c3d28"/>
     <ellipse cx="122" cy="168" rx="5.2" ry="2.3" fill="#5c3d28"/>
     <ellipse cx="114" cy="142" rx="16" ry="16" fill="#7eb0d4" stroke="#5c3d28" stroke-width="2"/>
-    <path d="M106 136h16M110 136v10M118 136v10" stroke="#fff6e8" stroke-width="1.7" stroke-linecap="round"/>
     <circle cx="114" cy="118" r="12" fill="#f3c7a3" stroke="#5c3d28" stroke-width="2"/>
     <path d="M107 116q7-7 14 0" stroke="#5c3d28" stroke-width="2" fill="none"/>
     <circle cx="110" cy="116" r="1.4" fill="#5c3d28"/>
@@ -74,7 +73,7 @@
     <path d="M104 109q10-12 20 0" fill="#f0d060" stroke="#5c3d28" stroke-width="1.7" stroke-linejoin="round"/>
     <g class="hoe">
       <path d="M128 136l14 12" stroke="#f3c7a3" stroke-width="5.5" stroke-linecap="round"/>
-      <circle cx="142" cy="148" r="3.6" fill="#f3c7a3" stroke="#5c3d28" stroke-width="1.4"/>
+      <circle cx="142" cy="148" r="4.2" fill="#f3c7a3" stroke="#5c3d28" stroke-width="1.6"/>
       <path d="M140 146l8 18" stroke="#6b4428" stroke-width="3.2" stroke-linecap="round"/>
       <path d="M144 164h12" stroke="#5c3d28" stroke-width="3.4" stroke-linecap="round"/>
     </g>
