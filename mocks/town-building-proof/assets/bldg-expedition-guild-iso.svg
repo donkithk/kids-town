@@ -1,100 +1,105 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 210" fill="none">
   <style>
     svg, svg * { pointer-events: none; }
-    .banner { transform-box: view-box; transform-origin: 168px 96px; animation: sway 3.6s ease-in-out infinite; }
-    .lamp { animation: breathe 2.8s ease-in-out infinite; }
+    .banner { transform-box: view-box; transform-origin: 162px 58px; animation: sway 3.6s ease-in-out infinite; }
+    .note { transform-box: fill-box; transform-origin: 10% 15%; animation: flutter 3.3s ease-in-out infinite; }
     @keyframes sway {
       0%, 100% { transform: rotate(-4deg); }
       50% { transform: rotate(5deg); }
     }
-    @keyframes breathe {
-      0%, 100% { opacity: .42; }
-      50% { opacity: 1; }
+    @keyframes flutter {
+      0%, 100% { transform: skewX(-4deg); }
+      50% { transform: skewX(5deg); }
     }
   </style>
 
   <polygon points="120,186 188,154 120,122 52,154" fill="#e4d2a4" stroke="#8b5e3c" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M70 160c10-3 16-2 22 2M150 156c8-3 14-2 18 2" stroke="#c4a06a" stroke-width="1.4" stroke-linecap="round" opacity=".55"/>
+  <path d="M74 158c8-2 14-2 18 1M156 154c8-2 12-1 16 2" stroke="#c4a06a" stroke-width="1.3" stroke-linecap="round" opacity=".5"/>
 
   <g>
-    <path d="M48 150c-1-12 2-18 0-24" stroke="#5c3d28" stroke-width="2.2" stroke-linecap="round" fill="none"/>
-    <path d="M46 128c-8-2-12-10-6-14 6 1 10 8 6 14z" fill="#5f9238" stroke="#5c3d28" stroke-width="1.4" stroke-linejoin="round"/>
-    <path d="M50 124c8-6 16-4 14 4-6 3-12 2-14-4z" fill="#6fa344" stroke="#5c3d28" stroke-width="1.4" stroke-linejoin="round"/>
-    <circle cx="44" cy="122" r="2.4" fill="#e24b4b" stroke="#5c3d28" stroke-width="1.1"/>
+    <path d="M186 148c1-10 2-16 0-22" stroke="#5c3d28" stroke-width="2" stroke-linecap="round" fill="none"/>
+    <path d="M184 128c7-2 12-8 6-13-6 1-10 7-6 13z" fill="#6fa344" stroke="#5c3d28" stroke-width="1.3" stroke-linejoin="round"/>
+    <circle cx="190" cy="122" r="2.1" fill="#e07a3d" stroke="#5c3d28" stroke-width="1"/>
   </g>
 
-  <polygon points="118,162 62,140 62,98 118,120" fill="#6b4428" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <polygon points="122,162 178,140 178,98 122,120" fill="#8b5e3c" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M78 132c12 4 20 3 28-1M86 118c10 3 16 2 22-1" stroke="#8b5e3c" stroke-width="1.5" stroke-linecap="round" opacity=".45"/>
-  <path d="M140 128c12-4 22-3 30 1M148 114c10-3 18-2 24 1" stroke="#c4a06a" stroke-width="1.5" stroke-linecap="round" opacity=".4"/>
+  <!-- stone courtyard -->
+  <polygon points="120,174 150,160 120,148 90,160" fill="#d5ccbc" stroke="#5c3d28" stroke-width="2.3" stroke-linejoin="round"/>
+  <path d="M104 166 L120 158 L136 166 M112 162 L120 158 L128 162" stroke="#8f8678" stroke-width="1.2" stroke-linecap="round" opacity=".7"/>
 
-  <!-- quest board on the left wall -->
-  <polygon points="74,136 96,144 96,158 74,150" fill="#4a3028" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
-  <polygon points="76,138 94,145 94,155 76,148" fill="#f3e6c8" stroke="#5c3d28" stroke-width="1.3" stroke-linejoin="round"/>
-  <path d="M80 144h10M80 148h8M80 151h6" stroke="#8b5e3c" stroke-width="1" stroke-linecap="round"/>
-  <circle cx="84" cy="141" r="1.6" fill="#c45c48" stroke="#5c3d28" stroke-width="0.8"/>
+  <!-- gatehouse -->
+  <polygon points="114,154 74,136 74,102 114,120" fill="#c4baa8" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <polygon points="118,154 170,130 170,96 118,120" fill="#e6dfd2" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M80 128 L110 142 M80 116 L110 130 M82 108 L106 120" stroke="#8a8174" stroke-width="1.35" stroke-linecap="round" opacity=".75"/>
+  <path d="M88 136 v-10 M98 140 v-12 M126 144 L164 128 M130 132 L166 116 M134 120 L164 108" stroke="#8a8174" stroke-width="1.25" stroke-linecap="round" opacity=".65"/>
+  <path d="M140 140 v-10 M154 134 v-10" stroke="#a39888" stroke-width="1.15" stroke-linecap="round" opacity=".7"/>
 
-  <!-- timber door in the front corner -->
-  <path d="M102,140 C102,120 110,108 120,106 C130,108 138,120 138,140" fill="#5c3d28" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
-  <polygon points="114,160 102,154 102,128 114,134" fill="#4a3028" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
-  <polygon points="126,160 138,154 138,128 126,134" fill="#6b4428" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
-  <polygon points="112,152 105,149 105,136 112,139" fill="#a67c52" stroke="#5c3d28" stroke-width="1.1"/>
-  <polygon points="128,152 135,149 135,136 128,139" fill="#c4a06a" stroke="#5c3d28" stroke-width="1.1"/>
-  <circle cx="116" cy="146" r="1.6" fill="#c4a06a"/>
-  <circle cx="124" cy="146" r="1.6" fill="#e7c56a"/>
+  <!-- left tower -->
+  <polygon points="80,124 52,110 52,60 80,74" fill="#b7aea0" stroke="#5c3d28" stroke-width="2.8" stroke-linejoin="round"/>
+  <polygon points="80,124 104,114 104,64 80,74" fill="#d9d2c4" stroke="#5c3d28" stroke-width="2.8" stroke-linejoin="round"/>
+  <path d="M58 104 L76 114 M58 92 L76 102 M58 80 L76 90 M86 116 L100 110 M86 104 L100 98 M86 92 L100 86" stroke="#8a8174" stroke-width="1.2" stroke-linecap="round" opacity=".7"/>
 
-  <!-- copper lantern -->
-  <polygon points="146,132 154,128 154,142 146,146" fill="#b87333" stroke="#5c3d28" stroke-width="1.6" stroke-linejoin="round"/>
-  <polygon points="147,134 153,131 153,140 147,143" fill="#f6e27a" stroke="#5c3d28" stroke-width="1"/>
-  <path class="lamp" d="M148,135 L152,133 L152,139 L148,141 Z" fill="#fff6c2"/>
-  <path d="M150,128 v-6" stroke="#5c3d28" stroke-width="1.6" stroke-linecap="round"/>
+  <!-- right tower -->
+  <polygon points="142,118 120,108 120,66 142,76" fill="#c4baa8" stroke="#5c3d28" stroke-width="2.8" stroke-linejoin="round"/>
+  <polygon points="142,118 174,102 174,60 142,76" fill="#efeae0" stroke="#5c3d28" stroke-width="2.8" stroke-linejoin="round"/>
+  <path d="M126 104 L138 110 M126 92 L138 98 M126 80 L138 86 M150 110 L168 100 M150 98 L168 88 M150 86 L168 76" stroke="#8a8174" stroke-width="1.2" stroke-linecap="round" opacity=".65"/>
 
-  <polygon points="120,184 156,168 120,156 84,168" fill="#d7b48a" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
-  <polygon points="84,168 120,156 120,163 84,175" fill="#b08968" stroke="#5c3d28" stroke-width="1.6" stroke-linejoin="round"/>
-  <polygon points="156,168 120,156 120,163 156,175" fill="#c4a06a" stroke="#5c3d28" stroke-width="1.6" stroke-linejoin="round"/>
-  <polygon points="120,170 142,160 120,152 98,160" fill="#e6d3b8" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
-  <path d="M98 164c8 3 14 3 22 0M106 158c6 2 10 2 14 0" stroke="#8b5e3c" stroke-width="1.2" stroke-linecap="round" opacity=".45"/>
+  <!-- blue-gray tower roofs, shared ridges -->
+  <path d="M54,64 L80,76 L86,40 L62,34 Z" fill="#5e6e78" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M106,62 L80,76 L86,40 L104,36 Z" fill="#8ea0aa" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M60,60 L78,70 M66,50 L82,60" stroke="#3e4c56" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M100,56 L82,70 M96,46 L86,56" stroke="#5c6e78" stroke-width="1.3" stroke-linecap="round"/>
 
-  <defs>
-    <clipPath id="gRoofL">
-      <path d="M58,98 L108,118 L120,50 L72,66 Z"/>
-    </clipPath>
-    <clipPath id="gRoofR">
-      <path d="M182,98 L132,118 L120,50 L168,66 Z"/>
-    </clipPath>
-  </defs>
-  <path d="M58,98 L108,118 L120,50 L72,66 Z" fill="#3e2a22"/>
-  <path d="M182,98 L132,118 L120,50 L168,66 Z" fill="#5c3d28"/>
-  <path d="M58,98 L108,118 L112,124 L62,104 Z" fill="#2e2018"/>
-  <path d="M182,98 L132,118 L128,124 L178,104 Z" fill="#3e2a22"/>
-  <g clip-path="url(#gRoofL)">
-    <path d="M58,98 Q66,104 74,102 Q82,110 90,106 Q98,114 108,118 L114,100 L62,88 Z" fill="#5c3d28" stroke="#5c3d28" stroke-width="1.2" stroke-linejoin="round"/>
-    <path d="M62,90 Q70,94 78,91 Q86,98 94,93 Q102,100 112,96 L116,78 L66,74 Z" fill="#6b4428" stroke="#5c3d28" stroke-width="1.2" stroke-linejoin="round"/>
-    <path d="M66,80 Q74,82 82,78 Q90,84 98,78 Q106,82 116,76 L120,58 L70,64 Z" fill="#7a5344" stroke="#5c3d28" stroke-width="1.2" stroke-linejoin="round"/>
-    <path d="M70,70 Q78,70 86,66 Q94,70 102,64 Q110,66 120,58 L120,50 L74,66 Z" fill="#4a3028" stroke="#5c3d28" stroke-width="1.2" stroke-linejoin="round"/>
-    <path d="M60,100 L106,116" stroke="#2e2018" stroke-width="2.2" stroke-linecap="round"/>
-    <path d="M66,86 L104,100" stroke="#2e2018" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M118,66 L146,76 L152,44 L128,38 Z" fill="#6d7e88" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M174,58 L146,76 L152,44 L170,36 Z" fill="#a8b8c0" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
+  <path d="M124,62 L144,72 M130,52 L148,62" stroke="#3e4c56" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M168,52 L148,70 M162,44 L154,54" stroke="#6a7c86" stroke-width="1.3" stroke-linecap="round"/>
+
+  <!-- parapet in front of the eaves -->
+  <polygon points="56,66 66,70 66,60 56,56" fill="#d5ccbc" stroke="#5c3d28" stroke-width="1.5" stroke-linejoin="round"/>
+  <polygon points="70,72 80,76 80,66 70,62" fill="#cfc6b6" stroke="#5c3d28" stroke-width="1.5" stroke-linejoin="round"/>
+  <polygon points="84,72 94,68 94,58 84,62" fill="#e6dfd2" stroke="#5c3d28" stroke-width="1.5" stroke-linejoin="round"/>
+  <polygon points="96,66 104,62 104,52 96,56" fill="#efeae0" stroke="#5c3d28" stroke-width="1.5" stroke-linejoin="round"/>
+  <polygon points="124,70 134,74 134,64 124,60" fill="#d9d2c4" stroke="#5c3d28" stroke-width="1.5" stroke-linejoin="round"/>
+  <polygon points="148,70 160,66 160,56 148,60" fill="#efeae0" stroke="#5c3d28" stroke-width="1.5" stroke-linejoin="round"/>
+  <polygon points="162,62 172,58 172,48 162,52" fill="#f4f0e6" stroke="#5c3d28" stroke-width="1.5" stroke-linejoin="round"/>
+
+  <!-- timber arch, seated on the upper step -->
+  <path d="M102,150 C102,130 110,118 120,116 C130,118 138,130 138,150 L136,164 L104,164 Z" fill="#3e3830" stroke="#5c3d28" stroke-width="2.5" stroke-linejoin="round"/>
+  <polygon points="116,166 104,160 104,132 116,138" fill="#5c3d28" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
+  <polygon points="124,166 136,160 136,132 124,138" fill="#7a5236" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
+  <polygon points="114,156 107,153 107,140 114,143" fill="#8b5e3c" stroke="#5c3d28" stroke-width="1"/>
+  <polygon points="126,156 133,153 133,140 126,143" fill="#a67c52" stroke="#5c3d28" stroke-width="1"/>
+  <path d="M106 146 h8 M126 146 h8" stroke="#3e342c" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="117" cy="150" r="1.7" fill="#c4a06a"/>
+  <circle cx="123" cy="150" r="1.7" fill="#e7c56a"/>
+
+  <!-- steps in front of the door -->
+  <polygon points="120,178 148,164 120,154 92,164" fill="#cfc6b6" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
+  <polygon points="92,164 120,154 120,160 92,170" fill="#b7aea0" stroke="#5c3d28" stroke-width="1.5" stroke-linejoin="round"/>
+  <polygon points="148,164 120,154 120,160 148,170" fill="#ddd6c8" stroke="#5c3d28" stroke-width="1.5" stroke-linejoin="round"/>
+  <polygon points="120,166 136,158 120,152 104,158" fill="#e6dfd2" stroke="#5c3d28" stroke-width="2" stroke-linejoin="round"/>
+  <polygon points="104,158 120,152 120,158 104,164" fill="#c4baa8" stroke="#5c3d28" stroke-width="1.3" stroke-linejoin="round"/>
+  <polygon points="136,158 120,152 120,158 136,164" fill="#efeae0" stroke="#5c3d28" stroke-width="1.3" stroke-linejoin="round"/>
+
+  <!-- outdoor quest board, left of the steps -->
+  <path d="M64,176 v-36" stroke="#5c3d28" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M90,166 v-34" stroke="#5c3d28" stroke-width="3.2" stroke-linecap="round"/>
+  <polygon points="52,136 98,152 98,170 52,154" fill="#6b4428" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
+  <polygon points="56,140 78,148 78,162 56,154" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.4" stroke-linejoin="round"/>
+  <path d="M60 147 h14 M60 151 h12 M60 155 h9" stroke="#6b5344" stroke-width="1.25" stroke-linecap="round"/>
+  <g class="note">
+    <polygon points="70,138 96,148 94,162 68,152" fill="#f7f1e4" stroke="#5c3d28" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M76 146 h14 M76 150 h12 M76 154 h8" stroke="#8b5e3c" stroke-width="1.25" stroke-linecap="round"/>
   </g>
-  <g clip-path="url(#gRoofR)">
-    <path d="M182,98 Q174,104 166,102 Q158,110 150,106 Q142,114 132,118 L126,100 L178,88 Z" fill="#8b5e3c" stroke="#5c3d28" stroke-width="1.2" stroke-linejoin="round"/>
-    <path d="M178,90 Q170,94 162,91 Q154,98 146,93 Q138,100 128,96 L124,78 L174,74 Z" fill="#a67c52" stroke="#5c3d28" stroke-width="1.2" stroke-linejoin="round"/>
-    <path d="M174,80 Q166,82 158,78 Q150,84 142,78 Q134,82 124,76 L120,58 L170,64 Z" fill="#c4a06a" stroke="#5c3d28" stroke-width="1.2" stroke-linejoin="round"/>
-    <path d="M170,70 Q162,70 154,66 Q146,70 138,64 Q130,66 120,58 L120,50 L166,66 Z" fill="#8b5e3c" stroke="#5c3d28" stroke-width="1.2" stroke-linejoin="round"/>
-    <path d="M180,100 L134,116" stroke="#5c3d28" stroke-width="2.2" stroke-linecap="round"/>
-    <path d="M174,86 L136,100" stroke="#5c3d28" stroke-width="1.8" stroke-linecap="round"/>
-  </g>
-  <path d="M58,98 L108,118 L120,50 L72,66 Z" fill="none" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M182,98 L132,118 L120,50 L168,66 Z" fill="none" stroke="#5c3d28" stroke-width="3" stroke-linejoin="round"/>
-  <path d="M58,98 L108,118 L112,124 L62,104 Z" fill="none" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
-  <path d="M182,98 L132,118 L128,124 L178,104 Z" fill="none" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
+  <circle cx="72" cy="144" r="2.3" fill="#c45c48" stroke="#5c3d28" stroke-width="0.9"/>
 
-  <!-- guild banner -->
+  <!-- guild banner on the right tower -->
   <g class="banner">
-    <path d="M168,96 v8" stroke="#5c3d28" stroke-width="2.4" stroke-linecap="round"/>
-    <polygon points="166,104 190,112 188,136 164,126" fill="#c45c48" stroke="#5c3d28" stroke-width="2.2" stroke-linejoin="round"/>
-    <polygon points="166,114 188,121 187,126 165,119" fill="#f3e6c8" stroke="#5c3d28" stroke-width="1.1" stroke-linejoin="round"/>
-    <circle cx="176" cy="122" r="5.2" fill="#e7c56a" stroke="#5c3d28" stroke-width="1.3"/>
-    <path d="M176 117.5v9M171.6 122h8.8" stroke="#5c3d28" stroke-width="1.2" stroke-linecap="round"/>
-    <path d="M176 117.5l1.6 2.4h-3.2z" fill="#c45c48"/>
+    <path d="M162,58 v9" stroke="#5c3d28" stroke-width="2.4" stroke-linecap="round"/>
+    <polygon points="160,67 184,74 182,96 158,88" fill="#c45c48" stroke="#5c3d28" stroke-width="2.1" stroke-linejoin="round"/>
+    <polygon points="160,76 182,82 181,87 159,81" fill="#f3e6c8" stroke="#5c3d28" stroke-width="1" stroke-linejoin="round"/>
+    <circle cx="171" cy="82" r="4.6" fill="#e7c56a" stroke="#5c3d28" stroke-width="1.2"/>
+    <path d="M171 78.2 v7.6 M167.4 82 h7.2" stroke="#5c3d28" stroke-width="1.1" stroke-linecap="round"/>
+    <path d="M171 78.2 l1.5 2.2 h-3z" fill="#c45c48"/>
   </g>
 </svg>
