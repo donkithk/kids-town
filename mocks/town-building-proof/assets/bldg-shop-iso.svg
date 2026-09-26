@@ -32,9 +32,22 @@
   <polygon points="136.0,105.0 182.0,77.0 189.2,57.5 143.9,88.0" fill="#c45c48" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
   <polygon points="143.9,88.0 96.8,79.4 50.7,59.7 120.0,34.0 189.2,57.5" fill="#f6d76a" stroke="#5c3d28" stroke-width="2.6" stroke-linejoin="round"/>
 
-  <path d="M92.0,108.0 L104.0,109.3 L91.3,139.0 Q82.7,146.5 74.0,138.0 Z" fill="#d6453d" stroke="#5c3d28" stroke-width="1.3" stroke-linejoin="round"/><path d="M104.0,109.3 L116.0,110.7 L108.7,140.0 Q100.0,147.5 91.3,139.0 Z" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.3" stroke-linejoin="round"/><path d="M116.0,110.7 L128.0,112.0 L126.0,141.0 Q117.3,148.5 108.7,140.0 Z" fill="#d6453d" stroke="#5c3d28" stroke-width="1.3" stroke-linejoin="round"/><path d="M128.0,112.0 L140.0,113.3 L143.3,142.0 Q134.7,149.5 126.0,141.0 Z" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.3" stroke-linejoin="round"/><path d="M140.0,113.3 L152.0,114.7 L160.7,143.0 Q152.0,150.5 143.3,142.0 Z" fill="#d6453d" stroke="#5c3d28" stroke-width="1.3" stroke-linejoin="round"/><path d="M152.0,114.7 L164.0,116.0 L178.0,144.0 Q169.3,151.5 160.7,143.0 Z" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.3" stroke-linejoin="round"/>
-  <path d="M92.0,108.0 L164.0,116.0 L178.0,144.0 Q169.3,151.5 160.7,143.0 Q152.0,150.5 143.3,142.0 Q134.7,149.5 126.0,141.0 Q117.3,148.5 108.7,140.0 Q100.0,147.5 91.3,139.0 Q82.7,146.5 74.0,138.0 Z" fill="none" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
-
+  <!-- left eave awning -->
+  <path d="M60.3,80.0 L67.0,82.9 L67.0,91.9 Q63.6,94.7 60.3,89.0 Z" fill="#d6453d" stroke="#5c3d28" stroke-width="1.05" stroke-linejoin="round"/>
+  <path d="M67.0,82.9 L73.6,85.8 L73.6,94.8 Q70.3,97.5 67.0,91.9 Z" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.05" stroke-linejoin="round"/>
+  <path d="M73.6,85.8 L80.3,88.7 L80.3,97.7 Q77.0,100.5 73.6,94.8 Z" fill="#d6453d" stroke="#5c3d28" stroke-width="1.05" stroke-linejoin="round"/>
+  <path d="M80.3,88.7 L87.0,91.6 L87.0,100.6 Q83.6,103.4 80.3,97.7 Z" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.05" stroke-linejoin="round"/>
+  <path d="M87.0,91.6 L93.7,94.5 L93.7,103.5 Q90.3,106.3 87.0,100.6 Z" fill="#d6453d" stroke="#5c3d28" stroke-width="1.05" stroke-linejoin="round"/>
+  <path d="M93.7,94.5 L100.3,97.4 L100.3,106.4 Q97.0,109.2 93.7,103.5 Z" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.05" stroke-linejoin="round"/>
+  <path d="M60.3,80.0 L100.3,97.4 L100.3,106.4 Q97.0,109.2 93.7,103.5 Q90.3,106.3 87.0,100.6 Q83.6,103.4 80.3,97.7 Q77.0,100.5 73.6,94.8 Q70.3,97.5 67.0,91.9 Q63.6,94.7 60.3,89.0 Z" fill="none" stroke="#5c3d28" stroke-width="2.3" stroke-linejoin="round"/>
+  <!-- right eave awning -->
+  <path d="M138.8,103.3 L145.5,99.2 L145.5,108.2 Q142.1,114.5 138.8,112.3 Z" fill="#d6453d" stroke="#5c3d28" stroke-width="1.05" stroke-linejoin="round"/>
+  <path d="M145.5,99.2 L152.3,95.1 L152.3,104.1 Q148.9,110.4 145.5,108.2 Z" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.05" stroke-linejoin="round"/>
+  <path d="M152.3,95.1 L159.0,91.0 L159.0,100.0 Q155.6,106.3 152.3,104.1 Z" fill="#d6453d" stroke="#5c3d28" stroke-width="1.05" stroke-linejoin="round"/>
+  <path d="M159.0,91.0 L165.7,86.9 L165.7,95.9 Q162.4,102.1 159.0,100.0 Z" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.05" stroke-linejoin="round"/>
+  <path d="M165.7,86.9 L172.5,82.8 L172.5,91.8 Q169.1,98.0 165.7,95.9 Z" fill="#d6453d" stroke="#5c3d28" stroke-width="1.05" stroke-linejoin="round"/>
+  <path d="M172.5,82.8 L179.2,78.7 L179.2,87.7 Q175.9,93.9 172.5,91.8 Z" fill="#fffaf2" stroke="#5c3d28" stroke-width="1.05" stroke-linejoin="round"/>
+  <path d="M138.8,103.3 L179.2,78.7 L179.2,87.7 Q175.9,93.9 172.5,91.8 Q169.1,98.0 165.7,95.9 Q162.4,102.1 159.0,100.0 Q155.6,106.3 152.3,104.1 Q148.9,110.4 145.5,108.2 Q142.1,114.5 138.8,112.3 Z" fill="none" stroke="#5c3d28" stroke-width="2.3" stroke-linejoin="round"/>
   <polygon points="93.9,138.6 68.1,127.4 68.1,104.2 93.9,115.4" fill="#2f6f8a" stroke="#5c3d28" stroke-width="2.3" stroke-linejoin="round"/>
   <polygon points="90.2,132.9 71.8,124.9 71.8,109.9 90.2,117.9" fill="#d7eef6"/>
   <path class="glow" d="M90.2,132.9 L71.8,124.9 L71.8,109.9 L90.2,117.9 Z" fill="#fff6c2"/>
