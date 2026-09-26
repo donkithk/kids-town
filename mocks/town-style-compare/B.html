@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>B 正面立面 · 城鎮風格比較</title>
+  <link rel="stylesheet" href="mock.css">
+</head>
+<body class="stage-page">
+  <div class="stage">
+    <a class="skip" href="#townMap">跳到地圖</a>
+    <header class="gh">
+      <div class="av" aria-hidden="true"><img src="avatar.svg" alt=""></div>
+      <div class="in">
+        <div class="nm">Preview</div>
+        <div class="nm-lv">Lv.6</div>
+      </div>
+      <div class="hdr-mid">
+        <div class="rw">
+          <div class="xp" aria-hidden="true"><div class="xf"></div></div>
+          <span class="xp-num">XP 0/150</span>
+        </div>
+        <div class="hdr-res" aria-label="資源">
+          <span class="chip-gold">💰 <span class="n">200</span></span>
+          <span>🪵 <span class="n">8</span></span>
+          <span>🧱 <span class="n">5</span></span>
+          <span>🪟 <span class="n">0</span></span>
+          <span>⚙️ <span class="n">0</span></span>
+        </div>
+      </div>
+      <button class="mb" type="button" aria-label="主目錄">☰</button>
+    </header>
+
+    <section class="map" id="townMap" aria-label="正面立面城鎮">
+      <img class="meadow" src="meadow.svg" alt="">
+      <div class="vignette" aria-hidden="true"></div>
+      <p class="scene-chip">B · 正面立面</p>
+      <div class="village is-front">
+        <div class="pad" style="--c:0; --r:0">
+          <img src="bldg-library-front.svg" alt="">
+          <p class="cap">圖書館</p>
+        </div>
+        <div class="pad is-cell" style="--c:1; --r:0">
+          <img src="cell-front.svg" alt="">
+          <p class="cap">可建造</p>
+        </div>
+        <div class="pad is-plot" style="--c:0; --r:1">
+          <img src="plot-front.svg" alt="">
+          <p class="cap">空地</p>
+        </div>
+        <div class="pad" style="--c:2; --r:0">
+          <img src="bldg-farm-front.svg" alt="">
+          <p class="cap">農場</p>
+        </div>
+        <div class="pad" style="--c:1; --r:1">
+          <img src="bldg-shop-front.svg" alt="">
+          <p class="cap">商店</p>
+        </div>
+        <div class="pad is-cell" style="--c:2; --r:1">
+          <img src="cell-front.svg" alt="">
+          <p class="cap">可建造</p>
+        </div>
+      </div>
+    </section>
+
+    <p class="toast" id="toast" role="status" hidden></p>
+
+    <nav class="kt-footer" aria-label="主要導覽">
+      <button class="footer-tab" type="button" aria-current="page">
+        <img src="../asset-kit/ui/icon-town-home.svg" alt=""><span>城鎮首頁</span>
+      </button>
+      <button class="footer-tab" type="button">
+        <img src="../asset-kit/ui/icon-guild-hall.svg" alt=""><span>公會大廳</span>
+      </button>
+      <button class="footer-tab" type="button">
+        <img src="../asset-kit/ui/icon-quest-board.svg" alt=""><span>任務板</span>
+      </button>
+      <button class="footer-tab" type="button">
+        <img src="../asset-kit/ui/icon-shop.svg" alt=""><span>商店</span>
+      </button>
+      <button class="footer-tab" type="button">
+        <img src="../asset-kit/ui/icon-backpack.svg" alt=""><span>背包</span>
+      </button>
+    </nav>
+  </div>
+  <script src="mock.js"></script>
+</body>
+</html>

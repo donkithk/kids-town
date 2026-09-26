@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>城鎮風格比較 · 等角 / 正面</title>
+  <link rel="stylesheet" href="mock.css">
+</head>
+<body class="doc">
+  <main class="launch">
+    <h1>城鎮風格比較</h1>
+    <p>同一條村、同一套暖木日光、同一個 Header／Footer。只係建築物同地塊嘅畫法唔同，方便並排揀風格。</p>
+    <ul>
+      <li><strong>A 柔和等角。</strong> 大約 45° 嘅手繪等角，唔係像素風，亦唔係 3D 引擎。</li>
+      <li><strong>B 正面立面。</strong> 屋正面望過去，平視，同一種小屋插畫。</li>
+    </ul>
+    <p>兩幅都有圖書館、農場、商店、一塊空地，同兩格可建造。字喺畫面上，唔係烘進圖入面。</p>
+
+    <div class="pair">
+      <div class="slot-wrap">
+        <h2>A · 柔和等角</h2>
+        <div class="slot">
+          <iframe src="A.html" title="A 柔和等角城鎮" width="1280" height="720"></iframe>
+        </div>
+        <a class="full-link" href="A.html">打開 A 全畫面</a>
+      </div>
+      <div class="slot-wrap">
+        <h2>B · 正面立面</h2>
+        <div class="slot">
+          <iframe src="B.html" title="B 正面立面城鎮" width="1280" height="720"></iframe>
+        </div>
+        <a class="full-link" href="B.html">打開 B 全畫面</a>
+      </div>
+    </div>
+
+    <h2>點樣打開</h2>
+    <p>電腦可以直接開呢個檔，或者：</p>
+    <p><code>cd mocks/town-style-compare && python -m http.server 8766</code></p>
+    <p>然後開 <code>http://127.0.0.1:8766/00-index.html</code>。手機同一 Wi-Fi 用電腦 IP，建議橫放。頁面冇鎖縮放。全畫面網址可以加 <code>?native=1</code> 睇原寸。</p>
+    <p class="note">未揀 A 定 B 之前，唔好做放置、移動、升級嘅互動稿。呢個 PR 只係風格比較，唔好 merge。</p>
+  </main>
+</body>
+</html>
