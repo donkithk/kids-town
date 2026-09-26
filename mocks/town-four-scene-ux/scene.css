@@ -172,6 +172,15 @@ body.is-native { overflow: auto; }
 .village.is-iso .pad,
 .village.is-iso .pad * { pointer-events: none; }
 
+/* chrome.css gives every pad z-index c+r, which traps the contact shadow
+   inside that pad. A neighbor plot then paints its whole slab over any
+   shadow that crosses the seam. Keep z-index:auto here so slabs, shadows,
+   and sprites share the village stacking context. */
+.village.is-iso .pad {
+  z-index: auto;
+  overflow: visible;
+}
+
 .pad > .slab,
 .ground-tile > .slab,
 .pad > .mark {
@@ -183,11 +192,15 @@ body.is-native { overflow: auto; }
   pointer-events: none;
 }
 
+.village.is-iso .pad > .slab {
+  z-index: calc(var(--c) + var(--r));
+}
+
 .ground-tile.is-raised > .slab { top: calc(var(--s) * 63px); }
 
 .pad > .shadow {
   position: absolute;
-  z-index: 1;
+  z-index: calc(20 + var(--c) + var(--r));
   width: calc(var(--s) * 200px);
   height: calc(var(--s) * 100px);
   left: calc(var(--s) * -20px);
@@ -195,7 +208,10 @@ body.is-native { overflow: auto; }
   pointer-events: none;
 }
 
-.pad > .mark { z-index: 2; }
+.pad > .mark,
+.focus-ring {
+  z-index: calc(10 + var(--c) + var(--r));
+}
 
 .ground {
   position: absolute;
@@ -210,12 +226,9 @@ body.is-native { overflow: auto; }
   pointer-events: none;
 }
 
-.pad.is-chosen,
-.pad.is-preview { z-index: 16; }
-
 .village.is-iso .cap {
   position: absolute;
-  z-index: 4;
+  z-index: calc(40 + var(--c) + var(--r));
   top: 0;
   left: 50%;
   margin: 0;
@@ -249,7 +262,7 @@ body.is-native { overflow: auto; }
 
 .focus-ring {
   position: absolute;
-  z-index: 2;
+  z-index: calc(10 + var(--c) + var(--r));
   width: calc(var(--s) * 168px);
   height: calc(var(--s) * 120px);
   left: calc(var(--s) * -4px);
@@ -265,7 +278,7 @@ body.is-native { overflow: auto; }
 .pad > .sprite,
 .pad > .ghost {
   position: absolute;
-  z-index: 4;
+  z-index: calc(40 + var(--c) + var(--r));
   left: 0;
   right: 0;
   bottom: 0;
@@ -274,11 +287,27 @@ body.is-native { overflow: auto; }
   pointer-events: none;
 }
 
+.village.is-iso .pad.is-preview > .shadow,
+.village.is-iso .pad.is-chosen > .shadow {
+  z-index: 70;
+}
+
+.village.is-iso .pad.is-preview > .sprite,
+.village.is-iso .pad.is-preview > .ghost,
+.village.is-iso .pad.is-preview > .cap,
+.village.is-iso .pad.is-preview > .badge,
+.village.is-iso .pad.is-chosen > .sprite,
+.village.is-iso .pad.is-chosen > .ghost,
+.village.is-iso .pad.is-chosen > .cap,
+.village.is-iso .pad.is-chosen > .badge {
+  z-index: 80;
+}
+
 .pad > .ghost { opacity: .55; }
 
 .badge {
   position: absolute;
-  z-index: 5;
+  z-index: calc(40 + var(--c) + var(--r));
   left: 50%;
   top: calc(var(--s) * 121px);
   margin: 0;

@@ -83,6 +83,7 @@ Header 示範籌碼開始係 💰6000 🪵240 🧱180 🪟12 ⚙️90。呢一�
 | 取消之後返場景 2，toast「已取消，資源未扣除」，金幣仍然 6000 | PASS |
 | 場景 4：圖書館面板，升級／打開功能／借書／還書都停用 | PASS |
 | 建築 SVG 仍係 `town-building-proof/assets/`，呢個 PR 冇改鎖定剪影 | PASS |
+| 接觸陰影畫喺全部地塊之上，鄰格地邊唔會蓋住橢圓 | PASS |
 | 未接產品 `index.html`、API、經濟 | PASS |
 
 ## 唔好 merge
