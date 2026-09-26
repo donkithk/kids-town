@@ -81,9 +81,10 @@
 <polygon points="133.2,103.1 120.9,100.7 120.7,91.6 132.4,94.9" fill="#b3a494"/>
 <polygon points="118.8,100.1 107.1,97.9 106.9,88.9 118.7,91.3" fill="#e0d4c4"/>
 <polygon points="134.0,166.0 106.0,160.0 106.0,88.0 134.0,94.0" fill="none" stroke="#5c3d28" stroke-width="2.6" stroke-linejoin="round"/>
-<polygon points="54.0,66.0 106.0,88.0 46.7,51.7 99.1,73.0" fill="#7a6e64" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
-<polygon points="106.0,88.0 134.0,94.0 99.1,73.0 141.9,81.9" fill="#a89888" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
-<polygon points="134.0,94.0 186.0,66.0 141.9,81.9 193.3,51.7" fill="#d4c8b6" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
+<polygon points="54.0,72.0 106.0,94.0 134.0,100.0 186.0,72.0 193.3,51.7 141.9,81.9 99.1,73.0 46.7,51.7" fill="#5c5348"/>
+<polygon points="54.0,72.0 106.0,94.0 99.1,73.0 46.7,51.7" fill="#7a6e64" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
+<polygon points="106.0,94.0 134.0,100.0 141.9,81.9 99.1,73.0" fill="#a89888" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
+<polygon points="134.0,100.0 186.0,72.0 193.3,51.7 141.9,81.9" fill="#d4c8b6" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
 <polygon points="141.9,81.9 99.1,73.0 46.7,51.7 120.0,30.0 193.3,51.7" fill="#cfc6b8" stroke="#5c3d28" stroke-width="2.6" stroke-linejoin="round"/>
 <polygon points="99.9,72.4 112.9,75.0 115.4,57.5 108.0,56.0" fill="#f7f2ea"/>
 <polygon points="114.0,75.1 127.0,78.0 124.0,59.4 116.5,57.7" fill="#e7dfd2"/>
