@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1184 520" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d7f2fc"/>
+      <stop offset="1" stop-color="#b7e3f4"/>
+    </linearGradient>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fb85a"/>
+      <stop offset="1" stop-color="#6d9844"/>
+    </linearGradient>
+  </defs>
+  <rect width="1184" height="520" fill="url(#sky)"/>
+  <g fill="#fff" opacity=".9">
+    <ellipse cx="180" cy="48" rx="78" ry="20"/>
+    <ellipse cx="236" cy="40" rx="46" ry="16"/>
+    <ellipse cx="860" cy="56" rx="96" ry="22"/>
+    <ellipse cx="934" cy="48" rx="50" ry="15"/>
+  </g>
+  <!-- Distant hills only. The play surface is the iso tile field on top. -->
+  <path d="M0 132c90-28 170-8 250-22 110-18 160 16 270 4 120-14 190 10 310 2 100-8 180 6 354 24v28H0v-36Z" fill="#b7d48a"/>
+  <path d="M0 168c140-22 230 10 360-8 150-20 220 18 380 2 120-12 210 8 444 22v40H0v-56Z" fill="#8fb86a"/>
+  <path d="M0 210c160 8 250-24 400-4 160 22 230-16 400 6 140 16 200-6 384 18v286H0V210Z" fill="url(#far)"/>
+  <g>
+    <rect x="70" y="188" width="10" height="36" rx="3" fill="#8b5e3c"/>
+    <circle cx="75" cy="180" r="22" fill="#6fa344"/>
+    <circle cx="60" cy="188" r="14" fill="#8fbf55"/>
+    <rect x="1096" y="176" width="12" height="46" rx="3" fill="#6b4428"/>
+    <circle cx="1102" cy="164" r="28" fill="#6ea04a"/>
+    <circle cx="1078" cy="176" r="16" fill="#8fbf55"/>
+  </g>
+  <g>
+    <circle cx="210" cy="400" r="3.5" fill="#e07a8a"/>
+    <circle cx="248" cy="430" r="3" fill="#f0c14b"/>
+    <circle cx="980" cy="420" r="3.5" fill="#fff8e7"/>
+    <circle cx="1010" cy="448" r="3" fill="#e07a8a"/>
+  </g>
+</svg>

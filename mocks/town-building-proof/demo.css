@@ -1,0 +1,564 @@
+/* Building proof pack. Locked chrome is chrome.css (1280×720 header / footer /
+   letterbox). This file only adds the place / move demo and the catalog sheet. */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hdr-res .n { font-variant-numeric: tabular-nums; }
+
+.scene-chip { left: auto; right: 12px; z-index: 7; }
+
+.palette {
+  position: absolute;
+  z-index: 20;
+  left: 10px;
+  top: 44px;
+  bottom: 10px;
+  width: 208px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 3px solid var(--wood);
+  border-radius: 16px;
+  background: rgba(250, 246, 239, .95);
+  box-shadow: 0 6px 0 rgba(92, 61, 40, .12);
+}
+
+.palette-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.palette-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.palette-head p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink-soft);
+}
+
+.palette-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-content: start;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pal-btn {
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 44px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 3px solid transparent;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.pal-btn img {
+  width: 48px;
+  height: 44px;
+  flex: 0 0 48px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.pal-name {
+  display: block;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.pal-cost {
+  display: block;
+  margin-top: 1px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  line-height: 1.2;
+}
+
+.pal-btn[aria-pressed="true"] {
+  border-color: var(--gold);
+  background:
+    linear-gradient(180deg, #fff6d2, #ffe3a0) padding-box,
+    linear-gradient(165deg, var(--gold-bright), var(--gold)) border-box;
+}
+
+.pal-btn.is-placed { background: #f3e6c8; }
+
+.pal-btn.is-placed[aria-pressed="true"] {
+  background: linear-gradient(180deg, #fff6d2, #ffe3a0);
+}
+
+.legend {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.btn-motion[aria-pressed="true"] {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #fff6d2, #ffe3a0);
+}
+
+.motion-os {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.motion-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 4px 0 12px;
+}
+
+.motion-bar .btn-motion { min-width: 132px; }
+
+.motion-bar .motion-os { text-align: left; }
+
+.btn-motion,
+.btn-reset,
+.text-link {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  border: 3px solid var(--wood);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.village.is-iso {
+  /* Same diamond size as tip 3ff954a. A 6×5 court fills the map width;
+     scroll down to the front path. Padding clears the confirm bar. */
+  --s: 1;
+  --step-x: calc(var(--s) * 84px);
+  --step-y: calc(var(--s) * 50px);
+  --pad-w: calc(var(--s) * 160px);
+  --pad-h: calc(var(--s) * 158px);
+  left: 224px;
+  right: 6px;
+  top: 4px;
+  bottom: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: 88px;
+  scroll-padding-bottom: 88px;
+  scrollbar-width: thin;
+}
+
+.village.is-iso .pad,
+.ground-tile {
+  width: var(--pad-w);
+  height: var(--pad-h);
+  left: calc(50% + (var(--c) - var(--r) - 0.5) * var(--step-x) - var(--pad-w) / 2);
+  top: calc((var(--c) + var(--r) + 1) * var(--step-y));
+}
+
+/* Sprites, ghosts, labels and the pad box must not catch taps.
+   The village listener picks the diamond by math. */
+.village.is-iso .pad,
+.village.is-iso .pad * {
+  pointer-events: none;
+}
+
+/* Footprint center inside the unscaled 160×158 pad is (80px, 121px).
+   Slab viewBox center (0,0) is 84px across and 50px down. */
+.pad > .slab,
+.ground-tile > .slab,
+.pad > .mark {
+  position: absolute;
+  width: calc(var(--s) * 168px);
+  height: calc(var(--s) * 120px);
+  left: calc(var(--s) * -4px);
+  top: calc(var(--s) * 71px);
+  pointer-events: none;
+}
+
+.ground-tile.is-raised > .slab { top: calc(var(--s) * 63px); }
+
+.pad > .shadow {
+  position: absolute;
+  z-index: 1;
+  width: calc(var(--s) * 200px);
+  height: calc(var(--s) * 100px);
+  left: calc(var(--s) * -20px);
+  top: calc(var(--s) * 71px);
+  pointer-events: none;
+}
+
+.pad > .mark { z-index: 2; }
+
+.ground {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.ground-tile {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.pad.is-locked,
+.pad.is-hover { z-index: 15; }
+
+.village.is-iso .cap {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  left: 50%;
+  margin: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Keyboard-only control. Pointer hits are resolved on the village. */
+.cell-btn {
+  position: absolute;
+  z-index: 3;
+  width: calc(var(--s) * 44px);
+  height: calc(var(--s) * 44px);
+  left: calc(var(--s) * 58px);
+  top: calc(var(--s) * 99px);
+  padding: 0;
+  border: 0;
+  appearance: none;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  pointer-events: none;
+}
+
+.cell-btn:hover,
+.cell-btn:focus,
+.cell-btn:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.focus-ring {
+  position: absolute;
+  z-index: 2;
+  width: calc(var(--s) * 168px);
+  height: calc(var(--s) * 120px);
+  left: calc(var(--s) * -4px);
+  top: calc(var(--s) * 71px);
+  pointer-events: none;
+  opacity: 0;
+  clip-path: polygon(50% 0, 100% 41.67%, 50% 83.33%, 0 41.67%);
+  box-shadow: inset 0 0 0 4px var(--focus);
+}
+
+.pad:focus-within .focus-ring { opacity: 1; }
+
+.pad > .sprite,
+.pad > .ghost {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+.pad > .ghost { opacity: .5; }
+
+.pad.is-illegal .ghost { opacity: .72; }
+
+.badge {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: calc(var(--s) * 121px);
+  margin: 0;
+  padding: 2px 8px;
+  border: 2px solid var(--gold);
+  border-radius: 999px;
+  background: rgba(255, 246, 210, .95);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.badge.is-bad {
+  top: calc(var(--s) * 78px);
+  border-color: #b33a2b;
+  background: #fde8e4;
+  color: #7a241c;
+}
+
+.pad > .sprite[hidden],
+.pad > .ghost[hidden],
+.cell-btn img[hidden],
+.pad > .shadow[hidden],
+.pad > .mark[hidden],
+.cap[hidden],
+.badge[hidden],
+.oob-mark[hidden],
+.place-bar[hidden],
+.empty-hint[hidden] { display: none !important; }
+
+.pad.is-valid .mark {
+  animation: valid-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes valid-pulse {
+  50% { filter: drop-shadow(0 0 7px rgba(212, 160, 23, .95)); }
+}
+
+.pad.is-locked .mark {
+  filter: drop-shadow(0 0 6px rgba(196, 92, 38, .85));
+}
+
+.empty-hint {
+  position: absolute;
+  z-index: 21;
+  left: auto;
+  right: 12px;
+  top: 46px;
+  margin: 0;
+  max-width: 280px;
+  padding: 8px 14px;
+  border: 3px solid var(--wood);
+  border-radius: 999px;
+  background: rgba(250, 246, 239, .94);
+  font-size: 16px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.oob-mark {
+  position: absolute;
+  z-index: 9;
+  width: 148px;
+  pointer-events: none;
+  transform: translate(-50%, -40%);
+}
+
+.oob-mark img { width: 100%; height: auto; display: block; }
+
+.oob-mark span {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  padding: 2px 8px;
+  border: 2px solid #b33a2b;
+  border-radius: 999px;
+  background: #fde8e4;
+  color: #7a241c;
+  font-size: 14px;
+  font-weight: 800;
+  transform: translate(-50%, -50%);
+}
+
+.map.is-oob {
+  box-shadow: inset 0 0 0 6px #b33a2b, 0 8px 0 rgba(0, 0, 0, .12);
+}
+
+.place-bar {
+  position: absolute;
+  z-index: 30;
+  left: 232px;
+  right: 12px;
+  bottom: 10px;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 3px solid var(--wood);
+  border-radius: 16px;
+  background: rgba(250, 246, 239, .97);
+}
+
+.place-bar button {
+  min-width: 96px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 3px solid var(--wood);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+#btnConfirm {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #fff6d2, #ffe3a0);
+}
+
+#btnConfirm:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+#placeStatus {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pad.is-valid .mark { animation: none; }
+}
+
+body.sheet-page {
+  margin: 0;
+  background:
+    radial-gradient(circle at 12% 0, rgba(240, 193, 75, .28), transparent 28%),
+    linear-gradient(180deg, #f6ead4, #e7d3b0);
+  color: var(--ink);
+  font-family: var(--font, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif);
+}
+
+.sheet {
+  width: min(100% - 28px, 1280px);
+  margin: 0 auto;
+  padding: 28px 0 48px;
+}
+
+.sheet h1 { margin: 0 0 8px; font-size: clamp(1.5rem, 3vw, 2rem); }
+
+.sheet p { line-height: 1.5; font-size: 1.05rem; }
+
+.sheet a.back {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 8px 14px;
+  border: 3px solid var(--wood, #8b5e3c);
+  border-radius: 12px;
+  background: #faf6ef;
+  color: var(--ink, #3b2a1a);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.cutouts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cutouts li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px 12px;
+  border: 3px solid var(--wood, #8b5e3c);
+  border-radius: 16px;
+  background: #fffaf3;
+}
+
+.cutouts .art {
+  width: 100%;
+  border-radius: 12px;
+  background: #6d9844 url("assets/ground-tile.svg") center 70% / 118% auto no-repeat;
+}
+
+.cutouts img { width: 100%; height: auto; display: block; }
+
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 18px;
+  margin: 8px 0 28px;
+}
+
+.compare figure { margin: 0; }
+
+.compare figcaption {
+  margin-bottom: 6px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.compare .art {
+  border-radius: 12px;
+  background: #6d9844 url("assets/ground-tile.svg") center 78% / 78% auto no-repeat;
+}
+
+.compare img {
+  width: 100%;
+  height: auto;
+  display: block;
+  pointer-events: none;
+}
+
+.sheet h2 { margin: 22px 0 8px; font-size: 1.35rem; }
+
+.cutouts strong { font-size: 16px; }
+
+.cutouts code {
+  font-size: 12px;
+  color: var(--ink-soft, #5c4632);
+}
+
+@media (max-width: 800px) {
+  .cutouts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

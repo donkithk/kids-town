@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-84 -50 168 120" fill="none">
+  <!-- Light from the upper front-right. Left lip is the shadow side. -->
+  <polygon points="-84,0 0,50 0,58 -84,8" fill="#4c7630"/>
+  <polygon points="84,0 0,50 0,58 84,8" fill="#6b9842"/>
+  <polygon points="0,-50 84,0 0,50 -84,0" fill="#87b64e" stroke="#5c7c36" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M-18 6c3-7 7-7 9 0M22-4c3-8 6-7 8 1" stroke="#6a9a3c" stroke-width="2" stroke-linecap="round"/>
+</svg>
