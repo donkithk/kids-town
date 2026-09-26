@@ -61,12 +61,12 @@
   <polygon points="156.2,129.8 159.9,127.6 159.9,116.7 156.2,119.0" fill="#e07a3d" stroke="#5c3d28" stroke-width="1"/>
   <polygon points="161.8,129.2 165.4,127.0 165.4,114.7 161.8,117.0" fill="#3d8fbf" stroke="#5c3d28" stroke-width="1"/>
 
-  <path d="M114,152 C114,136 120,126 126,124 C132,126 138,136 138,152 L136,168 L116,168 Z" fill="#1f4e66" stroke="#5c3d28" stroke-width="2.4"/>
-  <polygon points="124,170 116,166 116,140 124,144" fill="#5aa6d6" stroke="#5c3d28" stroke-width="2" stroke-linejoin="round"/>
-  <polygon points="128,170 136,166 136,140 128,144" fill="#7ec4ea" stroke="#5c3d28" stroke-width="2" stroke-linejoin="round"/>
-  <polygon points="123,156 118,154 118,146 123,148" fill="#e7f6ff" stroke="#5c3d28" stroke-width="0.8"/>
-  <polygon points="129,156 134,154 134,146 129,148" fill="#f4fbff" stroke="#5c3d28" stroke-width="0.8"/>
-  <circle cx="126" cy="156" r="1.5" fill="#f0c14b"/>
+  <polygon points="108.5,125.4 131.5,129.8 131.5,167.8 108.5,163.4" fill="#1f4e66" stroke="#5c3d28" stroke-width="2.4" stroke-linejoin="round"/>
+  <polygon points="111.3,129.0 119.7,130.5 119.7,162.5 111.3,161.0" fill="#5aa6d6" stroke="#5c3d28" stroke-width="1.7" stroke-linejoin="round"/>
+  <polygon points="120.3,130.7 128.7,132.2 128.7,164.2 120.3,162.7" fill="#7ec4ea" stroke="#5c3d28" stroke-width="1.7" stroke-linejoin="round"/>
+  <polygon points="112.9,135.8 118.1,136.7 118.1,145.7 112.9,144.8" fill="#e7f6ff" stroke="#5c3d28" stroke-width="0.8"/>
+  <polygon points="121.9,137.5 127.1,138.4 127.1,147.4 121.9,146.5" fill="#f4fbff" stroke="#5c3d28" stroke-width="0.8"/>
+  <circle cx="120" cy="146.6" r="1.5" fill="#f0c14b"/>
 
   <g class="sign">
     <polygon points="86,64 156,56 162,28 92,36" fill="#c4453a" stroke="#5c3d28" stroke-width="2.6" stroke-linejoin="round"/>
