@@ -6,9 +6,9 @@
     .steam.d3 { animation-delay: 1.4s; }
     .smoke.d3 { animation-delay: 1.5s; }
     @keyframes puff {
-      0% { transform: translate(0px, 2px); opacity: .7; }
-      45% { transform: translate(2px, -3px); opacity: 1; }
-      100% { transform: translate(4px, -8px); opacity: .45; }
+      0% { transform: translate(0px, 2px); opacity: .75; }
+      50% { transform: translate(3px, -4px); opacity: 1; }
+      100% { transform: translate(6px, -10px); opacity: .5; }
     }
   </style>
   <polygon points="120,186 188,154 120,122 52,154" fill="#e4d2a4" stroke="#8b5e3c" stroke-width="3" stroke-linejoin="round"/>
@@ -41,12 +41,12 @@
   <ellipse cx="168" cy="36" rx="8" ry="3.2" fill="#fffaf4" stroke="#5c3d28" stroke-width="1.3"/>
 
   <g class="smoke">
-    <circle cx="146" cy="16" r="5" fill="#fffaf4"/>
-    <circle cx="152" cy="10" r="3.6" fill="#fffaf4"/>
+    <circle cx="148" cy="20" r="5" fill="#d5e6ee"/>
+    <circle cx="146" cy="14" r="4.5" fill="#fffaf4"/>
   </g>
   <g class="smoke d2">
-    <circle cx="168" cy="20" r="4.6" fill="#fffaf4"/>
-    <circle cx="174" cy="13" r="3.4" fill="#fffaf4"/>
+    <circle cx="170" cy="24" r="4.8" fill="#d5e6ee"/>
+    <circle cx="168" cy="18" r="4.2" fill="#fffaf4"/>
   </g>
 
   <!-- cooling tower, left -->
@@ -56,11 +56,11 @@
   <ellipse cx="79" cy="56" rx="14" ry="4.2" fill="#5aa6d6" stroke="#5c3d28" stroke-width="1.4"/>
 
   <g class="steam">
-    <circle cx="74" cy="28" r="9" fill="#fffaf4"/>
-    <circle cx="62" cy="32" r="8" fill="#fffaf4"/>
-    <circle cx="86" cy="26" r="8" fill="#fffaf4"/>
-    <circle cx="70" cy="20" r="7" fill="#fffaf4"/>
-    <circle cx="84" cy="16" r="5.5" fill="#fffaf4"/>
+    <circle cx="70" cy="34" r="8" fill="#d5e6ee"/>
+    <circle cx="74" cy="26" r="9" fill="#fffaf4"/>
+    <circle cx="60" cy="28" r="7" fill="#fffaf4"/>
+    <circle cx="88" cy="24" r="7" fill="#fffaf4"/>
+    <circle cx="72" cy="16" r="6" fill="#fffaf4"/>
   </g>
 
   <!-- front blue shed -->
