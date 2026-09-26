@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>四場景 · 城鎮起屋</title>
+  <link rel="stylesheet" href="chrome.css">
+  <link rel="stylesheet" href="scene.css">
+</head>
+<body class="stage-page">
+  <div class="stage">
+    <a class="skip" href="#townMap">跳到城鎮地圖</a>
+    <header class="gh">
+      <div class="av" aria-hidden="true"><img src="../town-building-proof/assets/avatar.svg" alt=""></div>
+      <div class="in">
+        <div class="nm">Preview</div>
+        <div class="nm-lv">Lv.6</div>
+      </div>
+      <div class="hdr-mid">
+        <div class="rw">
+          <div class="xp" aria-hidden="true"><div class="xf"></div></div>
+          <span class="xp-num">XP 0/150</span>
+        </div>
+        <div class="hdr-res" aria-label="資源（只係演示籌碼）">
+          <span class="chip-gold">💰 <span class="n" id="res-gold">6000</span></span>
+          <span>🪵 <span class="n" id="res-wood">240</span></span>
+          <span>🧱 <span class="n" id="res-brick">180</span></span>
+          <span>🪟 <span class="n" id="res-glass">12</span></span>
+          <span>⚙️ <span class="n" id="res-gear">90</span></span>
+        </div>
+      </div>
+      <button class="mb" type="button" aria-label="主目錄">☰</button>
+    </header>
+
+    <section class="map is-scene-1" id="townMap" aria-label="場景 1 · 睇地圖">
+      <h1 class="sr-only">四個場景：睇地圖、揀空地、擺位置、升級或打開功能</h1>
+      <img class="meadow" src="../town-building-proof/assets/meadow.svg" alt="">
+      <div class="vignette" aria-hidden="true"></div>
+
+      <div class="step-rail">
+        <p class="scene-chip" id="sceneChip">場景 1 · 睇地圖</p>
+        <ol class="step-list" aria-label="起屋四步">
+          <li>
+            <button class="step" type="button" data-scene="1" aria-current="step">
+              <span class="step-no">1</span><span>睇地圖</span>
+            </button>
+          </li>
+          <li>
+            <button class="step" type="button" data-scene="2">
+              <span class="step-no">2</span><span>揀空地</span>
+            </button>
+          </li>
+          <li>
+            <button class="step is-later" type="button" data-scene="3">
+              <span class="step-no">3</span><span>擺位置</span><span class="step-next">下一提示</span>
+            </button>
+          </li>
+          <li>
+            <button class="step is-later" type="button" data-scene="4">
+              <span class="step-no">4</span><span>升級</span><span class="step-next">下一提示</span>
+            </button>
+          </li>
+        </ol>
+      </div>
+
+      <aside class="palette" id="palette" hidden>
+        <div class="palette-head">
+          <h2>建築清單</h2>
+          <p id="placedCount">已起 3/10</p>
+        </div>
+        <div class="palette-grid" id="paletteGrid"></div>
+        <p class="legend">未起嘅先可以揀 · 已起可睇升級</p>
+        <button class="tool-btn" id="btnListToggle" type="button">收起清單</button>
+      </aside>
+
+      <p class="hint" id="hint">圖書館、農場、商店已經起好。周圍睇吓，或者撳「我要起屋」。</p>
+      <div class="village is-iso" id="village"></div>
+
+      <button class="list-launcher" id="listLauncher" type="button" hidden>
+        建築清單
+        <small>揀想起嘅屋</small>
+      </button>
+
+      <button class="cta" id="btnBuild" type="button">我要起屋</button>
+
+      <div class="tools">
+        <a class="tool-btn" href="flow.html">四步流程</a>
+        <button class="tool-btn" id="btnMotion" type="button" aria-pressed="true">動畫 開</button>
+        <button class="tool-btn" id="btnReset" type="button">重置示範</button>
+      </div>
+
+      <div class="place-bar" id="readyBar" hidden>
+        <button id="btnBack" type="button">返去睇地圖</button>
+        <p id="readyStatus" aria-live="polite">點金色空地，或者打開清單揀一座未起嘅屋。</p>
+        <button id="btnToScene3" type="button" disabled>去擺位置</button>
+      </div>
+
+      <div class="place-bar" id="placeBar" hidden>
+        <button id="btnCancel" type="button">取消</button>
+        <p id="placeStatus" aria-live="polite"></p>
+        <button id="btnConfirm" type="button" disabled>確定放置（下一提示）</button>
+      </div>
+
+      <section class="action-sheet" id="actionSheet" hidden aria-label="升級或打開功能">
+        <p class="next-tip">下一提示</p>
+        <img class="sheet-art" id="sheetArt" alt="">
+        <div>
+          <h2 id="sheetTitle" tabindex="-1">升級或打開功能</h2>
+          <p class="sheet-level" id="sheetLevel">Lv.1 · 示範</p>
+          <p class="sheet-note" id="sheetNote"></p>
+          <div class="sheet-picks" id="sheetPicks" aria-label="已起嘅屋"></div>
+          <div class="sheet-actions">
+            <button id="btnUpgrade" type="button" disabled>升級（下一提示）</button>
+            <button id="btnOpenFn" type="button" disabled>打開功能（下一提示）</button>
+          </div>
+          <div class="fn-row" id="sheetFns"></div>
+        </div>
+        <button class="btn-close-sheet" id="btnCloseSheet" type="button">返去地圖</button>
+      </section>
+    </section>
+
+    <p class="toast" id="toast" role="status" hidden></p>
+
+    <nav class="kt-footer" aria-label="主要導覽">
+      <button class="footer-tab" type="button" aria-current="page">
+        <img src="../town-building-proof/assets/ui/icon-town-home.svg" alt=""><span>城鎮首頁</span>
+      </button>
+      <button class="footer-tab" type="button">
+        <img src="../town-building-proof/assets/ui/icon-guild-hall.svg" alt=""><span>公會大廳</span>
+      </button>
+      <button class="footer-tab" type="button">
+        <img src="../town-building-proof/assets/ui/icon-quest-board.svg" alt=""><span>任務板</span>
+      </button>
+      <button class="footer-tab" type="button">
+        <img src="../town-building-proof/assets/ui/icon-shop.svg" alt=""><span>商店</span>
+      </button>
+      <button class="footer-tab" type="button">
+        <img src="../town-building-proof/assets/ui/icon-backpack.svg" alt=""><span>背包</span>
+      </button>
+    </nav>
+  </div>
+  <script src="scene.js"></script>
+</body>
+</html>
