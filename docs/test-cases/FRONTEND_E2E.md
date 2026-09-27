@@ -11,7 +11,7 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 四場景起屋（設計稿 `3b4671d`／PR #27，**唔好 merge #27**）: `TC-FE-TOWN-UX-01`…`05`、`TC-FE-TOWN-FX-01`／`02`、`TC-FE-TOWN-HIT-01`…`03`、`TC-FE-TOWN-MOTION-01`／`02`。呢個 sheet flow 已經喺 main。舊放置條 `TC-FE-PLACE-SHOP-01`／`TC-FE-PLACE-BUILD-01` 仍然有效，唔係呢個 sheet flow 嘅代替。
 
-格外搬返（6×5 之外嘅「已起」，或者 `stored=1`）: `TC-FE-TOWN-RELOCATE-01`…`04`。篩選 `-k relocate`。`02`／`03` **留紅**：清單把格外座標鎖成「已起」，「去擺位置」唔可以搬返；stored 屋被當成未起新建築，確定 POST create 會被「已經興建」拒絕，座標唔更新、資源亦唔係搬返。`01`（場景 1 唔幽靈渲染）同 `04`（格內「已起」唔可以再起多一座）係守則，而家 main 已經符合。
+格外搬返（**8×8** 之外嘅「已起」，或者 `stored=1`）: `TC-FE-TOWN-RELOCATE-01`…`04`。篩選 `-k relocate`。可建地圖係欄 0..7 × 行 0..7，場景 1–3 同一個 8×8。`01`／`02`／`03` **留紅**：地圖未有 8×8；清單把格外座標鎖成「已起」，「去擺位置」唔可以搬返 8×8；stored 屋被當成未起新建築，確定 POST create 會被「已經興建」拒絕。`04` 守住格內「已起」唔可以再起多一座。
 
 共用前置（除另註）：
 
@@ -415,16 +415,16 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 ---
 
-## TC-FE-TOWN-RELOCATE-01 — 場景 1 唔好幽靈渲染格外「已起」
+## TC-FE-TOWN-RELOCATE-01 — 場景 1–3 係 8×8，格外「已起」唔好幽靈渲染
 
 | 欄 | 內容 |
 |----|------|
 | **ID** | TC-FE-TOWN-RELOCATE-01 |
-| **優先級** | P0（格外搬返；場景 1 守則，而家 main 已符合） |
+| **優先級** | P0（8×8 格外搬返；main 上留紅） |
 | **建議模組** | `tests/test_frontend.py`（`-k relocate`） |
-| **前置** | 空庫合成 `test_fe_kid`。種子：工坊 `(4,1)` stored=0（6×5 之內）；圖書館 `(17,1)`、健身室 `(15,5)`、農場 `(9,5)`、醫院 `(17,13)`、探險公會 `(9,13)` 都係 stored=0 但超出欄 0..5 × 行 0..4；商店 `(3,3)` stored=1。銀行唔喺 `seed_building_defs`，唔種。唔用真 PIN／production DB。 |
-| **步驟** | 1. 登入城鎮首頁，停喺場景 1 2. 睇等角地圖 |
-| **預期** | 工坊出現喺「第 5 欄第 2 行」。格外五座唔好出現喺任何等角格、sprite 或 caption。stored 商店唔好畫喺「第 4 欄第 4 行」（嗰格仍然係空地）。舊 `.town-building` 畫布唔算場景 1。 |
+| **前置** | 空庫合成 `test_fe_kid`。種子：工坊 `(4,1)` stored=0（8×8 之內）；圖書館 `(17,1)`、健身室 `(15,5)`、農場 `(9,5)`、醫院 `(17,13)`、探險公會 `(9,13)` 都係 stored=0 但超出欄 0..7 × 行 0..7；商店 `(3,3)` stored=1。銀行唔喺 `seed_building_defs`，唔種。唔用真 PIN／production DB。 |
+| **步驟** | 1. 場景 1 數等角格 2. 睇工坊同格外／stored 有冇畫出嚟 3. 「我要起屋」再數一次 4. 揀空地 + 未起嘅燈塔，「去擺位置」入場景 3 再數一次 |
+| **預期** | 場景 1、2、3 都係 **8×8**（64 格，第 1–8 欄 × 第 1–8 行）。工坊出現喺「第 5 欄第 2 行」。格外五座唔好出現喺任何等角格、sprite 或 caption。stored 商店唔好畫喺「第 4 欄第 4 行」（嗰格仍然係空地）。舊 `.town-building` 畫布唔算。燈塔只係用嚟打開場景 3 度格，唔係搬返本身。 |
 
 ---
 
@@ -436,7 +436,7 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **優先級** | P0（格外搬返；main 上留紅） |
 | **建議模組** | `tests/test_frontend.py`（`-k relocate`） |
 | **步驟** | 1. 撳「我要起屋」 2. 揀一塊空地 3. 打開「建築清單」 4. 睇格外五座同 stored 商店 5. 撳圖書館 6. 再撳 stored 商店 |
-| **預期** | 格外屋同 stored 屋可以當 **搬返／放返地圖** 來揀，揀完「去擺位置」可撳。唔好只標「已起」然後打開升級 sheet、提示要揀「未起」。stored 屋亦唔好當成未起嘅新建築（標價 💰）去起第二座。格內工坊仍然係「已起」，唔可以當未起（見 `TC-FE-TOWN-RELOCATE-04`）。 |
+| **預期** | 場景 2 係 8×8。格外屋（例如 `(17,1)`、`(9,13)`）同 stored 屋可以當 **搬返／放返 8×8 地圖** 來揀，揀完「去擺位置」可撳。唔好只標「已起」然後打開升級 sheet、提示要揀「未起」。stored 屋亦唔好當成未起嘅新建築（標價 💰）去起第二座。格內工坊仍然係「已起」，唔可以當未起（見 `TC-FE-TOWN-RELOCATE-04`）。 |
 
 ---
 
@@ -448,7 +448,7 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **優先級** | P0（格外搬返；main 上留紅） |
 | **建議模組** | `tests/test_frontend.py`（`-k relocate`） |
 | **步驟** | 1. 空地「第 1 欄第 1 行」+ 圖書館 →「去擺位置」→「確定」 2. 空地「第 1 欄第 4 行」+ stored 商店 →「去擺位置」→「確定」 3. 讀 HUD、DB 座標、`stored`、材料 |
-| **預期** | 圖書館由 `(17,1)` 搬到 cell `(0,0)`，仍然一行、stored=0，並且出現喺嗰格。商店由 stored=1 放到 cell `(0,3)`，仍然一行。工坊留喺 `(4,1)`。金幣同材料（HUD 同 inventory）同搬之前一樣。唔好 POST 新起屋扣資源，亦唔好因為「已經興建」而擺唔返。後端已有 `POST /buildings/<id>/move` 同 store／unstored；而家 UX 擋住。 |
+| **預期** | 場景 2（同埋去到場景 3 嗰陣）都係 8×8。圖書館由 `(17,1)` 搬到 cell `(0,0)`，仍然一行、stored=0，並且出現喺嗰格。商店由 stored=1 放到 cell `(0,3)`，仍然一行。工坊留喺 `(4,1)`。金幣同材料（HUD 同 inventory）同搬之前一樣。唔好 POST 新起屋扣資源，亦唔好因為「已經興建」而擺唔返。後端已有 `POST /buildings/<id>/move` 同 store／unstored；而家 UX 擋住。 |
 
 ---
 
@@ -460,7 +460,7 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **優先級** | P0（格外搬返；守住現有規則） |
 | **建議模組** | `tests/test_frontend.py`（`-k relocate`） |
 | **步驟** | 1. 場景 2 揀空地 2. 清單撳格內工坊 3. 睇「去擺位置」、DB、HUD |
-| **預期** | 工坊仍然標「已起」。「去擺位置」保持 disabled，唔好當未起屋來起第二座。DB 仍然只有一座工坊喺 `(4,1)`。HUD／庫存不變。升級，以及將來先至做嘅格內搬屋，唔喺呢個 case。 |
+| **預期** | 8×8 之內已經起好嘅工坊仍然標「已起」。「去擺位置」保持 disabled，唔好當未起屋來起第二座。DB 仍然只有一座工坊喺 `(4,1)`。HUD／庫存不變。升級，以及將來先至做嘅格內搬屋，唔喺呢個 case。 |
 
 ---
 
@@ -502,6 +502,6 @@ python -m pytest tests/test_frontend.py -q -k 'not relocate' --tb=line
 python -m pytest tests/test_frontend.py -q -k town_ux --tb=short
 ```
 
-`relocate` 係格外／stored 搬返（`TC-FE-TOWN-RELOCATE-01`…`04`）。`-k 'not relocate'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`。搬返未落地之前，`02` 同 `03` 會紅；`01` 同 `04` 守住已經成立嘅場景 1 同格內規則。唔好改產品來令呢個 PR 變綠。
+`relocate` 係 8×8 地圖同格外／stored 搬返（`TC-FE-TOWN-RELOCATE-01`…`04`）。`-k 'not relocate'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`。接受尺寸係 8×8。搬返同 8×8 未落地之前，`relocate` 會紅。唔好改產品來令呢個 PR 變綠。
 
 雙重驗證 (B) 人手步驟：[`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md)。跑完結果寫 [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md)。

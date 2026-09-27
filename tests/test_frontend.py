@@ -22,8 +22,8 @@ Requirements:
   TC-FE-TOWN-FX-01/02  新起同升級嘅金星慶祝；升級金星要喺 action sheet 上面睇到。
   TC-FE-TOWN-HIT-01/02/03  背面格 hit-test、1100×800 同 1280×720 信箱撳格、軟橢圓接觸陰影。
   TC-FE-TOWN-MOTION-01/02  慶祝層 pointer-events:none；動畫掣跟 prefers-reduced-motion，開／關撳先寫 localStorage。
-  TC-FE-TOWN-RELOCATE-01..04  6×5 之外或者 stored=1 嘅「已起」要搬得返地圖，而且唔扣資源。
-        篩選 `-k relocate`。產品未有呢個搬返，02／03 故意留紅。格內「已起」仍然唔可以當未起再起多一座。
+  TC-FE-TOWN-RELOCATE-01..04  8×8 地圖；格外或者 stored=1 嘅「已起」要搬得返去，而且唔扣資源。
+        篩選 `-k relocate`。地圖未係 8×8，格外搬返亦未做，所以留紅。格內「已起」仍然唔可以當未起再起多一座。
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
   FE-P0-03  家長 A session 不能管理家長 B 嘅仔女
@@ -2437,17 +2437,18 @@ def test_town_ux_motion_toggle_follows_reduced_motion_until_click(
     )
 
 
-# ── TC-FE-TOWN-RELOCATE: place back buildings outside the 6×5 grid ──
+# ── TC-FE-TOWN-RELOCATE: 8×8 map, place back buildings outside that grid ──
 #
-# Four-scene UX is already on main. placedDef still treats every non-stored
-# row as 「已起」, including cells outside col 0..5 × row 0..4. Scene 2 then
-# refuses to select them, and confirm only POSTs a new build. Move and
-# unstored APIs already exist. These cases stay red until an out-of-grid or
-# stored building can be put back on an empty pad without spending resources.
-# In-grid 「已起」 must still not erect a second copy.
+# Acceptance is COLS=8 ROWS=8 in scenes 1–3. The grid assert stays red until
+# the four-scene map uses that size. placedDef still treats every non-stored row as 「已起」,
+# including cells outside col 0..7 × row 0..7 (for example 17,1 and 9,13).
+# Scene 2 then refuses to select them, and confirm only POSTs a new build.
+# Move and unstored APIs already exist. In-grid 「已起」 must still not erect
+# a second copy.
 
-TOWN_GRID_COLS = 6
-TOWN_GRID_ROWS = 5
+TOWN_GRID_COLS = 8
+TOWN_GRID_ROWS = 8
+TOWN_RELOCATE_UNBUILT = "燈塔"
 # (name, cell_x, cell_y, stored). 銀行 is not in seed_building_defs.
 TOWN_RELOCATE_IN_GRID = ("工坊", 4, 1, 0)
 TOWN_RELOCATE_OUT = (
@@ -2461,7 +2462,8 @@ TOWN_RELOCATE_OUT = (
 TOWN_RELOCATE_STORED = ("商店", 3, 3, 1)
 TOWN_RELOCATE_RED = (
     "Out-of-grid or stored 「已起」 buildings must be selectable to move / place "
-    "back onto the current 6×5 map. Confirm must update that existing row "
+    "back onto the current 8×8 map. Scenes 1–3 must all use COLS=8 ROWS=8. "
+    "Confirm must update that existing row "
     "(new cell, stored=0) and must not deduct coins or materials. "
     "POST /api/kids/<id>/buildings/<id>/move and /unstored already exist; "
     "the list still locks off-grid rows as 「已起」 and confirm still POSTs a new build."
@@ -2475,6 +2477,44 @@ def _relocate_fail(case_id, detail):
 
 def _cell_in_town_grid(cell_x, cell_y):
     return 0 <= cell_x < TOWN_GRID_COLS and 0 <= cell_y < TOWN_GRID_ROWS
+
+
+_TOWN_GRID_PROBE_JS = r"""
+() => {
+  const buttons = [...document.querySelectorAll('#townMap .pad button, #village .pad button')];
+  const cells = new Set();
+  let maxC = 0;
+  let maxR = 0;
+  for (const btn of buttons) {
+    const label = btn.getAttribute('aria-label') || '';
+    const m = /第\s*(\d+)\s*欄第\s*(\d+)\s*行/.exec(label);
+    if (!m) continue;
+    const c = Number(m[1]);
+    const r = Number(m[2]);
+    if (c > maxC) maxC = c;
+    if (r > maxR) maxR = r;
+    cells.add(c + ',' + r);
+  }
+  return {cols: maxC, rows: maxR, count: cells.size};
+}
+"""
+
+
+def _town_grid_problem(page, scene):
+    """1-based label span must be COLS×ROWS in every four-scene map."""
+    size = page.evaluate(_TOWN_GRID_PROBE_JS)
+    want = TOWN_GRID_COLS * TOWN_GRID_ROWS
+    if (
+        size["cols"] == TOWN_GRID_COLS
+        and size["rows"] == TOWN_GRID_ROWS
+        and size["count"] == want
+    ):
+        return None
+    return (
+        f"scene {scene} map is {size['cols']}×{size['rows']} ({size['count']} pads); "
+        f"want {TOWN_GRID_COLS}×{TOWN_GRID_ROWS} ({want} pads, "
+        f"col 0..{TOWN_GRID_COLS - 1} × row 0..{TOWN_GRID_ROWS - 1})"
+    )
 
 
 def _seed_town_relocate_plot(test_db_path, kid_id):
@@ -2644,39 +2684,72 @@ def _return_to_scene2(page, case_id):
 def test_town_relocate_scene1_hides_out_of_grid_buildings(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-RELOCATE-01 場景 1：格內工坊可見；格外同 stored 唔好幽靈渲染。"""
+    """TC-FE-TOWN-RELOCATE-01 場景 1–3 都係 8×8；格內工坊可見；格外同 stored 唔好幽靈渲染。"""
     kid_id = fe_ids["kid_id"]
     _seed_town_relocate_plot(test_db_path, kid_id)
     _open_town_home(page, base_url)
+    problems = []
+    grid = _town_grid_problem(page, 1)
+    if grid:
+        problems.append(grid)
     labels = _iso_pad_labels(page)
     visible = _iso_visible_names(page)
     blob = "\n".join(labels + visible)
     in_name, in_x, in_y, _stored = TOWN_RELOCATE_IN_GRID
     in_label = f"第 {in_x + 1} 欄第 {in_y + 1} 行"
-    assert in_name in blob and in_label in blob, (
-        "TC-FE-TOWN-RELOCATE-01: scene 1 must show the in-grid building "
-        f"{in_name} at {in_label} (cell {in_x},{in_y}). "
-        f"iso labels={labels!r} visible={visible!r}"
-    )
-    ghosts = []
+    if in_name not in blob or in_label not in blob:
+        problems.append(
+            f"scene 1 must show in-grid {in_name} at {in_label} (cell {in_x},{in_y}). "
+            f"iso labels={labels!r} visible={visible!r}"
+        )
     for name, cell_x, cell_y, stored in (*TOWN_RELOCATE_OUT, TOWN_RELOCATE_STORED):
         if name in blob:
             where = "stored=1" if stored else f"cell ({cell_x},{cell_y}) outside {TOWN_GRID_COLS}×{TOWN_GRID_ROWS}"
-            ghosts.append(f"{name} ({where})")
+            problems.append(f"ghosted {name} ({where})")
     stored_name, stored_x, stored_y, _ = TOWN_RELOCATE_STORED
     stored_label = f"第 {stored_x + 1} 欄第 {stored_y + 1} 行"
     stored_pad = [label for label in labels if stored_label in label]
     if not stored_pad or not any("空地" in label for label in stored_pad):
-        ghosts.append(
+        problems.append(
             f"{stored_name} cell ({stored_x},{stored_y}) is stored=1 and must stay an empty pad "
             f"(saw {stored_pad!r})"
         )
-    assert not ghosts, (
-        "TC-FE-TOWN-RELOCATE-01: scene 1 must not ghost-render 「已起」 buildings whose "
-        f"cells are outside the 6×5 grid, or stored=1 rows. Ghosted: {ghosts}. "
-        f"{TOWN_RELOCATE_RED}"
-    )
     assert all(not _cell_in_town_grid(x, y) for _n, x, y, _s in TOWN_RELOCATE_OUT)
+    _enter_scene2(page, "TC-FE-TOWN-RELOCATE-01")
+    grid = _town_grid_problem(page, 2)
+    if grid:
+        problems.append(grid)
+    _select_empty_pad(page, 1, 1)
+    _open_building_list(page)
+    unbuilt = _palette_button(page, TOWN_RELOCATE_UNBUILT)
+    if unbuilt.count() == 0:
+        problems.append(
+            f"scene 3 grid check needs unbuilt {TOWN_RELOCATE_UNBUILT} in the list"
+        )
+    else:
+        unbuilt.first.click()
+        page.wait_for_timeout(300)
+        if not _go_place_enabled(page):
+            problems.append(
+                f"could not open scene 3 to measure the {TOWN_GRID_COLS}×{TOWN_GRID_ROWS} grid "
+                f"({TOWN_RELOCATE_UNBUILT} did not enable 「去擺位置」)"
+            )
+        else:
+            _go_place_button(page).first.click()
+            page.get_by_role("button", name=re.compile(r"取消")).first.wait_for(
+                state="visible", timeout=8000
+            )
+            grid = _town_grid_problem(page, 3)
+            if grid:
+                problems.append(grid)
+    if problems:
+        _relocate_fail(
+            "TC-FE-TOWN-RELOCATE-01",
+            "Scenes 1–3 must use one "
+            f"{TOWN_GRID_COLS}×{TOWN_GRID_ROWS} map. "
+            "In-grid buildings stay visible; out-of-grid and stored rows must not ghost-render. "
+            + " | ".join(problems),
+        )
 
 
 @pytest.mark.case_id("TC-FE-TOWN-RELOCATE-02")
@@ -2687,9 +2760,12 @@ def test_town_relocate_scene2_offgrid_and_stored_selectable(
     _seed_town_relocate_plot(test_db_path, fe_ids["kid_id"])
     _open_town_home(page, base_url)
     _enter_scene2(page, "TC-FE-TOWN-RELOCATE-02")
+    problems = []
+    grid = _town_grid_problem(page, 2)
+    if grid:
+        problems.append(grid)
     _select_empty_pad(page, 1, 1)
     _open_building_list(page)
-    problems = []
     for name, cell_x, cell_y, _stored in TOWN_RELOCATE_OUT:
         btn = _palette_button(page, name)
         if btn.count() == 0:
@@ -2748,7 +2824,7 @@ def test_town_relocate_scene2_offgrid_and_stored_selectable(
     if problems:
         _relocate_fail(
             "TC-FE-TOWN-RELOCATE-02",
-            "Scene 2 must let the kid select out-of-grid and stored buildings to relocate, "
+            "Scene 2 on the 8×8 map must let the kid select out-of-grid and stored buildings to relocate, "
             "not only buildings marked 未起 for a brand-new build. "
             + " | ".join(problems),
         )
@@ -2765,9 +2841,12 @@ def test_town_relocate_confirm_moves_without_deduct(
     before = _resource_snapshot(page, test_db_path, kid_id)
     before_rows = _building_rows(test_db_path, kid_id)
     _enter_scene2(page, "TC-FE-TOWN-RELOCATE-03")
+    problems = []
+    grid = _town_grid_problem(page, 2)
+    if grid:
+        problems.append(grid)
     library_cell = _select_empty_pad(page, 1, 1)
     _open_building_list(page)
-    problems = []
 
     library_btn = _palette_button(page, "圖書館")
     if library_btn.count() == 0:
@@ -2789,6 +2868,9 @@ def test_town_relocate_confirm_moves_without_deduct(
             if confirm.count() == 0 or not confirm.first.is_visible():
                 problems.append("scene 3 has no 「確定」 for the 圖書館 relocate")
             else:
+                grid = _town_grid_problem(page, 3)
+                if grid:
+                    problems.append(grid)
                 confirm.first.click()
                 page.wait_for_timeout(800)
                 labels = "\n".join(_iso_pad_labels(page))
@@ -2815,6 +2897,9 @@ def test_town_relocate_confirm_moves_without_deduct(
         else:
             _go_place_button(page).first.click()
             confirm = page.get_by_role("button", name=re.compile(r"確定"))
+            grid = _town_grid_problem(page, 3)
+            if grid:
+                problems.append(grid)
             confirm.first.click()
             page.wait_for_timeout(800)
             labels = "\n".join(_iso_pad_labels(page))
@@ -2878,7 +2963,7 @@ def test_town_relocate_in_grid_cannot_duplicate_build(
     assert not _go_place_enabled(page), (
         "TC-FE-TOWN-RELOCATE-04: in-grid 「已起」 工坊 must not enable 「去擺位置」 "
         "as a new build. Erecting a second copy is forbidden. "
-        "Upgrade, and any later relocate of buildings already inside 6×5, stay separate. "
+        "Upgrade, and any later relocate of buildings already inside the 8×8 grid, stay separate. "
         f"control={blob!r} hint={_ready_status_text(page)!r}"
     )
     _dismiss_town_sheet(page)
