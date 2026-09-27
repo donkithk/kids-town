@@ -1446,6 +1446,35 @@ def grant_starter_pack_once(db, kid_id):
     return True
 
 
+# Four-scene buildable map. Origins outside this box, or with no legal cell, warehouse on load.
+TOWN_PLACE_COLS = 8
+TOWN_PLACE_ROWS = 8
+
+
+def warehouse_legacy_out_of_grid(db, kid_id):
+    """Set stored=1 on placed rows that sit outside the 8×8 map or have no legal cell.
+
+    Runs on each town load and buildings fetch, so rows written while the server
+    is already up are included. The same row keeps id, def_id, and level.
+    In-grid buildings stay placed.
+    """
+    db.execute(
+        """
+        UPDATE buildings
+        SET stored=1
+        WHERE kid_id=?
+          AND COALESCE(stored, 0)=0
+          AND (
+            cell_x IS NULL OR cell_y IS NULL
+            OR cell_x < 0 OR cell_y < 0
+            OR cell_x >= ? OR cell_y >= ?
+          )
+        """,
+        (kid_id, TOWN_PLACE_COLS, TOWN_PLACE_ROWS),
+    )
+    db.commit()
+
+
 def _ensure_building_placement_columns(db):
     """buildings.cell_x/cell_y/stored exist on live DBs; add them if a fresh file lacks them."""
     cols = [row[1] for row in db.execute("PRAGMA table_info(buildings)").fetchall()]
@@ -3054,6 +3083,7 @@ def list_building_defs():
 @app.route('/api/kids/<int:kid_id>/buildings', methods=['GET'])
 def list_buildings(kid_id):
     db = get_db()
+    warehouse_legacy_out_of_grid(db, kid_id)
     rows = db.execute("""
         SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect
         FROM buildings b
@@ -3206,6 +3236,7 @@ def unstored_building(kid_id, b_id):
 @app.route('/api/kids/<int:kid_id>/stored-buildings', methods=['GET'])
 def get_stored_buildings(kid_id):
     db = get_db()
+    warehouse_legacy_out_of_grid(db, kid_id)
     rows = db.execute("""
         SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect, bd.materials, bd.max_level
         FROM buildings b JOIN building_defs bd ON b.def_id=bd.id
@@ -4277,6 +4308,7 @@ def get_explored(kid_id):
 @app.route('/api/kids/<int:kid_id>/town', methods=['GET'])
 def get_town_state(kid_id):
     db = get_db()
+    warehouse_legacy_out_of_grid(db, kid_id)
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
     if not kid:
         return jsonify({'error': 'Kid not found'}), 404
