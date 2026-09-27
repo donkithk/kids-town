@@ -25,7 +25,7 @@ Requirements:
   TC-FE-TOWN-GRID-01  四場景地圖係 8×8。
   TC-FE-TOWN-STORE-LEGACY-01  格外（或無合法格）且 stored=0 嘅屋，載入時收進存倉 stored=1，保留種類同等級。
   TC-FE-TOWN-STORE-LEGACY-02  收倉之後唔好畫喺地圖、唔好當地圖「已起」；用現有存倉流程放返空地，唔扣資源。
-  篩選 `-k 'town_grid or store_legacy'`。main 未做，留紅。
+  篩選 `-k 'town_grid or store_legacy'`。
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
   FE-P0-03  家長 A session 不能管理家長 B 嘅仔女

@@ -2,6 +2,31 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## 8×8 grid and legacy warehouse — green (product)
+
+> Recorded 2026-09-27 against product commit `75f00b5` on branch `cursor/town-8x8-store-legacy-green-96f2`, based on tester tip `f1f1116` (draft PR #31, not merged).  
+> Product: scenes 1–3 are COLS=8 ROWS=8. Each town load and buildings fetch sets `stored=1` on the same row when `stored=0` and the cell is outside 0..7×0..7 or has no legal cell. In-grid rows stay placed. Place-back is the existing 存倉 / `#placementBar` / `POST /buildings/<id>/unstored` path and does not spend resources.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Empty seeded SQLite only. Asserts were not weakened.
+
+### Commands
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Grid + legacy store | `python3 -m pytest tests/test_frontend.py -q -k 'town_grid or store_legacy' --tb=line` | **3 passed**, 38 deselected in 5.34s |
+| Existing frontend | `python3 -m pytest tests/test_frontend.py -q -k 'not town_grid and not store_legacy' --tb=line` | **38 passed**, 3 deselected, 4 warnings in 49.13s |
+
+The other frontend suite did not regress.
+
+### Case ID → result
+
+| Case ID | Pytest | Result |
+|---------|--------|--------|
+| TC-FE-TOWN-GRID-01 | `test_town_grid_map_is_8x8` | **PASS** |
+| TC-FE-TOWN-STORE-LEGACY-01 | `test_town_store_legacy_migrates_out_of_grid_to_stored` | **PASS** |
+| TC-FE-TOWN-STORE-LEGACY-02 | `test_town_store_legacy_place_from_store_without_spend` | **PASS** |
+
+---
+
 ## 8×8 grid and legacy warehouse — red on main (tests only, do not merge)
 
 > Recorded 2026-09-27 against **main** `a443c050805021f245b32eeca25af500d1c83286` (`a443c05`, four-scene UX from #28/#29/#30 already on this tree).  

@@ -11,7 +11,7 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 四場景起屋（設計稿 `3b4671d`／PR #27，**唔好 merge #27**）: `TC-FE-TOWN-UX-01`…`05`、`TC-FE-TOWN-FX-01`／`02`、`TC-FE-TOWN-HIT-01`…`03`、`TC-FE-TOWN-MOTION-01`／`02`。呢個 sheet flow 已經喺 main。舊放置條 `TC-FE-PLACE-SHOP-01`／`TC-FE-PLACE-BUILD-01` 仍然有效，唔係呢個 sheet flow 嘅代替。
 
-8×8 地圖同格外收倉: `TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`。篩選 `-k 'town_grid or store_legacy'`。可建地圖係欄 0..7 × 行 0..7，場景 1–3 同一個 8×8。載入城鎮時，格外或者無合法格、而且 `stored=0` 嘅屋要一次過收進存倉（`stored=1`），保留同一行、`def_id`、等級。收倉之後場景 1 唔好畫佢哋，建築清單唔好當地圖「已起」鎖住。用現有「存倉」放返空地，唔扣資源。唔好用清單「去擺位置」搬屋來代替。main 未做，**留紅**。
+8×8 地圖同格外收倉: `TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`。篩選 `-k 'town_grid or store_legacy'`。可建地圖係欄 0..7 × 行 0..7，場景 1–3 同一個 8×8。載入城鎮時，格外或者無合法格、而且 `stored=0` 嘅屋要一次過收進存倉（`stored=1`），保留同一行、`def_id`、等級。收倉之後場景 1 唔好畫佢哋，建築清單唔好當地圖「已起」鎖住。用現有「存倉」放返空地，唔扣資源。唔好用清單「去擺位置」搬屋來代替。產品喺城鎮載入同建築物讀取時收倉，場景 1–3 係 8×8。
 
 共用前置（除另註）：
 
@@ -420,7 +420,7 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | 欄 | 內容 |
 |----|------|
 | **ID** | TC-FE-TOWN-GRID-01 |
-| **優先級** | P0（8×8 可建格；main 上留紅） |
+| **優先級** | P0（8×8 可建格） |
 | **建議模組** | `tests/test_frontend.py`（`-k town_grid`） |
 | **前置** | 空庫合成 `test_fe_kid`。清走佢嘅建築物，等「第 1 欄第 1 行」係空地，清單有「未起」。唔用真 PIN／production DB。 |
 | **步驟** | 1. 場景 1 數等角格 2. 「我要起屋」再數一次 3. 揀「第 1 欄第 1 行」+ 第一座可見嘅「未起」，「去擺位置」入場景 3，見到「取消」之後再數一次 |
@@ -433,7 +433,7 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | 欄 | 內容 |
 |----|------|
 | **ID** | TC-FE-TOWN-STORE-LEGACY-01 |
-| **優先級** | P0（格外收倉；main 上留紅） |
+| **優先級** | P0（格外收倉） |
 | **建議模組** | `tests/test_frontend.py`（`-k store_legacy`） |
 | **前置** | 空庫合成 `test_fe_kid`。種子全部 `stored=0`：工坊 `(4,1)` Lv.1（8×8 之內）；圖書館 `(17,1)` Lv.3、健身室 `(15,5)` Lv.1、農場 `(9,5)` Lv.2、醫院 `(17,13)` Lv.1、探險公會 `(9,13)` Lv.1（超出欄 0..7 × 行 0..7）；燈塔 `cell_x`／`cell_y` 都係空（無合法格）Lv.1。銀行唔喺 `seed_building_defs`，唔種。金幣同材料夠多，以免誤當新建築扣到都唔覺。唔用真 PIN／production DB。 |
 | **步驟** | 1. 寫低每一行嘅 id、`def_id`、等級 2. 登入並等城鎮 HUD 出現（即係載入城鎮） 3. 再讀同一份 SQLite |
@@ -446,7 +446,7 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | 欄 | 內容 |
 |----|------|
 | **ID** | TC-FE-TOWN-STORE-LEGACY-02 |
-| **優先級** | P0（格外收倉；main 上留紅） |
+| **優先級** | P0（格外收倉） |
 | **建議模組** | `tests/test_frontend.py`（`-k store_legacy`） |
 | **前置** | 同 `TC-FE-TOWN-STORE-LEGACY-01`。 |
 | **步驟** | 1. 載入場景 1，睇等角格 2. 「我要起屋」打開「建築清單」 3. ☰ →「存倉」 4. 如果有圖書館卡：撳「按此放置」，切去城鎮，揀一塊原點喺 0..6 × 0..6 嘅綠色空地（2×2 留喺 8×8 裡面），撳「確認建造」 5. 讀 HUD、金幣、材料、同一行 |
@@ -492,6 +492,6 @@ python -m pytest tests/test_frontend.py -q -k 'not town_grid and not store_legac
 python -m pytest tests/test_frontend.py -q -k town_ux --tb=short
 ```
 
-`town_grid`／`store_legacy` 係 8×8 地圖同格外收倉（`TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`）。`-k 'not town_grid and not store_legacy'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`。接受尺寸係 8×8。收倉同 8×8 未落地之前，呢三個 case 會紅。唔好改產品來令呢個 PR 變綠。
+`town_grid`／`store_legacy` 係 8×8 地圖同格外收倉（`TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`）。`-k 'not town_grid and not store_legacy'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`。接受尺寸係 8×8。收倉喺每次城鎮載入同建築物讀取時做。
 
 雙重驗證 (B) 人手步驟：[`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md)。跑完結果寫 [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md)。
