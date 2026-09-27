@@ -15,7 +15,7 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 已經 `stored=1` 嘅屋唔好當新建築賣: `TC-FE-TOWN-STORE-LIST-01`、`TC-FE-TOWN-STORE-PLACE-01`、`TC-FE-TOWN-STORE-CONFIRM-01`。篩選 `-k 'store_list or store_place or store_confirm'`。場景 2 建築清單唔好把存倉屋標成「未起」兼顯示價錢，亦唔好帶入「確定先至扣資源」然後 POST `/buildings`。呢個新建查重包埋 `stored=1` 嘅行，所以 API 回 400「你已經興建咗呢種建築物」。正確放返係現有存倉（`#placementBar`，POST `/buildings/<id>/unstored`），唔扣金幣同材料，同一行變 `stored=0`。呢三條喺 main 上留紅。唔改產品。
 
-清單放返存倉要留喺四場景 8×8: `TC-FE-TOWN-STORE-UX-01`。篩選 `-k store_ux`。喺建築清單揀已經入倉嘅屋開始放返之後，`#placementBar` 唔好有 class `active`，`#townMap` 唔好被 `#placementBar.active ~ #townMap { visibility:hidden }` 收埋，`#townCanvasWrapper` 唔好露出大片 `↘️`／`.valid-plot`（24×16 舊格）。要留喺四場景等角格。唔好出現裁切咗嘅紫色「確認建造」舊條。確認要 POST `/buildings/<id>/unstored`（或者同等產品 API），金幣同材料唔變，地圖見到嗰座屋，同一行變 `stored=0`。main `66bd1bc` 上四場景 `placeFromStore` 會叫 legacy `startUnstoreBuilding`，所以留紅。唔改產品。
+清單放返存倉要留喺四場景 8×8: `TC-FE-TOWN-STORE-UX-01`。篩選 `-k store_ux`。喺建築清單揀已經入倉嘅屋開始放返之後，`#placementBar` 唔好有 class `active`，`#townMap` 唔好被 `#placementBar.active ~ #townMap { visibility:hidden }` 收埋，`#townCanvasWrapper` 唔好露出大片淡 `↘️`／`.valid-plot`（24×16 舊格）或者綠色「按確認」。要留喺四場景等角格。唔好出現裁到只剩「確認」嘅紫色舊條。確認要 POST `/buildings/<id>/unstored`（或者同等產品 API），金幣同材料唔變，地圖見到嗰座屋，同一行變 `stored=0`。main `66bd1bc` 上四場景 `placeFromStore` 會叫 legacy `startUnstoreBuilding`，所以留紅。唔改產品。
 
 共用前置（除另註）：
 
@@ -505,8 +505,8 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **優先級** | P0（存倉放返 UX） |
 | **建議模組** | `tests/test_frontend.py`（`-k store_ux`） |
 | **前置** | 空庫合成 `test_fe_kid`，PIN `1357`。金幣同材料夠多。建築物只得兩行：工坊 `(4,1)` Lv.1 `stored=0`（喺 8×8 地圖）；探險公會 Lv.1 `stored=1`（已經入倉）。唔用真 PIN／production DB。 |
-| **步驟** | 1. 登入 → 城鎮 → 「我要起屋」進入四場景 → 打開「建築清單」 2. 揀存倉嘅探險公會，開始放返（#35 之後清單對倉庫項目嘅產品路徑，`placeFromStore`） 3. 成個放置過程：`#placementBar` 唔好有 class `active`；`#townMap` 維持可見（唔好被 `#placementBar.active ~ #townMap { visibility:hidden }` 收埋）；`#townCanvasWrapper` 唔好露出大片 `↘️`／`.valid-plot`（24×16 舊格）；留喺四場景 8×8 等角格；唔好出現裁切咗嘅紫色「確認建造」舊條 4. 用四場景確認放返：POST `/buildings/<id>/unstored`（或者同等產品 API）。金幣同材料唔變。地圖見到探險公會。同一行變 `stored=0` |
-| **預期** | 由清單開始放返之後，畫面一直係四場景 8×8 等角格。舊 `#placementBar` 唔好 active，小鎮地圖唔好被 sibling 規則藏起，亦唔好見到 24×16 綠色空地同淡 `↘️`。確認打去 unstored，唔扣資源。main `66bd1bc` 上 `placeFromStore` 呼叫 `startUnstoreBuilding`，條會 active、地圖 `visibility:hidden`、畫布鋪滿 `↘️`，再揀格就係紫色「確認建造」舊條。留紅。 |
+| **步驟** | 1. 登入 → 城鎮 → 「我要起屋」進入四場景 → 打開「建築清單」 2. 揀存倉嘅探險公會，開始放返（#35 之後清單對倉庫項目嘅產品路徑，`placeFromStore`） 3. 成個放置過程：`#placementBar` 唔好有 class `active`；`#townMap` 維持可見（唔好被 `#placementBar.active ~ #townMap { visibility:hidden }` 收埋）；`#townCanvasWrapper` 唔好露出大片淡 `↘️`／`.valid-plot`（24×16 舊格）；綠色格唔好出「按確認」；留喺四場景 8×8 等角格；唔好出現裁切咗、只睇到「確認」嘅紫色舊條 4. 用四場景確認放返：POST `/buildings/<id>/unstored`（或者同等產品 API）。金幣同材料唔變。地圖見到探險公會。同一行變 `stored=0` |
+| **預期** | 由清單開始放返之後，畫面一直係四場景 8×8 等角格。舊 `#placementBar` 唔好 active，小鎮地圖唔好被 sibling 規則藏起，亦唔好見到 24×16 淡 `↘️` 同綠色「按確認」。確認打去 unstored，唔扣資源。main `66bd1bc` 上 `placeFromStore` 呼叫 `startUnstoreBuilding`，紫色條會 active（Preview 會裁到只剩「確認」）、地圖 `visibility:hidden`、畫布鋪滿淡 `↘️`。留紅。 |
 
 ---
 

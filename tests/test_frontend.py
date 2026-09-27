@@ -3438,10 +3438,13 @@ _STORE_UX_CHROME_JS = r"""
   const plots = [...document.querySelectorAll('#townCanvasWrapper .valid-plot')];
   let arrows = 0;
   let confirmCells = 0;
+  let faintPlots = 0;
   for (const el of plots) {
     const text = el.innerText || '';
     if (text.includes('↘️')) arrows += 1;
     if (text.includes('按確認')) confirmCells += 1;
+    const opacity = parseFloat(getComputedStyle(el).opacity || '1');
+    if (opacity < 0.9) faintPlots += 1;
   }
   const confirmBtn = bar ? bar.querySelector('.confirm-btn') : null;
   const pads = [...document.querySelectorAll('#townMap .pad button, #village .pad button')];
@@ -3450,33 +3453,83 @@ _STORE_UX_CHROME_JS = r"""
     const cs = getComputedStyle(el);
     if (cs.visibility !== 'hidden' && cs.display !== 'none') visiblePads += 1;
   }
-  function clipped(el) {
-    if (!el) return false;
-    const rect = el.getBoundingClientRect();
-    if (rect.width < 8 || rect.height < 8) return true;
-    let node = el.parentElement;
-    while (node) {
-      const cs = getComputedStyle(node);
-      const mode = (cs.overflow || '') + (cs.overflowX || '') + (cs.overflowY || '');
-      if (mode.includes('hidden') || mode.includes('clip')) {
-        const box = node.getBoundingClientRect();
-        const width = Math.min(rect.right, box.right) - Math.max(rect.left, box.left);
-        const height = Math.min(rect.bottom, box.bottom) - Math.max(rect.top, box.top);
-        if (width < rect.width - 2 || height < rect.height - 2) return true;
-      }
-      node = node.parentElement;
-    }
-    return false;
+  const stage = document.querySelector('body.kt-artstage .gsw');
+  const tab = document.getElementById('tab-town');
+  function clipRoot() {
+    return stage || tab || document.documentElement;
   }
+  function rectOf(el) {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return {
+      x: Math.round(r.x), y: Math.round(r.y),
+      w: Math.round(r.width), h: Math.round(r.height),
+      sw: el.scrollWidth, cw: el.clientWidth
+    };
+  }
+  function cutBy(el, root) {
+    if (!el || !root) return null;
+    const rect = el.getBoundingClientRect();
+    const box = root.getBoundingClientRect();
+    const width = Math.min(rect.right, box.right) - Math.max(rect.left, box.left);
+    const height = Math.min(rect.bottom, box.bottom) - Math.max(rect.top, box.top);
+    return {
+      fullW: Math.round(rect.width),
+      fullH: Math.round(rect.height),
+      visW: Math.round(Math.max(0, width)),
+      visH: Math.round(Math.max(0, height)),
+      cut: width < rect.width - 2 || height < rect.height - 2
+    };
+  }
+  function visibleChars(el, root) {
+    if (!el || !root) return '';
+    const box = root.getBoundingClientRect();
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let out = '';
+    let node;
+    while ((node = walker.nextNode())) {
+      const text = node.textContent || '';
+      for (let i = 0; i < text.length; i += 1) {
+        const range = document.createRange();
+        range.setStart(node, i);
+        range.setEnd(node, i + 1);
+        const rects = range.getClientRects();
+        let seen = false;
+        for (const r of rects) {
+          const w = Math.min(r.right, box.right) - Math.max(r.left, box.left);
+          const h = Math.min(r.bottom, box.bottom) - Math.max(r.top, box.top);
+          if (w > 0.4 && h > 0.4) { seen = true; break; }
+        }
+        if (seen) out += text[i];
+        range.detach();
+      }
+    }
+    return out.replace(/\s+/g, ' ').trim();
+  }
+  const span = bar ? bar.querySelector('span') : null;
+  const root = clipRoot();
+  const visibleBar = visibleChars(bar, root);
+  const visibleConfirm = visibleChars(confirmBtn, root);
+  const barCut = cutBy(bar, root);
+  const confirmCut = cutBy(confirmBtn, root);
+  const spanCut = cutBy(span, root);
   return {
     barClass: bar ? bar.className : '',
     barActive: !!(bar && bar.classList.contains('active')),
     barDisplay: barCs ? barCs.display : '',
     barBg: barCs ? barCs.backgroundColor : '',
     barText: bar ? (bar.innerText || '').replace(/\s+/g, ' ').trim() : '',
-    barClipped: clipped(bar),
+    barClipped: !!(barCut && barCut.cut) || !!(spanCut && spanCut.cut) || !!(confirmCut && confirmCut.cut),
     confirmText: confirmBtn ? (confirmBtn.textContent || '').trim() : '',
-    confirmClipped: clipped(confirmBtn),
+    confirmClipped: !!(confirmCut && confirmCut.cut),
+    visibleBar: visibleBar,
+    visibleConfirm: visibleConfirm,
+    barCut: barCut,
+    spanCut: spanCut,
+    confirmCut: confirmCut,
+    barBox: rectOf(bar),
+    spanBox: rectOf(span),
+    confirmBox: rectOf(confirmBtn),
     mapVisibility: mapCs ? mapCs.visibility : '',
     mapPointer: mapCs ? mapCs.pointerEvents : '',
     scene: map ? (map.getAttribute('aria-label') || '') : '',
@@ -3484,6 +3537,7 @@ _STORE_UX_CHROME_JS = r"""
     plotCount: plots.length,
     arrowCount: arrows,
     confirmCells: confirmCells,
+    faintPlots: faintPlots,
     visiblePads: visiblePads,
     domPads: pads.length,
     wrapShown: !!(wrapCs && wrapCs.display !== 'none' && wrapCs.visibility !== 'hidden'),
@@ -3503,11 +3557,6 @@ def _store_ux_fail(case_id, detail):
         "on that four-scene pad. Gold and materials stay unchanged, and the same "
         "row becomes stored=0."
     )
-
-
-def _purple_placement_bar(background):
-    text = (background or "").replace(" ", "").lower()
-    return "99,102,241" in text or "6366f1" in text
 
 
 def _store_ux_chrome(page):
@@ -3567,27 +3616,73 @@ def _reveal_legacy_confirm(page):
         pass
 
 
+def _collapsed(text):
+    return re.sub(r"\s+", "", text or "")
+
+
+def _confirm_fragment(chrome):
+    """On-screen confirm copy when the purple bar is truncated.
+
+    Preview leaves only a piece such as 「確認」. A full 「確認建造」 that is
+    still the legacy purple strip is reported by the caller separately.
+    """
+    visible = chrome.get("visibleBar") or ""
+    visible_confirm = chrome.get("visibleConfirm") or ""
+    full = chrome.get("barText") or ""
+    painted = _collapsed(visible)
+    dom = _collapsed(full)
+    clipped = bool(chrome.get("barClipped") or chrome.get("confirmClipped"))
+    if clipped or (dom and painted and painted != dom and "確認" in painted):
+        shown = visible_confirm or visible
+        return shown or "確認"
+    if "確認" in painted and "確認建造" not in painted and (
+        "確認建造" in dom or "確認建造" in (chrome.get("confirmText") or "")
+    ):
+        return visible_confirm or visible or "確認"
+    return None
+
+
 def _legacy_place_problems(chrome):
-    """Acceptance violations while a stored building is being placed."""
+    """Acceptance violations while a stored building is being placed.
+
+    The preview failure is the legacy purple #placementBar (often clipped so
+    only 「確認」 remains), a faint ↘️ / .valid-plot flood, and green 「按確認」
+    cells, instead of the four-scene 8×8 iso pad.
+    """
     problems = []
     if chrome["barActive"]:
-        problems.append(
-            "#placementBar has class active "
-            f"(class={chrome['barClass']!r}, display={chrome['barDisplay']!r}, "
-            f"background={chrome['barBg']!r}, text={chrome['barText']!r})"
-        )
+        fragment = _confirm_fragment(chrome)
+        if fragment:
+            problems.append(
+                "purple #placementBar is clipped/truncated: the visible confirm "
+                f"copy is only {fragment!r} (preview leaves 「確認」). "
+                f"DOM text was {chrome['barText']!r}, background={chrome['barBg']!r}"
+            )
+        else:
+            problems.append(
+                "#placementBar has class active. It is the legacy purple confirm "
+                f"strip (background={chrome['barBg']!r}, display={chrome['barDisplay']!r}, "
+                f"on-screen {chrome.get('visibleBar')!r}). "
+                "Preview clips this same strip so only 「確認」 remains. "
+                "That bar must not appear while placing a stored building"
+            )
     if chrome["mapVisibility"] == "hidden":
         problems.append(
             "#townMap computed visibility is hidden "
             f"(pointer-events={chrome['mapPointer']!r}). "
             "#placementBar.active ~ #townMap { visibility:hidden } hides the four-scene map"
         )
-    if chrome["plotCount"] >= 48 or chrome["arrowCount"] >= 24:
+    if chrome["plotCount"] >= 48 or chrome["arrowCount"] >= 24 or chrome.get("faintPlots", 0) >= 24:
         problems.append(
-            "#townCanvasWrapper exposes a large legacy placement grid: "
-            f"{chrome['plotCount']} .valid-plot and {chrome['arrowCount']} ↘️ "
-            f"(wrap shown={chrome['wrapShown']}). That is the 24×16-style UI, "
-            "not the 8×8 iso pad"
+            "#townCanvasWrapper exposes a large legacy placement grid of faint "
+            f"per-cell icons: {chrome.get('faintPlots', 0)} faint .valid-plot, "
+            f"{chrome['plotCount']} .valid-plot total, and {chrome['arrowCount']} ↘️ "
+            f"(wrap shown={chrome['wrapShown']}). "
+            "That is the broken 24×16-style UI, not the four-scene 8×8 iso pad"
+        )
+    if chrome["confirmCells"]:
+        problems.append(
+            f"{chrome['confirmCells']} green .valid-plot cell(s) show 「按確認」"
         )
     on_iso = (
         chrome["mapVisibility"] != "hidden"
@@ -3599,23 +3694,6 @@ def _legacy_place_problems(chrome):
             "placement left the visible four-scene 8×8 iso pad "
             f"(visible pads {chrome['visiblePads']}, dom pads {chrome['domPads']}, "
             f"aria={chrome['scene']!r}, class={chrome['mapClass']!r})"
-        )
-    confirm_bits = []
-    if "確認建造" in (chrome["confirmText"] or "") or "確認建造" in (chrome["barText"] or ""):
-        confirm_bits.append(f"button {chrome['confirmText']!r}")
-    if chrome["confirmCells"]:
-        confirm_bits.append(f"{chrome['confirmCells']} green cell(s) show 「按確認」")
-    if confirm_bits or (chrome["barActive"] and _purple_placement_bar(chrome["barBg"])):
-        clipped = []
-        if chrome["barClipped"]:
-            clipped.append("bar clipped")
-        if chrome["confirmClipped"]:
-            clipped.append("confirm button clipped")
-        clip_note = f" ({', '.join(clipped)})" if clipped else ""
-        shown = ", ".join(confirm_bits) if confirm_bits else "purple #placementBar.active"
-        problems.append(
-            "legacy purple 「確認建造」 placement bar is showing "
-            f"({shown}, background={chrome['barBg']!r}){clip_note}"
         )
     return problems
 
