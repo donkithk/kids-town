@@ -7,20 +7,23 @@
 > Recorded 2026-09-27 against **main** `66bd1bc2802acd7a04ab3389b9ace1e242dcf302` (`66bd1bc`, Green #35).  
 > Acceptance: placing a stored building from the four-scene 建築清單 stays on the visible 8×8 iso pad. `#placementBar` must not gain class `active`. `#townMap` must stay visible (`#placementBar.active ~ #townMap { visibility:hidden }` must not hide it). `#townCanvasWrapper` must not show the legacy 24×16 `.valid-plot` / `↘️` grid or the clipped purple 「確認建造」 bar. Confirm posts `/buildings/<id>/unstored`, gold and materials stay unchanged, and the same row becomes `stored=0` on the map.  
 > This change is tests + catalog only. No product code. Do not merge.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Empty seeded SQLite only.  
 > Fixture: 工坊 `(4,1)` Lv.1 `stored=0`; 探險公會 `stored=1`. No production DB and no real PIN.  
-> On this main, `placeFromStore` calls legacy `startUnstoreBuilding`, so the placement bar becomes active and the iso map is hidden.
+> On this main, `placeFromStore` calls legacy `startUnstoreBuilding`. The bar is `#placementBar.active` (`display:flex`, background `rgb(99, 102, 241)`). `#townMap` computed visibility is `hidden` (`pointer-events:none`). `#townCanvasWrapper` shows 336 `.valid-plot` and 335 `↘️`. Visible iso pads are 0 (the DOM still has 64, aria 「場景 2」). The purple bar reads 「按「確認」」 with button 「✅ 確認建造」, and one green cell shows 「按確認」. POST `/unstored` was not sent from the four-scene pad.
 
 ### Commands
 
 | Suite | Command | Result |
 |-------|---------|--------|
-| Store place UX | `python3 -m pytest tests/test_frontend.py -q -k store_ux --tb=line` | **pending run** |
+| Store place UX | `python3 -m pytest tests/test_frontend.py -q -k store_ux --tb=line` | **1 failed**, 44 deselected in 2.53s |
+
+The one new case fails. Asserts were not weakened.
 
 ### Case ID → result on main `66bd1bc`
 
 | Case ID | Pytest | Result | Reason |
 |---------|--------|--------|--------|
-| TC-FE-TOWN-STORE-UX-01 | `test_town_store_ux_place_stays_on_four_scene` | **FAIL** | Legacy `#placementBar.active` hides `#townMap` and shows the 24×16 `↘️` / `.valid-plot` grid plus the purple 「確認建造」 bar. Four-scene unstored confirm was not reached. |
+| TC-FE-TOWN-STORE-UX-01 | `test_town_store_ux_place_stays_on_four_scene` | **FAIL** | `#placementBar.active` is present (purple `rgb(99, 102, 241)`). `#townMap` visibility is `hidden`. `#townCanvasWrapper` shows 336 `.valid-plot` and 335 `↘️`. Visible 8×8 iso pads: 0. Purple bar shows 「✅ 確認建造」 and one green cell shows 「按確認」. Four-scene POST `/unstored` was not sent. |
 
 ---
 
