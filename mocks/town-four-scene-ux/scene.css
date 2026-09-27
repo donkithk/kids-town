@@ -746,10 +746,10 @@ body.is-native { overflow: auto; }
   pointer-events: none;
 }
 
-/* Upgrade (and any burst while the sheet is open) is a stage sibling of
-   the map, so it paints above the sheet. Map is z-index 1; footer is 20. */
-.stage > .fx-burst {
-  z-index: 30;
+/* Upgrade burst is the sheet's own last child, above the cream panel
+   and every control inside it. */
+.action-sheet > .fx-burst {
+  z-index: 50;
 }
 
 .fx-ring,
@@ -771,10 +771,30 @@ body.is-native { overflow: auto; }
 }
 
 .fx-burst.is-upgrade .fx-ring {
-  width: 70px;
-  height: 70px;
-  margin: -35px 0 0 -35px;
-  border-color: rgba(255, 236, 186, 0.95);
+  width: 128px;
+  height: 128px;
+  margin: -64px 0 0 -64px;
+  border-width: 6px;
+  border-color: #ffe14a;
+  box-shadow: 0 0 22px rgba(255, 196, 40, 0.95);
+  animation-duration: 1200ms;
+}
+
+.fx-flash {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 168px;
+  height: 168px;
+  margin: -84px 0 0 -84px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle,
+    rgba(255, 244, 180, 0.98) 0%,
+    rgba(255, 210, 60, 0.82) 38%,
+    rgba(240, 193, 75, 0.28) 62%,
+    rgba(240, 193, 75, 0) 74%);
+  animation: fx-flash 1200ms ease-out forwards;
 }
 
 .fx-bit {
@@ -807,10 +827,34 @@ body.is-native { overflow: auto; }
   background: #8fbe55;
 }
 
-.fx-burst.is-upgrade .fx-bit.is-star { background: #fff4c8; }
+.fx-burst.is-upgrade .fx-bit {
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  animation-duration: 1200ms;
+}
+
+.fx-burst.is-upgrade .fx-bit.is-star {
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  background: #ffe14a;
+  filter: drop-shadow(0 0 5px rgba(255, 186, 20, 0.95));
+}
+
+.fx-burst.is-upgrade .fx-bit.is-coin {
+  background: radial-gradient(circle at 32% 32%, #fff, #ffe566 42%, #f0b429 74%);
+  box-shadow: 0 0 0 2px #fff6c8, 0 0 12px rgba(255, 196, 40, 0.95);
+}
 
 .pad.is-celebrating > .sprite {
   animation: fx-glow 1080ms ease-out;
+}
+
+@keyframes fx-flash {
+  0% { opacity: 0.2; transform: scale(0.45); }
+  18% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.15); }
 }
 
 @keyframes fx-ring {
@@ -840,7 +884,8 @@ body.is-native { overflow: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fx-bit { display: none; }
+  .fx-bit,
+  .fx-flash { display: none; }
   .fx-ring { animation: fx-quiet 1000ms ease-out forwards; }
   .pad.is-celebrating > .sprite { animation: none; }
 }

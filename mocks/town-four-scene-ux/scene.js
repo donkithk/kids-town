@@ -330,10 +330,22 @@
     };
   }
 
-  /* Gold sparkle burst. Place plays on the new building while the sheet
-     is still closed. Once the sheet is open, the burst is hosted on the
-     stage (above the map) and centered on the sheet art, so the panel
-     cannot cover it. Reduced motion keeps one soft ring. */
+  /* Absolute left/top is the padding edge, not the border edge. */
+  function pointInBox(host, clientX, clientY) {
+    var rect = host.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return null;
+    var style = window.getComputedStyle(host);
+    var borderX = parseFloat(style.borderLeftWidth) || 0;
+    var borderY = parseFloat(style.borderTopWidth) || 0;
+    return {
+      x: (clientX - rect.left) * (host.offsetWidth / rect.width) - borderX,
+      y: (clientY - rect.top) * (host.offsetHeight / rect.height) - borderY
+    };
+  }
+
+  /* Place plays on the new building while the sheet is still closed.
+     Upgrade is the last child of the sheet, centered on the sheet art,
+     so the panel paints underneath the gold. Reduced motion keeps one ring. */
   function celebrate(kind, cellPos) {
     var cell = cellPos ? cellBy(cellPos.c, cellPos.r) : null;
     var sheetOpen = !!(state.sheet && sheet && !sheet.hidden);
@@ -348,14 +360,14 @@
       var art = document.getElementById("sheetArt");
       var artBox = art.getBoundingClientRect();
       if (artBox.width < 1) return;
-      host = document.querySelector(".stage");
-      point = localPoint(host, artBox.left + artBox.width / 2, artBox.top + artBox.height * 0.58);
+      host = sheet;
+      point = pointInBox(sheet, artBox.left + artBox.width / 2, artBox.top + artBox.height * 0.55);
     }
     if (!point || !host) return;
 
     var reduced = motionReduced();
     var node = document.createElement("div");
-    node.className = "fx-burst is-" + kind + (host === map ? "" : " is-front") + (reduced ? " is-quiet" : "");
+    node.className = "fx-burst is-" + kind + (host === sheet ? " is-front" : "") + (reduced ? " is-quiet" : "");
     node.setAttribute("aria-hidden", "true");
     node.style.left = point.x + "px";
     node.style.top = point.y + "px";
@@ -363,9 +375,14 @@
     var ring = document.createElement("span");
     ring.className = "fx-ring";
     node.appendChild(ring);
+    if (!reduced && kind === "upgrade") {
+      var flash = document.createElement("span");
+      flash.className = "fx-flash";
+      node.appendChild(flash);
+    }
 
     if (!reduced) {
-      var count = kind === "place" ? 12 : 10;
+      var count = kind === "place" ? 12 : 14;
       for (var i = 0; i < count; i += 1) {
         var bit = document.createElement("span");
         var shape = "is-coin";
@@ -374,7 +391,7 @@
         else if (i % 3 === 1) shape = "is-leaf";
         bit.className = "fx-bit " + shape;
         var angle = (Math.PI * 2 * i) / count - Math.PI / 2;
-        var dist = (kind === "place" ? 62 : 48) + (i % 3) * 10;
+        var dist = (kind === "place" ? 62 : 78) + (i % 3) * 16;
         var squash = kind === "place" ? 0.62 : 0.82;
         bit.style.setProperty("--dx", (Math.cos(angle) * dist).toFixed(1) + "px");
         bit.style.setProperty("--dy", (Math.sin(angle) * dist * squash).toFixed(1) + "px");
@@ -395,7 +412,7 @@
       removed = true;
       if (node.parentNode) node.parentNode.removeChild(node);
     }
-    setTimeout(cleanup, 1250);
+    setTimeout(cleanup, kind === "upgrade" ? 1400 : 1250);
   }
 
   function onOpenFn() {
