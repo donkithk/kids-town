@@ -1506,6 +1506,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 }
 
 </style>
+<link rel="stylesheet" href="/kids/town-four-scene.css">
 </head>
 <body>
 <div class="kt-rotate" id="ktRotate" role="dialog" aria-label="請轉橫向">
@@ -1633,6 +1634,44 @@ body.kt-pane-shop .kt-backpack-block{display:none}
     <span>📍 點擊地圖上空地放置建築</span>
     <button class="cancel-place" onclick="cancelPlacement()">✕ 取消</button>
   </div>
+  <section class="map is-scene-1" id="townMap" aria-label="場景 1 · 睇地圖">
+    <div class="village is-iso" id="village"></div>
+    <button class="cta" id="btnBuild" type="button">我要起屋</button>
+    <div class="tools">
+      <button class="tool-btn" id="btnMotion" type="button" aria-pressed="true">動畫 開</button>
+    </div>
+    <button class="list-launcher" id="listLauncher" type="button" hidden>建築清單</button>
+    <aside class="palette" id="palette" hidden>
+      <div class="palette-head">
+        <h2>建築清單</h2>
+        <p id="placedCount">已起 0</p>
+      </div>
+      <div class="palette-grid" id="paletteGrid"></div>
+    </aside>
+    <div class="place-bar" id="readyBar" hidden>
+      <button id="btnUxBack" type="button">返去睇地圖</button>
+      <p id="readyStatus">點金色空地，或者打開清單揀一座未起嘅屋。</p>
+      <button id="btnToScene3" type="button" disabled>去擺位置</button>
+    </div>
+    <div class="place-bar" id="uxPlaceBar" hidden>
+      <button id="btnUxCancel" type="button">取消</button>
+      <p id="placeStatus">確定先至扣資源。取消唔會扣。</p>
+      <button id="btnUxConfirm" type="button" disabled>確定放置</button>
+    </div>
+    <section class="action-sheet" id="actionSheet" hidden aria-label="升級或打開功能">
+      <img class="sheet-art" id="sheetArt" alt="">
+      <div>
+        <h2 id="sheetTitle">升級或打開功能</h2>
+        <p class="sheet-level" id="sheetLevel">Lv.1</p>
+        <p class="sheet-note" id="sheetNote"></p>
+        <div class="sheet-actions">
+          <button id="btnUpgrade" type="button">升級</button>
+        </div>
+        <div class="fn-row" id="sheetFns"></div>
+      </div>
+      <button class="btn-close-sheet" id="btnCloseSheet" type="button">返去地圖</button>
+    </section>
+  </section>
   <div id="townCanvasWrapper"
        ontouchstart="touchStart(event)"
        ontouchmove="touchMove(event)"
@@ -2068,6 +2107,15 @@ const EXPEDITION_TYPES = [
 // STATE
 // ═══════════════════════════════════════════════════════════════
 let currentKidId = null;
+function ktReadTown() {
+  return {
+    buildings: (townData && townData.buildings) || [],
+    inventory: (townData && townData.inventory) || [],
+    points: (townData && townData.kid && townData.kid.points) || 0,
+    defs: buildingDefs || [],
+    kidId: currentKidId
+  };
+}
 let kids = [];
 let tasks = [];
 let isParentSession = false; // parent PIN verified for current session
@@ -2289,6 +2337,7 @@ async function loadBuildingDefs() {
   try {
     const res = await fetch(`${API}/api/building-defs`);
     if (res.ok) buildingDefs = await res.json();
+    if (typeof townUxSync === 'function') townUxSync();
   } catch(e) {}
 }
 
@@ -2695,6 +2744,7 @@ function renderTownBuildings() {
   }
   
   container.innerHTML = html;
+  if (typeof townUxSync === 'function') townUxSync();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -6051,5 +6101,6 @@ if ('serviceWorker' in navigator) {
   console.log('[PWA] Service Worker not supported');
 }
 </script>
+<script src="/kids/town-four-scene.js"></script>
 </body>
 </html>
