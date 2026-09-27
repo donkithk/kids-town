@@ -2110,6 +2110,7 @@ let currentKidId = null;
 function ktReadTown() {
   return {
     buildings: (townData && townData.buildings) || [],
+    storedBuildings: (townData && townData.stored_buildings) || [],
     inventory: (townData && townData.inventory) || [],
     points: (townData && townData.kid && townData.kid.points) || 0,
     defs: buildingDefs || [],

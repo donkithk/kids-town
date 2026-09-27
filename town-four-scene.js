@@ -139,6 +139,39 @@
     return null;
   }
 
+  function storedRows() {
+    var town = readTown();
+    return town.storedBuildings || town.stored_buildings || [];
+  }
+
+  /* Owned but warehoused. Not a map 「已起」, and not a new-build sale. */
+  function storedDef(defId) {
+    var list = storedRows().slice();
+    var owned = buildings();
+    for (var i = 0; i < owned.length; i += 1) {
+      if ((owned[i].stored | 0) === 1) list.push(owned[i]);
+    }
+    for (var j = 0; j < list.length; j += 1) {
+      if (String(list[j].def_id) === String(defId)) return list[j];
+    }
+    return null;
+  }
+
+  function placeFromStore(row) {
+    state.defId = null;
+    if (state.scene === 3) state.scene = 2;
+    state.sheet = false;
+    render();
+    if (row && typeof startUnstoreBuilding === "function") {
+      startUnstoreBuilding(row.id);
+      return;
+    }
+    if (typeof showToast === "function") {
+      var name = (row && row.name) || "呢種建築物";
+      showToast("「" + name + "」喺存倉，用存倉放返，唔使再扣資源。");
+    }
+  }
+
   function assetSrc(name) {
     var id = ASSET_ID[name] || "shop";
     var still = motionOn ? "" : "-still";
@@ -154,6 +187,7 @@
     if (!state.pad || state.defId == null) return false;
     if (occAt(state.pad.c, state.pad.r)) return false;
     if (placedDef(state.defId)) return false;
+    if (storedDef(state.defId)) return false;
     return true;
   }
 
@@ -328,10 +362,11 @@
     var placedN = 0;
     list.forEach(function (def) {
       var placed = placedDef(def.id);
+      var warehoused = placed ? null : storedDef(def.id);
       if (placed) placedN += 1;
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "pal-btn" + (placed ? " is-placed" : "");
+      btn.className = "pal-btn" + (placed ? " is-placed" : "") + (warehoused ? " is-stored" : "");
       var img = document.createElement("img");
       img.alt = "";
       img.src = assetSrc(def.name);
@@ -341,15 +376,15 @@
       name.textContent = def.name;
       var cost = document.createElement("span");
       cost.className = "pal-cost";
-      cost.textContent = placed ? "已起" : ("💰" + (def.cost_gold || 0));
+      cost.textContent = placed ? "已起" : (warehoused ? "存倉" : ("💰" + (def.cost_gold || 0)));
       copy.appendChild(name);
       copy.appendChild(cost);
       btn.appendChild(img);
       btn.appendChild(copy);
-      btn.setAttribute("aria-pressed", (!placed && String(state.defId) === String(def.id)) ? "true" : "false");
+      btn.setAttribute("aria-pressed", (!placed && !warehoused && String(state.defId) === String(def.id)) ? "true" : "false");
       btn.setAttribute("aria-label", placed
         ? (def.name + "，已起")
-        : (def.name + "，未起"));
+        : (warehoused ? (def.name + "，放返") : (def.name + "，未起")));
       btn.addEventListener("click", function () { onPalette(def.id); });
       grid.appendChild(btn);
     });
@@ -372,6 +407,7 @@
     if (status && state.scene === 2) {
       var def = defById(state.defId);
       if (readyToPreview()) status.textContent = "已揀「" + def.name + "」同呢格空地。";
+      else if (def && storedDef(def.id)) status.textContent = "「" + def.name + "」喺存倉。用存倉放返，唔使再扣資源。";
       else if (state.pad && !def) status.textContent = "已揀空地。打開清單，揀一座未起嘅屋。";
       else if (def && !placedDef(def.id) && !state.pad) status.textContent = "已揀「" + def.name + "」。再點一塊金色空地。";
       else status.textContent = "點金色空地，或者打開清單揀一座未起嘅屋。";
@@ -436,6 +472,11 @@
   function onPalette(id) {
     if (placedDef(id)) {
       openSheet(id);
+      return;
+    }
+    var warehoused = storedDef(id);
+    if (warehoused) {
+      placeFromStore(warehoused);
       return;
     }
     state.defId = String(state.defId) === String(id) ? null : id;
@@ -531,6 +572,11 @@
   }
 
   async function onConfirm() {
+    var warehoused = storedDef(state.defId);
+    if (warehoused) {
+      placeFromStore(warehoused);
+      return;
+    }
     if (!readyToPreview()) return;
     var def = defById(state.defId);
     var cell = { c: state.pad.c, r: state.pad.r };
