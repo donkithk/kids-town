@@ -22,8 +22,10 @@ Requirements:
   TC-FE-TOWN-FX-01/02  新起同升級嘅金星慶祝；升級金星要喺 action sheet 上面睇到。
   TC-FE-TOWN-HIT-01/02/03  背面格 hit-test、1100×800 同 1280×720 信箱撳格、軟橢圓接觸陰影。
   TC-FE-TOWN-MOTION-01/02  慶祝層 pointer-events:none；動畫掣跟 prefers-reduced-motion，開／關撳先寫 localStorage。
-  TC-FE-TOWN-RELOCATE-01..04  8×8 地圖；格外或者 stored=1 嘅「已起」要搬得返去，而且唔扣資源。
-        篩選 `-k relocate`。地圖未係 8×8，格外搬返亦未做，所以留紅。格內「已起」仍然唔可以當未起再起多一座。
+  TC-FE-TOWN-GRID-01  四場景地圖係 8×8。
+  TC-FE-TOWN-STORE-LEGACY-01  格外（或無合法格）且 stored=0 嘅屋，載入時收進存倉 stored=1，保留種類同等級。
+  TC-FE-TOWN-STORE-LEGACY-02  收倉之後唔好畫喺地圖、唔好當地圖「已起」；用現有存倉流程放返空地，唔扣資源。
+  篩選 `-k 'town_grid or store_legacy'`。main 未做，留紅。
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
   FE-P0-03  家長 A session 不能管理家長 B 嘅仔女
@@ -2437,47 +2439,29 @@ def test_town_ux_motion_toggle_follows_reduced_motion_until_click(
     )
 
 
-# ── TC-FE-TOWN-RELOCATE: 8×8 map, place back buildings outside that grid ──
+# ── TC-FE-TOWN-GRID / STORE-LEGACY: 8×8 map, warehouse the rows outside it ──
 #
-# Acceptance is COLS=8 ROWS=8 in scenes 1–3. The grid assert stays red until
-# the four-scene map uses that size. placedDef still treats every non-stored row as 「已起」,
-# including cells outside col 0..7 × row 0..7 (for example 17,1 and 9,13).
-# Scene 2 then refuses to select them, and confirm only POSTs a new build.
-# Move and unstored APIs already exist. In-grid 「已起」 must still not erect
-# a second copy.
+# Acceptance is COLS=8 ROWS=8 in scenes 1–3. Rows with a cell outside
+# col 0..7 × row 0..7, or with no legal cell, and stored=0, must become
+# stored=1 when the town loads. Keep the same row id, def_id, and level.
+# Scene 1 must not paint them. The build list must not lock them as map-「已起」.
+# Place them back from the existing 存倉 tab onto an empty pad. That path
+# must not deduct resources. Do not use 「去擺位置」 as the place-back path.
 
 TOWN_GRID_COLS = 8
 TOWN_GRID_ROWS = 8
-TOWN_RELOCATE_UNBUILT = "燈塔"
-# (name, cell_x, cell_y, stored). 銀行 is not in seed_building_defs.
-TOWN_RELOCATE_IN_GRID = ("工坊", 4, 1, 0)
-TOWN_RELOCATE_OUT = (
-    ("圖書館", 17, 1, 0),
-    ("健身室", 15, 5, 0),
-    ("農場", 9, 5, 0),
-    ("醫院", 17, 13, 0),
-    ("探險公會", 9, 13, 0),
+# (name, cell_x, cell_y, level). Inside the 8×8 grid; must stay placed.
+TOWN_LEGACY_IN_GRID = ("工坊", 4, 1, 1)
+# Outside 0..7 × 0..7. 銀行 is not in seed_building_defs.
+TOWN_LEGACY_OUT = (
+    ("圖書館", 17, 1, 3),
+    ("健身室", 15, 5, 1),
+    ("農場", 9, 5, 2),
+    ("醫院", 17, 13, 1),
+    ("探險公會", 9, 13, 1),
 )
-# In-grid cell, but stored: must not paint on scene 1, and must place back.
-TOWN_RELOCATE_STORED = ("商店", 3, 3, 1)
-TOWN_RELOCATE_RED = (
-    "Out-of-grid or stored 「已起」 buildings must be selectable to move / place "
-    "back onto the current 8×8 map. Scenes 1–3 must all use COLS=8 ROWS=8. "
-    "Confirm must update that existing row "
-    "(new cell, stored=0) and must not deduct coins or materials. "
-    "POST /api/kids/<id>/buildings/<id>/move and /unstored already exist; "
-    "the list still locks off-grid rows as 「已起」 and confirm still POSTs a new build."
-)
-_RELOCATE_HINT = re.compile(r"搬|擺返|放返|搬屋|可搬|放回")
-
-
-def _relocate_fail(case_id, detail):
-    pytest.fail(f"{case_id}: {detail} {TOWN_RELOCATE_RED}")
-
-
-def _cell_in_town_grid(cell_x, cell_y):
-    return 0 <= cell_x < TOWN_GRID_COLS and 0 <= cell_y < TOWN_GRID_ROWS
-
+# No legal cell (NULL coordinates), stored=0. Must also enter the warehouse.
+TOWN_LEGACY_NO_CELL = ("燈塔", 1)
 
 _TOWN_GRID_PROBE_JS = r"""
 () => {
@@ -2517,12 +2501,37 @@ def _town_grid_problem(page, scene):
     )
 
 
-def _seed_town_relocate_plot(test_db_path, kid_id):
-    """Empty plot, then one in-grid building plus legacy coords and one stored row.
+def _store_legacy_fail(case_id, detail):
+    pytest.fail(
+        f"{case_id}: {detail} "
+        "On town load, every stored=0 building whose cell is outside 0..7×0..7 "
+        "or has no legal cell must be set to stored=1 (warehouse) on the same row, "
+        "keeping def_id and level. After that, scene 1 must not show it and the "
+        "build list must not lock it as map-「已起」. Place it back from the existing "
+        "存倉 tab onto an empty pad without spending resources."
+    )
 
-    Synthetic kid only. Coordinates mimic the verified out-of-grid pattern
-    (library 17,1 and the other large-map cells). No production DB and no real PIN.
-    Balances are high so a mistaken new-build would be able to deduct.
+
+def _insert_legacy_building(test_db_path, kid_id, name, level, cell_x, cell_y, stored=0):
+    """Seed one row. cell_x/cell_y may be None (no legal cell)."""
+    def_id_value = building_def_id(test_db_path, name)
+    db = connect_db(test_db_path)
+    cur = db.execute(
+        "INSERT INTO buildings (kid_id, def_id, plot_idx, level, cell_x, cell_y, stored) "
+        "VALUES (?, ?, 0, ?, ?, ?, ?)",
+        (kid_id, def_id_value, level, cell_x, cell_y, stored),
+    )
+    db.commit()
+    bid = cur.lastrowid
+    db.close()
+    return {"id": bid, "def_id": def_id_value, "name": name, "level": level}
+
+
+def _seed_town_store_legacy(test_db_path, kid_id):
+    """In-grid 工坊 plus out-of-grid and cell-less rows, all stored=0.
+
+    Synthetic kid only. Balances are high so a mistaken new-build could deduct.
+    No production DB and no real PIN.
     """
     set_kid_points(test_db_path, kid_id, 8000)
     grant_inventory(
@@ -2534,29 +2543,35 @@ def _seed_town_relocate_plot(test_db_path, kid_id):
     db.execute("DELETE FROM buildings WHERE kid_id=?", (kid_id,))
     db.commit()
     db.close()
-    for name, cell_x, cell_y, stored in (
-        TOWN_RELOCATE_IN_GRID,
-        *TOWN_RELOCATE_OUT,
-        TOWN_RELOCATE_STORED,
-    ):
-        insert_building(
-            test_db_path,
-            kid_id,
-            building_def_id(test_db_path, name),
-            level=1,
-            stored=stored,
-            cell_x=cell_x,
-            cell_y=cell_y,
+    seeded = []
+    name, cell_x, cell_y, level = TOWN_LEGACY_IN_GRID
+    row = _insert_legacy_building(
+        test_db_path, kid_id, name, level, cell_x, cell_y, stored=0
+    )
+    row.update(cell_x=cell_x, cell_y=cell_y, warehouse=False)
+    seeded.append(row)
+    for name, cell_x, cell_y, level in TOWN_LEGACY_OUT:
+        row = _insert_legacy_building(
+            test_db_path, kid_id, name, level, cell_x, cell_y, stored=0
         )
+        row.update(cell_x=cell_x, cell_y=cell_y, warehouse=True)
+        seeded.append(row)
+    name, level = TOWN_LEGACY_NO_CELL
+    row = _insert_legacy_building(
+        test_db_path, kid_id, name, level, None, None, stored=0
+    )
+    row.update(cell_x=None, cell_y=None, warehouse=True)
+    seeded.append(row)
+    return seeded
 
 
 def _building_rows(test_db_path, kid_id):
     db = connect_db(test_db_path)
     rows = db.execute(
-        "SELECT b.id, d.name AS name, b.cell_x, b.cell_y, "
+        "SELECT b.id, b.def_id, d.name AS name, b.cell_x, b.cell_y, "
         "COALESCE(b.stored, 0) AS stored, b.level "
         "FROM buildings b JOIN building_defs d ON d.id=b.def_id "
-        "WHERE b.kid_id=? ORDER BY d.name",
+        "WHERE b.kid_id=? ORDER BY b.id",
         (kid_id,),
     ).fetchall()
     db.close()
@@ -2597,34 +2612,6 @@ def _control_blob(btn):
     return ((btn.get_attribute("aria-label") or "") + " " + (btn.inner_text() or "")).strip()
 
 
-def _go_place_enabled(page):
-    go = _go_place_button(page)
-    if go.count() == 0:
-        return False
-    btn = go.first
-    try:
-        return btn.is_visible() and btn.is_enabled()
-    except Exception:
-        return False
-
-
-def _sheet_open(page):
-    sheet = page.locator("#actionSheet, .action-sheet").first
-    try:
-        return sheet.count() > 0 and sheet.is_visible()
-    except Exception:
-        return False
-
-
-def _dismiss_town_sheet(page):
-    if not _sheet_open(page):
-        return
-    close = page.get_by_role("button", name=re.compile(r"返去地圖"))
-    if close.count() and close.first.is_visible():
-        close.first.click()
-        page.wait_for_timeout(200)
-
-
 def _pad_button(page, col_1, row_1):
     return page.get_by_role(
         "button",
@@ -2655,326 +2642,332 @@ def _resource_snapshot(page, test_db_path, kid_id):
     }
 
 
-def _ready_status_text(page):
-    node = page.locator("#readyStatus")
-    if node.count() == 0:
-        return ""
-    try:
-        return (node.first.text_content() or "").strip()
-    except Exception:
-        return ""
+def _open_store_tab(page):
+    """Existing drawer path: ☰ → 存倉. Does not use the four-scene build list."""
+    _open_drawer(page)
+    page.get_by_role("button", name=re.compile(r"存倉")).first.click()
+    page.locator("#tab-store.active").wait_for(state="visible", timeout=8000)
+    page.wait_for_function(
+        """() => {
+          const el = document.getElementById('storedBuildings');
+          if (!el) return false;
+          const text = el.innerText || '';
+          return text.includes('存倉吉咗') || !!el.querySelector('.build-card');
+        }""",
+        timeout=8000,
+    )
 
 
-def _return_to_scene2(page, case_id):
-    """Leave the upgrade sheet or scene 3 so another building can be chosen."""
-    _dismiss_town_sheet(page)
-    cancel = page.locator("#btnUxCancel")
-    try:
-        if cancel.count() and cancel.first.is_visible():
-            cancel.first.click()
-            page.wait_for_timeout(200)
-    except Exception:
-        pass
-    _dismiss_town_sheet(page)
-    if _role_visible(page, "button", "我要起屋"):
-        _enter_scene2(page, case_id)
+def _pick_in_grid_valid_plot(page):
+    """A legacy .valid-plot whose 2×2 stays inside col 0..7 × row 0..7."""
+    return page.evaluate(
+        """() => {
+          const plots = [...document.querySelectorAll('.valid-plot')];
+          for (const el of plots) {
+            const px = parseInt(el.dataset.px, 10);
+            const py = parseInt(el.dataset.py, 10);
+            if (px >= 0 && py >= 0 && px <= 6 && py <= 6) return {px, py};
+          }
+          return null;
+        }"""
+    )
 
 
-@pytest.mark.case_id("TC-FE-TOWN-RELOCATE-01")
-def test_town_relocate_scene1_hides_out_of_grid_buildings(
-    page, base_url, test_db_path, fe_ids
-):
-    """TC-FE-TOWN-RELOCATE-01 場景 1–3 都係 8×8；格內工坊可見；格外同 stored 唔好幽靈渲染。"""
+@pytest.mark.case_id("TC-FE-TOWN-GRID-01")
+def test_town_grid_map_is_8x8(page, base_url, test_db_path, fe_ids):
+    """TC-FE-TOWN-GRID-01 場景 1–3 嘅可建地圖係 8×8。"""
     kid_id = fe_ids["kid_id"]
-    _seed_town_relocate_plot(test_db_path, kid_id)
+    db = connect_db(test_db_path)
+    db.execute("DELETE FROM buildings WHERE kid_id=?", (kid_id,))
+    db.commit()
+    db.close()
     _open_town_home(page, base_url)
     problems = []
     grid = _town_grid_problem(page, 1)
     if grid:
         problems.append(grid)
+    _enter_scene2(page, "TC-FE-TOWN-GRID-01")
+    grid = _town_grid_problem(page, 2)
+    if grid:
+        problems.append(grid)
+    _select_empty_pad(page, 1, 1)
+    _open_building_list(page)
+    picked = None
+    buttons = page.locator("#paletteGrid button")
+    for i in range(buttons.count()):
+        btn = buttons.nth(i)
+        try:
+            if not btn.is_visible():
+                continue
+        except Exception:
+            continue
+        blob = _control_blob(btn)
+        if "未起" in blob and "已起" not in blob:
+            picked = btn
+            break
+    if picked is None:
+        problems.append("scene 2 list has no visible 未起 building, so scene 3 was not opened")
+    else:
+        picked.click()
+        go = _go_place_button(page)
+        enabled = False
+        try:
+            enabled = go.count() > 0 and go.first.is_visible() and go.first.is_enabled()
+        except Exception:
+            enabled = False
+        if not enabled:
+            problems.append("「去擺位置」 stayed disabled, so scene 3 was not measured")
+        else:
+            go.first.click()
+            page.locator("#btnUxCancel").wait_for(state="visible", timeout=8000)
+            grid = _town_grid_problem(page, 3)
+            if grid:
+                problems.append(grid)
+    if problems:
+        pytest.fail(
+            "TC-FE-TOWN-GRID-01: the four-scene buildable map must be 8×8 "
+            "(COLS=8 ROWS=8, 64 pads, col 0..7 × row 0..7) in scenes 1, 2, and 3. "
+            + " | ".join(problems)
+        )
+
+
+@pytest.mark.case_id("TC-FE-TOWN-STORE-LEGACY-01")
+def test_town_store_legacy_migrates_out_of_grid_to_stored(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-STORE-LEGACY-01 載入城鎮時，格外或無合法格而且 stored=0 嘅屋收進存倉。"""
+    kid_id = fe_ids["kid_id"]
+    seeded = _seed_town_store_legacy(test_db_path, kid_id)
+    before = {row["id"]: row for row in seeded}
+    _open_town_home(page, base_url)
+    rows = _building_rows(test_db_path, kid_id)
+    problems = []
+    if len(rows) != len(seeded):
+        problems.append(
+            f"town load changed the building count ({len(seeded)} -> {len(rows)}). "
+            "Keep the same rows."
+        )
+    by_id = {row["id"]: row for row in rows}
+    for bid, expect in before.items():
+        row = by_id.get(bid)
+        if row is None:
+            problems.append(f"row id {bid} ({expect['name']}) is missing after town load")
+            continue
+        if row["def_id"] != expect["def_id"] or row["level"] != expect["level"] or row["name"] != expect["name"]:
+            problems.append(
+                f"{expect['name']} id={bid} must keep def_id={expect['def_id']} "
+                f"and level={expect['level']}; saw {row}"
+            )
+        if expect["warehouse"]:
+            if row["stored"] != 1:
+                cell = (row["cell_x"], row["cell_y"])
+                problems.append(
+                    f"{expect['name']} id={bid} is still stored=0 at cell {cell}. "
+                    "Town load must put this out-of-grid or cell-less row into the "
+                    "warehouse (stored=1) without changing def_id or level."
+                )
+        elif row["stored"] != 0 or (row["cell_x"], row["cell_y"]) != (4, 1):
+            problems.append(
+                f"in-grid 工坊 must stay stored=0 at (4,1); saw {row}"
+            )
+    if problems:
+        _store_legacy_fail("TC-FE-TOWN-STORE-LEGACY-01", " | ".join(problems))
+
+
+@pytest.mark.case_id("TC-FE-TOWN-STORE-LEGACY-02")
+def test_town_store_legacy_place_from_store_without_spend(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-STORE-LEGACY-02 收倉後唔喺地圖、唔鎖「已起」；存倉放返空地唔扣資源。"""
+    kid_id = fe_ids["kid_id"]
+    seeded = _seed_town_store_legacy(test_db_path, kid_id)
+    library = next(row for row in seeded if row["name"] == "圖書館")
+    workshop = next(row for row in seeded if row["name"] == "工坊")
+    _open_town_home(page, base_url)
+    before = _resource_snapshot(page, test_db_path, kid_id)
+    problems = []
+
     labels = _iso_pad_labels(page)
     visible = _iso_visible_names(page)
     blob = "\n".join(labels + visible)
-    in_name, in_x, in_y, _stored = TOWN_RELOCATE_IN_GRID
+    in_name, in_x, in_y, _level = TOWN_LEGACY_IN_GRID
     in_label = f"第 {in_x + 1} 欄第 {in_y + 1} 行"
     if in_name not in blob or in_label not in blob:
         problems.append(
-            f"scene 1 must show in-grid {in_name} at {in_label} (cell {in_x},{in_y}). "
+            f"scene 1 must keep in-grid {in_name} at {in_label}. "
             f"iso labels={labels!r} visible={visible!r}"
         )
-    for name, cell_x, cell_y, stored in (*TOWN_RELOCATE_OUT, TOWN_RELOCATE_STORED):
-        if name in blob:
-            where = "stored=1" if stored else f"cell ({cell_x},{cell_y}) outside {TOWN_GRID_COLS}×{TOWN_GRID_ROWS}"
-            problems.append(f"ghosted {name} ({where})")
-    stored_name, stored_x, stored_y, _ = TOWN_RELOCATE_STORED
-    stored_label = f"第 {stored_x + 1} 欄第 {stored_y + 1} 行"
-    stored_pad = [label for label in labels if stored_label in label]
-    if not stored_pad or not any("空地" in label for label in stored_pad):
-        problems.append(
-            f"{stored_name} cell ({stored_x},{stored_y}) is stored=1 and must stay an empty pad "
-            f"(saw {stored_pad!r})"
-        )
-    assert all(not _cell_in_town_grid(x, y) for _n, x, y, _s in TOWN_RELOCATE_OUT)
-    _enter_scene2(page, "TC-FE-TOWN-RELOCATE-01")
-    grid = _town_grid_problem(page, 2)
-    if grid:
-        problems.append(grid)
-    _select_empty_pad(page, 1, 1)
-    _open_building_list(page)
-    unbuilt = _palette_button(page, TOWN_RELOCATE_UNBUILT)
-    if unbuilt.count() == 0:
-        problems.append(
-            f"scene 3 grid check needs unbuilt {TOWN_RELOCATE_UNBUILT} in the list"
-        )
-    else:
-        unbuilt.first.click()
-        page.wait_for_timeout(300)
-        if not _go_place_enabled(page):
-            problems.append(
-                f"could not open scene 3 to measure the {TOWN_GRID_COLS}×{TOWN_GRID_ROWS} grid "
-                f"({TOWN_RELOCATE_UNBUILT} did not enable 「去擺位置」)"
-            )
-        else:
-            _go_place_button(page).first.click()
-            page.get_by_role("button", name=re.compile(r"取消")).first.wait_for(
-                state="visible", timeout=8000
-            )
-            grid = _town_grid_problem(page, 3)
-            if grid:
-                problems.append(grid)
-    if problems:
-        _relocate_fail(
-            "TC-FE-TOWN-RELOCATE-01",
-            "Scenes 1–3 must use one "
-            f"{TOWN_GRID_COLS}×{TOWN_GRID_ROWS} map. "
-            "In-grid buildings stay visible; out-of-grid and stored rows must not ghost-render. "
-            + " | ".join(problems),
-        )
-
-
-@pytest.mark.case_id("TC-FE-TOWN-RELOCATE-02")
-def test_town_relocate_scene2_offgrid_and_stored_selectable(
-    page, base_url, test_db_path, fe_ids
-):
-    """TC-FE-TOWN-RELOCATE-02 場景 2：格外／stored 可以當搬返來揀，唔好鎖死「已起」或者當新起屋。"""
-    _seed_town_relocate_plot(test_db_path, fe_ids["kid_id"])
-    _open_town_home(page, base_url)
-    _enter_scene2(page, "TC-FE-TOWN-RELOCATE-02")
-    problems = []
-    grid = _town_grid_problem(page, 2)
-    if grid:
-        problems.append(grid)
-    _select_empty_pad(page, 1, 1)
-    _open_building_list(page)
-    for name, cell_x, cell_y, _stored in TOWN_RELOCATE_OUT:
-        btn = _palette_button(page, name)
-        if btn.count() == 0:
-            problems.append(f"{name} at ({cell_x},{cell_y}) is missing from the building list")
+    for row in seeded:
+        if not row["warehouse"]:
             continue
-        blob = _control_blob(btn.first)
-        if "已起" in blob and not _RELOCATE_HINT.search(blob):
+        if row["name"] in blob:
             problems.append(
-                f"{name} at ({cell_x},{cell_y}) is locked 「已起」 ({blob!r}) "
-                "and is not offered as relocate / place-back"
+                f"scene 1 still shows {row['name']} "
+                f"(cell {row['cell_x']},{row['cell_y']}). "
+                "A warehouse row must not paint on the iso map."
             )
-    stored_name = TOWN_RELOCATE_STORED[0]
-    stored_btn = _palette_button(page, stored_name)
-    if stored_btn.count() == 0:
-        problems.append(f"stored {stored_name} is missing from the building list")
-    else:
-        blob = _control_blob(stored_btn.first)
-        if not _RELOCATE_HINT.search(blob) and ("未起" in blob or "💰" in blob or "已起" in blob):
-            problems.append(
-                f"stored {stored_name} is offered as a new build or locked 「已起」 ({blob!r}), "
-                "not as place-back onto the map"
-            )
-    library = _palette_button(page, "圖書館")
-    if library.count():
-        library.first.click()
-        page.wait_for_timeout(300)
-        if _sheet_open(page) and not _go_place_enabled(page):
-            problems.append(
-                "clicking out-of-grid 圖書館 opens the upgrade sheet and leaves 「去擺位置」 disabled. "
-                f"Hint: {_ready_status_text(page)!r}"
-            )
-        elif not _go_place_enabled(page):
-            problems.append(
-                "out-of-grid 圖書館 plus an empty pad does not enable 「去擺位置」. "
-                f"Hint: {_ready_status_text(page)!r}"
-            )
-        _dismiss_town_sheet(page)
-    if not _sheet_open(page):
-        _open_building_list(page)
-    shop = _palette_button(page, stored_name)
-    if shop.count() and shop.first.is_visible():
-        shop.first.click()
-        page.wait_for_timeout(300)
-        shop_blob = _control_blob(shop.first) if shop.count() else ""
-        if _go_place_enabled(page) and not _RELOCATE_HINT.search(shop_blob):
-            problems.append(
-                f"stored {stored_name} enables 「去擺位置」 as a new build ({shop_blob!r}). "
-                "That path POSTs create and would spend resources or be rejected as a duplicate, "
-                "instead of placing the stored row back."
-            )
-        elif not _go_place_enabled(page):
-            problems.append(
-                f"stored {stored_name} cannot be selected to place back "
-                f"({shop_blob!r}). Hint: {_ready_status_text(page)!r}"
-            )
-    if problems:
-        _relocate_fail(
-            "TC-FE-TOWN-RELOCATE-02",
-            "Scene 2 on the 8×8 map must let the kid select out-of-grid and stored buildings to relocate, "
-            "not only buildings marked 未起 for a brand-new build. "
-            + " | ".join(problems),
-        )
 
-
-@pytest.mark.case_id("TC-FE-TOWN-RELOCATE-03")
-def test_town_relocate_confirm_moves_without_deduct(
-    page, base_url, test_db_path, fe_ids
-):
-    """TC-FE-TOWN-RELOCATE-03 確定搬返：座落新格、舊座標更新、金幣材料唔變。"""
-    kid_id = fe_ids["kid_id"]
-    _seed_town_relocate_plot(test_db_path, kid_id)
-    _open_town_home(page, base_url)
-    before = _resource_snapshot(page, test_db_path, kid_id)
-    before_rows = _building_rows(test_db_path, kid_id)
-    _enter_scene2(page, "TC-FE-TOWN-RELOCATE-03")
-    problems = []
-    grid = _town_grid_problem(page, 2)
-    if grid:
-        problems.append(grid)
-    library_cell = _select_empty_pad(page, 1, 1)
+    _enter_scene2(page, "TC-FE-TOWN-STORE-LEGACY-02")
     _open_building_list(page)
-
-    library_btn = _palette_button(page, "圖書館")
-    if library_btn.count() == 0:
-        problems.append("building list has no 圖書館")
-    else:
-        library_blob = _control_blob(library_btn.first)
-        library_btn.first.click()
-        page.wait_for_timeout(300)
-        if not _go_place_enabled(page):
-            problems.append(
-                "empty pad 第 1 欄第 1 行 plus out-of-grid 圖書館 (17,1, stored=0) "
-                "does not enable 「去擺位置」 "
-                f"(control {library_blob!r}, hint {_ready_status_text(page)!r}). "
-                "Confirm never runs, so the building cannot appear on that pad."
-            )
-        else:
-            _go_place_button(page).first.click()
-            confirm = page.get_by_role("button", name=re.compile(r"確定"))
-            if confirm.count() == 0 or not confirm.first.is_visible():
-                problems.append("scene 3 has no 「確定」 for the 圖書館 relocate")
-            else:
-                grid = _town_grid_problem(page, 3)
-                if grid:
-                    problems.append(grid)
-                confirm.first.click()
-                page.wait_for_timeout(800)
-                labels = "\n".join(_iso_pad_labels(page))
-                if "圖書館" not in labels or "第 1 欄第 1 行" not in labels:
-                    problems.append(
-                        "confirm did not put 圖書館 on 第 1 欄第 1 行. "
-                        f"toast={_toast_text(page)!r}"
-                    )
-
-    _return_to_scene2(page, "TC-FE-TOWN-RELOCATE-03")
-    _select_empty_pad(page, 1, 4)
-    _open_building_list(page)
-    shop_btn = _palette_button(page, "商店")
-    if shop_btn.count() == 0:
-        problems.append("building list has no stored 商店")
-    else:
-        shop_btn.first.click()
-        page.wait_for_timeout(300)
-        if not _go_place_enabled(page):
-            problems.append(
-                "stored 商店 cannot be sent to 「去擺位置」 to place it back on 第 1 欄第 4 行. "
-                f"control={_control_blob(shop_btn.first)!r} hint={_ready_status_text(page)!r}"
-            )
-        else:
-            _go_place_button(page).first.click()
-            confirm = page.get_by_role("button", name=re.compile(r"確定"))
-            grid = _town_grid_problem(page, 3)
-            if grid:
-                problems.append(grid)
-            confirm.first.click()
-            page.wait_for_timeout(800)
-            labels = "\n".join(_iso_pad_labels(page))
-            if "商店" not in labels:
+    for row in seeded:
+        btn = _palette_button(page, row["name"])
+        if btn.count() == 0:
+            problems.append(f"{row['name']} is missing from the building list")
+            continue
+        control = _control_blob(btn.first)
+        if row["warehouse"]:
+            if "已起" in control:
                 problems.append(
-                    "confirm did not place stored 商店 back on the map "
-                    f"(toast={_toast_text(page)!r}). "
-                    "A new-build POST is rejected as a duplicate and does not unstored the row."
+                    f"{row['name']} is locked as map-「已起」 ({control!r}). "
+                    "After the warehouse patch it must not block picking as a placed building."
                 )
+        elif "已起" not in control:
+            problems.append(
+                f"in-grid 工坊 must stay marked 已起 ({control!r})"
+            )
+
+    _open_store_tab(page)
+    store_text = page.locator("#storedBuildings").inner_text() or ""
+    if "存倉吉咗" in store_text or page.locator("#storedBuildings .build-card").count() == 0:
+        missing = [
+            f"{row['name']} Lv.{row['level']}"
+            for row in seeded
+            if row["warehouse"]
+        ]
+        problems.append(
+            "存倉 is empty, so the legacy rows cannot be placed from storage. "
+            f"Expected cards {missing}. Saw {store_text!r}."
+        )
+    else:
+        for row in seeded:
+            if not row["warehouse"]:
+                continue
+            card = page.locator("#storedBuildings .build-card", has_text=row["name"])
+            card_text = card.first.inner_text() if card.count() else ""
+            if card.count() == 0 or f"Lv.{row['level']}" not in card_text:
+                problems.append(
+                    f"存倉 must list {row['name']} Lv.{row['level']} (按此放置). "
+                    f"Saw {card_text!r}."
+                )
+        library_card = page.locator("#storedBuildings .build-card", has_text="圖書館")
+        if library_card.count() == 0:
+            problems.append("存倉 has no 圖書館 card to place back")
+        else:
+            library_card.first.click()
+            bar = page.locator("#placementBar")
+            active = "active" in (bar.get_attribute("class") or "")
+            if not active:
+                problems.append(
+                    "clicking the 存倉 card must start the existing place-from-storage "
+                    "flow (#placementBar.active). Do not use 「去擺位置」."
+                )
+            else:
+                _goto_town_map(page)
+                try:
+                    page.locator(".valid-plot").first.wait_for(state="visible", timeout=8000)
+                except Exception:
+                    problems.append("place-from-storage did not show a .valid-plot on the town map")
+                else:
+                    picked = _pick_in_grid_valid_plot(page)
+                    if not picked:
+                        problems.append(
+                            "no .valid-plot with origin inside 0..6 × 0..6 "
+                            "(the 2×2 must stay inside the 8×8 grid)"
+                        )
+                    else:
+                        page.locator(
+                            f'.valid-plot[data-px="{picked["px"]}"][data-py="{picked["py"]}"]'
+                        ).first.dispatch_event("click")
+                        confirm = page.locator("#placementBar").get_by_role(
+                            "button", name=re.compile(r"確認")
+                        )
+                        try:
+                            confirm.first.wait_for(state="visible", timeout=8000)
+                        except Exception:
+                            problems.append(
+                                "selecting an empty pad did not show 「確認建造」 "
+                                "on the place-from-storage bar"
+                            )
+                        else:
+                            try:
+                                with page.expect_response(
+                                    lambda r: r.request.method == "POST"
+                                    and "/buildings/" in r.url,
+                                    timeout=8000,
+                                ) as resp_info:
+                                    confirm.first.click()
+                                resp = resp_info.value
+                            except Exception as exc:
+                                problems.append(
+                                    f"confirm did not finish a place-from-storage request ({exc})"
+                                )
+                            else:
+                                if "/unstored" not in resp.url:
+                                    problems.append(
+                                        "confirm must POST the existing unstored endpoint "
+                                        f"for the stored row, not a new build. url={resp.url}"
+                                    )
+                                if resp.status not in (200, 201):
+                                    problems.append(
+                                        f"unstored failed HTTP {resp.status}: {resp.text()[:300]}"
+                                    )
+                                page.wait_for_timeout(400)
+                                placed = _rows_named(
+                                    _building_rows(test_db_path, kid_id), "圖書館"
+                                )
+                                if (
+                                    len(placed) != 1
+                                    or placed[0]["id"] != library["id"]
+                                    or placed[0]["level"] != 3
+                                    or placed[0]["stored"] != 0
+                                    or placed[0]["def_id"] != library["def_id"]
+                                    or not (
+                                        placed[0]["cell_x"] is not None
+                                        and placed[0]["cell_y"] is not None
+                                        and 0 <= placed[0]["cell_x"] < TOWN_GRID_COLS
+                                        and 0 <= placed[0]["cell_y"] < TOWN_GRID_ROWS
+                                    )
+                                ):
+                                    problems.append(
+                                        "圖書館 must stay the same row (id, def_id, level 3) "
+                                        "and land stored=0 on a cell inside 0..7 × 0..7. "
+                                        f"saw {placed!r} picked={picked!r}"
+                                    )
+                                on_iso = any(
+                                    "圖書館" in label for label in _iso_pad_labels(page)
+                                )
+                                on_canvas = page.locator(
+                                    '#townBuildings img[alt="圖書館"]'
+                                ).count() > 0
+                                if not on_iso and not on_canvas:
+                                    problems.append(
+                                        "after place-from-storage, 圖書館 is not on the "
+                                        f"iso map or the town canvas. toast={_toast_text(page)!r}"
+                                    )
 
     after = _resource_snapshot(page, test_db_path, kid_id)
-    rows = _building_rows(test_db_path, kid_id)
-    if after["hud"] != before["hud"] or after["points"] != before["points"] or after["inventory"] != before["inventory"]:
+    if (
+        after["hud"] != before["hud"]
+        or after["points"] != before["points"]
+        or after["inventory"] != before["inventory"]
+    ):
         problems.append(
-            "place-back changed resources "
+            "placing from 存倉 must not deduct coins or materials "
             f"(hud {before['hud']} -> {after['hud']}, "
             f"points {before['points']} -> {after['points']}, "
             f"inventory {before['inventory']} -> {after['inventory']})"
         )
-    libraries = _rows_named(rows, "圖書館")
-    if len(libraries) != 1 or (libraries[0]["cell_x"], libraries[0]["cell_y"]) != library_cell or libraries[0]["stored"] != 0:
-        problems.append(
-            "圖書館 must stay a single row, stored=0, moved from (17,1) onto "
-            f"cell {library_cell}. saw {libraries!r}"
-        )
-    shops = _rows_named(rows, "商店")
-    if len(shops) != 1 or shops[0]["stored"] != 0 or (shops[0]["cell_x"], shops[0]["cell_y"]) != (0, 3):
-        problems.append(
-            "stored 商店 must stay a single row and land on cell (0,3) with stored=0. "
-            f"saw {shops!r}"
-        )
-    workshops = _rows_named(rows, "工坊")
-    if workshops != _rows_named(before_rows, "工坊"):
-        problems.append(f"in-grid 工坊 must stay put. before={before_rows!r} after={rows!r}")
-    if problems:
-        _relocate_fail("TC-FE-TOWN-RELOCATE-03", " | ".join(problems))
-
-
-@pytest.mark.case_id("TC-FE-TOWN-RELOCATE-04")
-def test_town_relocate_in_grid_cannot_duplicate_build(
-    page, base_url, test_db_path, fe_ids
-):
-    """TC-FE-TOWN-RELOCATE-04 格內「已起」唔可以當未起再起多一座。"""
-    kid_id = fe_ids["kid_id"]
-    _seed_town_relocate_plot(test_db_path, kid_id)
-    _open_town_home(page, base_url)
-    before = _resource_snapshot(page, test_db_path, kid_id)
-    before_workshops = _rows_named(_building_rows(test_db_path, kid_id), "工坊")
-    _enter_scene2(page, "TC-FE-TOWN-RELOCATE-04")
-    _select_empty_pad(page, 1, 1)
-    _open_building_list(page)
-    workshop = _palette_button(page, "工坊")
-    assert workshop.count() > 0, "TC-FE-TOWN-RELOCATE-04: list must include in-grid 工坊"
-    blob = _control_blob(workshop.first)
-    assert "已起" in blob, (
-        "TC-FE-TOWN-RELOCATE-04: in-grid 工坊 must stay marked 已起 "
-        f"so it is not offered as an unbuilt copy ({blob!r})."
-    )
-    workshop.first.click()
-    page.wait_for_timeout(300)
-    assert not _go_place_enabled(page), (
-        "TC-FE-TOWN-RELOCATE-04: in-grid 「已起」 工坊 must not enable 「去擺位置」 "
-        "as a new build. Erecting a second copy is forbidden. "
-        "Upgrade, and any later relocate of buildings already inside the 8×8 grid, stay separate. "
-        f"control={blob!r} hint={_ready_status_text(page)!r}"
-    )
-    _dismiss_town_sheet(page)
-    after = _resource_snapshot(page, test_db_path, kid_id)
     workshops = _rows_named(_building_rows(test_db_path, kid_id), "工坊")
-    assert workshops == before_workshops, (
-        "TC-FE-TOWN-RELOCATE-04: selecting in-grid 工坊 must not insert or move a second copy. "
-        f"before={before_workshops!r} after={workshops!r}"
-    )
-    assert after == before, (
-        "TC-FE-TOWN-RELOCATE-04: browsing an in-grid 「已起」 building must not deduct. "
-        f"before={before!r} after={after!r}"
-    )
-
+    if (
+        len(workshops) != 1
+        or workshops[0]["id"] != workshop["id"]
+        or workshops[0]["stored"] != 0
+        or (workshops[0]["cell_x"], workshops[0]["cell_y"]) != (4, 1)
+        or workshops[0]["level"] != 1
+    ):
+        problems.append(
+            f"in-grid 工坊 must stay id={workshop['id']} stored=0 level 1 at (4,1). "
+            f"saw {workshops!r}"
+        )
+    if problems:
+        _store_legacy_fail("TC-FE-TOWN-STORE-LEGACY-02", " | ".join(problems))

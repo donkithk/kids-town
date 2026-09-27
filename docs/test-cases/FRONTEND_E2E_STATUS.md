@@ -2,31 +2,31 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
-## Out-of-grid relocate onto an 8×8 map — red on main (tests only, do not merge)
+## 8×8 grid and legacy warehouse — red on main (tests only, do not merge)
 
 > Recorded 2026-09-27 against **main** `a443c050805021f245b32eeca25af500d1c83286` (`a443c05`, four-scene UX from #28/#29/#30 already on this tree).  
-> Acceptance is **COLS=8 ROWS=8** (64 pads, col 0..7 × row 0..7) in scenes 1–3. This change is tests + catalog only. No product code. Do not merge.  
+> Acceptance: the buildable map is **COLS=8 ROWS=8** (64 pads, col 0..7 × row 0..7) in scenes 1–3. On town load, every `stored=0` building whose cell is outside that grid, or which has no legal cell, becomes `stored=1` on the same row (same id, `def_id`, level). Scene 1 must not paint those rows. The build list must not lock them as map-「已起」. Place them back from the existing 存倉 tab onto an empty pad without spending resources. List relocate (「去擺位置」) is not this path.  
+> This change is tests + catalog only. No product code. Do not merge.  
 > Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Empty seeded SQLite only.  
-> Fixture: 工坊 `(4,1)` stored=0 inside the 8×8 grid; 圖書館 `(17,1)`, 健身室 `(15,5)`, 農場 `(9,5)`, 醫院 `(17,13)`, 探險公會 `(9,13)` stored=0 outside that grid; 商店 `(3,3)` stored=1. 銀行 is not in `seed_building_defs`, so it is not seeded. No production DB and no real PIN.  
-> The four-scene map still does not use 8×8. Off-grid rows stay locked 「已起」, so 「去擺位置」 cannot relocate them. Stored rows are offered as a new build (💰). Confirm POSTs create and toasts 「你已經興建咗呢種建築物」 instead of moving or unstoring the row. `POST /buildings/<id>/move` and store/unstored already exist.
+> Fixture: 工坊 `(4,1)` Lv.1 stored=0 inside 8×8; 圖書館 `(17,1)` Lv.3, 健身室 `(15,5)` Lv.1, 農場 `(9,5)` Lv.2, 醫院 `(17,13)` Lv.1, 探險公會 `(9,13)` Lv.1 stored=0 outside that grid; 燈塔 with NULL `cell_x`/`cell_y`, Lv.1, stored=0. 銀行 is not in `seed_building_defs`, so it is not seeded. No production DB and no real PIN.  
+> The four-scene map is still 6×5. Town load does not warehouse the legacy rows. A NULL cell paints as `(0,0)`. The list locks every legacy name as 「已起」. 存倉 shows 「存倉吉咗，未有建築物」.
 
 ### Commands
 
 | Suite | Command | Result |
 |-------|---------|--------|
-| Relocate cases | `python3 -m pytest tests/test_frontend.py -q -k relocate --tb=line` | **3 failed, 1 passed**, 38 deselected in 8.95s |
-| Existing frontend | `python3 -m pytest tests/test_frontend.py -q -k 'not relocate' --tb=line` | **38 passed**, 4 deselected, 4 warnings in 50.14s |
+| Grid + legacy store | `python3 -m pytest tests/test_frontend.py -q -k 'town_grid or store_legacy' --tb=line` | **3 failed**, 38 deselected in 4.43s |
+| Existing frontend | `python3 -m pytest tests/test_frontend.py -q -k 'not town_grid and not store_legacy' --tb=line` | **38 passed**, 3 deselected, 4 warnings in 50.37s |
 
-`04` passes: an in-grid 「已起」 still cannot start a second build. `01`–`03` fail. Asserts were not weakened. `-k 'not relocate'` stays green.
+All three new cases fail. Asserts were not weakened. The exclusion filter stays green. The older `-k 'not relocate'` filter no longer skips these tests.
 
 ### Case ID → result on main `a443c05`
 
 | Case ID | Pytest | Result | Reason |
 |---------|--------|--------|--------|
-| TC-FE-TOWN-RELOCATE-01 | `test_town_relocate_scene1_hides_out_of_grid_buildings` | **FAIL** | Scenes 1, 2, and 3 each measure 6 columns × 5 rows (30 pads). Acceptance is 8×8 (64 pads, col 0..7 × row 0..7). In-grid 工坊 still shows, and the out-of-grid / stored rows did not ghost on the iso map; the case is red because the map size is not 8×8. |
-| TC-FE-TOWN-RELOCATE-02 | `test_town_relocate_scene2_offgrid_and_stored_selectable` | **FAIL** | Scene 2 is 30 pads, not 8×8. Every out-of-grid row is locked 「已起」 (for example `圖書館，已起` at `(17,1)`). Clicking 圖書館 opens the upgrade sheet and leaves 「去擺位置」 disabled. Hint: 「已揀空地。打開清單，揀一座未起嘅屋。」 Stored 商店 is offered as a new build (`商店，未起` / 💰500). |
-| TC-FE-TOWN-RELOCATE-03 | `test_town_relocate_confirm_moves_without_deduct` | **FAIL** | Scene 2 and the stored-shop scene 3 are 30 pads, not 8×8. 圖書館 `(17,1)` never enables 「去擺位置」, so it stays at `(17,1)`. Stored 商店 confirm POSTs create and toasts 「你已經興建咗呢種建築物」; the row stays stored=1 at `(3,3)`. Coins and materials were unchanged, and the existing row was not moved onto the 8×8 pad. |
-| TC-FE-TOWN-RELOCATE-04 | `test_town_relocate_in_grid_cannot_duplicate_build` | **PASS** | In-grid 工坊 stays 「已起」. 「去擺位置」 stays disabled. Still one 工坊 at `(4,1)`. HUD and inventory unchanged. |
+| TC-FE-TOWN-GRID-01 | `test_town_grid_map_is_8x8` | **FAIL** | Scenes 1, 2, and 3 each measure 6 columns × 5 rows (30 pads). Acceptance is 8×8 (64 pads, col 0..7 × row 0..7). |
+| TC-FE-TOWN-STORE-LEGACY-01 | `test_town_store_legacy_migrates_out_of_grid_to_stored` | **FAIL** | After town load the same rows remain stored=0: 圖書館 `(17,1)`, 健身室 `(15,5)`, 農場 `(9,5)`, 醫院 `(17,13)`, 探險公會 `(9,13)`, 燈塔 `(NULL, NULL)`. def_id and level were kept. In-grid 工坊 was not reported as moved. |
+| TC-FE-TOWN-STORE-LEGACY-02 | `test_town_store_legacy_place_from_store_without_spend` | **FAIL** | Scene 1 still paints 燈塔 (NULL cell becomes a map cell). The five out-of-grid names were not on the iso map. All six legacy names are locked 「已起」 (for example `圖書館，已起`). 存倉 is empty: 「存倉吉咗，未有建築物」, so place-from-storage never starts. In-grid 工坊 stayed 「已起」. Coins and materials were unchanged. |
 
 ---
 
