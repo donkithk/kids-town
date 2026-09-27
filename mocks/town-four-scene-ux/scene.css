@@ -198,13 +198,29 @@ body.is-native { overflow: auto; }
 
 .ground-tile.is-raised > .slab { top: calc(var(--s) * 63px); }
 
+/* The locked shadow SVG clips its own ellipse: the oval is centered at
+   x=68 with rx=76, so the left tail sits outside viewBox x=0 and ends in a
+   hard vertical cut. That cut lands on the neighbor plot border. Draw the
+   full oval here instead, with the seam inside the soft body, not on the fade. */
 .pad > .shadow {
   position: absolute;
   z-index: calc(20 + var(--c) + var(--r));
-  width: calc(var(--s) * 200px);
-  height: calc(var(--s) * 100px);
-  left: calc(var(--s) * -20px);
-  top: calc(var(--s) * 71px);
+  /* Center stays on the contact point (pad 48,121). The opaque plateau
+     reaches past the neighbor diamond edge so the plot stroke sits inside
+     the oval, and the fade happens on the open face beyond that edge. */
+  width: calc(var(--s) * 260px);
+  height: calc(var(--s) * 112px);
+  left: calc(var(--s) * -82px);
+  top: calc(var(--s) * 65px);
+  background: radial-gradient(
+    ellipse 120px 40px at 50% 50%,
+    rgba(44, 28, 16, 0.88) 0%,
+    rgba(44, 28, 16, 0.84) 58%,
+    rgba(44, 28, 16, 0.4) 76%,
+    rgba(44, 28, 16, 0.12) 90%,
+    rgba(44, 28, 16, 0) 100%
+  );
+  filter: blur(1.5px);
   pointer-events: none;
 }
 

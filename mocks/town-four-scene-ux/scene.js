@@ -261,11 +261,10 @@
         slab.className = "slab";
         slab.alt = "";
         slab.src = ASSET + "ground-plot.svg";
-        var shadow = document.createElement("img");
+        var shadow = document.createElement("div");
         shadow.className = "shadow";
-        shadow.alt = "";
-        shadow.src = ASSET + "shadow-iso.svg";
         shadow.hidden = true;
+        shadow.setAttribute("aria-hidden", "true");
         var mark = document.createElement("img");
         mark.className = "mark";
         mark.alt = "";
