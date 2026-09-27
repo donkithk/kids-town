@@ -2,6 +2,34 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## 8×8 grid and legacy warehouse — regress PASS (do not merge #27 / #31 / #32)
+
+> Independent regress recorded 2026-09-27.  
+> Product tree: PR #32 tip `bdd5125cd74eb748bbbd3b5619c600ad51637282` (`bdd5125`, branch `cursor/town-8x8-store-legacy-green-96f2`).  
+> Test overlay only (not product/UI): PR #31 tip `f1f1116fb89a8be36b059e46e947f5e77f8ed82c` (`f1f1116`, branch `cursor/red-relocate-out-of-grid-8ec5`) — `tests/test_frontend.py`, `docs/test-cases/FRONTEND_E2E.md`, and the prior red STATUS.  
+> **Do not merge #27, #31, or #32.**  
+> Prior red record on tester PR #31 was against main `a443c05`. This run is the same assertions on the #32 product tip.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Empty seeded SQLite only. Asserts were not weakened.
+
+### Commands
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Grid + legacy store | `python3 -m pytest tests/test_frontend.py -q -k 'town_grid or store_legacy' --tb=line` | **3 passed**, 38 deselected in 5.22s |
+| Existing frontend | `python3 -m pytest tests/test_frontend.py -q -k 'not town_grid and not store_legacy' --tb=line` | **38 passed**, 3 deselected, 4 warnings in 49.26s |
+
+No town_grid or store_legacy failures. The other frontend suite did not regress.
+
+### Case ID → PASS on product `bdd5125` + tests `f1f1116`
+
+| Case ID | Pytest | Result |
+|---------|--------|--------|
+| TC-FE-TOWN-GRID-01 | `test_town_grid_map_is_8x8` | **PASS** |
+| TC-FE-TOWN-STORE-LEGACY-01 | `test_town_store_legacy_migrates_out_of_grid_to_stored` | **PASS** |
+| TC-FE-TOWN-STORE-LEGACY-02 | `test_town_store_legacy_place_from_store_without_spend` | **PASS** |
+
+---
+
 ## Town four-scene UX — regress PASS (do not merge #27 / #28 / #29)
 
 > Independent regress recorded 2026-09-27.  
