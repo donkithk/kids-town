@@ -2,6 +2,44 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## Town four-scene UX — regress PASS (do not merge #27 / #28 / #29)
+
+> Independent regress recorded 2026-09-27.  
+> Product tree: PR #29 tip `e6e85abc2000ca6967cf2a4500ad59fc459a90df` (`e6e85ab`, branch `cursor/town-four-scene-product-63d5`).  
+> Test overlay only (not product/UI): PR #28 tip `7a92ba8a1a3c2c0ae8d784e687037006843117dc` (`7a92ba8`, branch `cursor/red-town-four-scene-ux-55ae`) — `tests/test_frontend.py`, `docs/test-cases/FRONTEND_E2E.md`, and the prior red STATUS.  
+> Design lock: mock tip `3b4671d7d14be2024937213152ac05a008f27372` (PR #27). **Do not merge #27, #28, or #29.**  
+> Prior red record on tester PR #28 was against main `ed48d47`. This run is the same assertions on the #29 product tip.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Empty seeded SQLite only.  
+> `TC-FE-PLACE-SHOP-01` / `TC-FE-PLACE-BUILD-01` stay on the old `#placementBar` flow. They are not this sheet flow.
+
+### Commands
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| New four-scene cases | `python3 -m pytest tests/test_frontend.py -q -k town_ux --tb=line` | **12 passed**, 26 deselected in 19.57s |
+| Existing frontend | `python3 -m pytest tests/test_frontend.py -q -k 'not town_ux' --tb=line` | **26 passed**, 12 deselected, 4 warnings in 27.83s |
+
+No town_ux failures. Asserts were not weakened.
+
+### Case ID → PASS on product `e6e85ab` + tests `7a92ba8`
+
+| Case ID | Pytest | Result |
+|---------|--------|--------|
+| TC-FE-TOWN-UX-01 | `test_town_ux_scene1_map_cta_and_empty_pad_does_not_spend` | **PASS** |
+| TC-FE-TOWN-UX-02 | `test_town_ux_scene2_gold_pads_and_building_list` | **PASS** |
+| TC-FE-TOWN-UX-03 | `test_town_ux_scene3_cancel_does_not_deduct` | **PASS** |
+| TC-FE-TOWN-UX-04 | `test_town_ux_scene3_confirm_deducts_and_opens_sheet` | **PASS** |
+| TC-FE-TOWN-UX-05 | `test_town_ux_scene4_upgrade_feature_and_hud` | **PASS** |
+| TC-FE-TOWN-HIT-01 | `test_town_ux_hit_back_pad_not_front_sprite` | **PASS** |
+| TC-FE-TOWN-HIT-02 | `test_town_ux_letterbox_pad_hit_alignment` | **PASS** |
+| TC-FE-TOWN-HIT-03 | `test_town_ux_hit_soft_oval_contact_shadows` | **PASS** |
+| TC-FE-TOWN-FX-01 | `test_town_ux_fx_place_shows_gold_stars` | **PASS** |
+| TC-FE-TOWN-FX-02 | `test_town_ux_fx_upgrade_shows_gold_stars_on_sheet` | **PASS** |
+| TC-FE-TOWN-MOTION-01 | `test_town_ux_motion_burst_pointer_events_none` | **PASS** |
+| TC-FE-TOWN-MOTION-02 | `test_town_ux_motion_toggle_follows_reduced_motion_until_click` | **PASS** |
+
+---
+
 ## Town four-scene UX — red on main (do not merge)
 
 > Recorded 2026-09-27 against product **main** `ed48d47e27f35ca40adf061aca1f5af0de4028a9` (`ed48d47`, design: town style A compare + building proof pack).  
