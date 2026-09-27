@@ -603,7 +603,9 @@ body.is-native { overflow: auto; }
 .place-bar button { padding: 8px 12px; }
 
 .place-bar .is-next,
-#btnToScene3:not(:disabled) {
+#btnToScene3:not(:disabled),
+#btnConfirm:not(:disabled),
+.sheet-actions button:not(:disabled) {
   border-color: var(--gold);
   background: linear-gradient(180deg, #fff6d2, #ffe3a0);
 }
@@ -707,12 +709,25 @@ body.is-native { overflow: auto; }
 
 .fn {
   min-height: 44px;
-  border: 3px dashed var(--wood-mid);
+  border: 3px solid var(--wood);
   border-radius: 12px;
   background: #fff;
-  color: var(--ink-soft);
+  color: var(--ink);
   font-size: 15px;
   font-weight: 800;
+  cursor: pointer;
+}
+
+.fn-row.is-open {
+  padding: 6px;
+  border: 3px solid var(--gold);
+  border-radius: 14px;
+  background: #fff6d2;
+}
+
+.fn[aria-pressed="true"] {
+  border-color: var(--focus);
+  background: #fff1e8;
 }
 
 .sheet-picks button[aria-pressed="true"] {

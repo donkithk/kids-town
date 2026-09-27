@@ -51,13 +51,13 @@
             </button>
           </li>
           <li>
-            <button class="step is-later" type="button" data-scene="3">
-              <span class="step-no">3</span><span>擺位置</span><span class="step-next">下一提示</span>
+            <button class="step" type="button" data-scene="3">
+              <span class="step-no">3</span><span>擺位置</span>
             </button>
           </li>
           <li>
-            <button class="step is-later" type="button" data-scene="4">
-              <span class="step-no">4</span><span>升級</span><span class="step-next">下一提示</span>
+            <button class="step" type="button" data-scene="4">
+              <span class="step-no">4</span><span>升級</span>
             </button>
           </li>
         </ol>
@@ -98,11 +98,10 @@
       <div class="place-bar" id="placeBar" hidden>
         <button id="btnCancel" type="button">取消</button>
         <p id="placeStatus" aria-live="polite"></p>
-        <button id="btnConfirm" type="button" disabled>確定放置（下一提示）</button>
+        <button id="btnConfirm" type="button" disabled>確定放置</button>
       </div>
 
       <section class="action-sheet" id="actionSheet" hidden aria-label="升級或打開功能">
-        <p class="next-tip">下一提示</p>
         <img class="sheet-art" id="sheetArt" alt="">
         <div>
           <h2 id="sheetTitle" tabindex="-1">升級或打開功能</h2>
@@ -110,8 +109,8 @@
           <p class="sheet-note" id="sheetNote"></p>
           <div class="sheet-picks" id="sheetPicks" aria-label="已起嘅屋"></div>
           <div class="sheet-actions">
-            <button id="btnUpgrade" type="button" disabled>升級（下一提示）</button>
-            <button id="btnOpenFn" type="button" disabled>打開功能（下一提示）</button>
+            <button id="btnUpgrade" type="button">升級 · 💰50 🪵2</button>
+            <button id="btnOpenFn" type="button" aria-pressed="false">打開功能</button>
           </div>
           <div class="fn-row" id="sheetFns"></div>
         </div>

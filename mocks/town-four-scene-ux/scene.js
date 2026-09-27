@@ -1,6 +1,6 @@
-/* Four-scene kid loop. Demo state only — no API, no spend on cancel.
-   Scenes 1 and 2 are playable. Scenes 3 and 4 are labeled shells for the next tip.
-   Building art is loaded from the locked proof pack and is not redrawn here. */
+/* Four-scene kid loop. Demo state only — no API.
+   Spend happens only when the kid confirms a place or an upgrade.
+   Cancel never touches the purse. Building art stays in the locked proof pack. */
 (function () {
   var COLS = 6;
   var ROWS = 5;
@@ -24,8 +24,34 @@
   var defById = {};
   DEFS.forEach(function (def) { defById[def.id] = def; });
 
+  var UPGRADE_COST = { gold: 50, wood: 2 };
+  var FN_COPY = {
+    "借書": "借咗一本故事書",
+    "還書": "書還好咗",
+    "鍛鍊": "做完一輪鍛鍊",
+    "休息一下": "休息好咗",
+    "收成": "收成一籃菜",
+    "澆水": "澆完水",
+    "買賣": "買賣完成",
+    "睇貨架": "睇完貨架",
+    "睇醫生": "睇完醫生",
+    "休息": "休息好咗",
+    "接任務": "接咗一個任務",
+    "出發": "準備出發",
+    "整道具": "整好一件道具",
+    "修理": "修理好咗",
+    "望海": "望咗一望海",
+    "開燈": "燈亮咗",
+    "練習": "練習完一輪",
+    "比試": "比試完一場",
+    "觀星": "觀完星",
+    "記錄": "寫低記錄"
+  };
+
   var grid = clone(SEED);
   var res = clone(START);
+  var levels = {};
+  var fnMsg = {};
   var pads = [];
   var palBtns = {};
   var toastTimer = 0;
@@ -38,7 +64,9 @@
     listOpen: false,
     pad: null,
     bldg: null,
-    hover: null
+    hover: null,
+    fnsOpen: false,
+    lastFn: null
   };
 
   var map = document.getElementById("townMap");
@@ -98,6 +126,24 @@
     return !!(state.pad && state.bldg && !grid[keyOf(state.pad.c, state.pad.r)] && !findPos(state.bldg));
   }
 
+  function canAfford(cost) {
+    var names = Object.keys(cost);
+    for (var i = 0; i < names.length; i += 1) {
+      if ((res[names[i]] || 0) < cost[names[i]]) return false;
+    }
+    return true;
+  }
+
+  function spend(cost) {
+    Object.keys(cost).forEach(function (name) {
+      res[name] = (res[name] || 0) - cost[name];
+    });
+  }
+
+  function levelOf(id) {
+    return levels[id] || 1;
+  }
+
   function sceneLabel() {
     if (state.sheet) return "場景 4 · 升級";
     if (state.scene === 2) return "場景 2 · 揀空地";
@@ -126,7 +172,13 @@
   }
 
   function openSheet(id) {
-    if (id && defById[id]) state.sheetId = id;
+    if (id && defById[id]) {
+      if (id !== state.sheetId) {
+        state.fnsOpen = false;
+        state.lastFn = null;
+      }
+      state.sheetId = id;
+    }
     state.sheet = true;
     render();
     var title = document.getElementById("sheetTitle");
@@ -188,12 +240,87 @@
       return;
     }
     if (state.scene === 3) {
-      if (sameCell(state.pad, { c: c, r: r })) {
-        showToast("預覽緊呢格。確定放置要等下一提示。取消唔會扣資源。");
-      } else {
-        showToast("下一提示先至可以搬去第二格。取消唔會扣資源。");
+      var moving = defById[state.bldg];
+      if (occ) {
+        showToast("呢度已經有" + defById[occ].name + "，唔可以放。");
+        return;
       }
+      if (sameCell(state.pad, { c: c, r: r })) {
+        showToast("就係呢格。撳「確定放置」先至扣資源。");
+        return;
+      }
+      state.pad = { c: c, r: r };
+      showToast("「" + (moving ? moving.name : "屋") + "」搬去第 " + (c + 1) + " 欄第 " + (r + 1) + " 行。");
+      render();
     }
+  }
+
+  function onConfirm() {
+    if (!readyToPreview()) {
+      showToast("呢格唔可以放。揀一塊空地。");
+      render();
+      return;
+    }
+    var def = defById[state.bldg];
+    if (!canAfford(def.cost)) {
+      showToast("資源唔夠起「" + def.name + "」。取消唔會扣。");
+      render();
+      return;
+    }
+    spend(def.cost);
+    var id = state.bldg;
+    grid[keyOf(state.pad.c, state.pad.r)] = id;
+    levels[id] = 1;
+    state.pad = null;
+    state.bldg = null;
+    state.scene = 1;
+    state.listOpen = false;
+    state.hover = null;
+    showToast("起好「" + def.name + "」。已扣 " + costText(def) + "。");
+    openSheet(id);
+  }
+
+  function onUpgrade() {
+    var def = defById[state.sheetId];
+    if (!def || !findPos(def.id)) {
+      showToast("未起好，未可以升級。");
+      return;
+    }
+    if (!canAfford(UPGRADE_COST)) {
+      showToast("資源唔夠升級「" + def.name + "」。");
+      render();
+      return;
+    }
+    spend(UPGRADE_COST);
+    levels[def.id] = levelOf(def.id) + 1;
+    showToast(def.name + " 升到 Lv." + levels[def.id] + "（示範）。");
+    render();
+  }
+
+  function onOpenFn() {
+    var def = defById[state.sheetId];
+    if (!def || !findPos(def.id)) {
+      showToast("未起好，未可以打開功能。");
+      return;
+    }
+    state.fnsOpen = true;
+    showToast("打開咗「" + def.name + "」嘅功能。揀一個掣試吓。");
+    render();
+    var first = document.querySelector("#sheetFns .fn");
+    if (first) first.focus();
+  }
+
+  function onFn(label) {
+    var def = defById[state.sheetId];
+    if (!def || !findPos(def.id)) {
+      showToast("未起好，未可以做呢個功能。");
+      return;
+    }
+    state.fnsOpen = true;
+    fnMsg[def.id] = def.name + "：" + (FN_COPY[label] || label) + "（示範）";
+    state.lastFn = def.id + ":" + label;
+    showToast(fnMsg[def.id]);
+    render();
   }
 
   function buildPalette() {
@@ -414,7 +541,7 @@
     else if (state.scene === 2) label += picked ? "，已揀呢格" : "，空地，撳一下就揀";
     else if (kind === "illegal") label += "，已經有屋，唔可以放";
     else if (kind === "preview") label += "，擺放預覽";
-    else if (kind === "valid") label += "，可以放。搬位要等下一提示";
+    else if (kind === "valid") label += "，可以放，撳一下就搬去呢格";
     cell.btn.setAttribute("aria-label", label);
   }
 
@@ -467,7 +594,7 @@
       var go = document.getElementById("btnToScene3");
       go.disabled = !readyToPreview();
       if (readyToPreview()) {
-        status.textContent = "已揀「" + defById[state.bldg].name + "」同呢格空地。去場景 3 睇預覽。確定要等下一提示，而家未扣資源。";
+        status.textContent = "已揀「" + defById[state.bldg].name + "」同呢格空地。去場景 3 睇預覽。確定先至扣資源。";
       } else if (state.pad && !state.bldg) {
         status.textContent = "已揀空地。打開清單，揀一座未起嘅屋。";
       } else if (state.bldg && !state.pad) {
@@ -479,8 +606,20 @@
 
     if (showPlace) {
       var def = defById[state.bldg];
-      document.getElementById("placeStatus").textContent =
-        "預覽「" + def.name + "」。下一提示先至可以搬格同確定。取消唔扣示範資源（💰" + res.gold + "）。";
+      var placeOk = readyToPreview();
+      var afford = !!(def && canAfford(def.cost));
+      var confirm = document.getElementById("btnConfirm");
+      confirm.disabled = !(placeOk && afford);
+      confirm.textContent = "確定放置";
+      if (placeOk && afford) {
+        document.getElementById("placeStatus").textContent =
+          "預覽「" + def.name + "」· " + costText(def) + "。點其他金色格可以搬位。確定先至扣資源，取消保持 💰" + res.gold + "。";
+      } else if (placeOk) {
+        document.getElementById("placeStatus").textContent =
+          "資源唔夠起「" + def.name + "」（要 " + costText(def) + "）。取消唔會扣。";
+      } else {
+        document.getElementById("placeStatus").textContent = "呢格唔可以放。揀一塊金色空地。取消唔會扣。";
+      }
     }
 
     var hint = document.getElementById("hint");
@@ -493,15 +632,26 @@
     if (!state.sheet) return;
     var def = defById[state.sheetId] || defById.library;
     state.sheetId = def.id;
+    var placedHere = !!findPos(def.id);
+    var upgradeBtn = document.getElementById("btnUpgrade");
+    var openBtn = document.getElementById("btnOpenFn");
     document.getElementById("sheetTitle").textContent = def.name;
-    document.getElementById("sheetLevel").textContent = "Lv.1 · 示範";
-    document.getElementById("sheetNote").textContent = findPos(def.id)
-      ? "可以升級，或者打開呢座屋嘅功能。兩個掣都係下一提示，而家撳唔到，亦唔扣資源。"
-      : "放好之後就會見到呢個面板。升級同功能都係下一提示，而家未扣資源。";
+    document.getElementById("sheetLevel").textContent = "Lv." + levelOf(def.id) + " · 示範";
+    document.getElementById("sheetNote").textContent = fnMsg[def.id]
+      ? fnMsg[def.id]
+      : (placedHere
+        ? (state.fnsOpen
+          ? "功能打開咗。揀下面一個掣試吓，呢度只係示範。"
+          : "可以升級，或者打開功能。升級先至扣 💰50 🪵2。")
+        : "放好之後先至可以升級同打開功能。");
     var art = document.getElementById("sheetArt");
     var next = asset(def.id);
     if (art.getAttribute("src") !== next) art.src = next;
-    document.getElementById("btnUpgrade").textContent = "升級（下一提示）· " + "💰50 🪵2";
+    upgradeBtn.disabled = !placedHere || !canAfford(UPGRADE_COST);
+    upgradeBtn.textContent = placedHere ? "升級 · 💰50 🪵2" : "未起好，未可以升級";
+    openBtn.disabled = !placedHere;
+    openBtn.textContent = "打開功能";
+    openBtn.setAttribute("aria-pressed", state.fnsOpen ? "true" : "false");
 
     var picks = document.getElementById("sheetPicks");
     picks.textContent = "";
@@ -517,12 +667,15 @@
 
     var fns = document.getElementById("sheetFns");
     fns.textContent = "";
+    fns.classList.toggle("is-open", !!state.fnsOpen && placedHere);
     def.fns.forEach(function (label) {
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "fn";
-      btn.disabled = true;
-      btn.textContent = label + "（下一提示）";
+      btn.disabled = !placedHere;
+      btn.textContent = label;
+      btn.setAttribute("aria-pressed", state.lastFn === def.id + ":" + label ? "true" : "false");
+      btn.addEventListener("click", function () { onFn(label); });
       fns.appendChild(btn);
     });
   }
@@ -601,6 +754,8 @@
   function onReset() {
     grid = clone(SEED);
     res = clone(START);
+    levels = {};
+    fnMsg = {};
     state.scene = 1;
     state.sheet = false;
     state.sheetId = "library";
@@ -608,7 +763,9 @@
     state.pad = null;
     state.bldg = null;
     state.hover = null;
-    showToast("示範已重置。資源未變。");
+    state.fnsOpen = false;
+    state.lastFn = null;
+    showToast("示範已重置。資源返到 💰6000。");
     render();
   }
 
@@ -635,9 +792,9 @@
   document.getElementById("btnBack").addEventListener("click", function () { goScene(1); });
   document.getElementById("btnToScene3").addEventListener("click", function () { goScene(3); });
   document.getElementById("btnCancel").addEventListener("click", cancelPreview);
-  document.getElementById("btnConfirm").addEventListener("click", function () {
-    showToast("確定放置係下一提示。而家未扣資源。");
-  });
+  document.getElementById("btnConfirm").addEventListener("click", onConfirm);
+  document.getElementById("btnUpgrade").addEventListener("click", onUpgrade);
+  document.getElementById("btnOpenFn").addEventListener("click", onOpenFn);
   document.getElementById("btnCloseSheet").addEventListener("click", closeSheet);
   document.getElementById("btnReset").addEventListener("click", onReset);
   document.getElementById("btnMotion").addEventListener("click", function () {
