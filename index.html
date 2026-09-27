@@ -2610,17 +2610,18 @@ function renderTownBuildings() {
   const occupied = Array.from({length: ROWS}, () => Array(COLS).fill(false));
   const cellContent = Array.from({length: ROWS}, () => Array(COLS).fill(null));
   
-  // Mark building cells (2×2) — each plot_idx maps to a 4×4 block, building uses 2×2 inside it
+  // Mark each placed building's real 2×2 from cell_x/cell_y so green plots miss it.
   buildings.forEach(b => {
-    const plot_idx = b.plot_idx || 0;
-    const grid_x = (plot_idx % 6) * 4;
-    const grid_y = Math.floor(plot_idx / 6) * 4;
-    // Building occupies cells [1..2, 1..2] within the 4×4 block
-    for (let dy = 1; dy < 3; dy++) {
-      for (let dx = 1; dx < 3; dx++) {
-        if (grid_y + dy < ROWS && grid_x + dx < COLS) {
-          occupied[grid_y + dy][grid_x + dx] = true;
-          cellContent[grid_y + dy][grid_x + dx] = 'building';
+    if (b.cell_x == null || b.cell_y == null) return;
+    const cx = b.cell_x;
+    const cy = b.cell_y;
+    for (let dy = 0; dy < 2; dy++) {
+      for (let dx = 0; dx < 2; dx++) {
+        const x = cx + dx;
+        const y = cy + dy;
+        if (y >= 0 && y < ROWS && x >= 0 && x < COLS) {
+          occupied[y][x] = true;
+          cellContent[y][x] = 'building';
         }
       }
     }

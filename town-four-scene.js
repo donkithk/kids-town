@@ -2,8 +2,8 @@
    Spends only through the existing place / upgrade APIs. Cancel never spends.
    Pad picks use iso math so a back diamond wins under a front sprite. */
 (function () {
-  var COLS = 6;
-  var ROWS = 5;
+  var COLS = 8;
+  var ROWS = 8;
   var ASSET = "mocks/town-building-proof/assets/";
   var MOTION_KEY = "ktTownMotion";
   var MARK_VALID = ASSET + "cell-valid.svg";
