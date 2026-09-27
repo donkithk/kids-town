@@ -4316,6 +4316,10 @@ def get_town_state(kid_id):
         SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect, bd.materials, bd.max_level
         FROM buildings b JOIN building_defs bd ON b.def_id=bd.id WHERE b.kid_id=? AND b.stored=0
     ''', (kid_id,)).fetchall()
+    stored_buildings = db.execute('''
+        SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect, bd.materials, bd.max_level
+        FROM buildings b JOIN building_defs bd ON b.def_id=bd.id WHERE b.kid_id=? AND b.stored=1
+    ''', (kid_id,)).fetchall()
     inventory = db.execute("SELECT * FROM inventory WHERE kid_id=?", (kid_id,)).fetchall()
     explored = db.execute("SELECT * FROM explored_regions WHERE kid_id=?", (kid_id,)).fetchall()
     # 清理 stale running expedition (避免 frontend 顯示過期嘅 running battle)
@@ -4327,6 +4331,7 @@ def get_town_state(kid_id):
     return jsonify({
         'kid': kid_hud(kid),
         'buildings': rows_to_list(buildings),
+        'stored_buildings': rows_to_list(stored_buildings),
         'inventory': rows_to_list(inventory),
         'explored': rows_to_list(explored),
         'expedition': row_to_dict(running_exp) if running_exp else None,

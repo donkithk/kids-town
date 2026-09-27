@@ -283,6 +283,7 @@ body.kt-artstage #tab-town .mp { position: relative; }
 #townMap .pal-cost { display: block; font-size: 14px; font-weight: 700; color: var(--ink-soft); }
 
 #townMap .pal-btn.is-placed { background: #f3e6c8; }
+#townMap .pal-btn.is-stored { background: #e7f0e4; }
 
 #townMap .place-bar {
   position: absolute;
