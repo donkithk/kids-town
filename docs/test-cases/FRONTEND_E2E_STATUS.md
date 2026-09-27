@@ -2,6 +2,35 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## Stored building must not use the new-build spend path — regress PASS (do not merge #34 / #35)
+
+> Independent regress recorded 2026-09-27.  
+> Product tree: PR #35 tip `dc5e4124755add1c926b6508bbdadc16368c12fc` (`dc5e412`, branch `cursor/green-stored-not-new-build-9eb7`).  
+> Test overlay only (not product): PR #34 tip `4fbeb073ba28b5bd282028a31b6ebbd5010ca89d` (`4fbeb07`, branch `cursor/red-stored-building-spend-bb35`) — `tests/test_frontend.py`, `docs/test-cases/FRONTEND_E2E.md`, and the prior red STATUS. Those three files are byte-identical on #35 because `dc5e412` is the child of `4fbeb07` and does not touch them. Asserts were not weakened.  
+> **Do not merge #34 or #35 from this record.** This PR is a STATUS stamp only.  
+> Prior red record on tester PR #34 was against main `0bd8c87`. This run is the same assertions on the #35 product tip.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Empty seeded SQLite only. No production DB and no real PIN.  
+> Fixture: 工坊 `(4,1)` Lv.1 `stored=0`; 探險公會 `(9,13)` Lv.1 `stored=1`.
+
+### Commands
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Stored vs new-build | `python3 -m pytest tests/test_frontend.py -q -k 'store_list or store_place or store_confirm' --tb=line` | **3 passed**, 41 deselected in 6.41s |
+| Sibling grid + legacy store | `python3 -m pytest tests/test_frontend.py -q -k 'town_grid or store_legacy' --tb=line` | **3 passed**, 41 deselected in 4.69s |
+
+No store-as-new failures. Asserts were not weakened. The sibling filter stayed green on this tree.
+
+### Case ID → PASS on product `dc5e412` + tests `4fbeb07`
+
+| Case ID | Pytest | Result |
+|---------|--------|--------|
+| TC-FE-TOWN-STORE-LIST-01 | `test_town_store_list_does_not_sell_stored_guild` | **PASS** |
+| TC-FE-TOWN-STORE-PLACE-01 | `test_town_store_place_from_warehouse_without_spend` | **PASS** |
+| TC-FE-TOWN-STORE-CONFIRM-01 | `test_town_store_confirm_does_not_pair_spend_copy_with_already_built` | **PASS** |
+
+---
+
 ## Stored building must not use the new-build spend path — red on main (tests only, do not merge)
 
 > Recorded 2026-09-27 against **main** `0bd8c8729f750ec97019532f8acd60df1c11556b` (`0bd8c87`, Green #32).  
