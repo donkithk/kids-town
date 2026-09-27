@@ -746,6 +746,12 @@ body.is-native { overflow: auto; }
   pointer-events: none;
 }
 
+/* Upgrade (and any burst while the sheet is open) is a stage sibling of
+   the map, so it paints above the sheet. Map is z-index 1; footer is 20. */
+.stage > .fx-burst {
+  z-index: 30;
+}
+
 .fx-ring,
 .fx-bit {
   position: absolute;

@@ -331,33 +331,31 @@
   }
 
   /* Gold sparkle burst. Place plays on the new building while the sheet
-     is still closed, then the sheet opens. Upgrade is the same family,
-     a little tighter, on the map sprite when it sits above the sheet,
-     otherwise on the sheet art. Reduced motion keeps one soft ring. */
+     is still closed. Once the sheet is open, the burst is hosted on the
+     stage (above the map) and centered on the sheet art, so the panel
+     cannot cover it. Reduced motion keeps one soft ring. */
   function celebrate(kind, cellPos) {
     var cell = cellPos ? cellBy(cellPos.c, cellPos.r) : null;
-    var sprite = cell && cell.sprite && !cell.sprite.hidden ? cell.sprite : null;
-    var anchor = sprite;
-    var aim = null;
-    var sheet = document.getElementById("actionSheet");
-    var sheetBox = sheet && !sheet.hidden ? sheet.getBoundingClientRect() : null;
-    if (sprite) {
+    var sheetOpen = !!(state.sheet && sheet && !sheet.hidden);
+    var host = map;
+    var point = null;
+    if (!sheetOpen) {
+      var sprite = cell && cell.sprite && !cell.sprite.hidden ? cell.sprite : null;
+      if (!sprite) return;
       var spriteBox = sprite.getBoundingClientRect();
-      var stick = sheetBox ? sheetBox.top - spriteBox.top : spriteBox.height;
-      if (kind === "upgrade" && stick < 36) {
-        anchor = document.getElementById("sheetArt");
-      } else {
-        var yIn = kind === "place" ? spriteBox.height * 0.38 : Math.min(spriteBox.height * 0.4, Math.max(18, stick * 0.55));
-        aim = { x: spriteBox.left + spriteBox.width / 2, y: spriteBox.top + yIn };
-      }
+      point = localPoint(map, spriteBox.left + spriteBox.width / 2, spriteBox.top + spriteBox.height * 0.38);
+    } else {
+      var art = document.getElementById("sheetArt");
+      var artBox = art.getBoundingClientRect();
+      if (artBox.width < 1) return;
+      host = document.querySelector(".stage");
+      point = localPoint(host, artBox.left + artBox.width / 2, artBox.top + artBox.height * 0.58);
     }
-    if (!anchor) anchor = document.getElementById("sheetArt");
-    var point = aim ? localPoint(map, aim.x, aim.y) : localPoint(map, anchor.getBoundingClientRect().left + anchor.getBoundingClientRect().width / 2, anchor.getBoundingClientRect().top + anchor.getBoundingClientRect().height / 2);
-    if (!point) return;
+    if (!point || !host) return;
 
     var reduced = motionReduced();
     var node = document.createElement("div");
-    node.className = "fx-burst is-" + kind + (reduced ? " is-quiet" : "");
+    node.className = "fx-burst is-" + kind + (host === map ? "" : " is-front") + (reduced ? " is-quiet" : "");
     node.setAttribute("aria-hidden", "true");
     node.style.left = point.x + "px";
     node.style.top = point.y + "px";
@@ -390,7 +388,7 @@
       }
     }
 
-    map.appendChild(node);
+    host.appendChild(node);
     var removed = false;
     function cleanup() {
       if (removed) return;
