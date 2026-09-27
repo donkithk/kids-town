@@ -7,30 +7,34 @@
 > Recorded 2026-09-27 against product **main** `ed48d47e27f35ca40adf061aca1f5af0de4028a9` (`ed48d47`, design: town style A compare + building proof pack).  
 > This change is tests + catalog only. Design reference is mock tip `3b4671d7d14be2024937213152ac05a008f27372` (PR #27 draft). **Do not merge #27 or this PR.** Builder turns these cases green later.  
 > Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux.  
-> `TC-FE-PLACE-SHOP-01` / `TC-FE-PLACE-BUILD-01` stay. They are the old placement bar, not this sheet flow.
+> `TC-FE-PLACE-SHOP-01` / `TC-FE-PLACE-BUILD-01` stay. They are the old placement bar, not this sheet flow.  
+> Checklist coverage: (1) scene 1 real data `UX-01` (2) scene 2 pad + list `UX-02` (3) ghost confirm/cancel `UX-04` / `UX-03` (4) scene 4 upgrade + feature `UX-05` (5) gold stars `FX-01` place + `FX-02` upgrade on the action sheet (6) soft oval shadows `HIT-03`, letterbox + occluded back-row hit `HIT-01` / `HIT-02` at 1100×800 and 1280×720 (7) animation toggle `MOTION-02`.
 
 ### Commands
 
 | Suite | Command | Result |
 |-------|---------|--------|
-| New four-scene cases | `python3 -m pytest tests/test_frontend.py -q -k town_ux --tb=line` | **9 failed**, 26 deselected in 6.70s |
-| Existing frontend | `python3 -m pytest tests/test_frontend.py -q -k 'not town_ux' --tb=line` | **26 passed**, 9 deselected, 4 warnings in 27.96s |
+| New four-scene cases | `python3 -m pytest tests/test_frontend.py -q -k town_ux --tb=line` | **12 failed**, 26 deselected in 8.47s |
+| Existing frontend | `python3 -m pytest tests/test_frontend.py -q -k 'not town_ux' --tb=line` | **26 passed**, 12 deselected, 4 warnings in 26.37s |
 
-Full `tests/test_frontend.py` is now 35 tests: the 9 `town_ux` cases are intentional reds. Filter with `-k 'not town_ux'` to see the previous green set. Do not weaken the new asserts onto `#placementBar`.
+Full `tests/test_frontend.py` is now 38 tests: the 12 `town_ux` cases are intentional reds. Filter with `-k 'not town_ux'` to see the previous green set. Do not weaken the new asserts onto `#placementBar`.
 
 ### Case ID → FAIL on `ed48d47`
 
 | Case ID | Pytest | Result | Fail message (abridged to the assertion) |
 |---------|--------|--------|------------------------------------------|
-| TC-FE-TOWN-UX-01 | `test_town_ux_scene1_map_cta_and_empty_pad_does_not_spend` | **FAIL** | Scene 1 睇地圖 … Missing: CTA 「我要起屋」, iso empty pads（button「第 N 欄第 M 行…空地」）. 1280×720 stage and seeded 圖書館／農場／商店 were already on the old map; that did not pass the case. |
+| TC-FE-TOWN-UX-01 | `test_town_ux_scene1_map_cta_and_empty_pad_does_not_spend` | **FAIL** | Scene 1 must show placed buildings from the kid's real data. Missing: scene-1 iso map missing real placed 商店, 圖書館, 農場, CTA 「我要起屋」, iso empty pads. Footer 「商店」 and legacy `.town-building` do not count. |
 | TC-FE-TOWN-UX-02 | `test_town_ux_scene2_gold_pads_and_building_list` | **FAIL** | Scene 2 must open from 「我要起屋」: gold frames, list 「已起」, 「去擺位置」. Entry CTA 「我要起屋」 is not on the town home. |
-| TC-FE-TOWN-UX-03 | `test_town_ux_scene3_cancel_does_not_deduct` | **FAIL** | Scene 3 取消 must leave HUD unchanged and toast 「已取消，資源未扣除」. Entry CTA 「我要起屋」 is not on the town home. |
-| TC-FE-TOWN-UX-04 | `test_town_ux_scene3_confirm_deducts_and_opens_sheet` | **FAIL** | Scene 3 確定 must deduct HUD resources, place the building, and open the scene 4 upgrade sheet. Entry CTA 「我要起屋」 is not on the town home. |
-| TC-FE-TOWN-UX-05 | `test_town_ux_scene4_upgrade_feature_and_hud` | **FAIL** | Scene 4 must raise the building level, deduct the upgrade from the HUD, and show a visible result from a feature button. Entry CTA 「我要起屋」 is not on the town home. |
-| TC-FE-TOWN-HIT-01 | `test_town_ux_hit_back_pad_not_front_sprite` | **FAIL** | Iso hit-test needs pad buttons 「第 N 欄第 M 行」. A tap on a back-row pad covered by a front sprite must select the back pad. Old `.valid-plot` / `.town-building` is not a stand-in. |
-| TC-FE-TOWN-HIT-02 | `test_town_ux_letterbox_pad_hit_alignment` | **FAIL** | Viewport 1100×800; art-stage layout is **1280×720** (visual **1100.0×618.8**). Scaled stage alone does not pass: pad visual-center hit targets are missing. |
-| TC-FE-TOWN-MOTION-01 | `test_town_ux_motion_burst_pointer_events_none` | **FAIL** | Place/upgrade celebration bursts (`.fx-burst` or `[data-town-fx]`) must use `pointer-events:none`. Entry CTA 「我要起屋」 is not on the town home. Battle `.spark-burst` does not count. |
-| TC-FE-TOWN-MOTION-02 | `test_town_ux_motion_toggle_follows_reduced_motion_until_click` | **FAIL** | Town home must expose 動畫 開/關. Reduced-motion emulation was on and no `motion` localStorage key was written on first visit; the toggle itself is missing. |
+| TC-FE-TOWN-UX-03 | `test_town_ux_scene3_cancel_does_not_deduct` | **FAIL** | Scene 3 取消 must leave HUD unchanged and toast 「已取消，資源未扣除」 after a semi-transparent preview that can move, while an occupied pad stays blocked. Entry CTA missing. |
+| TC-FE-TOWN-UX-04 | `test_town_ux_scene3_confirm_deducts_and_opens_sheet` | **FAIL** | Scene 3 確定 must deduct HUD resources, place the building, and open the scene 4 upgrade sheet. Entry CTA missing. |
+| TC-FE-TOWN-UX-05 | `test_town_ux_scene4_upgrade_feature_and_hud` | **FAIL** | Scene 4 must raise the building level, deduct the upgrade from the HUD, and show a visible result from a feature button. Entry CTA missing. |
+| TC-FE-TOWN-HIT-01 | `test_town_ux_hit_back_pad_not_front_sprite` | **FAIL** | Iso hit-test needs pad buttons. A tap on a back-row diamond covered by a front building must select that back pad at 1100×800 (stage layout 1280×720, visual 1100.0×618.8) and at 1280×720. |
+| TC-FE-TOWN-HIT-02 | `test_town_ux_letterbox_pad_hit_alignment` | **FAIL** | Letterbox pad alignment needs iso pad hit targets at 1100×800 and 1280×720. Stage is already 1280×720 (visual 1100.0×618.8); that alone does not pass. |
+| TC-FE-TOWN-HIT-03 | `test_town_ux_hit_soft_oval_contact_shadows` | **FAIL** | Soft oval contact shadow (radial-gradient ellipse, blurred, crosses the seam, pointer-events none) missing under the 1100×800 letterbox; must also hold at 1280×720. |
+| TC-FE-TOWN-FX-01 | `test_town_ux_fx_place_shows_gold_stars` | **FAIL** | New-build gold stars `.fx-burst.is-place .fx-bit.is-star` were not visible. Battle `.spark-burst` does not count. Entry CTA missing. |
+| TC-FE-TOWN-FX-02 | `test_town_ux_fx_upgrade_shows_gold_stars_on_sheet` | **FAIL** | Upgrade gold stars on the open action sheet `.action-sheet .fx-burst.is-upgrade .fx-bit.is-star` missing. Entry CTA missing. |
+| TC-FE-TOWN-MOTION-01 | `test_town_ux_motion_burst_pointer_events_none` | **FAIL** | Place/upgrade celebration bursts (`.fx-burst` or `[data-town-fx]`) must use `pointer-events:none`. Entry CTA missing. Battle `.spark-burst` does not count. |
+| TC-FE-TOWN-MOTION-02 | `test_town_ux_motion_toggle_follows_reduced_motion_until_click` | **FAIL** | 動畫 開/關 toggle missing. Reduced-motion emulation was on and the first visit wrote no motion key. Only an explicit on click and an explicit off click may write localStorage. |
 
 Shared tail on every failure: `Missing four-scene town build UX on /kids/ town home (design mock tip 3b4671d / PR #27, do not merge). The old shop／建築 #placementBar flow is a different case and does not pass this one. Builder work: land the sheet flow before turning this green.`
 
@@ -44,7 +48,7 @@ Shared tail on every failure: `Missing four-scene town build UX on /kids/ town h
 
 ## Commands (real numbers, 2026-09-19 historical)
 
-These counts are from before the four-scene red cases. The current file is 35 tests; see the section above.
+These counts are from before the four-scene red cases. The current file is 38 tests; see the section above.
 
 | Suite | Command | Result |
 |-------|---------|--------|

@@ -18,9 +18,10 @@ Requirements:
   TC-FE-CEREMONY-01  真實 complete（唔 mock）後 toast／HUD 顯示金幣 + XP 數字 + 材料（唔只金幣）
   TC-FE-PLACE-SHOP-01  商店 建造 → startPlacement → 點空地／確認 → 地圖出現建築
   TC-FE-PLACE-BUILD-01  建築 tab 建造 → startPlacement → 點空地／確認 → 地圖出現建築
-  TC-FE-TOWN-UX-01..05  四場景起屋（我要起屋 → 清單 → 擺位置 → 升級）。main 未有呢個 UX，故意留紅。
-  TC-FE-TOWN-HIT-01/02  等角背面格 hit-test、1100×800 信箱下撳格對齊。
-  TC-FE-TOWN-MOTION-01/02  慶祝層 pointer-events:none；動畫掣跟 prefers-reduced-motion，撳先寫 localStorage。
+  TC-FE-TOWN-UX-01..05  四場景起屋（真實資料地圖 → 清單 → ghost 擺位 → 升級）。main 未有呢個 UX，故意留紅。
+  TC-FE-TOWN-FX-01/02  新起同升級嘅金星慶祝；升級金星要喺 action sheet 上面睇到。
+  TC-FE-TOWN-HIT-01/02/03  背面格 hit-test、1100×800 同 1280×720 信箱撳格、軟橢圓接觸陰影。
+  TC-FE-TOWN-MOTION-01/02  慶祝層 pointer-events:none；動畫掣跟 prefers-reduced-motion，開／關撳先寫 localStorage。
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
   FE-P0-03  家長 A session 不能管理家長 B 嘅仔女
@@ -1591,13 +1592,35 @@ def _require_build_cta(page, case_id, detail):
 
 
 def _building_on_town(page, name):
-    img = page.locator(f'#tab-town img[alt="{name}"]')
+    labels = _iso_pad_labels(page)
+    if any(name in label for label in labels):
+        return True
+    img = page.locator(f'#tab-town .pad img[alt="{name}"], #townMap img[alt="{name}"], #village img[alt="{name}"]')
     try:
         if img.count() > 0 and img.first.is_visible():
             return True
     except Exception:
         pass
-    return _role_visible(page, "button", re.compile(name))
+    return False
+
+
+def _iso_pad_labels(page):
+    """Accessible names on the iso scene map only. Legacy .town-building and the footer do not count."""
+    return page.evaluate(
+        """() => [...document.querySelectorAll(
+          '#townMap .pad button, #village .pad button, .village.is-iso .pad button, #townMap .cap, #village .cap, .village.is-iso .cap'
+        )].map((el) => (el.getAttribute('aria-label') || el.textContent || '').trim()).filter(Boolean)"""
+    )
+
+
+def _motion_store(page):
+    return page.evaluate(
+        """() => Object.fromEntries(
+          Object.keys(localStorage)
+            .filter((key) => key.toLowerCase().includes('motion'))
+            .map((key) => [key, localStorage.getItem(key)])
+        )"""
+    )
 
 
 def _open_building_list(page):
@@ -1727,7 +1750,7 @@ def _placed_names(test_db_path, kid_id):
 def test_town_ux_scene1_map_cta_and_empty_pad_does_not_spend(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-UX-01 場景 1：1280×720 地圖、種子屋、空地唔發光、我要起屋、點空地唔扣。"""
+    """TC-FE-TOWN-UX-01 場景 1：真實資料嘅已起屋出現喺等角地圖，空地唔發光，我要起屋，點空地唔扣。"""
     kid_id = fe_ids["kid_id"]
     _seed_town_ux_plot(test_db_path, kid_id)
     _open_town_home(page, base_url)
@@ -1735,9 +1758,13 @@ def test_town_ux_scene1_map_cta_and_empty_pad_does_not_spend(
     stage = _stage_metrics(page)
     if stage["w"] != 1280 or stage["h"] != 720:
         missing.append(f"art-stage layout {stage['w']}×{stage['h']} (want 1280×720)")
+    labels = _iso_pad_labels(page)
+    placed_blob = "\n".join(labels)
     for name, _x, _y in TOWN_UX_SEED:
-        if not _building_on_town(page, name):
-            missing.append(f"seed building {name}")
+        if name not in placed_blob:
+            missing.append(f"scene-1 iso map missing real placed {name}")
+    if any(TOWN_UX_UNBUILT in label and "空地" not in label for label in labels):
+        missing.append(f"unplaced {TOWN_UX_UNBUILT} must not show as a scene-1 building")
     if not _role_visible(page, "button", "我要起屋"):
         missing.append("CTA 「我要起屋」")
     probe = _pad_probe(page)
@@ -1748,8 +1775,10 @@ def test_town_ux_scene1_map_cta_and_empty_pad_does_not_spend(
     if missing:
         _town_ux_fail(
             "TC-FE-TOWN-UX-01",
-            "Scene 1 睇地圖 must show the shared 1280×720 art-stage, seed buildings "
-            "圖書館／農場／商店, quiet empty pads (no gold frames), and CTA 「我要起屋」. "
+            "Scene 1 睇地圖 must show placed buildings from the kid's real data "
+            "(seeded 圖書館／農場／商店 on the iso map; unplaced 健身室 must not appear as built). "
+            "Legacy .town-building sprites and the footer 「商店」 tab do not count. "
+            "Also quiet empty pads (no gold frames) and CTA 「我要起屋」. "
             "Tapping an empty pad must not deduct HUD resources. "
             f"Missing: {', '.join(missing)}.",
         )
@@ -2003,40 +2032,54 @@ def test_town_ux_scene4_upgrade_feature_and_hud(
 def test_town_ux_hit_back_pad_not_front_sprite(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-HIT-01 背面格被前面建築遮住時，撳落去選背面格，唔係棟建築。"""
+    """TC-FE-TOWN-HIT-01 背面格被前面建築遮住時，撳落去選背面格，唔係棟建築。
+
+    Runs at the letterboxed 1100×800 viewport and again at 1280×720.
+    """
     _seed_town_ux_plot(test_db_path, fe_ids["kid_id"])
     _open_town_home(page, base_url)
     if _pad_probe(page)["count"] == 0:
+        stage = _stage_metrics(page)
         _town_ux_fail(
             "TC-FE-TOWN-HIT-01",
             "Iso hit-test needs pad buttons 「第 N 欄第 M 行」. "
-            "A tap on a back-row pad visually covered by a front building sprite "
-            "must select that back pad, not the sprite. "
+            "A tap on a back-row diamond covered by a front building sprite "
+            "must select that back pad, not the sprite, at viewport 1100×800 "
+            f"(stage layout {stage['w']}×{stage['h']}, visual {stage['rw']:.1f}×{stage['rh']:.1f}) "
+            "and at 1280×720. "
             "Do not use the old .valid-plot / .town-building stack as a stand-in.",
         )
-    _enter_scene2(page, "TC-FE-TOWN-HIT-01")
-    hit = page.evaluate(_OCCLUSION_JS)
-    if not hit:
-        _town_ux_fail(
-            "TC-FE-TOWN-HIT-01",
-            "No back empty pad is visually covered by a front building sprite. "
-            "Seed is 商店 (0,2), 圖書館 (2,1), 農場 (4,0). "
-            "The occluded back pad must win the hit test.",
+    _enter_scene2(
+        page,
+        "TC-FE-TOWN-HIT-01",
+        "Back-row diamond occluded by a front building must win the hit test at 1100×800 and 1280×720.",
+    )
+    for width, height in ((1100, 800), (1280, 720)):
+        page.set_viewport_size({"width": width, "height": height})
+        page.wait_for_timeout(200)
+        hit = page.evaluate(_OCCLUSION_JS)
+        if not hit:
+            _town_ux_fail(
+                "TC-FE-TOWN-HIT-01",
+                f"No back empty pad is visually covered by a front building sprite at {width}×{height}. "
+                "Seed is 商店 (0,2), 圖書館 (2,1), 農場 (4,0). "
+                "The occluded back pad must win the hit test.",
+            )
+        page.mouse.click(hit["x"], hit["y"])
+        chosen = page.get_by_role(
+            "button",
+            name=re.compile(rf"第\s*{hit['c']}\s*欄第\s*{hit['r']}\s*行[\s\S]*已揀"),
         )
-    page.mouse.click(hit["x"], hit["y"])
-    chosen = page.get_by_role(
-        "button",
-        name=re.compile(rf"第\s*{hit['c']}\s*欄第\s*{hit['r']}\s*行[\s\S]*已揀"),
-    )
-    assert chosen.count() > 0 and chosen.first.is_visible(), (
-        "TC-FE-TOWN-HIT-01: the click on the occluded point must select back pad "
-        f"第 {hit['c']} 欄第 {hit['r']} 行 (已揀), not the front building {hit['front']!r}."
-    )
+        assert chosen.count() > 0 and chosen.first.is_visible(), (
+            "TC-FE-TOWN-HIT-01: the click on the occluded point must select back pad "
+            f"第 {hit['c']} 欄第 {hit['r']} 行 (已揀) at {width}×{height}, "
+            f"not the front building {hit['front']!r}."
+        )
 
 
 @pytest.mark.case_id("TC-FE-TOWN-HIT-02")
 def test_town_ux_letterbox_pad_hit_alignment(page, base_url, test_db_path, fe_ids):
-    """TC-FE-TOWN-HIT-02 viewport 1100×800、舞台 1280×720 縮放後，撳格中心仍然選中嗰格。"""
+    """TC-FE-TOWN-HIT-02 1100×800 同 1280×720 信箱下，撳格視覺中心仍然選中嗰格。"""
     _seed_town_ux_plot(test_db_path, fe_ids["kid_id"])
     _open_town_home(page, base_url)
     assert page.viewport_size["width"] == 1100
@@ -2045,34 +2088,213 @@ def test_town_ux_letterbox_pad_hit_alignment(page, base_url, test_db_path, fe_id
     if _pad_probe(page)["count"] == 0:
         _town_ux_fail(
             "TC-FE-TOWN-HIT-02",
-            "Letterbox pad alignment needs iso pad hit targets. "
-            f"Viewport is 1100×800; art-stage layout is {stage['w']}×{stage['h']} "
+            "Letterbox pad alignment needs iso pad hit targets at viewport 1100×800 "
+            "and at 1280×720. "
+            f"Current viewport is 1100×800; art-stage layout is {stage['w']}×{stage['h']} "
             f"(visual {stage['rw']:.1f}×{stage['rh']:.1f}). "
             "A 1280×720 scaled stage alone does not pass: the click at a pad's "
             "visual center must select that pad, not a neighbor.",
         )
-    scale = min(1100 / 1280, 800 / 720)
-    assert stage["w"] == 1280 and stage["h"] == 720, stage
-    assert abs(stage["rw"] - 1280 * scale) < 2, stage
-    assert abs(stage["rh"] - 720 * scale) < 2, stage
-    _enter_scene2(page, "TC-FE-TOWN-HIT-02")
-    target = page.get_by_role("button", name=re.compile(r"空地")).first
-    label = target.get_attribute("aria-label") or ""
-    match = _PAD_LABEL.search(label)
-    assert match, f"TC-FE-TOWN-HIT-02: empty pad label missing 欄/行: {label!r}"
-    box = target.bounding_box()
-    assert box, "TC-FE-TOWN-HIT-02: empty pad has no box"
-    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-    chosen = page.get_by_role(
-        "button",
-        name=re.compile(
-            rf"第\s*{match.group(1)}\s*欄第\s*{match.group(2)}\s*行[\s\S]*已揀"
-        ),
+    _enter_scene2(
+        page,
+        "TC-FE-TOWN-HIT-02",
+        "Pad visual-center hits must stay on that pad at 1100×800 and 1280×720.",
     )
-    assert chosen.count() > 0, (
-        "TC-FE-TOWN-HIT-02: clicking the pad's visual center under letterbox scale "
-        f"must select 第 {match.group(1)} 欄第 {match.group(2)} 行, not a neighbor."
+    for width, height in ((1100, 800), (1280, 720)):
+        page.set_viewport_size({"width": width, "height": height})
+        page.wait_for_timeout(200)
+        stage = _stage_metrics(page)
+        scale = min(width / 1280, height / 720)
+        assert stage["w"] == 1280 and stage["h"] == 720, stage
+        assert abs(stage["rw"] - 1280 * scale) < 2, stage
+        assert abs(stage["rh"] - 720 * scale) < 2, stage
+        target = page.get_by_role("button", name=re.compile(r"空地")).first
+        label = target.get_attribute("aria-label") or ""
+        match = _PAD_LABEL.search(label)
+        assert match, f"TC-FE-TOWN-HIT-02: empty pad label missing 欄/行 at {width}×{height}: {label!r}"
+        box = target.bounding_box()
+        assert box, f"TC-FE-TOWN-HIT-02: empty pad has no box at {width}×{height}"
+        page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        chosen = page.get_by_role(
+            "button",
+            name=re.compile(
+                rf"第\s*{match.group(1)}\s*欄第\s*{match.group(2)}\s*行[\s\S]*已揀"
+            ),
+        )
+        assert chosen.count() > 0, (
+            "TC-FE-TOWN-HIT-02: clicking the pad's visual center under letterbox scale "
+            f"at {width}×{height} must select 第 {match.group(1)} 欄第 {match.group(2)} 行, "
+            "not a neighbor."
+        )
+
+
+_SHADOW_PROBE_JS = r"""
+() => {
+  const pads = [...document.querySelectorAll('.village.is-iso .pad, #village .pad, #townMap .pad')];
+  const out = [];
+  for (const pad of pads) {
+    const btn = pad.querySelector('button');
+    const label = (btn && (btn.getAttribute('aria-label') || '')) || '';
+    const shadow = pad.querySelector(':scope > .shadow, :scope > [data-contact-shadow]');
+    if (!shadow || shadow.hidden) continue;
+    const cs = getComputedStyle(shadow);
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    const sbox = shadow.getBoundingClientRect();
+    const pbox = pad.getBoundingClientRect();
+    if (sbox.width < 2 || sbox.height < 2) continue;
+    const bg = (cs.backgroundImage || '') + ' ' + (cs.background || '');
+    out.push({
+      label,
+      w: sbox.width,
+      h: sbox.height,
+      filter: cs.filter || '',
+      bg,
+      overflow: getComputedStyle(pad).overflow,
+      crosses: sbox.left < pbox.left - 0.5 || sbox.right > pbox.right + 0.5,
+      pe: cs.pointerEvents
+    });
+  }
+  return out;
+}
+"""
+
+
+def _assert_soft_oval_shadows(page, width, height):
+    shadows = page.evaluate(_SHADOW_PROBE_JS)
+    assert shadows, (
+        f"TC-FE-TOWN-HIT-03: placed buildings need a visible contact shadow at {width}×{height}."
     )
+    blob = " ".join(item["label"] for item in shadows)
+    for name, _x, _y in TOWN_UX_SEED:
+        assert name in blob, (
+            f"TC-FE-TOWN-HIT-03: real placed {name} has no contact shadow at {width}×{height}."
+        )
+    for shadow in shadows:
+        assert shadow["w"] > shadow["h"] * 1.3, (
+            f"TC-FE-TOWN-HIT-03: contact shadow must be a wide oval at {width}×{height}: {shadow}"
+        )
+        assert re.search(r"radial-gradient", shadow["bg"], re.I) and re.search(r"ellipse", shadow["bg"], re.I), (
+            f"TC-FE-TOWN-HIT-03: contact shadow must be a soft radial ellipse at {width}×{height}: {shadow['bg']!r}"
+        )
+        assert "blur" in shadow["filter"] or re.search(r"rgba\([^)]*,\s*0(?:\.0+)?\)", shadow["bg"]), (
+            f"TC-FE-TOWN-HIT-03: contact shadow must fade softly (blur or transparent edge): {shadow}"
+        )
+        assert shadow["crosses"], (
+            f"TC-FE-TOWN-HIT-03: the oval must cross the pad seam onto the neighbor plot: {shadow}"
+        )
+        assert shadow["overflow"] == "visible", shadow
+        assert shadow["pe"] == "none", shadow
+
+
+@pytest.mark.case_id("TC-FE-TOWN-HIT-03")
+def test_town_ux_hit_soft_oval_contact_shadows(page, base_url, test_db_path, fe_ids):
+    """TC-FE-TOWN-HIT-03 已起屋有軟橢圓接觸陰影，信箱 1100×800 同 1280×720 都仲係橢圓。"""
+    _seed_town_ux_plot(test_db_path, fe_ids["kid_id"])
+    _open_town_home(page, base_url)
+    stage = _stage_metrics(page)
+    if not page.evaluate(_SHADOW_PROBE_JS):
+        _town_ux_fail(
+            "TC-FE-TOWN-HIT-03",
+            "Placed buildings on the iso map need a soft oval contact shadow "
+            "(radial-gradient ellipse, blurred, wider than the pad so it crosses the seam, "
+            "pointer-events none). "
+            f"Checked under the 1100×800 letterbox (stage layout {stage['w']}×{stage['h']}, "
+            f"visual {stage['rw']:.1f}×{stage['rh']:.1f}) and it must still hold at viewport 1280×720. "
+            "The legacy town map does not draw this contact shadow.",
+        )
+    for width, height in ((1100, 800), (1280, 720)):
+        page.set_viewport_size({"width": width, "height": height})
+        page.wait_for_timeout(200)
+        _assert_soft_oval_shadows(page, width, height)
+
+
+def _wait_visible_gold_stars(page, selector):
+    page.wait_for_function(
+        """(sel) => [...document.querySelectorAll(sel)].some((el) => {
+          const cs = getComputedStyle(el);
+          const box = el.getBoundingClientRect();
+          return cs.display !== 'none' && cs.visibility !== 'hidden'
+            && box.width > 1 && box.height > 1
+            && parseFloat(cs.opacity) > 0.35;
+        })""",
+        arg=selector,
+        timeout=4000,
+    )
+
+
+@pytest.mark.case_id("TC-FE-TOWN-FX-01")
+def test_town_ux_fx_place_shows_gold_stars(page, base_url, test_db_path, fe_ids):
+    """TC-FE-TOWN-FX-01 確定起屋之後，地圖上睇到金星慶祝（唔係戰鬥 spark）。"""
+    _seed_town_ux_plot(test_db_path, fe_ids["kid_id"])
+    _open_town_home(page, base_url)
+    _enter_scene3(
+        page,
+        "TC-FE-TOWN-FX-01",
+        "Confirming a new build must show a visible gold-star celebration on the map "
+        "(.fx-burst.is-place .fx-bit.is-star). Battle .spark-burst does not count.",
+    )
+    page.get_by_role("button", name=re.compile(r"確定")).first.click()
+    try:
+        _wait_visible_gold_stars(page, ".fx-burst.is-place .fx-bit.is-star")
+    except Exception:
+        _town_ux_fail(
+            "TC-FE-TOWN-FX-01",
+            "New-build gold stars were not visible (.fx-burst.is-place .fx-bit.is-star). "
+            "Battle .spark-burst does not count.",
+        )
+    on_sheet = page.evaluate(
+        """() => {
+          const star = document.querySelector('.fx-burst.is-place .fx-bit.is-star');
+          return !!(star && star.closest('#actionSheet, .action-sheet'));
+        }"""
+    )
+    assert not on_sheet, (
+        "TC-FE-TOWN-FX-01: the place celebration plays on the new building before the sheet covers it."
+    )
+
+
+@pytest.mark.case_id("TC-FE-TOWN-FX-02")
+def test_town_ux_fx_upgrade_shows_gold_stars_on_sheet(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-FX-02 升級金星要喺打開緊嘅 action sheet 上面睇到。"""
+    _seed_town_ux_plot(test_db_path, fe_ids["kid_id"])
+    _open_town_home(page, base_url)
+    _enter_scene3(
+        page,
+        "TC-FE-TOWN-FX-02",
+        "Upgrade must show a visible gold-star celebration on the open action sheet "
+        "(.action-sheet .fx-burst.is-upgrade .fx-bit.is-star), in front of the panel.",
+    )
+    page.get_by_role("button", name=re.compile(r"確定")).first.click()
+    upgrade = page.get_by_role("button", name=re.compile(r"升級"))
+    try:
+        upgrade.first.wait_for(state="visible", timeout=8000)
+    except Exception:
+        _town_ux_fail(
+            "TC-FE-TOWN-FX-02",
+            "Scene 4 action sheet did not open, so the upgrade gold-star burst cannot sit on it.",
+        )
+    upgrade.first.click()
+    try:
+        _wait_visible_gold_stars(
+            page,
+            "#actionSheet .fx-burst.is-upgrade .fx-bit.is-star, .action-sheet .fx-burst.is-upgrade .fx-bit.is-star",
+        )
+    except Exception:
+        _town_ux_fail(
+            "TC-FE-TOWN-FX-02",
+            "Upgrade gold stars were not visible on the open action sheet.",
+        )
+    hosted = page.evaluate(
+        """() => {
+          const sheet = document.querySelector('#actionSheet, .action-sheet');
+          if (!sheet || sheet.hidden) return false;
+          const burst = sheet.querySelector('.fx-burst.is-upgrade');
+          return !!(burst && sheet.contains(burst));
+        }"""
+    )
+    assert hosted, "TC-FE-TOWN-FX-02: the upgrade burst must be a child of the open action sheet."
 
 
 @pytest.mark.case_id("TC-FE-TOWN-MOTION-01")
@@ -2148,8 +2370,9 @@ def test_town_ux_motion_toggle_follows_reduced_motion_until_click(
             "TC-FE-TOWN-MOTION-02",
             "Town home must expose an 動畫 開/關 toggle. "
             "With no localStorage and prefers-reduced-motion: reduce, it defaults off. "
-            "Only an explicit click writes a localStorage key whose name contains 'motion' "
-            "and that value overrides the system preference on the next load.",
+            "Only an explicit on click and an explicit off click write a localStorage key "
+            "whose name contains 'motion'. That stored on value overrides reduced motion "
+            "on the next load. Loading the town must not write the key.",
         )
     btn = toggle.first
     label = (btn.inner_text() or "") + " " + (btn.get_attribute("aria-label") or "")
@@ -2193,7 +2416,20 @@ def test_town_ux_motion_toggle_follows_reduced_motion_until_click(
     label_kept = (again.inner_text() or "") + " " + (again.get_attribute("aria-label") or "")
     pressed_kept = again.get_attribute("aria-pressed")
     assert ("開" in label_kept) or pressed_kept == "true", (
-        "TC-FE-TOWN-MOTION-02: the stored choice overrides prefers-reduced-motion "
+        "TC-FE-TOWN-MOTION-02: the stored on choice overrides prefers-reduced-motion "
         f"on the next visit (label={label_kept!r} aria-pressed={pressed_kept!r})."
+    )
+    on_value = _motion_store(page)
+    again.click()
+    off_value = _motion_store(page)
+    assert off_value and off_value != on_value, (
+        "TC-FE-TOWN-MOTION-02: the explicit off click must rewrite the motion localStorage value "
+        f"(on={on_value!r} off={off_value!r}). Do not delete the key and fall back to the system default."
+    )
+    label_off = (again.inner_text() or "") + " " + (again.get_attribute("aria-label") or "")
+    pressed_off = again.get_attribute("aria-pressed")
+    assert ("關" in label_off) or pressed_off == "false", (
+        "TC-FE-TOWN-MOTION-02: after the off click the toggle shows 關 "
+        f"(label={label_off!r} aria-pressed={pressed_off!r})."
     )
 

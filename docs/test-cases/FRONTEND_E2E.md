@@ -9,7 +9,7 @@
 Status map after a run: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).  
 Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01`、`TC-FE-PLACE-BUILD-01`；(B) [`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md).
 
-四場景起屋（設計稿 `3b4671d`／PR #27，**唔好 merge #27**）: `TC-FE-TOWN-UX-01`…`05`、`TC-FE-TOWN-HIT-01`／`02`、`TC-FE-TOWN-MOTION-01`／`02`。產品 `/kids/` 城鎮首頁未有呢個流程，呢批 case **故意留紅**。舊放置條 `TC-FE-PLACE-SHOP-01`／`TC-FE-PLACE-BUILD-01` 仍然有效，唔係呢個 sheet flow 嘅代替。
+四場景起屋（設計稿 `3b4671d`／PR #27，**唔好 merge #27**）: `TC-FE-TOWN-UX-01`…`05`、`TC-FE-TOWN-FX-01`／`02`、`TC-FE-TOWN-HIT-01`…`03`、`TC-FE-TOWN-MOTION-01`／`02`。產品 `/kids/` 城鎮首頁未有呢個流程，呢批 case **故意留紅**。舊放置條 `TC-FE-PLACE-SHOP-01`／`TC-FE-PLACE-BUILD-01` 仍然有效，唔係呢個 sheet flow 嘅代替。
 
 共用前置（除另註）：
 
@@ -275,8 +275,8 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
 | **設計** | Mock tip `3b4671d`（PR #27 draft，只係設計參考，**唔好 merge**）。斷言打產品 `/kids/` 城鎮首頁，唔係靜態 mock 路徑。 |
 | **前置** | 空庫合成 `test_fe_kid`。測試會種圖書館 `(2,1)`、農場 `(4,0)`、商店 `(0,2)`，健身室未起。HUD 讀畫面，唔硬套 mock 示範籌碼 💰6000。 |
-| **步驟** | 1. 登入，停喺城鎮首頁 2. 睇 1280×720 art-stage 3. 確認三座種子屋可見 4. 空地冇金框 5. 見到「我要起屋」 6. 撳一塊空地 |
-| **預期** | Style A 等角地圖喺共用 1280×720 信箱舞台。空地唔發光。撳空地**唔扣** HUD 資源，亦唔當已起健身室。未有「我要起屋」／「第 N 欄第 M 行」空地掣，本 case **留紅**。唔好用舊 `#placementBar` 當過。 |
+| **步驟** | 1. 登入，停喺城鎮首頁 2. 睇 1280×720 art-stage 3. 等角地圖顯示 DB 入面真正已起嘅圖書館／農場／商店（頁腳「商店」同舊 `.town-building` 唔算） 4. 未起嘅健身室唔好當成已起 5. 空地冇金框 6. 見到「我要起屋」 7. 撳一塊空地 |
+| **預期** | 場景 1 顯示小朋友真實資料嘅已起屋，唔係寫死嘅 mock 三座。空地唔發光。撳空地**唔扣** HUD 資源。未有等角格仔／「我要起屋」，本 case **留紅**。唔好用舊 `#placementBar` 當過。 |
 | **備註** | `TC-FE-PLACE-SHOP-01`／`TC-FE-PLACE-BUILD-01` 繼續覆蓋舊建造條，唔係本流程嘅代替。 |
 
 ---
@@ -300,8 +300,8 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **ID** | TC-FE-TOWN-UX-03 |
 | **優先級** | P0（四場景起屋；main 上留紅） |
 | **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
-| **步驟** | 1. 去到場景 3 2. 見到半透明預覽 3. 預覽搬去另一塊空地 4. 撳已有圖書館嘅格 5. 撳「取消」 6. 讀取消前後 HUD |
-| **預期** | 搬位同撳佔用格都唔改 HUD。佔用格被擋住（toast 似「已經有／唔可以放」）。取消返回，toast 似「已取消，資源未扣除」，HUD 同取消前相等，健身室冇寫入 DB。資源數字跟當時 HUD，唔硬套 mock 嘅 💰6000。 |
+| **步驟** | 1. 去到場景 3 2. 見到半透明 ghost 預覽 3. ghost 搬去另一塊空地 4. 撳已有圖書館嘅格 5. 撳「取消」 6. 讀取消前後 HUD |
+| **預期** | Ghost 搬位同撳佔用格都唔改 HUD。佔用格被擋住（toast 似「已經有／唔可以放」）。取消返回，toast 似「已取消，資源未扣除」，HUD 同取消前相等，健身室冇寫入 DB。資源數字跟當時 HUD，唔硬套 mock 嘅 💰6000。確定扣資源係 `TC-FE-TOWN-UX-04`。 |
 
 ---
 
@@ -336,8 +336,8 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **ID** | TC-FE-TOWN-HIT-01 |
 | **優先級** | P0（四場景起屋；main 上留紅） |
 | **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
-| **步驟** | 1. 場景 2 2. 搵一塊背面空地，佢嘅畫面範圍被前面建築 sprite 遮住 3. 用滑鼠撳嗰個重疊點 |
-| **預期** | 選中背面空地（「第 N 欄第 M 行」＋「已揀」），唔係打開前面嗰座屋。舊 `.valid-plot`／`.town-building` 疊層唔算本 case。種子位置：商店 `(0,2)`、圖書館 `(2,1)`、農場 `(4,0)`。 |
+| **步驟** | 1. 場景 2 2. Viewport 1100×800：搵一塊背面空地，畫面被前面建築 sprite 遮住，用滑鼠撳重疊點 3. Viewport 1280×720 再撳一次 |
+| **預期** | 兩個 viewport 都選中背面空地（「第 N 欄第 M 行」＋「已揀」），唔係前面嗰座屋。舊 `.valid-plot`／`.town-building` 疊層唔算。種子：商店 `(0,2)`、圖書館 `(2,1)`、農場 `(4,0)`。 |
 
 ---
 
@@ -348,8 +348,44 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **ID** | TC-FE-TOWN-HIT-02 |
 | **優先級** | P0（四場景起屋；main 上留紅） |
 | **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
-| **步驟** | 1. Viewport 1100×800 2. 確認舞台 layout 1280×720，視覺縮放 `min(1100/1280, 800/720)` 3. 場景 2 用滑鼠撳一塊空地嘅視覺中心 |
-| **預期** | 選中嘅就係嗰格（欄／行一致），唔係隔離格。淨係已經有 1280×720 信箱、但未有四場景空地掣，本 case **留紅**。 |
+| **步驟** | 1. Viewport 1100×800，確認舞台 layout 1280×720、視覺縮放 `min(1100/1280, 800/720)` 2. 場景 2 用滑鼠撳一塊空地嘅視覺中心 3. 再將 viewport 設做 1280×720，重覆撳格中心 |
+| **預期** | 兩個 viewport 選中嘅都係嗰格（欄／行一致），唔係隔離格。淨係已經有 1280×720 信箱、但未有四場景空地掣，本 case **留紅**。背面格被前面屋遮住係 `TC-FE-TOWN-HIT-01`（同樣兩個 viewport）。 |
+
+---
+
+## TC-FE-TOWN-HIT-03 — 軟橢圓接觸陰影
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-HIT-03 |
+| **優先級** | P0（四場景起屋；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
+| **步驟** | 1. 場景 1 已起圖書館／農場／商店 2. Viewport 1100×800（1280×720 信箱）睇每座屋嘅接觸陰影 3. 再試 viewport 1280×720 |
+| **預期** | 每座真實已起屋有一粒軟橢圓接觸陰影：`radial-gradient` ellipse、有 blur 或者透明邊、比地塊闊所以跨過鄰格縫、`pointer-events: none`、pad `overflow: visible`。舊城鎮 sprite 冇呢個陰影，本 case **留紅**。 |
+
+---
+
+## TC-FE-TOWN-FX-01 — 新起屋金星慶祝
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-FX-01 |
+| **優先級** | P1（四場景起屋；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
+| **步驟** | 1. 去到場景 3 2. 撳「確定」 3. 等 `.fx-burst.is-place .fx-bit.is-star` 變得睇到 |
+| **預期** | 新起屋有可見金星（opacity 升起、有尺寸）。金星喺地圖上嘅新建築，唔好一開始就只喺 action sheet 入面。戰鬥 `.spark-burst` 唔算。未有起屋流程，本 case **留紅**。 |
+
+---
+
+## TC-FE-TOWN-FX-02 — 升級金星喺 action sheet 上
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-FX-02 |
+| **優先級** | P1（四場景起屋；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
+| **步驟** | 1. 確定放置，打開場景 4 2. 撳升級 3. 等 action sheet 入面 `.fx-burst.is-upgrade .fx-bit.is-star` |
+| **預期** | 升級金星係打開緊嘅 action sheet 嘅子節點，而且睇得見（喺面板前面）。地圖上嘅放置金星唔算本 case。 |
 
 ---
 
@@ -372,8 +408,8 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **ID** | TC-FE-TOWN-MOTION-02 |
 | **優先級** | P1（四場景起屋；main 上留紅） |
 | **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
-| **步驟** | 1. 清 localStorage，模擬 `prefers-reduced-motion: reduce` 2. 登入城鎮首頁 3. 睇「動畫」掣，確認未寫 motion key 4. 撳一次 5. 重新載入（系統仍然 reduce） |
-| **預期** | 第一次、未有儲存：掣預設關。只有呢下撳先寫入名稱含 `motion` 嘅 localStorage，並覆蓋系統偏好；再入嚟仍然係開。城鎮首頁未有呢個掣，本 case **留紅**。唔好用音效 mute key 頂替。 |
+| **步驟** | 1. 清 localStorage，模擬 `prefers-reduced-motion: reduce` 2. 登入城鎮首頁，確認未寫 motion key、掣預設關 3. 撳一次變開 4. 重新載入（系統仍然 reduce） 5. 再撳一次變關 |
+| **預期** | 第一次載入唔寫 localStorage，跟系統減少動態所以關。只有明確撳「開」同之後撳「關」先改寫名稱含 `motion` 嘅 key。儲低嘅「開」會覆蓋系統偏好。城鎮首頁未有呢個掣，本 case **留紅**。唔好用音效 mute key 頂替。 |
 
 ---
 
