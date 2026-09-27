@@ -2,6 +2,33 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## Stored building must not use the new-build spend path — red on main (tests only, do not merge)
+
+> Recorded 2026-09-27 against **main** `0bd8c8729f750ec97019532f8acd60df1c11556b` (`0bd8c87`, Green #32).  
+> Acceptance: a `stored=1` building is already owned. Scene 2 建築清單 must not show it as unbuilt with a price, and 確定 must not POST `/buildings`. That create dup-check includes stored rows and returns 400「你已經興建咗呢種建築物」. The correct place is 存倉 / `#placementBar` / `POST /buildings/<id>/unstored`, with no gold or material spend, on the same row (`stored=0`).  
+> This change is tests + catalog only. No product code. Do not merge.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Empty seeded SQLite only.  
+> Fixture: 工坊 `(4,1)` Lv.1 `stored=0`; 探險公會 `(9,13)` Lv.1 `stored=1`. No production DB and no real PIN.  
+> On this main the palette still renders the stored guild as 「未起」 with 💰150. Choosing it opens 「確定先至扣資源」 and 確定 posts `/buildings`, which 400s. The row stays `stored=1`, so the map does not show 探險公會. Gold and materials are not deducted because the 400 happens before the spend.
+
+### Commands
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Stored vs new-build | `python3 -m pytest tests/test_frontend.py -q -k 'store_list or store_place or store_confirm' --tb=line` | **3 failed**, 41 deselected in 5.79s |
+
+All three new cases fail. Asserts were not weakened.
+
+### Case ID → result on main `0bd8c87`
+
+| Case ID | Pytest | Result | Reason |
+|---------|--------|--------|--------|
+| TC-FE-TOWN-STORE-LIST-01 | `test_town_store_list_does_not_sell_stored_guild` | **FAIL** | Scene 2 建築清單 offers 探險公會 as unbuilt with a price (`探險公會，未起` and 💰150). Choosing it with an empty pad enters 「確定先至扣資源。取消唔會扣。」. On-map 工坊 stayed 「已起」 at 第 5 欄第 2 行. |
+| TC-FE-TOWN-STORE-PLACE-01 | `test_town_store_place_from_warehouse_without_spend` | **FAIL** | The list confirm is not 存倉 / `#placementBar` / POST `/buildings/<id>/unstored`. 確定 posts `POST /api/kids/1/buildings` and gets HTTP 400「你已經興建咗呢種建築物」. The map does not show 探險公會. The same row stays id=5, def_id=6, level 1, `stored=1` at `(9,13)`. Gold and materials are unchanged because the 400 is before any deduct. |
+| TC-FE-TOWN-STORE-CONFIRM-01 | `test_town_store_confirm_does_not_pair_spend_copy_with_already_built` | **FAIL** | 「確定先至扣資源。取消唔會扣。」 is on screen together with toast「你已經興建咗呢種建築物」 (HTTP 400 from `POST /buildings`). The palette row is still `探險公會，未起` / 💰150. The later 存倉 / `#placementBar` / unstored place kept the same row at `stored=0` and did not change gold or materials; the case stays red because those two strings were shown together. |
+
+---
+
 ## 8×8 grid and legacy warehouse — green (product)
 
 > Recorded 2026-09-27 against product commit `75f00b5` on branch `cursor/town-8x8-store-legacy-green-96f2`, based on tester tip `f1f1116` (draft PR #31, not merged).  

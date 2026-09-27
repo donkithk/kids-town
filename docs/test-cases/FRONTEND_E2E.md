@@ -13,6 +13,8 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 8×8 地圖同格外收倉: `TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`。篩選 `-k 'town_grid or store_legacy'`。可建地圖係欄 0..7 × 行 0..7，場景 1–3 同一個 8×8。載入城鎮時，格外或者無合法格、而且 `stored=0` 嘅屋要一次過收進存倉（`stored=1`），保留同一行、`def_id`、等級。收倉之後場景 1 唔好畫佢哋，建築清單唔好當地圖「已起」鎖住。用現有「存倉」放返空地，唔扣資源。唔好用清單「去擺位置」搬屋來代替。產品喺城鎮載入同建築物讀取時收倉，場景 1–3 係 8×8。
 
+已經 `stored=1` 嘅屋唔好當新建築賣: `TC-FE-TOWN-STORE-LIST-01`、`TC-FE-TOWN-STORE-PLACE-01`、`TC-FE-TOWN-STORE-CONFIRM-01`。篩選 `-k 'store_list or store_place or store_confirm'`。場景 2 建築清單唔好把存倉屋標成「未起」兼顯示價錢，亦唔好帶入「確定先至扣資源」然後 POST `/buildings`。呢個新建查重包埋 `stored=1` 嘅行，所以 API 回 400「你已經興建咗呢種建築物」。正確放返係現有存倉（`#placementBar`，POST `/buildings/<id>/unstored`），唔扣金幣同材料，同一行變 `stored=0`。呢三條喺 main 上留紅。唔改產品。
+
 共用前置（除另註）：
 
 1. Session-scoped test server on a free port, `TESTING=True`, empty DB + seed.
@@ -454,6 +456,45 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 ---
 
+## TC-FE-TOWN-STORE-LIST-01 — 存倉屋唔好喺建築清單當未起兼標價錢
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-STORE-LIST-01 |
+| **優先級** | P0（存倉唔好當新建築） |
+| **建議模組** | `tests/test_frontend.py`（`-k store_list`） |
+| **前置** | 空庫合成 `test_fe_kid`，PIN `1357`。金幣同材料夠多。建築物只得兩行：工坊 `(4,1)` Lv.1 `stored=0`（喺 8×8 地圖）；探險公會 `(9,13)` Lv.1 `stored=1`（已經入倉，舊格喺 8×8 之外）。唔用真 PIN／production DB。 |
+| **步驟** | 1. 登入，場景 1 睇等角格 2. 「我要起屋」打開「建築清單」 3. 讀工坊同探險公會嘅清單文案 4. 揀「第 1 欄第 1 行」同探險公會，睇「去擺位置」會唔會打開「確定先至扣資源」 |
+| **預期** | 場景 1 見到工坊喺「第 5 欄第 2 行」，唔好畫探險公會。工坊仍然係「已起」。探險公會唔好以「未起」或者 💰 價錢出現。揀佢唔好入新建築確認（「確定先至扣資源」）。正確放返係存倉，唔係清單新建築。main 上留紅。 |
+
+---
+
+## TC-FE-TOWN-STORE-PLACE-01 — 放返存倉屋要走 unstored，地圖見到而且唔扣資源
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-STORE-PLACE-01 |
+| **優先級** | P0（存倉唔好當新建築） |
+| **建議模組** | `tests/test_frontend.py`（`-k store_place`） |
+| **前置** | 同 `TC-FE-TOWN-STORE-LIST-01`。 |
+| **步驟** | 1. 場景 1 確認探險公會未喺地圖 2. 「我要起屋」打開「建築清單」，揀空地同探險公會 3. 如果出現「確定先至扣資源」，撳「確定放置」，睇 POST、地圖、同一行、HUD 4. 如果清單冇帶入呢句新建築確認，就改用 ☰ →「存倉」嘅「按此放置」（`#placementBar`，同 `TC-FE-TOWN-STORE-LEGACY-02`），揀 8×8 裡面嘅空地，撳「確認建造」 |
+| **預期** | 放返必須係 POST `/buildings/<id>/unstored`，唔好係 POST `/buildings`。地圖見到探險公會。金幣同材料唔變。同一行（同一個 id、`def_id`、Lv.1）變成 `stored=0`，格喺 0..7 × 0..7。工坊留喺 `(4,1)`、`stored=0`。main 上清單會入「確定先至扣資源」，確定打去 POST `/buildings` 得到 400，地圖冇探險公會，行仍然 `stored=1`。留紅。 |
+
+---
+
+## TC-FE-TOWN-STORE-CONFIRM-01 — 唔好同時見到扣資源文案同「你已經興建咗呢種建築物」
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-STORE-CONFIRM-01 |
+| **優先級** | P0（存倉唔好當新建築） |
+| **建議模組** | `tests/test_frontend.py`（`-k store_confirm`） |
+| **前置** | 同 `TC-FE-TOWN-STORE-LIST-01`。 |
+| **步驟** | 1. 打開建築清單，揀空地同存倉嘅探險公會 2. 如果見到「確定先至扣資源」，撳「確定放置」 3. 讀確認文案、toast、POST 4. 再用存倉／`#placementBar`／unstored 放返（同 `TC-FE-TOWN-STORE-LEGACY-02`） 5. 再讀 HUD、金幣、材料、同一行 |
+| **預期** | 唔好同時出現「確定先至扣資源」同「你已經興建咗呢種建築物」（確認文案配埋 400，因為新建查重包埋 `stored=1`）。正確放返之後金幣同材料同放之前一樣，同一行 `stored=0` 喺 8×8 裡面。main 上兩句會一齊出現，所以留紅。 |
+
+---
+
 ## FE-XSS-01 — 任務標題 DOM 唔執行 markup
 
 | 欄 | 內容 |
@@ -488,10 +529,11 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 pip install -r requirements.txt
 python -m playwright install chromium
 python -m pytest tests/test_frontend.py -q -k 'town_grid or store_legacy' --tb=line
+python -m pytest tests/test_frontend.py -q -k 'store_list or store_place or store_confirm' --tb=line
 python -m pytest tests/test_frontend.py -q -k 'not town_grid and not store_legacy' --tb=line
 python -m pytest tests/test_frontend.py -q -k town_ux --tb=short
 ```
 
-`town_grid`／`store_legacy` 係 8×8 地圖同格外收倉（`TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`）。`-k 'not town_grid and not store_legacy'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`。接受尺寸係 8×8。收倉喺每次城鎮載入同建築物讀取時做。
+`town_grid`／`store_legacy` 係 8×8 地圖同格外收倉（`TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`）。`store_list`／`store_place`／`store_confirm` 係已經入倉嘅屋唔好當新建築賣（`TC-FE-TOWN-STORE-LIST-01`、`TC-FE-TOWN-STORE-PLACE-01`、`TC-FE-TOWN-STORE-CONFIRM-01`）。`-k 'not town_grid and not store_legacy'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`，以及呢三條存倉紅測。接受尺寸係 8×8。收倉喺每次城鎮載入同建築物讀取時做。已經 `stored=1` 嘅屋要用存倉 unstored 放返，唔好 POST `/buildings`。
 
 雙重驗證 (B) 人手步驟：[`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md)。跑完結果寫 [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md)。

@@ -26,6 +26,10 @@ Requirements:
   TC-FE-TOWN-STORE-LEGACY-01  格外（或無合法格）且 stored=0 嘅屋，載入時收進存倉 stored=1，保留種類同等級。
   TC-FE-TOWN-STORE-LEGACY-02  收倉之後唔好畫喺地圖、唔好當地圖「已起」；用現有存倉流程放返空地，唔扣資源。
   篩選 `-k 'town_grid or store_legacy'`。
+  TC-FE-TOWN-STORE-LIST-01  已存倉（stored=1）嘅屋，場景 2 建築清單唔好當未起兼標價錢，亦唔好入「確定先至扣資源」。
+  TC-FE-TOWN-STORE-PLACE-01  用存倉／#placementBar／unstored 放返，地圖見到屋，金幣材料唔變，同一行 stored=0。
+  TC-FE-TOWN-STORE-CONFIRM-01  唔好同時見到扣資源確認文案同「你已經興建咗呢種建築物」；正確放返之後資源唔變。
+  篩選 `-k 'store_list or store_place or store_confirm'`。
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
   FE-P0-03  家長 A session 不能管理家長 B 嘅仔女
@@ -2971,3 +2975,441 @@ def test_town_store_legacy_place_from_store_without_spend(
         )
     if problems:
         _store_legacy_fail("TC-FE-TOWN-STORE-LEGACY-02", " | ".join(problems))
+
+
+# ── TC-FE-TOWN-STORE-LIST / PLACE / CONFIRM: stored row is not a new build ──
+#
+# stored=1 means the kid already owns that building. Scene 2 建築清單 must not
+# sell it as 未起 with a gold price, and 確定放置 must not POST /buildings.
+# That create call dup-checks stored rows and returns 400
+# 「你已經興建咗呢種建築物」. The correct place is the existing 存倉 tab:
+# #placementBar and POST /buildings/<id>/unstored, with no spend.
+# Filter: `-k 'store_list or store_place or store_confirm'`.
+
+STORE_PALETTE_GUILD = "探險公會"
+STORE_PALETTE_WORKSHOP = "工坊"
+SPEND_CONFIRM_COPY = "確定先至扣資源"
+ALREADY_BUILT_COPY = "你已經興建咗呢種建築物"
+
+
+def _store_palette_fail(case_id, detail):
+    pytest.fail(
+        f"{case_id}: {detail} "
+        "A stored=1 building is already owned. The four-scene 建築清單 must not "
+        "show it as unbuilt with a price, and 確定 must not POST /buildings "
+        f"(the dup check includes stored rows and answers 400 {ALREADY_BUILT_COPY}). "
+        "Place it from 存倉 with #placementBar and POST /buildings/<id>/unstored, "
+        "without spending gold or materials."
+    )
+
+
+def _seed_town_store_palette(test_db_path, kid_id):
+    """On-map 工坊 stored=0 plus 探險公會 already stored=1.
+
+    Synthetic kid only. Balances are high so a mistaken new-build could deduct
+    and still be seen. No production DB and no real PIN.
+    """
+    set_kid_points(test_db_path, kid_id, 8000)
+    grant_inventory(
+        test_db_path,
+        kid_id,
+        {"wood": 400, "brick": 300, "glass": 40, "gear": 120, "gem": 20},
+    )
+    db = connect_db(test_db_path)
+    db.execute("DELETE FROM buildings WHERE kid_id=?", (kid_id,))
+    db.commit()
+    db.close()
+    workshop = _insert_legacy_building(
+        test_db_path, kid_id, STORE_PALETTE_WORKSHOP, 1, 4, 1, stored=0
+    )
+    workshop.update(cell_x=4, cell_y=1)
+    # Already warehoused. Old cell is outside 0..7×0..7; stored stays 1.
+    guild = _insert_legacy_building(
+        test_db_path, kid_id, STORE_PALETTE_GUILD, 1, 9, 13, stored=1
+    )
+    guild.update(cell_x=9, cell_y=13)
+    return {"workshop": workshop, "guild": guild}
+
+
+def _palette_control(page, name):
+    btn = _palette_button(page, name)
+    if btn.count() == 0:
+        return None, ""
+    return btn.first, _control_blob(btn.first)
+
+
+def _offered_as_unbuilt_with_price(control):
+    """New-build row: 「未起」 and/or a gold price. 「已起」 is the on-map lock."""
+    if not control:
+        return False
+    return ("未起" in control) or ("💰" in control)
+
+
+def _workshop_row_ok(test_db_path, kid_id, workshop):
+    rows = _rows_named(_building_rows(test_db_path, kid_id), STORE_PALETTE_WORKSHOP)
+    return (
+        len(rows) == 1
+        and rows[0]["id"] == workshop["id"]
+        and rows[0]["stored"] == 0
+        and rows[0]["level"] == 1
+        and (rows[0]["cell_x"], rows[0]["cell_y"]) == (4, 1)
+        and rows[0]["def_id"] == workshop["def_id"]
+    )
+
+
+def _guild_placed_same_row(test_db_path, kid_id, guild):
+    rows = _rows_named(_building_rows(test_db_path, kid_id), STORE_PALETTE_GUILD)
+    if len(rows) != 1:
+        return False, rows
+    row = rows[0]
+    ok = (
+        row["id"] == guild["id"]
+        and row["def_id"] == guild["def_id"]
+        and row["level"] == guild["level"]
+        and row["stored"] == 0
+        and row["cell_x"] is not None
+        and row["cell_y"] is not None
+        and 0 <= row["cell_x"] < TOWN_GRID_COLS
+        and 0 <= row["cell_y"] < TOWN_GRID_ROWS
+    )
+    return ok, rows
+
+
+def _resources_unchanged(before, after):
+    return (
+        after["hud"] == before["hud"]
+        and after["points"] == before["points"]
+        and after["inventory"] == before["inventory"]
+    )
+
+
+def _resource_delta(before, after):
+    return (
+        f"hud {before['hud']} -> {after['hud']}, "
+        f"points {before['points']} -> {after['points']}, "
+        f"inventory {before['inventory']} -> {after['inventory']}"
+    )
+
+
+def _enter_new_build_confirm(page, name):
+    """Pick an empty pad and name in scene 2. Return place-status text, or None.
+
+    None means the list did not enable 「去擺位置」 for this building, so the
+    new-build spend confirm was not entered.
+    """
+    _select_empty_pad(page, 1, 1)
+    _open_building_list(page)
+    btn, control = _palette_control(page, name)
+    if btn is None or not _offered_as_unbuilt_with_price(control):
+        if btn is None:
+            return None
+        if "已起" in control and "未起" not in control and "💰" not in control:
+            return None
+    btn.click()
+    go = _go_place_button(page)
+    try:
+        enabled = go.count() > 0 and go.first.is_visible() and go.first.is_enabled()
+    except Exception:
+        enabled = False
+    if not enabled:
+        return None
+    go.first.click()
+    try:
+        page.locator("#uxPlaceBar").wait_for(state="visible", timeout=8000)
+        page.locator("#placeStatus").wait_for(state="visible", timeout=8000)
+    except Exception:
+        return ""
+    return page.locator("#placeStatus").inner_text() or ""
+
+
+def _place_guild_from_store(page, guild):
+    """存倉 card → #placementBar → in-grid .valid-plot → 確認. Like STORE-LEGACY-02.
+
+    Returns a list of problems. Empty means the unstored place finished.
+    """
+    problems = []
+    _open_store_tab(page)
+    store_text = page.locator("#storedBuildings").inner_text() or ""
+    card = page.locator("#storedBuildings .build-card", has_text=STORE_PALETTE_GUILD)
+    card_text = card.first.inner_text() if card.count() else ""
+    if "存倉吉咗" in store_text or card.count() == 0:
+        problems.append(
+            f"存倉 has no {STORE_PALETTE_GUILD} card to place "
+            f"(Lv.{guild['level']}). Saw {store_text!r}."
+        )
+        return problems
+    if f"Lv.{guild['level']}" not in card_text:
+        problems.append(
+            f"存倉 must list {STORE_PALETTE_GUILD} Lv.{guild['level']} (按此放置). "
+            f"Saw {card_text!r}."
+        )
+        return problems
+    card.first.click()
+    bar = page.locator("#placementBar")
+    if "active" not in (bar.get_attribute("class") or ""):
+        problems.append(
+            "clicking the 存倉 card must start #placementBar.active "
+            "(place-from-storage). Do not use 「去擺位置」."
+        )
+        return problems
+    _goto_town_map(page)
+    try:
+        page.locator(".valid-plot").first.wait_for(state="visible", timeout=8000)
+    except Exception:
+        problems.append("place-from-storage did not show a .valid-plot on the town map")
+        return problems
+    picked = _pick_in_grid_valid_plot(page)
+    if not picked:
+        problems.append(
+            "no .valid-plot with origin inside 0..6 × 0..6 "
+            "(the 2×2 must stay inside the 8×8 grid)"
+        )
+        return problems
+    page.locator(
+        f'.valid-plot[data-px="{picked["px"]}"][data-py="{picked["py"]}"]'
+    ).first.dispatch_event("click")
+    confirm = page.locator("#placementBar").get_by_role("button", name=re.compile(r"確認"))
+    try:
+        confirm.first.wait_for(state="visible", timeout=8000)
+    except Exception:
+        problems.append("selecting an empty pad did not show 「確認建造」 on #placementBar")
+        return problems
+    try:
+        with page.expect_response(
+            lambda r: r.request.method == "POST" and "/buildings/" in r.url,
+            timeout=8000,
+        ) as resp_info:
+            confirm.first.click()
+        resp = resp_info.value
+    except Exception as exc:
+        problems.append(f"confirm did not finish a place-from-storage request ({exc})")
+        return problems
+    if "/unstored" not in resp.url:
+        problems.append(
+            "confirm must POST /buildings/<id>/unstored for the stored row, "
+            f"not a new build. url={resp.url}"
+        )
+    if resp.status not in (200, 201):
+        problems.append(f"unstored failed HTTP {resp.status}: {resp.text()[:300]}")
+    page.wait_for_timeout(400)
+    return problems
+
+
+def _guild_visible_on_map(page):
+    labels = _iso_pad_labels(page)
+    visible = _iso_visible_names(page)
+    on_iso = any(STORE_PALETTE_GUILD in label for label in labels + visible)
+    on_canvas = page.locator(f'#townBuildings img[alt="{STORE_PALETTE_GUILD}"]').count() > 0
+    return on_iso or on_canvas, labels, visible
+
+
+def _submit_ux_confirm(page):
+    """Click four-scene 確定放置 and return response, toast, body, status text."""
+    confirm = page.locator("#btnUxConfirm")
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and "/buildings" in r.url,
+        timeout=8000,
+    ) as resp_info:
+        confirm.click()
+    resp = resp_info.value
+    page.wait_for_timeout(300)
+    toast = _toast_text(page)
+    try:
+        body = resp.text()
+    except Exception:
+        body = ""
+    try:
+        status_after = page.locator("#placeStatus").inner_text() or ""
+    except Exception:
+        status_after = ""
+    return resp, toast, body, status_after
+
+
+def _assert_guild_place_outcome(page, test_db_path, kid_id, guild, workshop, before, problems):
+    """Map, same row stored=0, resources, and the on-map 工坊."""
+    on_map, _labels, visible = _guild_visible_on_map(page)
+    if not on_map:
+        problems.append(
+            f"map does not show {STORE_PALETTE_GUILD} "
+            f"(iso/canvas names {visible!r}, toast={_toast_text(page)!r})"
+        )
+    ok, rows = _guild_placed_same_row(test_db_path, kid_id, guild)
+    if not ok:
+        problems.append(
+            f"{STORE_PALETTE_GUILD} must stay the same row "
+            f"(id={guild['id']}, def_id={guild['def_id']}, level {guild['level']}) "
+            f"and land stored=0 inside 0..7 × 0..7. saw {rows!r}"
+        )
+    after = _resource_snapshot(page, test_db_path, kid_id)
+    if not _resources_unchanged(before, after):
+        problems.append(
+            "placing the stored building must not deduct coins or materials "
+            f"({_resource_delta(before, after)})"
+        )
+    if not _workshop_row_ok(test_db_path, kid_id, workshop):
+        problems.append(
+            f"on-map {STORE_PALETTE_WORKSHOP} must stay id={workshop['id']} "
+            f"stored=0 level 1 at (4,1). "
+            f"saw {_rows_named(_building_rows(test_db_path, kid_id), STORE_PALETTE_WORKSHOP)!r}"
+        )
+
+
+@pytest.mark.case_id("TC-FE-TOWN-STORE-LIST-01")
+def test_town_store_list_does_not_sell_stored_guild(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-STORE-LIST-01 存倉嘅探險公會唔好喺建築清單當未起兼標價錢。"""
+    kid_id = fe_ids["kid_id"]
+    seeded = _seed_town_store_palette(test_db_path, kid_id)
+    _open_town_home(page, base_url)
+    problems = []
+    labels = _iso_pad_labels(page)
+    blob = "\n".join(labels + _iso_visible_names(page))
+    if STORE_PALETTE_WORKSHOP not in blob or "第 5 欄第 2 行" not in blob:
+        problems.append(
+            f"scene 1 must keep on-map {STORE_PALETTE_WORKSHOP} at 第 5 欄第 2 行. "
+            f"labels={labels!r}"
+        )
+    if STORE_PALETTE_GUILD in blob:
+        problems.append(
+            f"scene 1 must not paint stored {STORE_PALETTE_GUILD}. labels={labels!r}"
+        )
+    _enter_scene2(page, "TC-FE-TOWN-STORE-LIST-01")
+    _open_building_list(page)
+    _btn, shop_control = _palette_control(page, STORE_PALETTE_WORKSHOP)
+    if "已起" not in shop_control:
+        problems.append(
+            f"on-map {STORE_PALETTE_WORKSHOP} must stay 已起 ({shop_control!r})"
+        )
+    _btn, guild_control = _palette_control(page, STORE_PALETTE_GUILD)
+    if _offered_as_unbuilt_with_price(guild_control):
+        problems.append(
+            f"{STORE_PALETTE_GUILD} is listed as unbuilt with a price ({guild_control!r}). "
+            "stored=1 must not be a new-build row."
+        )
+    status = _enter_new_build_confirm(page, STORE_PALETTE_GUILD)
+    if status is not None and SPEND_CONFIRM_COPY in status:
+        problems.append(
+            f"choosing stored {STORE_PALETTE_GUILD} entered the new-build path "
+            f"({status!r}). That confirm spends; place-from-storage does not."
+        )
+    if not _workshop_row_ok(test_db_path, kid_id, seeded["workshop"]):
+        problems.append(
+            f"on-map {STORE_PALETTE_WORKSHOP} row changed while opening the list. "
+            f"saw {_rows_named(_building_rows(test_db_path, kid_id), STORE_PALETTE_WORKSHOP)!r}"
+        )
+    if problems:
+        _store_palette_fail("TC-FE-TOWN-STORE-LIST-01", " | ".join(problems))
+
+
+@pytest.mark.case_id("TC-FE-TOWN-STORE-PLACE-01")
+def test_town_store_place_from_warehouse_without_spend(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-STORE-PLACE-01 放返存倉探險公會必須走 unstored，地圖見到、唔扣資源。
+
+    The building list currently offers this stored row as a new build. That
+    confirm has to be the 存倉 / #placementBar / unstored path (STORE-LEGACY-02).
+    When the list no longer opens 「確定先至扣資源」, place from the 存倉 tab.
+    """
+    kid_id = fe_ids["kid_id"]
+    seeded = _seed_town_store_palette(test_db_path, kid_id)
+    guild = seeded["guild"]
+    workshop = seeded["workshop"]
+    _open_town_home(page, base_url)
+    before = _resource_snapshot(page, test_db_path, kid_id)
+    problems = []
+    on_map, labels, visible = _guild_visible_on_map(page)
+    if on_map:
+        problems.append(
+            f"stored {STORE_PALETTE_GUILD} is already on the map before place. "
+            f"labels={labels!r} visible={visible!r}"
+        )
+    _enter_scene2(page, "TC-FE-TOWN-STORE-PLACE-01")
+    _open_building_list(page)
+    status = _enter_new_build_confirm(page, STORE_PALETTE_GUILD)
+    if status is not None and SPEND_CONFIRM_COPY in status:
+        try:
+            resp, toast, body, status_after = _submit_ux_confirm(page)
+        except Exception as exc:
+            problems.append(
+                f"list confirm showed {status!r} but did not finish a place "
+                f"({exc}). Correct path is 存倉 #placementBar POST /unstored."
+            )
+        else:
+            problems.append(
+                "place did not use 存倉 / #placementBar / POST /buildings/<id>/unstored. "
+                f"The list confirm showed {status_after or status!r} and "
+                f"POST {resp.url} HTTP {resp.status} {body[:180]}. toast={toast!r}. "
+                "The 400 is before any deduct, so gold and materials stay put, "
+                "but the stored row is not placed."
+            )
+        _assert_guild_place_outcome(
+            page, test_db_path, kid_id, guild, workshop, before, problems
+        )
+    else:
+        problems.extend(_place_guild_from_store(page, guild))
+        _assert_guild_place_outcome(
+            page, test_db_path, kid_id, guild, workshop, before, problems
+        )
+    if problems:
+        _store_palette_fail("TC-FE-TOWN-STORE-PLACE-01", " | ".join(problems))
+
+
+@pytest.mark.case_id("TC-FE-TOWN-STORE-CONFIRM-01")
+def test_town_store_confirm_does_not_pair_spend_copy_with_already_built(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-STORE-CONFIRM-01 唔好同時出現扣資源文案同「你已經興建咗呢種建築物」。"""
+    kid_id = fe_ids["kid_id"]
+    seeded = _seed_town_store_palette(test_db_path, kid_id)
+    guild = seeded["guild"]
+    _open_town_home(page, base_url)
+    before = _resource_snapshot(page, test_db_path, kid_id)
+    problems = []
+    _enter_scene2(page, "TC-FE-TOWN-STORE-CONFIRM-01")
+    _open_building_list(page)
+    _btn, guild_control = _palette_control(page, STORE_PALETTE_GUILD)
+    status = _enter_new_build_confirm(page, STORE_PALETTE_GUILD)
+    spend_shown = bool(status) and SPEND_CONFIRM_COPY in status
+    if spend_shown:
+        try:
+            resp, toast, body, status_after = _submit_ux_confirm(page)
+        except Exception as exc:
+            problems.append(
+                f"{SPEND_CONFIRM_COPY} is on screen ({status!r}) but confirm "
+                f"did not finish a buildings POST ({exc}). "
+                f"palette={guild_control!r}"
+            )
+        else:
+            spend_still = SPEND_CONFIRM_COPY in status or SPEND_CONFIRM_COPY in status_after
+            already = ALREADY_BUILT_COPY in toast or ALREADY_BUILT_COPY in body
+            new_build = "/unstored" not in resp.url and resp.url.rstrip("/").endswith("/buildings")
+            if spend_still and already:
+                problems.append(
+                    f"spend-confirm copy is shown together with {ALREADY_BUILT_COPY}. "
+                    f"status={status_after!r} toast={toast!r} "
+                    f"HTTP {resp.status} {body[:180]} url={resp.url} "
+                    f"palette={guild_control!r}"
+                )
+            elif spend_still and new_build:
+                problems.append(
+                    "確定 posted a new build (/buildings) for a stored row "
+                    f"while showing {SPEND_CONFIRM_COPY}. "
+                    f"HTTP {resp.status} {body[:180]} url={resp.url} toast={toast!r}"
+                )
+    problems.extend(_place_guild_from_store(page, guild))
+    after = _resource_snapshot(page, test_db_path, kid_id)
+    if not _resources_unchanged(before, after):
+        problems.append(
+            "after the correct 存倉 place, gold and materials must be unchanged "
+            f"({_resource_delta(before, after)})"
+        )
+    ok, rows = _guild_placed_same_row(test_db_path, kid_id, guild)
+    if not ok:
+        problems.append(
+            f"correct place must keep the same {STORE_PALETTE_GUILD} row and "
+            f"set stored=0 inside the 8×8 map. saw {rows!r}"
+        )
+    if problems:
+        _store_palette_fail("TC-FE-TOWN-STORE-CONFIRM-01", " | ".join(problems))
