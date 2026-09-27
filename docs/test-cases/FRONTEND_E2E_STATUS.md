@@ -2,6 +2,28 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## Store place must stay on four-scene UX — red on main (tests only, do not merge)
+
+> Recorded 2026-09-27 against **main** `66bd1bc2802acd7a04ab3389b9ace1e242dcf302` (`66bd1bc`, Green #35).  
+> Acceptance: placing a stored building from the four-scene 建築清單 stays on the visible 8×8 iso pad. `#placementBar` must not gain class `active`. `#townMap` must stay visible (`#placementBar.active ~ #townMap { visibility:hidden }` must not hide it). `#townCanvasWrapper` must not show the legacy 24×16 `.valid-plot` / `↘️` grid or the clipped purple 「確認建造」 bar. Confirm posts `/buildings/<id>/unstored`, gold and materials stay unchanged, and the same row becomes `stored=0` on the map.  
+> This change is tests + catalog only. No product code. Do not merge.  
+> Fixture: 工坊 `(4,1)` Lv.1 `stored=0`; 探險公會 `stored=1`. No production DB and no real PIN.  
+> On this main, `placeFromStore` calls legacy `startUnstoreBuilding`, so the placement bar becomes active and the iso map is hidden.
+
+### Commands
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Store place UX | `python3 -m pytest tests/test_frontend.py -q -k store_ux --tb=line` | **pending run** |
+
+### Case ID → result on main `66bd1bc`
+
+| Case ID | Pytest | Result | Reason |
+|---------|--------|--------|--------|
+| TC-FE-TOWN-STORE-UX-01 | `test_town_store_ux_place_stays_on_four_scene` | **FAIL** | Legacy `#placementBar.active` hides `#townMap` and shows the 24×16 `↘️` / `.valid-plot` grid plus the purple 「確認建造」 bar. Four-scene unstored confirm was not reached. |
+
+---
+
 ## Stored building must not use the new-build spend path — red on main (tests only, do not merge)
 
 > Recorded 2026-09-27 against **main** `0bd8c8729f750ec97019532f8acd60df1c11556b` (`0bd8c87`, Green #32).  

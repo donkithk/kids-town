@@ -15,6 +15,8 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 已經 `stored=1` 嘅屋唔好當新建築賣: `TC-FE-TOWN-STORE-LIST-01`、`TC-FE-TOWN-STORE-PLACE-01`、`TC-FE-TOWN-STORE-CONFIRM-01`。篩選 `-k 'store_list or store_place or store_confirm'`。場景 2 建築清單唔好把存倉屋標成「未起」兼顯示價錢，亦唔好帶入「確定先至扣資源」然後 POST `/buildings`。呢個新建查重包埋 `stored=1` 嘅行，所以 API 回 400「你已經興建咗呢種建築物」。正確放返係現有存倉（`#placementBar`，POST `/buildings/<id>/unstored`），唔扣金幣同材料，同一行變 `stored=0`。呢三條喺 main 上留紅。唔改產品。
 
+清單放返存倉要留喺四場景 8×8: `TC-FE-TOWN-STORE-UX-01`。篩選 `-k store_ux`。喺建築清單揀已經入倉嘅屋開始放返之後，`#placementBar` 唔好有 class `active`，`#townMap` 唔好被 `#placementBar.active ~ #townMap { visibility:hidden }` 收埋，`#townCanvasWrapper` 唔好露出大片 `↘️`／`.valid-plot`（24×16 舊格）。要留喺四場景等角格。唔好出現裁切咗嘅紫色「確認建造」舊條。確認要 POST `/buildings/<id>/unstored`（或者同等產品 API），金幣同材料唔變，地圖見到嗰座屋，同一行變 `stored=0`。main `66bd1bc` 上四場景 `placeFromStore` 會叫 legacy `startUnstoreBuilding`，所以留紅。唔改產品。
+
 共用前置（除另註）：
 
 1. Session-scoped test server on a free port, `TESTING=True`, empty DB + seed.
@@ -495,6 +497,19 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 ---
 
+## TC-FE-TOWN-STORE-UX-01 — 清單放返存倉屋要留喺四場景，唔好彈出舊放置條
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-STORE-UX-01 |
+| **優先級** | P0（存倉放返 UX） |
+| **建議模組** | `tests/test_frontend.py`（`-k store_ux`） |
+| **前置** | 空庫合成 `test_fe_kid`，PIN `1357`。金幣同材料夠多。建築物只得兩行：工坊 `(4,1)` Lv.1 `stored=0`（喺 8×8 地圖）；探險公會 Lv.1 `stored=1`（已經入倉）。唔用真 PIN／production DB。 |
+| **步驟** | 1. 登入 → 城鎮 → 「我要起屋」進入四場景 → 打開「建築清單」 2. 揀存倉嘅探險公會，開始放返（#35 之後清單對倉庫項目嘅產品路徑，`placeFromStore`） 3. 成個放置過程：`#placementBar` 唔好有 class `active`；`#townMap` 維持可見（唔好被 `#placementBar.active ~ #townMap { visibility:hidden }` 收埋）；`#townCanvasWrapper` 唔好露出大片 `↘️`／`.valid-plot`（24×16 舊格）；留喺四場景 8×8 等角格；唔好出現裁切咗嘅紫色「確認建造」舊條 4. 用四場景確認放返：POST `/buildings/<id>/unstored`（或者同等產品 API）。金幣同材料唔變。地圖見到探險公會。同一行變 `stored=0` |
+| **預期** | 由清單開始放返之後，畫面一直係四場景 8×8 等角格。舊 `#placementBar` 唔好 active，小鎮地圖唔好被 sibling 規則藏起，亦唔好見到 24×16 綠色空地同淡 `↘️`。確認打去 unstored，唔扣資源。main `66bd1bc` 上 `placeFromStore` 呼叫 `startUnstoreBuilding`，條會 active、地圖 `visibility:hidden`、畫布鋪滿 `↘️`，再揀格就係紫色「確認建造」舊條。留紅。 |
+
+---
+
 ## FE-XSS-01 — 任務標題 DOM 唔執行 markup
 
 | 欄 | 內容 |
@@ -530,10 +545,11 @@ pip install -r requirements.txt
 python -m playwright install chromium
 python -m pytest tests/test_frontend.py -q -k 'town_grid or store_legacy' --tb=line
 python -m pytest tests/test_frontend.py -q -k 'store_list or store_place or store_confirm' --tb=line
+python -m pytest tests/test_frontend.py -q -k store_ux --tb=line
 python -m pytest tests/test_frontend.py -q -k 'not town_grid and not store_legacy' --tb=line
 python -m pytest tests/test_frontend.py -q -k town_ux --tb=short
 ```
 
-`town_grid`／`store_legacy` 係 8×8 地圖同格外收倉（`TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`）。`store_list`／`store_place`／`store_confirm` 係已經入倉嘅屋唔好當新建築賣（`TC-FE-TOWN-STORE-LIST-01`、`TC-FE-TOWN-STORE-PLACE-01`、`TC-FE-TOWN-STORE-CONFIRM-01`）。`-k 'not town_grid and not store_legacy'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`，以及呢三條存倉紅測。接受尺寸係 8×8。收倉喺每次城鎮載入同建築物讀取時做。已經 `stored=1` 嘅屋要用存倉 unstored 放返，唔好 POST `/buildings`。
+`town_grid`／`store_legacy` 係 8×8 地圖同格外收倉（`TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`）。`store_list`／`store_place`／`store_confirm` 係已經入倉嘅屋唔好當新建築賣（`TC-FE-TOWN-STORE-LIST-01`、`TC-FE-TOWN-STORE-PLACE-01`、`TC-FE-TOWN-STORE-CONFIRM-01`）。`store_ux` 係清單放返存倉要留喺四場景 8×8（`TC-FE-TOWN-STORE-UX-01`）。`-k 'not town_grid and not store_legacy'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`，以及存倉紅測。接受尺寸係 8×8。收倉喺每次城鎮載入同建築物讀取時做。已經 `stored=1` 嘅屋要用 unstored 放返，而且清單呢條路徑要留喺四場景等角格，唔好打開 legacy `#placementBar`。
 
 雙重驗證 (B) 人手步驟：[`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md)。跑完結果寫 [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md)。
