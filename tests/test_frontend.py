@@ -18,6 +18,9 @@ Requirements:
   TC-FE-CEREMONY-01  真實 complete（唔 mock）後 toast／HUD 顯示金幣 + XP 數字 + 材料（唔只金幣）
   TC-FE-PLACE-SHOP-01  商店 建造 → startPlacement → 點空地／確認 → 地圖出現建築
   TC-FE-PLACE-BUILD-01  建築 tab 建造 → startPlacement → 點空地／確認 → 地圖出現建築
+  TC-FE-TOWN-CHROME-01  城鎮首頁 header（#hdrRes）同公會大廳同一個資源列同高度
+  TC-FE-TOWN-CHROME-02  城鎮首頁 #ktFooter 五個 tab，底邊貼齊共享舞台（冇啡色空隙）
+  TC-FE-TOWN-CHROME-03  城鎮首頁內容喺同一個 1280×720 art-stage 入面
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
   FE-P0-03  家長 A session 不能管理家長 B 嘅仔女
@@ -415,6 +418,143 @@ def _open_drawer(page):
         page.get_by_role("button", name="☰").click()
         page.locator("#dr.o").wait_for(state="visible", timeout=8000)
     return drawer
+
+
+# Town-home chrome is compared at a fixed landscape viewport so the shared
+# 1280×720 shell letterboxes (scale = min(1100/1280, 800/720) < 1). Matching
+# guild/quest means the on-screen header, footer, and stage — not the unscaled
+# .mp / #townCanvasWrapper column.
+CHROME_VIEWPORT = {"width": 1100, "height": 800}
+CHROME_TOL_PX = 6
+STAGE_DESIGN_W = 1280
+STAGE_DESIGN_H = 720
+FOOTER_TAB_LABELS = ("城鎮首頁", "公會大廳", "任務板", "商店", "背包")
+HEADER_MAT_SLOTS = ("wood", "brick", "glass", "gear")
+# 公會大廳 is #tab-expedition. There is no #tab-guild.
+GUILD_TAB_ID = "tab-expedition"
+QUEST_TAB_ID = "tab-tasks"
+
+
+def _chrome_snapshot(page):
+    """On-screen chrome boxes plus the CSS the art-stage shell applies."""
+    return page.evaluate(
+        """() => {
+          const box = (el) => {
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            const cs = getComputedStyle(el);
+            return {
+              top: r.top, left: r.left, width: r.width, height: r.height,
+              bottom: r.bottom, right: r.right,
+              position: cs.position,
+              cssWidth: cs.width,
+              cssHeight: cs.height,
+              cssBottom: cs.bottom,
+              display: cs.display,
+              // Layout size ignores the letterbox transform, so the shell
+              // reads 1280×720 even when the viewport scales it.
+              layoutWidth: el.offsetWidth,
+              layoutHeight: el.offsetHeight,
+            };
+          };
+          const active = document.querySelector('.tab-content.active');
+          const footer = document.querySelector('#ktFooter');
+          const stage = document.querySelector('.gsw');
+          const footerBox = box(footer);
+          const stageBox = box(stage);
+          return {
+            vw: window.innerWidth,
+            vh: window.innerHeight,
+            artstage: document.body.classList.contains('kt-artstage'),
+            activeTab: active ? active.id : '',
+            header: box(document.querySelector('.gh')),
+            hdrRes: box(document.querySelector('#hdrRes')),
+            mats: Array.from(document.querySelectorAll('#hdrRes .mat')).map(
+              (el) => el.getAttribute('data-mat')
+            ),
+            goldVisible: !!(document.querySelector('#hdrRes #hudCo')),
+            footer: footerBox,
+            footerLabels: Array.from(
+              document.querySelectorAll('#ktFooter .kt-footer-label')
+            ).map((el) => (el.textContent || '').trim()),
+            stage: stageBox,
+            activePanel: box(active),
+            townInsideStage: !!(stage && stage.contains(document.querySelector('#tab-town'))),
+            viewportGap: footerBox ? window.innerHeight - footerBox.bottom : null,
+            stageGap: (footerBox && stageBox) ? stageBox.bottom - footerBox.bottom : null,
+          };
+        }"""
+    )
+
+
+def _open_town_home(page, base_url):
+    """Kid login lands on 城鎮首頁. Fonts aborted so footer flow is deterministic."""
+    page.set_viewport_size(CHROME_VIEWPORT)
+    page.route("https://fonts.googleapis.com/**", lambda route: route.abort())
+    page.route("https://fonts.gstatic.com/**", lambda route: route.abort())
+    _login(page, base_url)
+    page.locator("#tab-town.active").wait_for(state="visible", timeout=8000)
+    page.locator("#hdrRes").wait_for(state="visible", timeout=8000)
+    page.locator("#ktFooter").wait_for(state="visible", timeout=8000)
+
+
+def _click_footer_tab(page, label, tab_id):
+    page.locator("#ktFooter").get_by_role("button", name=label).click()
+    page.locator(f"#{tab_id}.active").wait_for(state="visible", timeout=8000)
+
+
+def _assert_header_slots(page):
+    hdr = page.locator("#hdrRes")
+    assert hdr.is_visible(), "#hdrRes resource bar must be visible"
+    gold = hdr.locator("#hudCo")
+    assert gold.is_visible(), "shared header must show the gold chip (#hudCo)"
+    assert "💰" in (hdr.inner_text() or ""), "shared header gold chip must show 💰"
+    for mat in HEADER_MAT_SLOTS:
+        slot = hdr.locator(f'.mat[data-mat="{mat}"]')
+        assert slot.count() == 1, f"missing material slot {mat}"
+        assert slot.is_visible(), f"material slot {mat} must be visible"
+
+
+def _assert_reference_artstage(metrics, tab_name):
+    """Guild/quest already use the shell. If this fails, the comparison target moved."""
+    assert metrics["artstage"], f"{tab_name} should turn on body.kt-artstage"
+    assert metrics["activeTab"], metrics
+    panel = metrics["activePanel"]
+    assert panel is not None, metrics
+    assert panel["layoutWidth"] == STAGE_DESIGN_W, (
+        f"{tab_name} panel layout width should be the 1280 design size; got {panel}"
+    )
+    assert panel["layoutHeight"] == STAGE_DESIGN_H, (
+        f"{tab_name} panel layout height should be the 720 design size; got {panel}"
+    )
+    assert panel["position"] == "absolute", (
+        f"{tab_name} panel should be position:absolute inside the stage; got {panel}"
+    )
+    scale = min(metrics["vw"] / STAGE_DESIGN_W, metrics["vh"] / STAGE_DESIGN_H)
+    stage = metrics["stage"]
+    assert abs(stage["width"] - STAGE_DESIGN_W * scale) <= CHROME_TOL_PX, stage
+    assert abs(stage["height"] - STAGE_DESIGN_H * scale) <= CHROME_TOL_PX, stage
+    assert abs(metrics["header"]["top"] - stage["top"]) <= CHROME_TOL_PX, metrics
+    assert abs(metrics["footer"]["bottom"] - stage["bottom"]) <= CHROME_TOL_PX, metrics
+    assert metrics["footer"]["position"] == "absolute", metrics["footer"]
+    assert metrics["footer"]["cssBottom"] == "0px", metrics["footer"]
+
+
+def _delta_msg(label, actual, expected):
+    delta = abs(actual - expected)
+    return (
+        f"{label}: 城鎮首頁 {actual:.1f}px vs 公會大廳 {expected:.1f}px "
+        f"(delta {delta:.1f}px, tolerance {CHROME_TOL_PX}px)"
+    )
+
+
+def _assert_close(label, actual, expected):
+    assert abs(actual - expected) <= CHROME_TOL_PX, (
+        _delta_msg(label, actual, expected)
+        + ". 城鎮首頁 must share the 1280×720 art-stage chrome "
+        "(body.kt-artstage .gsw letterbox). RED until builder #22; "
+        "do not widen this tolerance to fit the old .mp / #townCanvasWrapper map."
+    )
 
 
 def _goto_town_map(page):
@@ -1358,4 +1498,143 @@ def test_buildings_tab_build_enters_placement_and_building_appears_on_map(
     ).fetchone()
     db.close()
     assert row is not None, f"{PLACE_TAB_BUILDING} should be persisted after 建築 tab place"
+
+
+# ── TC-FE-TOWN-CHROME: 城鎮首頁 shares guild/quest art-stage chrome ──
+# Green on main after product #22 (main `ec6df09`, product commit `7d5b9d9`).
+# Ported from closed PR #23 tip `bf83adc`, which never landed on main.
+# Before #22, main `81763b1` left #tab-town off body.kt-artstage (old .mp map).
+# These asserts must stay green. Do not weaken the 6px tolerance.
+
+
+@pytest.mark.case_id("TC-FE-TOWN-CHROME-01")
+def test_town_home_header_matches_guild_chrome(page, base_url):
+    """TC-FE-TOWN-CHROME-01 城鎮首頁同公會大廳共用 #hdrRes 資源列，高度／位置一致。
+
+    Slots: gold (#hudCo / 💰) + wood / brick / glass / gear. On-screen .gh box
+    must match 公會大廳 within CHROME_TOL_PX (letterboxed 1280×720 stage).
+    """
+    _open_town_home(page, base_url)
+    _assert_header_slots(page)
+    town = _chrome_snapshot(page)
+    assert town["activeTab"] == "tab-town"
+    assert town["mats"] == list(HEADER_MAT_SLOTS), town["mats"]
+    assert town["goldVisible"]
+
+    _click_footer_tab(page, "公會大廳", GUILD_TAB_ID)
+    page.locator("body.kt-artstage").wait_for(state="attached", timeout=8000)
+    _assert_header_slots(page)
+    guild = _chrome_snapshot(page)
+    assert guild["mats"] == town["mats"], (town["mats"], guild["mats"])
+    _assert_reference_artstage(guild, "公會大廳")
+
+    _assert_close("header top", town["header"]["top"], guild["header"]["top"])
+    _assert_close("header height", town["header"]["height"], guild["header"]["height"])
+    _assert_close("header width", town["header"]["width"], guild["header"]["width"])
+    _assert_close(
+        "resource bar height", town["hdrRes"]["height"], guild["hdrRes"]["height"]
+    )
+
+
+@pytest.mark.case_id("TC-FE-TOWN-CHROME-02")
+def test_town_home_footer_aligns_with_guild_stage(page, base_url):
+    """TC-FE-TOWN-CHROME-02 #ktFooter 五個 tab，城鎮首頁底邊貼齊共享舞台。
+
+    Order: 城鎮首頁｜公會大廳｜任務板｜商店｜背包. On 公會大廳 the footer is
+    absolute bottom:0 of the 1280×720 stage (no gap under the footer inside
+    the frame). 城鎮首頁 must land on the same bottom edge.
+    """
+    _open_town_home(page, base_url)
+    footer = page.locator("#ktFooter")
+    assert footer.is_visible()
+    labels = [
+        text.strip()
+        for text in footer.locator(".kt-footer-label").all_inner_texts()
+    ]
+    assert labels == list(FOOTER_TAB_LABELS), labels
+    assert (
+        footer.get_by_role("button", name="城鎮首頁").get_attribute("aria-current")
+        == "page"
+    )
+    town = _chrome_snapshot(page)
+
+    _click_footer_tab(page, "公會大廳", GUILD_TAB_ID)
+    page.locator("body.kt-artstage").wait_for(state="attached", timeout=8000)
+    guild = _chrome_snapshot(page)
+    assert guild["footerLabels"] == list(FOOTER_TAB_LABELS), guild["footerLabels"]
+    _assert_reference_artstage(guild, "公會大廳")
+
+    _assert_close(
+        "footer bottom (flush with shared stage)",
+        town["footer"]["bottom"],
+        guild["footer"]["bottom"],
+    )
+    _assert_close(
+        "gap below footer",
+        town["viewportGap"],
+        guild["viewportGap"],
+    )
+    assert town["footer"]["position"] == guild["footer"]["position"], (
+        "城鎮首頁 footer position must match 公會大廳 "
+        f"(town {town['footer']['position']} / css bottom {town['footer']['cssBottom']}, "
+        f"guild {guild['footer']['position']} / {guild['footer']['cssBottom']}). "
+        "A sticky footer inside the old map column leaves a brown gap under the bar. "
+        "RED until builder #22."
+    )
+    assert town["footer"]["cssBottom"] == guild["footer"]["cssBottom"], (
+        town["footer"],
+        guild["footer"],
+    )
+
+
+@pytest.mark.case_id("TC-FE-TOWN-CHROME-03")
+def test_town_home_uses_shared_1280x720_stage(page, base_url):
+    """TC-FE-TOWN-CHROME-03 城鎮首頁內容包喺同公會／任務一樣嘅 1280×720 stage。
+
+    Reference shell (already on main): body.kt-artstage, .gsw letterboxed to
+    1280×720, active panel position:absolute with CSS width/height 1280×720.
+    #tab-town must sit inside that shell the same way. The old green
+    #townCanvasWrapper / .mp map is not itself the stage.
+    """
+    _open_town_home(page, base_url)
+    assert page.locator("#tab-town #townCanvasWrapper").is_visible()
+    town_before = _chrome_snapshot(page)
+    assert town_before["townInsideStage"], "#tab-town must live inside .gsw"
+
+    _click_footer_tab(page, "公會大廳", GUILD_TAB_ID)
+    page.locator("body.kt-artstage").wait_for(state="attached", timeout=8000)
+    guild = _chrome_snapshot(page)
+    _assert_reference_artstage(guild, "公會大廳")
+
+    _click_footer_tab(page, "任務板", QUEST_TAB_ID)
+    quest = _chrome_snapshot(page)
+    _assert_reference_artstage(quest, "任務板")
+    _assert_close("quest stage width", quest["stage"]["width"], guild["stage"]["width"])
+    _assert_close("quest stage height", quest["stage"]["height"], guild["stage"]["height"])
+    assert quest["activePanel"]["layoutWidth"] == guild["activePanel"]["layoutWidth"]
+    assert quest["activePanel"]["layoutHeight"] == guild["activePanel"]["layoutHeight"]
+    assert quest["activePanel"]["position"] == guild["activePanel"]["position"]
+
+    _click_footer_tab(page, "城鎮首頁", "tab-town")
+    page.locator("#tab-town.active").wait_for(state="visible", timeout=8000)
+    town = _chrome_snapshot(page)
+    assert town["activeTab"] == "tab-town"
+    assert town["townInsideStage"]
+
+    assert town["artstage"], (
+        "城鎮首頁 must turn on body.kt-artstage, same as 公會大廳／任務板. "
+        f"active={town['activeTab']} artstage={town['artstage']}. "
+        "RED until builder #22 includes #tab-town in the shared shell."
+    )
+    panel = town["activePanel"]
+    assert panel["layoutWidth"] == STAGE_DESIGN_W, panel
+    assert panel["layoutHeight"] == STAGE_DESIGN_H, panel
+    assert panel["position"] == guild["activePanel"]["position"], panel
+    assert panel["layoutWidth"] == guild["activePanel"]["layoutWidth"], panel
+    assert panel["layoutHeight"] == guild["activePanel"]["layoutHeight"], panel
+    _assert_close("stage width", town["stage"]["width"], guild["stage"]["width"])
+    _assert_close("stage height", town["stage"]["height"], guild["stage"]["height"])
+    _assert_close("town panel width", panel["width"], guild["activePanel"]["width"])
+    _assert_close("town panel height", panel["height"], guild["activePanel"]["height"])
+
 
