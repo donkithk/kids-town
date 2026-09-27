@@ -18,6 +18,9 @@ Requirements:
   TC-FE-CEREMONY-01  真實 complete（唔 mock）後 toast／HUD 顯示金幣 + XP 數字 + 材料（唔只金幣）
   TC-FE-PLACE-SHOP-01  商店 建造 → startPlacement → 點空地／確認 → 地圖出現建築
   TC-FE-PLACE-BUILD-01  建築 tab 建造 → startPlacement → 點空地／確認 → 地圖出現建築
+  TC-FE-TOWN-UX-01..05  四場景起屋（我要起屋 → 清單 → 擺位置 → 升級）。main 未有呢個 UX，故意留紅。
+  TC-FE-TOWN-HIT-01/02  等角背面格 hit-test、1100×800 信箱下撳格對齊。
+  TC-FE-TOWN-MOTION-01/02  慶祝層 pointer-events:none；動畫掣跟 prefers-reduced-motion，撳先寫 localStorage。
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
   FE-P0-03  家長 A session 不能管理家長 B 嘅仔女
@@ -31,6 +34,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -48,6 +52,7 @@ from tests.factories import (  # noqa: E402
     get_kid_points,
     grant_inventory,
     init_empty_db,
+    insert_building,
     insert_kid,
     set_kid_points,
 )
@@ -1358,4 +1363,837 @@ def test_buildings_tab_build_enters_placement_and_building_appears_on_map(
     ).fetchone()
     db.close()
     assert row is not None, f"{PLACE_TAB_BUILDING} should be persisted after 建築 tab place"
+
+
+# ── TC-FE-TOWN-UX / HIT / MOTION: four-scene town build (red on main) ──
+#
+# Design: mock tip 3b4671d (PR #27, do not merge). Product /kids/ town home
+# does not have this sheet flow yet. These cases must stay red until a builder
+# lands 「我要起屋」→ 建築清單 → 擺位置 → 升級. Do not satisfy them with the
+# old #placementBar path (TC-FE-PLACE-SHOP-01 / TC-FE-PLACE-BUILD-01 stay).
+
+TOWN_UX_RED = (
+    "Missing four-scene town build UX on /kids/ town home "
+    "(design mock tip 3b4671d / PR #27, do not merge). "
+    "The old shop／建築 #placementBar flow is a different case and does not pass this one. "
+    "Builder work: land the sheet flow before turning this green."
+)
+TOWN_UX_SEED = (("商店", 0, 2), ("圖書館", 2, 1), ("農場", 4, 0))
+TOWN_UX_UNBUILT = "健身室"
+_PAD_LABEL = re.compile(r"第\s*(\d+)\s*欄第\s*(\d+)\s*行")
+_PAD_PROBE_JS = r"""
+() => {
+  const buttons = [...document.querySelectorAll('button')].filter((btn) => {
+    const label = btn.getAttribute('aria-label') || btn.textContent || '';
+    return /第\s*\d+\s*欄/.test(label);
+  });
+  const goldish = (el) => {
+    if (!el) return false;
+    const cs = getComputedStyle(el);
+    const blob = [
+      cs.borderTopColor, cs.borderColor, cs.boxShadow, cs.outlineColor,
+      cs.backgroundColor, el.className || ''
+    ].join(' ');
+    return /212,\s*160,\s*23|240,\s*193,\s*75|d4a017|f0c14b/i.test(blob);
+  };
+  let empty = 0;
+  let framed = 0;
+  for (const btn of buttons) {
+    const label = btn.getAttribute('aria-label') || '';
+    if (!/空地/.test(label)) continue;
+    empty += 1;
+    const pad = btn.closest('.pad') || btn.parentElement;
+    const mark = pad && pad.querySelector('.mark, .focus-ring');
+    let markShown = false;
+    if (mark && !mark.hidden) {
+      const cs = getComputedStyle(mark);
+      markShown = cs.display !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0';
+    }
+    if (goldish(pad) || goldish(mark) || goldish(btn) || markShown) framed += 1;
+  }
+  return {count: buttons.length, empty, framed};
+}
+"""
+_OCCLUSION_JS = r"""
+() => {
+  const parse = (label) => {
+    const m = /第\s*(\d+)\s*欄第\s*(\d+)\s*行/.exec(label || '');
+    return m ? {c: Number(m[1]), r: Number(m[2])} : null;
+  };
+  const buttons = [...document.querySelectorAll('button')].map((btn) => {
+    const label = btn.getAttribute('aria-label') || '';
+    const pos = parse(label);
+    if (!pos) return null;
+    const pad = btn.closest('.pad') || btn.parentElement;
+    const sprite = pad && pad.querySelector('img.sprite, .sprite');
+    let spriteBox = null;
+    if (sprite && !sprite.hidden) {
+      const cs = getComputedStyle(sprite);
+      const box = sprite.getBoundingClientRect();
+      if (cs.display !== 'none' && box.width > 2 && box.height > 2) {
+        spriteBox = {left: box.left, top: box.top, right: box.right, bottom: box.bottom};
+      }
+    }
+    const box = btn.getBoundingClientRect();
+    return {
+      label,
+      pos,
+      empty: /空地/.test(label),
+      sprite: spriteBox,
+      left: box.left,
+      top: box.top,
+      width: box.width,
+      height: box.height
+    };
+  }).filter(Boolean);
+  const contains = (rect, x, y) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  for (const back of buttons) {
+    if (!back.empty || back.width < 2) continue;
+    for (let i = 1; i <= 3; i += 1) {
+      for (let j = 1; j <= 3; j += 1) {
+        const x = back.left + (back.width * i) / 4;
+        const y = back.top + (back.height * j) / 4;
+        for (const front of buttons) {
+          if (front.empty || !front.sprite) continue;
+          if (front.pos.c === back.pos.c && front.pos.r === back.pos.r) continue;
+          if (back.pos.r >= front.pos.r) continue;
+          if (!contains(front.sprite, x, y)) continue;
+          return {x, y, back: back.label, front: front.label, c: back.pos.c, r: back.pos.r};
+        }
+      }
+    }
+  }
+  return null;
+}
+"""
+
+
+def _town_ux_fail(case_id, detail):
+    pytest.fail(f"{case_id}: {detail} {TOWN_UX_RED}")
+
+
+def _role_visible(page, role, name):
+    loc = page.get_by_role(role, name=name)
+    try:
+        return loc.count() > 0 and loc.first.is_visible()
+    except Exception:
+        return False
+
+
+def _seed_town_ux_plot(test_db_path, kid_id):
+    """Library / farm / shop on the map; gym unbuilt; HUD can afford a place and an upgrade.
+
+    Balances are whatever the product HUD shows after this seed. Cases assert
+    equality and deltas, not the mock demo purse (💰6000 → 5800 → 5750).
+    """
+    set_kid_points(test_db_path, kid_id, 8000)
+    grant_inventory(
+        test_db_path,
+        kid_id,
+        {"wood": 400, "brick": 300, "glass": 40, "gear": 120, "gem": 20},
+    )
+    db = connect_db(test_db_path)
+    db.execute("DELETE FROM buildings WHERE kid_id=?", (kid_id,))
+    db.commit()
+    db.close()
+    for name, cell_x, cell_y in TOWN_UX_SEED:
+        insert_building(
+            test_db_path,
+            kid_id,
+            building_def_id(test_db_path, name),
+            level=1,
+            cell_x=cell_x,
+            cell_y=cell_y,
+        )
+
+
+def _open_town_home(page, base_url):
+    _login(page, base_url)
+    page.locator("body.kt-artstage #tab-town.active").wait_for(state="visible", timeout=8000)
+    page.locator("#townCanvasWrapper, #townMap, #village").first.wait_for(
+        state="visible", timeout=8000
+    )
+    page.wait_for_function(
+        "() => parseInt((document.getElementById('hudCo') || {}).textContent, 10) > 0",
+        timeout=8000,
+    )
+    try:
+        page.locator("#tab-town .town-building img, #tab-town .sprite, #tab-town .pad").first.wait_for(
+            state="attached", timeout=8000
+        )
+    except Exception:
+        pass
+
+
+def _hud_snapshot(page):
+    return {
+        "gold": _hud_gold(page),
+        "wood": _hud_mat_count(page, "wood"),
+        "brick": _hud_mat_count(page, "brick"),
+        "glass": _hud_mat_count(page, "glass"),
+        "gear": _hud_mat_count(page, "gear"),
+    }
+
+
+def _assert_hud_equal(before, after, case_id, why):
+    assert after == before, (
+        f"{case_id}: {why} HUD must stay {before}, got {after}. "
+        "Cancel and browsing empty pads never deduct."
+    )
+
+
+def _assert_hud_deducted(before, after, case_id, why):
+    assert all(after[key] <= before[key] for key in before), (
+        f"{case_id}: {why} must not increase HUD resources; {before} -> {after}"
+    )
+    assert any(after[key] < before[key] for key in before), (
+        f"{case_id}: {why} must deduct at least one HUD resource (gold or material); "
+        f"{before} -> {after}. Read the chips; do not hard-code the mock demo purse."
+    )
+
+
+def _toast_text(page):
+    parts = []
+    for sel in ("#toast", "[role=status]"):
+        loc = page.locator(sel)
+        if loc.count() == 0:
+            continue
+        try:
+            text = loc.first.inner_text() or ""
+        except Exception:
+            text = ""
+        if text.strip():
+            parts.append(text.strip())
+    return " ".join(parts)
+
+
+def _pad_probe(page):
+    return page.evaluate(_PAD_PROBE_JS)
+
+
+def _stage_metrics(page):
+    stage = page.locator("body.kt-artstage .gsw").first
+    if stage.count() == 0:
+        return {"w": 0, "h": 0, "rw": 0.0, "rh": 0.0}
+    return stage.evaluate(
+        """(el) => {
+          const rect = el.getBoundingClientRect();
+          return {w: el.offsetWidth, h: el.offsetHeight, rw: rect.width, rh: rect.height};
+        }"""
+    )
+
+
+def _require_build_cta(page, case_id, detail):
+    if _role_visible(page, "button", "我要起屋"):
+        return page.get_by_role("button", name="我要起屋").first
+    _town_ux_fail(case_id, detail + " Entry CTA 「我要起屋」 is not on the town home.")
+    return None
+
+
+def _building_on_town(page, name):
+    img = page.locator(f'#tab-town img[alt="{name}"]')
+    try:
+        if img.count() > 0 and img.first.is_visible():
+            return True
+    except Exception:
+        pass
+    return _role_visible(page, "button", re.compile(name))
+
+
+def _open_building_list(page):
+    heading = page.get_by_role("heading", name="建築清單")
+    if heading.count() > 0 and heading.first.is_visible():
+        return
+    launcher = page.get_by_role("button", name=re.compile(r"建築清單"))
+    if launcher.count() == 0 or not launcher.first.is_visible():
+        _town_ux_fail(
+            "TC-FE-TOWN-UX-02",
+            "Scene 2 must show a 「建築清單」 launcher or an open list after 「我要起屋」.",
+        )
+    launcher.first.click()
+    page.get_by_role("heading", name="建築清單").first.wait_for(state="visible", timeout=8000)
+
+
+def _go_place_button(page):
+    return page.get_by_role("button", name=re.compile(r"去擺位置"))
+
+
+def _enter_scene2(page, case_id, detail=None):
+    cta = _require_build_cta(
+        page,
+        case_id,
+        detail
+        or "Scene 2 must open from 「我要起屋」: gold frames on empty pads, a building list that marks built ones 「已起」, and 「去擺位置」 disabled until a free pad and an unbuilt building are chosen.",
+    )
+    cta.click()
+    page.get_by_role("button", name=re.compile(r"第\s*\d+\s*欄")).first.wait_for(
+        state="visible", timeout=8000
+    )
+
+
+def _pick_pad_and_unbuilt(page):
+    """Select one empty pad and 健身室 so 「去擺位置」 can enable."""
+    empty = page.get_by_role("button", name=re.compile(r"空地"))
+    if empty.count() == 0:
+        _town_ux_fail("TC-FE-TOWN-UX-02", "Scene 2 has no empty-pad button (accessible name contains 空地).")
+    empty.first.click()
+    _open_building_list(page)
+    gym = page.get_by_role("button", name=re.compile(rf"{TOWN_UX_UNBUILT}"))
+    picked = None
+    for i in range(gym.count()):
+        btn = gym.nth(i)
+        label = (btn.get_attribute("aria-label") or "") + (btn.inner_text() or "")
+        if "已起" in label:
+            continue
+        if btn.is_visible():
+            picked = btn
+            break
+    if picked is None:
+        _town_ux_fail(
+            "TC-FE-TOWN-UX-02",
+            f"Building list must offer unbuilt {TOWN_UX_UNBUILT} (not marked 已起).",
+        )
+    picked.click()
+
+
+def _enter_scene3(page, case_id, detail=None):
+    _enter_scene2(
+        page,
+        case_id,
+        detail
+        or "Scene 3 擺位置 needs the sheet flow (semi-transparent preview, move, blocked occupied pad, 取消 without deduct, 確定 deducts).",
+    )
+    probe = _pad_probe(page)
+    assert probe["empty"] > 0 and probe["framed"] == probe["empty"], (
+        f"{case_id}: scene 2 empty pads must all show a gold frame "
+        f"(empty={probe['empty']} framed={probe['framed']}). "
+        "Scene 1 must not be left glowing."
+    )
+    go = _go_place_button(page)
+    if go.count() == 0 or not go.first.is_visible():
+        _town_ux_fail(case_id, "Scene 2 must show 「去擺位置」.")
+    assert go.first.is_disabled(), (
+        f"{case_id}: 「去擺位置」 stays disabled until a free pad and an unbuilt building are both chosen."
+    )
+    _pick_pad_and_unbuilt(page)
+    assert go.first.is_enabled(), (
+        f"{case_id}: 「去擺位置」 enables only after a free pad and unbuilt {TOWN_UX_UNBUILT} are chosen."
+    )
+    go.first.click()
+    page.get_by_role("button", name=re.compile(r"取消")).first.wait_for(state="visible", timeout=8000)
+
+
+def _preview_opacity(page):
+    return page.evaluate(
+        """() => {
+          const nodes = [...document.querySelectorAll(
+            '#tab-town .ghost, #townMap .ghost, #village .ghost, .pad.is-preview .ghost, .pad.is-preview img'
+          )];
+          for (const img of nodes) {
+            if (img.hidden) continue;
+            const cs = getComputedStyle(img);
+            if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+            const opacity = parseFloat(cs.opacity);
+            if (opacity < 0.95) return opacity;
+          }
+          return null;
+        }"""
+    )
+
+
+def _sheet_level(page):
+    sheet = page.locator(
+        "#actionSheet, .action-sheet, [aria-label*='升級或打開功能']"
+    ).first
+    if sheet.count() == 0 or not sheet.is_visible():
+        return None, ""
+    text = sheet.inner_text() or ""
+    nums = [int(n) for n in re.findall(r"Lv\.?\s*(\d+)", text)]
+    return (nums[0] if nums else None), text
+
+
+def _placed_names(test_db_path, kid_id):
+    db = connect_db(test_db_path)
+    rows = db.execute(
+        "SELECT d.name FROM buildings b JOIN building_defs d ON d.id=b.def_id "
+        "WHERE b.kid_id=? AND COALESCE(b.stored, 0)=0",
+        (kid_id,),
+    ).fetchall()
+    db.close()
+    return [r["name"] for r in rows]
+
+
+@pytest.mark.case_id("TC-FE-TOWN-UX-01")
+def test_town_ux_scene1_map_cta_and_empty_pad_does_not_spend(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-UX-01 場景 1：1280×720 地圖、種子屋、空地唔發光、我要起屋、點空地唔扣。"""
+    kid_id = fe_ids["kid_id"]
+    _seed_town_ux_plot(test_db_path, kid_id)
+    _open_town_home(page, base_url)
+    missing = []
+    stage = _stage_metrics(page)
+    if stage["w"] != 1280 or stage["h"] != 720:
+        missing.append(f"art-stage layout {stage['w']}×{stage['h']} (want 1280×720)")
+    for name, _x, _y in TOWN_UX_SEED:
+        if not _building_on_town(page, name):
+            missing.append(f"seed building {name}")
+    if not _role_visible(page, "button", "我要起屋"):
+        missing.append("CTA 「我要起屋」")
+    probe = _pad_probe(page)
+    if probe["count"] == 0 or probe["empty"] == 0:
+        missing.append("iso empty pads（button「第 N 欄第 M 行…空地」）")
+    elif probe["framed"] != 0:
+        missing.append(f"scene 1 empty pads must not glow (framed={probe['framed']})")
+    if missing:
+        _town_ux_fail(
+            "TC-FE-TOWN-UX-01",
+            "Scene 1 睇地圖 must show the shared 1280×720 art-stage, seed buildings "
+            "圖書館／農場／商店, quiet empty pads (no gold frames), and CTA 「我要起屋」. "
+            "Tapping an empty pad must not deduct HUD resources. "
+            f"Missing: {', '.join(missing)}.",
+        )
+    before = _hud_snapshot(page)
+    page.get_by_role("button", name=re.compile(r"空地")).first.click()
+    page.wait_for_timeout(600)
+    _assert_hud_equal(
+        before,
+        _hud_snapshot(page),
+        "TC-FE-TOWN-UX-01",
+        "tapping an empty pad in scene 1",
+    )
+    assert TOWN_UX_UNBUILT not in _placed_names(test_db_path, kid_id)
+
+
+@pytest.mark.case_id("TC-FE-TOWN-UX-02")
+def test_town_ux_scene2_gold_pads_and_building_list(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-UX-02 場景 2：金框空地、清單「已起」、揀齊先至「去擺位置」。"""
+    _seed_town_ux_plot(test_db_path, fe_ids["kid_id"])
+    _open_town_home(page, base_url)
+    _enter_scene2(page, "TC-FE-TOWN-UX-02")
+    probe = _pad_probe(page)
+    assert probe["empty"] > 0 and probe["framed"] == probe["empty"], (
+        "TC-FE-TOWN-UX-02: after 「我要起屋」, every empty pad shows a gold frame. "
+        f"empty={probe['empty']} framed={probe['framed']}. {TOWN_UX_RED}"
+    )
+    go = _go_place_button(page)
+    if go.count() == 0 or not go.first.is_visible():
+        _town_ux_fail("TC-FE-TOWN-UX-02", "Scene 2 must show 「去擺位置」.")
+    assert go.first.is_disabled(), (
+        "TC-FE-TOWN-UX-02: 「去擺位置」 is disabled before a pad and an unbuilt building are chosen."
+    )
+    _open_building_list(page)
+    built_marks = page.get_by_text("已起", exact=False)
+    assert built_marks.count() >= 3, (
+        "TC-FE-TOWN-UX-02: the building list marks buildings that are already up with 「已起」 "
+        f"(saw {built_marks.count()})."
+    )
+    for name, _x, _y in TOWN_UX_SEED:
+        marked = page.get_by_role("button", name=re.compile(rf"{name}[\s\S]*已起|已起[\s\S]*{name}"))
+        assert marked.count() > 0, f"TC-FE-TOWN-UX-02: {name} must be marked 已起"
+    _pick_pad_and_unbuilt(page)
+    assert go.first.is_enabled(), (
+        "TC-FE-TOWN-UX-02: 「去擺位置」 enables only after a free pad and an unbuilt building are chosen."
+    )
+
+
+@pytest.mark.case_id("TC-FE-TOWN-UX-03")
+def test_town_ux_scene3_cancel_does_not_deduct(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-UX-03 場景 3：半透明預覽、可搬去空地、佔用格擋住、取消唔扣。"""
+    kid_id = fe_ids["kid_id"]
+    _seed_town_ux_plot(test_db_path, kid_id)
+    _open_town_home(page, base_url)
+    _enter_scene3(
+        page,
+        "TC-FE-TOWN-UX-03",
+        "Scene 3 取消 must leave HUD unchanged and toast 「已取消，資源未扣除」 after a semi-transparent preview that can move, while an occupied pad stays blocked.",
+    )
+    opacity = _preview_opacity(page)
+    assert opacity is not None and opacity < 0.95, (
+        "TC-FE-TOWN-UX-03: scene 3 must show a semi-transparent placement preview "
+        f"(ghost opacity={opacity}). {TOWN_UX_RED}"
+    )
+    before = _hud_snapshot(page)
+    other = page.get_by_role("button", name=re.compile(r"可以放|空地"))
+    moved = False
+    for i in range(min(other.count(), 8)):
+        btn = other.nth(i)
+        label = btn.get_attribute("aria-label") or ""
+        if "預覽" in label or not btn.is_visible():
+            continue
+        btn.click()
+        moved = True
+        break
+    assert moved, "TC-FE-TOWN-UX-03: scene 3 must allow moving the preview onto another empty pad."
+    page.wait_for_timeout(400)
+    _assert_hud_equal(before, _hud_snapshot(page), "TC-FE-TOWN-UX-03", "moving the preview")
+    occupied = page.locator("#townMap, #village, #tab-town").get_by_role(
+        "button", name=re.compile(r"圖書館")
+    )
+    assert occupied.count() > 0, "TC-FE-TOWN-UX-03: occupied 圖書館 pad must be tappable in scene 3."
+    occupied.first.click()
+    page.wait_for_timeout(400)
+    blocked = _toast_text(page)
+    assert ("唔可以" in blocked) or ("已經有" in blocked), (
+        "TC-FE-TOWN-UX-03: an occupied pad is blocked "
+        f"(toast should say 唔可以放 / 已經有). toast={blocked!r}"
+    )
+    _assert_hud_equal(before, _hud_snapshot(page), "TC-FE-TOWN-UX-03", "tapping an occupied pad")
+    page.get_by_role("button", name=re.compile(r"^取消$|取消")).first.click()
+    try:
+        page.wait_for_function(
+            """() => {
+              const node = document.getElementById('toast');
+              const text = (node && (node.innerText || node.textContent)) || '';
+              return text.includes('已取消') && text.includes('未扣除');
+            }""",
+            timeout=4000,
+        )
+    except Exception:
+        _town_ux_fail(
+            "TC-FE-TOWN-UX-03",
+            "取消 must toast like 「已取消，資源未扣除」 "
+            f"(got {_toast_text(page)!r}) and return without placing.",
+        )
+    page.wait_for_timeout(400)
+    _assert_hud_equal(before, _hud_snapshot(page), "TC-FE-TOWN-UX-03", "cancel")
+    assert TOWN_UX_UNBUILT not in _placed_names(test_db_path, kid_id), (
+        "TC-FE-TOWN-UX-03: cancel must not persist the building."
+    )
+
+
+@pytest.mark.case_id("TC-FE-TOWN-UX-04")
+def test_town_ux_scene3_confirm_deducts_and_opens_sheet(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-UX-04 場景 3 確定：扣 HUD、座落建築、打開場景 4。"""
+    kid_id = fe_ids["kid_id"]
+    _seed_town_ux_plot(test_db_path, kid_id)
+    _open_town_home(page, base_url)
+    _enter_scene3(
+        page,
+        "TC-FE-TOWN-UX-04",
+        "Scene 3 確定 must deduct HUD resources, place the building, and open the scene 4 upgrade sheet.",
+    )
+    before = _hud_snapshot(page)
+    confirm = page.get_by_role("button", name=re.compile(r"確定"))
+    if confirm.count() == 0 or not confirm.first.is_visible():
+        _town_ux_fail("TC-FE-TOWN-UX-04", "Scene 3 must show 「確定」／「確定放置」.")
+    assert confirm.first.is_enabled(), "TC-FE-TOWN-UX-04: 確定 is enabled when the preview pad is free and affordable."
+    confirm.first.click()
+    try:
+        page.wait_for_function(
+            """(goldBefore) => {
+              const el = document.getElementById('hudCo');
+              if (!el) return false;
+              const gold = parseInt(el.textContent, 10);
+              return Number.isFinite(gold) && gold < goldBefore;
+            }""",
+            arg=before["gold"],
+            timeout=8000,
+        )
+    except Exception:
+        after = _hud_snapshot(page)
+        _town_ux_fail(
+            "TC-FE-TOWN-UX-04",
+            "確定 must deduct resources and update the header chips "
+            f"(HUD {before} -> {after}).",
+        )
+    after = _hud_snapshot(page)
+    _assert_hud_deducted(before, after, "TC-FE-TOWN-UX-04", "confirm place")
+    assert _building_on_town(page, TOWN_UX_UNBUILT), (
+        f"TC-FE-TOWN-UX-04: {TOWN_UX_UNBUILT} must appear on the town map after 確定."
+    )
+    assert TOWN_UX_UNBUILT in _placed_names(test_db_path, kid_id)
+    upgrade = page.get_by_role("button", name=re.compile(r"升級"))
+    try:
+        upgrade.first.wait_for(state="visible", timeout=8000)
+    except Exception:
+        _town_ux_fail(
+            "TC-FE-TOWN-UX-04",
+            "After 確定, scene 4 must open (upgrade／feature sheet visible).",
+        )
+
+
+@pytest.mark.case_id("TC-FE-TOWN-UX-05")
+def test_town_ux_scene4_upgrade_feature_and_hud(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-UX-05 場景 4：升級加等級並扣資源；功能掣有可見結果；HUD 跟上。"""
+    kid_id = fe_ids["kid_id"]
+    _seed_town_ux_plot(test_db_path, kid_id)
+    _open_town_home(page, base_url)
+    _enter_scene3(
+        page,
+        "TC-FE-TOWN-UX-05",
+        "Scene 4 must raise the building level, deduct the upgrade from the HUD, and show a visible result from a feature button.",
+    )
+    page.get_by_role("button", name=re.compile(r"確定")).first.click()
+    upgrade = page.get_by_role("button", name=re.compile(r"升級"))
+    try:
+        upgrade.first.wait_for(state="visible", timeout=8000)
+    except Exception:
+        _town_ux_fail("TC-FE-TOWN-UX-05", "Scene 4 upgrade control did not open after place.")
+    level_before, _sheet_before = _sheet_level(page)
+    assert level_before is not None, (
+        "TC-FE-TOWN-UX-05: the upgrade sheet must show a level (Lv.N)."
+    )
+    hud_before = _hud_snapshot(page)
+    upgrade.first.click()
+    try:
+        page.wait_for_function(
+            """(prev) => {
+              const sheet = document.querySelector(
+                '#actionSheet, .action-sheet, [aria-label*="升級或打開功能"]'
+              );
+              if (!sheet) return false;
+              const match = (sheet.innerText || '').match(/Lv\\.?\\s*(\\d+)/);
+              return match && Number(match[1]) > prev;
+            }""",
+            arg=level_before,
+            timeout=8000,
+        )
+    except Exception:
+        level_after, text = _sheet_level(page)
+        _town_ux_fail(
+            "TC-FE-TOWN-UX-05",
+            f"Upgrade must raise the sheet level above Lv.{level_before} "
+            f"(saw {level_after}, sheet={text!r}).",
+        )
+    hud_after = _hud_snapshot(page)
+    _assert_hud_deducted(hud_before, hud_after, "TC-FE-TOWN-UX-05", "upgrade")
+    opener = page.get_by_role("button", name=re.compile(r"打開功能"))
+    if opener.count() and opener.first.is_visible() and opener.first.is_enabled():
+        opener.first.click()
+    sheet = page.locator("#actionSheet, .action-sheet, [aria-label*='升級或打開功能']").first
+    skip = re.compile(r"升級|打開功能|取消|確定|返去|收起|我要起屋|去擺位置|動畫|重置|已起")
+    feature = None
+    buttons = sheet.get_by_role("button")
+    for i in range(buttons.count()):
+        btn = buttons.nth(i)
+        label = ((btn.inner_text() or "") + " " + (btn.get_attribute("aria-label") or "")).strip()
+        if skip.search(label) or not btn.is_visible() or not btn.is_enabled():
+            continue
+        feature = btn
+        break
+    if feature is None:
+        _town_ux_fail(
+            "TC-FE-TOWN-UX-05",
+            "Scene 4 must expose at least one feature button with a visible result.",
+        )
+    before_blob = (sheet.inner_text() or "") + _toast_text(page)
+    feature.click()
+    page.wait_for_timeout(500)
+    after_blob = (sheet.inner_text() or "") + _toast_text(page)
+    assert after_blob != before_blob and len(after_blob.strip()) > 0, (
+        "TC-FE-TOWN-UX-05: the feature button must show a visible result "
+        f"(sheet/toast unchanged: {after_blob!r})."
+    )
+    assert _hud_snapshot(page) == hud_after, (
+        "TC-FE-TOWN-UX-05: header chips stay on the post-upgrade balance after the feature result "
+        f"(want {hud_after}, got {_hud_snapshot(page)})."
+    )
+
+
+@pytest.mark.case_id("TC-FE-TOWN-HIT-01")
+def test_town_ux_hit_back_pad_not_front_sprite(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-HIT-01 背面格被前面建築遮住時，撳落去選背面格，唔係棟建築。"""
+    _seed_town_ux_plot(test_db_path, fe_ids["kid_id"])
+    _open_town_home(page, base_url)
+    if _pad_probe(page)["count"] == 0:
+        _town_ux_fail(
+            "TC-FE-TOWN-HIT-01",
+            "Iso hit-test needs pad buttons 「第 N 欄第 M 行」. "
+            "A tap on a back-row pad visually covered by a front building sprite "
+            "must select that back pad, not the sprite. "
+            "Do not use the old .valid-plot / .town-building stack as a stand-in.",
+        )
+    _enter_scene2(page, "TC-FE-TOWN-HIT-01")
+    hit = page.evaluate(_OCCLUSION_JS)
+    if not hit:
+        _town_ux_fail(
+            "TC-FE-TOWN-HIT-01",
+            "No back empty pad is visually covered by a front building sprite. "
+            "Seed is 商店 (0,2), 圖書館 (2,1), 農場 (4,0). "
+            "The occluded back pad must win the hit test.",
+        )
+    page.mouse.click(hit["x"], hit["y"])
+    chosen = page.get_by_role(
+        "button",
+        name=re.compile(rf"第\s*{hit['c']}\s*欄第\s*{hit['r']}\s*行[\s\S]*已揀"),
+    )
+    assert chosen.count() > 0 and chosen.first.is_visible(), (
+        "TC-FE-TOWN-HIT-01: the click on the occluded point must select back pad "
+        f"第 {hit['c']} 欄第 {hit['r']} 行 (已揀), not the front building {hit['front']!r}."
+    )
+
+
+@pytest.mark.case_id("TC-FE-TOWN-HIT-02")
+def test_town_ux_letterbox_pad_hit_alignment(page, base_url, test_db_path, fe_ids):
+    """TC-FE-TOWN-HIT-02 viewport 1100×800、舞台 1280×720 縮放後，撳格中心仍然選中嗰格。"""
+    _seed_town_ux_plot(test_db_path, fe_ids["kid_id"])
+    _open_town_home(page, base_url)
+    assert page.viewport_size["width"] == 1100
+    assert page.viewport_size["height"] == 800
+    stage = _stage_metrics(page)
+    if _pad_probe(page)["count"] == 0:
+        _town_ux_fail(
+            "TC-FE-TOWN-HIT-02",
+            "Letterbox pad alignment needs iso pad hit targets. "
+            f"Viewport is 1100×800; art-stage layout is {stage['w']}×{stage['h']} "
+            f"(visual {stage['rw']:.1f}×{stage['rh']:.1f}). "
+            "A 1280×720 scaled stage alone does not pass: the click at a pad's "
+            "visual center must select that pad, not a neighbor.",
+        )
+    scale = min(1100 / 1280, 800 / 720)
+    assert stage["w"] == 1280 and stage["h"] == 720, stage
+    assert abs(stage["rw"] - 1280 * scale) < 2, stage
+    assert abs(stage["rh"] - 720 * scale) < 2, stage
+    _enter_scene2(page, "TC-FE-TOWN-HIT-02")
+    target = page.get_by_role("button", name=re.compile(r"空地")).first
+    label = target.get_attribute("aria-label") or ""
+    match = _PAD_LABEL.search(label)
+    assert match, f"TC-FE-TOWN-HIT-02: empty pad label missing 欄/行: {label!r}"
+    box = target.bounding_box()
+    assert box, "TC-FE-TOWN-HIT-02: empty pad has no box"
+    page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    chosen = page.get_by_role(
+        "button",
+        name=re.compile(
+            rf"第\s*{match.group(1)}\s*欄第\s*{match.group(2)}\s*行[\s\S]*已揀"
+        ),
+    )
+    assert chosen.count() > 0, (
+        "TC-FE-TOWN-HIT-02: clicking the pad's visual center under letterbox scale "
+        f"must select 第 {match.group(1)} 欄第 {match.group(2)} 行, not a neighbor."
+    )
+
+
+@pytest.mark.case_id("TC-FE-TOWN-MOTION-01")
+def test_town_ux_motion_burst_pointer_events_none(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-MOTION-01 放置／升級慶祝層 pointer-events:none，唔好截走撳擊。"""
+    _seed_town_ux_plot(test_db_path, fe_ids["kid_id"])
+    _open_town_home(page, base_url)
+    _enter_scene3(
+        page,
+        "TC-FE-TOWN-MOTION-01",
+        "Place/upgrade celebration bursts (.fx-burst or [data-town-fx]) must use pointer-events:none and must not steal taps. Battle .spark-burst does not count.",
+    )
+    page.get_by_role("button", name=re.compile(r"確定")).first.click()
+    burst = page.locator(".fx-burst, [data-town-fx]")
+    try:
+        burst.first.wait_for(state="attached", timeout=4000)
+    except Exception:
+        _town_ux_fail(
+            "TC-FE-TOWN-MOTION-01",
+            "Place must show a town celebration burst (.fx-burst or [data-town-fx]). "
+            "Battle .spark-burst does not count. The layer and its children need "
+            "pointer-events:none so a tap still reaches the pad underneath.",
+        )
+    stolen = page.evaluate(
+        """() => {
+          const nodes = [...document.querySelectorAll('.fx-burst, .fx-burst *, [data-town-fx], [data-town-fx] *')];
+          const bad = [];
+          for (const el of nodes) {
+            const pe = getComputedStyle(el).pointerEvents;
+            if (pe !== 'none') bad.push((el.className || el.tagName) + ':' + pe);
+          }
+          const host = document.querySelector('.fx-burst, [data-town-fx]');
+          if (!host) return {bad, hit: 'missing'};
+          const rect = host.getBoundingClientRect();
+          const top = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+          const hitBurst = !!(top && (top === host || host.contains(top)));
+          return {bad, hitBurst};
+        }"""
+    )
+    assert not stolen["bad"] and not stolen["hitBurst"], (
+        "TC-FE-TOWN-MOTION-01: celebration layers must use pointer-events:none "
+        f"and must not be the hit target. got={stolen}"
+    )
+
+
+@pytest.mark.case_id("TC-FE-TOWN-MOTION-02")
+def test_town_ux_motion_toggle_follows_reduced_motion_until_click(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-MOTION-02 未有 localStorage 時跟 prefers-reduced-motion；撳掣先寫低並覆蓋。"""
+    _seed_town_ux_plot(test_db_path, fe_ids["kid_id"])
+    page.emulate_media(reduced_motion="reduce")
+    page.goto(f"{base_url}/kids/")
+    page.evaluate("() => localStorage.clear()")
+    _login(page, base_url)
+    page.locator("body.kt-artstage #tab-town.active").wait_for(state="visible", timeout=8000)
+    reduced = page.evaluate(
+        "() => window.matchMedia('(prefers-reduced-motion: reduce)').matches"
+    )
+    assert reduced, "TC-FE-TOWN-MOTION-02: prefers-reduced-motion: reduce must be emulated"
+    stored = page.evaluate(
+        "() => Object.keys(localStorage).filter((key) => key.toLowerCase().includes('motion'))"
+    )
+    assert stored == [], (
+        "TC-FE-TOWN-MOTION-02: first visit must not write a motion localStorage key "
+        f"(saw {stored})."
+    )
+    toggle = page.get_by_role("button", name=re.compile(r"動畫"))
+    if toggle.count() == 0 or not toggle.first.is_visible():
+        _town_ux_fail(
+            "TC-FE-TOWN-MOTION-02",
+            "Town home must expose an 動畫 開/關 toggle. "
+            "With no localStorage and prefers-reduced-motion: reduce, it defaults off. "
+            "Only an explicit click writes a localStorage key whose name contains 'motion' "
+            "and that value overrides the system preference on the next load.",
+        )
+    btn = toggle.first
+    label = (btn.inner_text() or "") + " " + (btn.get_attribute("aria-label") or "")
+    pressed = btn.get_attribute("aria-pressed")
+    assert ("關" in label) or pressed == "false", (
+        "TC-FE-TOWN-MOTION-02: reduced motion with empty storage defaults the toggle off "
+        f"(label={label!r} aria-pressed={pressed!r})."
+    )
+    btn.click()
+    written = page.evaluate(
+        """() => Object.fromEntries(
+          Object.keys(localStorage)
+            .filter((key) => key.toLowerCase().includes('motion'))
+            .map((key) => [key, localStorage.getItem(key)])
+        )"""
+    )
+    assert written, (
+        "TC-FE-TOWN-MOTION-02: the click must write localStorage (key name contains 'motion'). "
+        "Do not persist the preference before that click."
+    )
+    label_on = (btn.inner_text() or "") + " " + (btn.get_attribute("aria-label") or "")
+    pressed_on = btn.get_attribute("aria-pressed")
+    assert ("開" in label_on) or pressed_on == "true", (
+        f"TC-FE-TOWN-MOTION-02: after the click the toggle is on (label={label_on!r})."
+    )
+    page.reload()
+    page.locator("body.kt-artstage #tab-town.active, #loginUsername").first.wait_for(
+        state="visible", timeout=8000
+    )
+    if page.locator("#loginUsername").is_visible():
+        page.locator("#loginUsername").fill(FE_KID_USERNAME)
+        page.locator("#loginPassword").fill(TEST_KID_PIN)
+        page.get_by_role("button", name="🚪 登入").click()
+        page.locator("body.kt-artstage #tab-town.active").wait_for(state="visible", timeout=8000)
+    kept = page.evaluate(
+        "() => window.matchMedia('(prefers-reduced-motion: reduce)').matches"
+    )
+    assert kept, "reduced-motion emulation should still be on after reload"
+    again = page.get_by_role("button", name=re.compile(r"動畫")).first
+    again.wait_for(state="visible", timeout=8000)
+    label_kept = (again.inner_text() or "") + " " + (again.get_attribute("aria-label") or "")
+    pressed_kept = again.get_attribute("aria-pressed")
+    assert ("開" in label_kept) or pressed_kept == "true", (
+        "TC-FE-TOWN-MOTION-02: the stored choice overrides prefers-reduced-motion "
+        f"on the next visit (label={label_kept!r} aria-pressed={pressed_kept!r})."
+    )
 

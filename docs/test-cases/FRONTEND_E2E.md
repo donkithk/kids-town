@@ -9,6 +9,8 @@
 Status map after a run: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).  
 Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01`、`TC-FE-PLACE-BUILD-01`；(B) [`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md).
 
+四場景起屋（設計稿 `3b4671d`／PR #27，**唔好 merge #27**）: `TC-FE-TOWN-UX-01`…`05`、`TC-FE-TOWN-HIT-01`／`02`、`TC-FE-TOWN-MOTION-01`／`02`。產品 `/kids/` 城鎮首頁未有呢個流程，呢批 case **故意留紅**。舊放置條 `TC-FE-PLACE-SHOP-01`／`TC-FE-PLACE-BUILD-01` 仍然有效，唔係呢個 sheet flow 嘅代替。
+
 共用前置（除另註）：
 
 1. Session-scoped test server on a free port, `TESTING=True`, empty DB + seed.
@@ -264,6 +266,117 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 ---
 
+## TC-FE-TOWN-UX-01 — 場景 1 睇地圖 +「我要起屋」
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-UX-01 |
+| **優先級** | P0（四場景起屋；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
+| **設計** | Mock tip `3b4671d`（PR #27 draft，只係設計參考，**唔好 merge**）。斷言打產品 `/kids/` 城鎮首頁，唔係靜態 mock 路徑。 |
+| **前置** | 空庫合成 `test_fe_kid`。測試會種圖書館 `(2,1)`、農場 `(4,0)`、商店 `(0,2)`，健身室未起。HUD 讀畫面，唔硬套 mock 示範籌碼 💰6000。 |
+| **步驟** | 1. 登入，停喺城鎮首頁 2. 睇 1280×720 art-stage 3. 確認三座種子屋可見 4. 空地冇金框 5. 見到「我要起屋」 6. 撳一塊空地 |
+| **預期** | Style A 等角地圖喺共用 1280×720 信箱舞台。空地唔發光。撳空地**唔扣** HUD 資源，亦唔當已起健身室。未有「我要起屋」／「第 N 欄第 M 行」空地掣，本 case **留紅**。唔好用舊 `#placementBar` 當過。 |
+| **備註** | `TC-FE-PLACE-SHOP-01`／`TC-FE-PLACE-BUILD-01` 繼續覆蓋舊建造條，唔係本流程嘅代替。 |
+
+---
+
+## TC-FE-TOWN-UX-02 — 場景 2 揀空地／建築清單
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-UX-02 |
+| **優先級** | P0（四場景起屋；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
+| **步驟** | 1. 撳「我要起屋」 2. 空地出金框 3. 打開「建築清單」 4. 已起嘅圖書館／農場／商店標「已起」 5. 未揀齊之前「去擺位置」disabled 6. 揀一塊空地 + 未起嘅健身室 |
+| **預期** | 兩樣都揀好，「去擺位置」先至可撳。清單打得開；已起唔可以再當未起屋來揀。 |
+
+---
+
+## TC-FE-TOWN-UX-03 — 場景 3 取消唔扣資源
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-UX-03 |
+| **優先級** | P0（四場景起屋；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
+| **步驟** | 1. 去到場景 3 2. 見到半透明預覽 3. 預覽搬去另一塊空地 4. 撳已有圖書館嘅格 5. 撳「取消」 6. 讀取消前後 HUD |
+| **預期** | 搬位同撳佔用格都唔改 HUD。佔用格被擋住（toast 似「已經有／唔可以放」）。取消返回，toast 似「已取消，資源未扣除」，HUD 同取消前相等，健身室冇寫入 DB。資源數字跟當時 HUD，唔硬套 mock 嘅 💰6000。 |
+
+---
+
+## TC-FE-TOWN-UX-04 — 場景 3 確定扣資源並打開場景 4
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-UX-04 |
+| **優先級** | P0（四場景起屋；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
+| **步驟** | 1. 去到場景 3 2. 讀 HUD 3. 撳「確定」／「確定放置」 4. 再讀 HUD、地圖、升級面板 |
+| **預期** | 至少一項 header 資源變少（其餘唔會變多）。健身室出現喺地圖同 DB。跟住打開場景 4（睇到「升級」）。扣幾多跟產品成本同畫面前後差，唔硬套 mock 示範 💰200 🪵10 🧱5。 |
+
+---
+
+## TC-FE-TOWN-UX-05 — 場景 4 升級、功能、HUD
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-UX-05 |
+| **優先級** | P0（四場景起屋；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
+| **步驟** | 1. 確定放置進入場景 4 2. 讀 sheet 等級同 HUD 3. 撳升級 4. 再讀等級同 HUD 5. 撳至少一個功能掣 |
+| **預期** | 等級上升，HUD 再扣（chips 反映新餘額）。功能掣之後 sheet／toast 有可見結果。功能本身唔好把剛扣完嘅餘額打回升級前。Mock 示範升級 💰50 🪵2 只係設計例子，產品斷言用前後差。 |
+
+---
+
+## TC-FE-TOWN-HIT-01 — 等角背面格唔好被前面建築截走
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-HIT-01 |
+| **優先級** | P0（四場景起屋；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
+| **步驟** | 1. 場景 2 2. 搵一塊背面空地，佢嘅畫面範圍被前面建築 sprite 遮住 3. 用滑鼠撳嗰個重疊點 |
+| **預期** | 選中背面空地（「第 N 欄第 M 行」＋「已揀」），唔係打開前面嗰座屋。舊 `.valid-plot`／`.town-building` 疊層唔算本 case。種子位置：商店 `(0,2)`、圖書館 `(2,1)`、農場 `(4,0)`。 |
+
+---
+
+## TC-FE-TOWN-HIT-02 — 信箱縮放後撳格仍然對齊
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-HIT-02 |
+| **優先級** | P0（四場景起屋；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
+| **步驟** | 1. Viewport 1100×800 2. 確認舞台 layout 1280×720，視覺縮放 `min(1100/1280, 800/720)` 3. 場景 2 用滑鼠撳一塊空地嘅視覺中心 |
+| **預期** | 選中嘅就係嗰格（欄／行一致），唔係隔離格。淨係已經有 1280×720 信箱、但未有四場景空地掣，本 case **留紅**。 |
+
+---
+
+## TC-FE-TOWN-MOTION-01 — 慶祝層唔截擊
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-MOTION-01 |
+| **優先級** | P1（四場景起屋；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
+| **步驟** | 1. 確定放置 2. 等城鎮慶祝層（`.fx-burst` 或 `[data-town-fx]`）出現 3. 讀 `pointer-events`，並用 `elementFromPoint` 睇層中心 |
+| **預期** | 慶祝層同子節點都係 `pointer-events: none`，中心點嘅 hit target 唔係呢個層。戰鬥 `.spark-burst` 唔算。 |
+
+---
+
+## TC-FE-TOWN-MOTION-02 — 動畫掣：系統減少動態，撳先寫 localStorage
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-MOTION-02 |
+| **優先級** | P1（四場景起屋；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
+| **步驟** | 1. 清 localStorage，模擬 `prefers-reduced-motion: reduce` 2. 登入城鎮首頁 3. 睇「動畫」掣，確認未寫 motion key 4. 撳一次 5. 重新載入（系統仍然 reduce） |
+| **預期** | 第一次、未有儲存：掣預設關。只有呢下撳先寫入名稱含 `motion` 嘅 localStorage，並覆蓋系統偏好；再入嚟仍然係開。城鎮首頁未有呢個掣，本 case **留紅**。唔好用音效 mute key 頂替。 |
+
+---
+
 ## FE-XSS-01 — 任務標題 DOM 唔執行 markup
 
 | 欄 | 內容 |
@@ -297,7 +410,10 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 ```bash
 pip install -r requirements.txt
 python -m playwright install chromium
-python -m pytest tests/test_frontend.py -v
+python -m pytest tests/test_frontend.py -q -k town_ux --tb=short
+python -m pytest tests/test_frontend.py -q -k 'not town_ux' --tb=line
 ```
+
+`town_ux` 係四場景新 case（UX／HIT／MOTION）嘅篩選。`-k 'not town_ux'` 先至係而家 main 上應保持綠嘅前端套件。全檔而家會多呢批紅，直到 builder 落地四場景流程。
 
 雙重驗證 (B) 人手步驟：[`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md)。跑完結果寫 [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md)。
