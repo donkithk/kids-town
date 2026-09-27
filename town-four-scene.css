@@ -1,0 +1,395 @@
+/* Four-scene town build on the kid town home.
+   Iso layout matches the design mock so pad hit-tests survive letterbox scale.
+   Locked building SVGs are referenced, not redrawn. */
+
+#townMap {
+  --wood: #8b5e3c;
+  --gold: #d4a017;
+  --gold-bright: #f0c14b;
+  --ink: #3b2a1a;
+  --ink-soft: #7a5b43;
+  --focus: #c45c26;
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #7eae52;
+  color: var(--ink);
+  font-family: var(--body-font, Nunito, sans-serif);
+}
+
+body.kt-artstage #tab-town .mp { position: relative; }
+
+#placementBar.active ~ #townMap {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#townMap[hidden],
+#townMap [hidden] { display: none !important; }
+
+#townMap .village.is-iso {
+  --s: 1;
+  --step-x: calc(var(--s) * 84px);
+  --step-y: calc(var(--s) * 50px);
+  --pad-w: calc(var(--s) * 160px);
+  --pad-h: calc(var(--s) * 158px);
+  position: absolute;
+  z-index: 3;
+  left: 8px;
+  right: 8px;
+  top: 8px;
+  bottom: 72px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+#townMap .village.is-iso .pad {
+  position: absolute;
+  z-index: auto;
+  overflow: visible;
+  width: var(--pad-w);
+  height: var(--pad-h);
+  margin: 0;
+  left: calc(50% + (var(--c) - var(--r) - 0.5) * var(--step-x) - var(--pad-w) / 2);
+  top: calc((var(--c) + var(--r) + 1) * var(--step-y));
+  pointer-events: none;
+}
+
+#townMap .pad > .slab {
+  position: absolute;
+  width: calc(var(--s, 1) * 168px);
+  height: calc(var(--s, 1) * 120px);
+  left: calc(var(--s, 1) * -4px);
+  top: calc(var(--s, 1) * 71px);
+  pointer-events: none;
+}
+
+#townMap .pad > .shadow,
+#townMap .pad > [data-contact-shadow] {
+  position: absolute;
+  z-index: 2;
+  width: calc(var(--s, 1) * 260px);
+  height: calc(var(--s, 1) * 112px);
+  left: calc(var(--s, 1) * -82px);
+  top: calc(var(--s, 1) * 65px);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cellipse/%3E%3C/svg%3E"),
+    radial-gradient(
+      ellipse 120px 40px at 50% 50%,
+      rgba(44, 28, 16, 0.88) 0%,
+      rgba(44, 28, 16, 0.84) 58%,
+      rgba(44, 28, 16, 0.4) 76%,
+      rgba(44, 28, 16, 0.12) 90%,
+      rgba(44, 28, 16, 0) 100%
+    );
+  background-size: 0 0, auto;
+  background-repeat: no-repeat;
+  filter: blur(1.5px);
+  pointer-events: none;
+}
+
+#townMap .pad > .mark {
+  position: absolute;
+  z-index: 3;
+  width: calc(var(--s, 1) * 168px);
+  height: calc(var(--s, 1) * 120px);
+  left: calc(var(--s, 1) * -4px);
+  top: calc(var(--s, 1) * 71px);
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+#townMap .pad.is-empty-hot > .mark,
+#townMap .pad.is-valid > .mark,
+#townMap .pad.is-chosen > .mark,
+#townMap .pad.is-preview > .mark {
+  filter: drop-shadow(0 0 4px rgba(212, 160, 23, 0.95));
+}
+
+#townMap .pad > .sprite,
+#townMap .pad > .ghost {
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 240 / 210;
+  pointer-events: none;
+}
+
+#townMap .pad > .ghost { opacity: 0.55; }
+
+#townMap .pad > .badge,
+#townMap .pad > .cap {
+  pointer-events: none;
+}
+
+#townMap .cap {
+  position: absolute;
+  z-index: 7;
+  top: 0;
+  left: 50%;
+  margin: 0;
+  transform: translateX(-50%);
+  padding: 2px 10px;
+  border: 2px solid var(--wood);
+  border-radius: 999px;
+  background: rgba(250, 246, 239, 0.95);
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+#townMap .cell-btn {
+  position: absolute;
+  z-index: 4;
+  width: calc(var(--s, 1) * 44px);
+  height: calc(var(--s, 1) * 44px);
+  left: calc(var(--s, 1) * 58px);
+  top: calc(var(--s, 1) * 99px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#townMap .badge {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  top: calc(var(--s, 1) * 121px);
+  transform: translate(-50%, -50%);
+  padding: 2px 8px;
+  border: 2px solid var(--gold);
+  border-radius: 999px;
+  background: rgba(255, 246, 210, 0.95);
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+#townMap .cta,
+#townMap .list-launcher,
+#townMap .tool-btn,
+#townMap .place-bar button,
+#townMap .sheet-actions button,
+#townMap .fn,
+#townMap .btn-close-sheet,
+#townMap .pal-btn {
+  min-width: 44px;
+  min-height: 44px;
+  border: 3px solid var(--wood);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+#townMap .cta {
+  position: absolute;
+  z-index: 22;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  min-width: 168px;
+  padding: 10px 22px;
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #fff6d2, #ffe3a0);
+  font-size: 20px;
+}
+
+#townMap .tools {
+  position: absolute;
+  z-index: 22;
+  top: 10px;
+  right: 12px;
+}
+
+#townMap .tool-btn { padding: 8px 12px; }
+
+#townMap .tool-btn[aria-pressed="true"] {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #fff6d2, #ffe3a0);
+}
+
+#townMap .list-launcher {
+  position: absolute;
+  z-index: 22;
+  left: 12px;
+  top: 10px;
+  padding: 8px 12px;
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #fff6d2, #ffe3a0);
+}
+
+#townMap .palette {
+  position: absolute;
+  z-index: 20;
+  left: 8px;
+  top: 64px;
+  bottom: 78px;
+  width: 236px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 3px solid var(--wood);
+  border-radius: 16px;
+  background: rgba(250, 246, 239, 0.97);
+}
+
+#townMap .palette h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+#townMap .palette-grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#townMap .pal-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+#townMap .pal-btn img {
+  width: 48px;
+  height: 44px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+#townMap .pal-name { display: block; font-size: 16px; font-weight: 800; }
+#townMap .pal-cost { display: block; font-size: 14px; font-weight: 700; color: var(--ink-soft); }
+
+#townMap .pal-btn.is-placed { background: #f3e6c8; }
+
+#townMap .place-bar {
+  position: absolute;
+  z-index: 30;
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 3px solid var(--wood);
+  border-radius: 16px;
+  background: rgba(250, 246, 239, 0.98);
+}
+
+#townMap .place-bar p {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+#townMap .place-bar button:disabled,
+#townMap .sheet-actions button:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+#townMap #btnToScene3:not(:disabled),
+#townMap #btnUxConfirm:not(:disabled) {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #fff6d2, #ffe3a0);
+}
+
+#townMap .action-sheet {
+  position: absolute;
+  z-index: 32;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 3px solid var(--wood);
+  border-radius: 18px;
+  background: rgba(250, 246, 239, 0.98);
+  box-shadow: 0 -8px 0 rgba(92, 61, 40, 0.08);
+}
+
+#townMap .action-sheet h2 { margin: 0; font-size: 22px; font-weight: 800; }
+#townMap .sheet-level,
+#townMap .sheet-note { margin: 2px 0 0; font-size: 15px; font-weight: 800; }
+#townMap .sheet-actions,
+#townMap .fn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+#townMap .sheet-art {
+  width: 120px;
+  height: 100px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+#townMap .fx-burst,
+#townMap .fx-burst *,
+#townMap [data-town-fx],
+#townMap [data-town-fx] * {
+  pointer-events: none;
+}
+
+#townMap .fx-burst {
+  position: absolute;
+  z-index: 40;
+  width: 0;
+  height: 0;
+}
+
+#townMap .action-sheet > .fx-burst { z-index: 50; }
+
+#townMap .fx-bit {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  opacity: 1;
+  pointer-events: none;
+  animation: townUxBit 2400ms ease-out forwards;
+}
+
+#townMap .fx-bit.is-star {
+  background: #ffe7a3;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+
+#townMap .fx-burst.is-upgrade .fx-bit.is-star {
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  background: #ffe14a;
+}
+
+@keyframes townUxBit {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.7); }
+}
