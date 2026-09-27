@@ -68,6 +68,7 @@
     listOpen: false,
     pad: null,
     defId: null,
+    unstoreId: null,
     note: ""
   };
 
@@ -157,19 +158,64 @@
     return null;
   }
 
+  function originOf(row) {
+    if (!row || row.cell_x == null || row.cell_y == null) return null;
+    return { id: row.id, x: row.cell_x | 0, y: row.cell_y | 0 };
+  }
+
+  /* unstored rejects a 2×2 whose cells hold another building origin or a tile. */
+  function footprintFree(c, r, ignoreId) {
+    if (c < 0 || r < 0 || c > COLS - 2 || r > ROWS - 2) return false;
+    var blocks = buildings().concat(storedRows());
+    var tiles = (typeof townData !== "undefined" && townData && townData.tiles) || [];
+    for (var dy = 0; dy < 2; dy += 1) {
+      for (var dx = 0; dx < 2; dx += 1) {
+        var cx = c + dx;
+        var cy = r + dy;
+        for (var i = 0; i < blocks.length; i += 1) {
+          var origin = originOf(blocks[i]);
+          if (!origin) continue;
+          if (ignoreId != null && String(origin.id) === String(ignoreId)) continue;
+          if (origin.x === cx && origin.y === cy) return false;
+        }
+        for (var t = 0; t < tiles.length; t += 1) {
+          var tile = tiles[t];
+          if ((tile.cell_x | 0) === cx && (tile.cell_y | 0) === cy) return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  function firstUnstorePad(ignoreId) {
+    for (var r = 0; r < ROWS; r += 1) {
+      for (var c = 0; c < COLS; c += 1) {
+        if (occAt(c, r)) continue;
+        if (footprintFree(c, r, ignoreId)) return { c: c, r: r };
+      }
+    }
+    return null;
+  }
+
+  /* 建築清單放返 stays on the four-scene pad. The 存倉 tab still uses startUnstoreBuilding. */
   function placeFromStore(row) {
-    state.defId = null;
-    if (state.scene === 3) state.scene = 2;
+    if (!row) return;
+    state.defId = row.def_id;
+    state.unstoreId = row.id;
     state.sheet = false;
+    state.listOpen = false;
+    var padOk = state.pad
+      && !occAt(state.pad.c, state.pad.r)
+      && footprintFree(state.pad.c, state.pad.r, row.id);
+    if (!padOk) state.pad = firstUnstorePad(row.id);
+    state.scene = 3;
     render();
-    if (row && typeof startUnstoreBuilding === "function") {
-      startUnstoreBuilding(row.id);
-      return;
-    }
-    if (typeof showToast === "function") {
-      var name = (row && row.name) || "呢種建築物";
-      showToast("「" + name + "」喺存倉，用存倉放返，唔使再扣資源。");
-    }
+  }
+
+  function readyToUnstore() {
+    if (!state.unstoreId || !state.pad) return false;
+    if (occAt(state.pad.c, state.pad.r)) return false;
+    return footprintFree(state.pad.c, state.pad.r, state.unstoreId);
   }
 
   function assetSrc(name) {
@@ -399,10 +445,22 @@
     show($("palette"), state.scene === 2 && state.listOpen && !sheetOn);
     show($("readyBar"), state.scene === 2 && !sheetOn);
     show($("uxPlaceBar"), state.scene === 3 && !sheetOn);
+    var placingStore = !!state.unstoreId;
+    var canConfirm = placingStore ? readyToUnstore() : readyToPreview();
     var go = $("btnToScene3");
-    if (go) go.disabled = !readyToPreview();
+    if (go) go.disabled = !canConfirm;
     var confirm = $("btnUxConfirm");
-    if (confirm) confirm.disabled = !readyToPreview();
+    if (confirm) confirm.disabled = !canConfirm;
+    var placeStatus = $("placeStatus");
+    if (placeStatus) {
+      if (placingStore) {
+        var storedDefRow = defById(state.defId);
+        var storedName = (storedDefRow && storedDefRow.name) || "呢座屋";
+        placeStatus.textContent = "放返存倉「" + storedName + "」，唔使扣金幣同材料。取消唔會扣。";
+      } else {
+        placeStatus.textContent = "確定先至扣資源。取消唔會扣。";
+      }
+    }
     var status = $("readyStatus");
     if (status && state.scene === 2) {
       var def = defById(state.defId);
@@ -479,6 +537,7 @@
       placeFromStore(warehoused);
       return;
     }
+    state.unstoreId = null;
     state.defId = String(state.defId) === String(id) ? null : id;
     state.listOpen = true;
     render();
@@ -529,6 +588,7 @@
   function cancelPreview() {
     state.scene = 2;
     state.sheet = false;
+    state.unstoreId = null;
     if (typeof showToast === "function") showToast("已取消，資源未扣除");
     render();
   }
@@ -571,7 +631,55 @@
     }, kind === "upgrade" ? 2200 : 2000);
   }
 
+  function rememberUnstore(placed) {
+    if (typeof townData === "undefined" || !townData || !placed) return;
+    var stored = townData.stored_buildings || [];
+    townData.stored_buildings = stored.filter(function (row) {
+      return String(row.id) !== String(placed.id);
+    });
+    var list = (townData.buildings || []).filter(function (row) {
+      return String(row.id) !== String(placed.id);
+    });
+    list.push(placed);
+    townData.buildings = list;
+  }
+
+  async function confirmUnstore() {
+    if (!readyToUnstore()) return;
+    var rowId = state.unstoreId;
+    var cell = { c: state.pad.c, r: state.pad.r };
+    var def = defById(state.defId);
+    var name = (def && def.name) || "建築";
+    var confirm = $("btnUxConfirm");
+    if (confirm) confirm.disabled = true;
+    try {
+      var placed = await fetchAPI("/api/kids/" + readTown().kidId + "/buildings/" + rowId + "/unstored", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cell_x: cell.c, cell_y: cell.r })
+      });
+      rememberUnstore(placed);
+      state.scene = 1;
+      state.sheet = false;
+      state.pad = null;
+      state.defId = null;
+      state.unstoreId = null;
+      state.listOpen = false;
+      render();
+      if (typeof showToast === "function") showToast("放好「" + name + "」。");
+      celebrate("place", cell);
+      await loadTown();
+    } catch (e) {
+      if (typeof showToast === "function") showToast(e.message || "放唔返", "error");
+      render();
+    }
+  }
+
   async function onConfirm() {
+    if (state.unstoreId) {
+      await confirmUnstore();
+      return;
+    }
     var warehoused = storedDef(state.defId);
     if (warehoused) {
       placeFromStore(warehoused);
@@ -661,6 +769,14 @@
       render();
     });
     $("btnToScene3").addEventListener("click", function () {
+      if (state.unstoreId) {
+        if (!readyToUnstore()) return;
+        state.scene = 3;
+        state.listOpen = false;
+        state.sheet = false;
+        render();
+        return;
+      }
       if (!readyToPreview()) return;
       state.scene = 3;
       state.listOpen = false;
