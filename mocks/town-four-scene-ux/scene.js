@@ -269,7 +269,8 @@
     }
     spend(def.cost);
     var id = state.bldg;
-    grid[keyOf(state.pad.c, state.pad.r)] = id;
+    var placed = { c: state.pad.c, r: state.pad.r };
+    grid[keyOf(placed.c, placed.r)] = id;
     levels[id] = 1;
     state.pad = null;
     state.bldg = null;
@@ -278,6 +279,7 @@
     state.hover = null;
     showToast("起好「" + def.name + "」。已扣 " + costText(def) + "。");
     openSheet(id);
+    celebrate("place", placed);
   }
 
   function onUpgrade() {
@@ -295,6 +297,97 @@
     levels[def.id] = levelOf(def.id) + 1;
     showToast(def.name + " 升到 Lv." + levels[def.id] + "（示範）。");
     render();
+    celebrate("upgrade", findPos(def.id));
+  }
+
+  function cellBy(c, r) {
+    for (var i = 0; i < pads.length; i += 1) {
+      if (pads[i].c === c && pads[i].r === r) return pads[i];
+    }
+    return null;
+  }
+
+  function motionReduced() {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function localPoint(host, clientX, clientY) {
+    var hostRect = host.getBoundingClientRect();
+    if (hostRect.width < 1) return null;
+    return {
+      x: (clientX - hostRect.left) * (host.offsetWidth / hostRect.width),
+      y: (clientY - hostRect.top) * (host.offsetHeight / hostRect.height)
+    };
+  }
+
+  /* Gold sparkle burst. Place is a wider oval on the new building.
+     Upgrade is the same family, a little tighter and starrier, on the
+     map sprite when it sits above the sheet, otherwise on the sheet art.
+     Reduced motion keeps one soft ring and skips the flying bits. */
+  function celebrate(kind, cellPos) {
+    var cell = cellPos ? cellBy(cellPos.c, cellPos.r) : null;
+    var sprite = cell && cell.sprite && !cell.sprite.hidden ? cell.sprite : null;
+    var anchor = sprite;
+    var aim = null;
+    var sheet = document.getElementById("actionSheet");
+    var sheetBox = sheet && !sheet.hidden ? sheet.getBoundingClientRect() : null;
+    if (sprite) {
+      var spriteBox = sprite.getBoundingClientRect();
+      var stick = sheetBox ? sheetBox.top - spriteBox.top : spriteBox.height;
+      if (kind === "upgrade" && stick < 36) {
+        anchor = document.getElementById("sheetArt");
+      } else {
+        var yIn = kind === "place" ? spriteBox.height * 0.38 : Math.min(spriteBox.height * 0.4, Math.max(18, stick * 0.55));
+        aim = { x: spriteBox.left + spriteBox.width / 2, y: spriteBox.top + yIn };
+      }
+    }
+    if (!anchor) anchor = document.getElementById("sheetArt");
+    var point = aim ? localPoint(map, aim.x, aim.y) : localPoint(map, anchor.getBoundingClientRect().left + anchor.getBoundingClientRect().width / 2, anchor.getBoundingClientRect().top + anchor.getBoundingClientRect().height / 2);
+    if (!point) return;
+
+    var reduced = motionReduced();
+    var node = document.createElement("div");
+    node.className = "fx-burst is-" + kind + (reduced ? " is-quiet" : "");
+    node.setAttribute("aria-hidden", "true");
+    node.style.left = point.x + "px";
+    node.style.top = point.y + "px";
+
+    var ring = document.createElement("span");
+    ring.className = "fx-ring";
+    node.appendChild(ring);
+
+    if (!reduced) {
+      var count = kind === "place" ? 12 : 10;
+      for (var i = 0; i < count; i += 1) {
+        var bit = document.createElement("span");
+        var shape = "is-coin";
+        if (kind === "upgrade") shape = i % 2 === 0 ? "is-star" : "is-coin";
+        else if (i % 3 === 0) shape = "is-star";
+        else if (i % 3 === 1) shape = "is-leaf";
+        bit.className = "fx-bit " + shape;
+        var angle = (Math.PI * 2 * i) / count - Math.PI / 2;
+        var dist = (kind === "place" ? 46 : 36) + (i % 3) * 8;
+        var squash = kind === "place" ? 0.62 : 0.82;
+        bit.style.setProperty("--dx", (Math.cos(angle) * dist).toFixed(1) + "px");
+        bit.style.setProperty("--dy", (Math.sin(angle) * dist * squash).toFixed(1) + "px");
+        bit.style.setProperty("--rot", (i * 36) + "deg");
+        bit.style.animationDelay = ((i % 4) * 18) + "ms";
+        node.appendChild(bit);
+      }
+      if (cell) {
+        cell.el.classList.add("is-celebrating");
+        setTimeout(function () { cell.el.classList.remove("is-celebrating"); }, 880);
+      }
+    }
+
+    map.appendChild(node);
+    var removed = false;
+    function cleanup() {
+      if (removed) return;
+      removed = true;
+      if (node.parentNode) node.parentNode.removeChild(node);
+    }
+    setTimeout(cleanup, 900);
   }
 
   function onOpenFn() {
