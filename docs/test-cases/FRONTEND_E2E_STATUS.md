@@ -2,6 +2,33 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## Store place must stay on four-scene UX — regress PASS (do not merge #37 / #38)
+
+> Independent regress recorded 2026-09-27.  
+> Product tree: PR #38 tip `46e03920bd893761b71277a16a223bc6cffabf49` (`46e0392`, branch `cursor/four-scene-store-place-eecb`).  
+> Test overlay only (not product): PR #37 tip `4ff2449612aa0edfa126ca46b96548bc00e11d85` (`4ff2449`, branch `cursor/store-place-four-scene-ux-bc7b`). `tests/test_frontend.py` is byte-identical (`83ca0269eace333e2a63e439fd6c47ccb5c5c8a9`) because `46e0392` is the child of `4ff2449` and the only file difference is `town-four-scene.js`. Asserts were not weakened. Ran as-is. No overlay edit.  
+> **Do not merge #37 or #38 from this record.** This PR is a STATUS stamp only.  
+> Prior red record on tester PR #37 was against main `66bd1bc`. This run is the same `TC-FE-TOWN-STORE-UX-01` assertions on the #38 product tip.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Empty seeded SQLite only. No production DB and no real PIN.  
+> Fixture: 工坊 `(4,1)` Lv.1 `stored=0`; 探險公會 `stored=1`.
+
+### Commands
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Store place UX | `python3 -m pytest tests/test_frontend.py -q -k store_ux --tb=line` | **1 passed**, 44 deselected in 2.91s |
+| Sibling stored vs new-build | `python3 -m pytest tests/test_frontend.py -q -k 'store_list or store_place or store_confirm' --tb=line` | **3 passed**, 42 deselected in 5.97s |
+
+No store-UX failure. Asserts were not weakened. The sibling filter stayed green on this tree.
+
+### Case ID → PASS on product `46e0392` + tests `4ff2449`
+
+| Case ID | Pytest | Result |
+|---------|--------|--------|
+| TC-FE-TOWN-STORE-UX-01 | `test_town_store_ux_place_stays_on_four_scene` | **PASS** |
+
+---
+
 ## Store place must stay on four-scene UX — red on main (tests only, do not merge)
 
 > Recorded 2026-09-27 against **main** `66bd1bc2802acd7a04ab3389b9ace1e242dcf302` (`66bd1bc`, Green #35).  
