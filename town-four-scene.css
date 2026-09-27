@@ -11,7 +11,7 @@
   --focus: #c45c26;
   position: absolute;
   inset: 0;
-  z-index: 4;
+  z-index: 40;
   overflow: hidden;
   border-radius: 18px;
   background: #7eae52;
@@ -75,14 +75,18 @@ body.kt-artstage #tab-town .mp { position: relative; }
   height: calc(var(--s, 1) * 112px);
   left: calc(var(--s, 1) * -82px);
   top: calc(var(--s, 1) * 65px);
-  background: radial-gradient(
-    ellipse 120px 40px at 50% 50%,
-    rgba(44, 28, 16, 0.88) 0%,
-    rgba(44, 28, 16, 0.84) 58%,
-    rgba(44, 28, 16, 0.4) 76%,
-    rgba(44, 28, 16, 0.12) 90%,
-    rgba(44, 28, 16, 0) 100%
-  );
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cellipse/%3E%3C/svg%3E"),
+    radial-gradient(
+      ellipse 120px 40px at 50% 50%,
+      rgba(44, 28, 16, 0.88) 0%,
+      rgba(44, 28, 16, 0.84) 58%,
+      rgba(44, 28, 16, 0.4) 76%,
+      rgba(44, 28, 16, 0.12) 90%,
+      rgba(44, 28, 16, 0) 100%
+    );
+  background-size: 0 0, auto;
+  background-repeat: no-repeat;
   filter: blur(1.5px);
   pointer-events: none;
 }
