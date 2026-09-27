@@ -55,6 +55,7 @@
   var pads = [];
   var palBtns = {};
   var toastTimer = 0;
+  var placeSeq = 0;
   var motionOn = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   var state = {
@@ -66,7 +67,8 @@
     bldg: null,
     hover: null,
     fnsOpen: false,
-    lastFn: null
+    lastFn: null,
+    placeBeat: false
   };
 
   var map = document.getElementById("townMap");
@@ -278,8 +280,16 @@
     state.listOpen = false;
     state.hover = null;
     showToast("起好「" + def.name + "」。已扣 " + costText(def) + "。");
-    openSheet(id);
+    state.placeBeat = true;
+    render();
     celebrate("place", placed);
+    var token = ++placeSeq;
+    setTimeout(function () {
+      if (token !== placeSeq) return;
+      state.placeBeat = false;
+      if (grid[keyOf(placed.c, placed.r)] === id) openSheet(id);
+      else render();
+    }, 680);
   }
 
   function onUpgrade() {
@@ -320,10 +330,10 @@
     };
   }
 
-  /* Gold sparkle burst. Place is a wider oval on the new building.
-     Upgrade is the same family, a little tighter and starrier, on the
-     map sprite when it sits above the sheet, otherwise on the sheet art.
-     Reduced motion keeps one soft ring and skips the flying bits. */
+  /* Gold sparkle burst. Place plays on the new building while the sheet
+     is still closed, then the sheet opens. Upgrade is the same family,
+     a little tighter, on the map sprite when it sits above the sheet,
+     otherwise on the sheet art. Reduced motion keeps one soft ring. */
   function celebrate(kind, cellPos) {
     var cell = cellPos ? cellBy(cellPos.c, cellPos.r) : null;
     var sprite = cell && cell.sprite && !cell.sprite.hidden ? cell.sprite : null;
@@ -366,7 +376,7 @@
         else if (i % 3 === 1) shape = "is-leaf";
         bit.className = "fx-bit " + shape;
         var angle = (Math.PI * 2 * i) / count - Math.PI / 2;
-        var dist = (kind === "place" ? 46 : 36) + (i % 3) * 8;
+        var dist = (kind === "place" ? 62 : 48) + (i % 3) * 10;
         var squash = kind === "place" ? 0.62 : 0.82;
         bit.style.setProperty("--dx", (Math.cos(angle) * dist).toFixed(1) + "px");
         bit.style.setProperty("--dy", (Math.sin(angle) * dist * squash).toFixed(1) + "px");
@@ -376,7 +386,7 @@
       }
       if (cell) {
         cell.el.classList.add("is-celebrating");
-        setTimeout(function () { cell.el.classList.remove("is-celebrating"); }, 880);
+        setTimeout(function () { cell.el.classList.remove("is-celebrating"); }, 1150);
       }
     }
 
@@ -387,7 +397,7 @@
       removed = true;
       if (node.parentNode) node.parentNode.removeChild(node);
     }
-    setTimeout(cleanup, 900);
+    setTimeout(cleanup, 1250);
   }
 
   function onOpenFn() {
@@ -677,7 +687,7 @@
     var showPlace = state.scene === 3 && !state.sheet;
     readyBar.hidden = !showReady;
     placeBar.hidden = !showPlace;
-    document.getElementById("btnBuild").hidden = state.scene !== 1 || state.sheet;
+    document.getElementById("btnBuild").hidden = state.scene !== 1 || state.sheet || state.placeBeat;
     document.getElementById("listLauncher").hidden = !(state.scene === 2 && !state.listOpen && !state.sheet);
     palette.hidden = !(state.scene === 2 && state.listOpen && !state.sheet);
     document.getElementById("hint").hidden = state.sheet || state.scene === 3 || (state.scene === 2 && state.listOpen);
@@ -858,6 +868,8 @@
     state.hover = null;
     state.fnsOpen = false;
     state.lastFn = null;
+    state.placeBeat = false;
+    placeSeq += 1;
     showToast("示範已重置。資源返到 💰6000。");
     render();
   }
