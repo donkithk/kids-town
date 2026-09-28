@@ -2,6 +2,23 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## Placed-building sheet buff — red on main (tests only)
+
+> Cases `TC-FE-TOWN-UX-SHEET-BUFF-01` and `TC-FE-TOWN-UX-SHEET-BUFF-02`. Filter `-k sheet_buff`.  
+> Contract: open a placed building's `#actionSheet`. `#sheetFns` has zero `.fn` buttons (no 整道具／修理／接任務／出發, and no `FN` / `onFn` path that only toasts and rewrites `#sheetNote`). A visible `#sheetBuff` shows the current-level buff from API `buff_type` and `buff_vals[level-1]` (same index as `get_building_buff`). Readable text or `aria-label` must include that number and either the buff type or a multiplier mark (`×4` / `x4` / `build_speed` plus `4`). Exact Chinese wording is not required.  
+> Fixture: empty DB, synthetic `test_fe_kid` only. Placed 工坊 `(4,1)` Lv.3 `stored=0`. Seed `build_speed` `buff_vals=[2,3,4,5,6]` so index 2 is **4**. Static `effect` 「建築速度 x2」 does not satisfy Lv.3. `#sheetNote`, the toast, and `#sheetCost` are not `#sheetBuff`. No production DB and no real PIN.  
+> Upgrade cost chip, `#btnUpgrade`, and `#upgradeConfirm` (last child of `.stage`; cancel does not spend) stay on the existing `upgrade_cost` / `upgrade_confirm` asserts. `TC-FE-TOWN-UX-05` and `store_ux` asserts are not changed.  
+> Command output is filled in after the proof run on this branch.
+
+### Case ID → expected on main before the product change
+
+| Case ID | Pytest | Result | Reason |
+|---------|--------|--------|--------|
+| TC-FE-TOWN-UX-SHEET-BUFF-01 | `test_town_ux_sheet_buff_shows_level_buff_without_fn` | **RED** | `#sheetFns .fn` must be zero and visible `#sheetBuff` must show Lv.3 `build_speed` value 4. Product still renders 整道具／修理 and has no `#sheetBuff`. |
+| TC-FE-TOWN-UX-SHEET-BUFF-02 | `test_town_ux_sheet_buff_no_stub_toast` | **RED** | No `.fn` click path and no stub toast such as `工坊：整好一件道具`. Product still has that `onFn` path. |
+
+---
+
 ## Four-scene upgrade cost + confirm — red on #38 tip (tests only, do not merge)
 
 > Recorded 2026-09-28 against **#38 tip** `46e03920bd893761b71277a16a223bc6cffabf49` (`46e0392`, branch `cursor/four-scene-store-place-eecb`). This is **not main**. When #38 merges, rebase this branch onto main.  
