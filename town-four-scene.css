@@ -340,6 +340,18 @@ body.kt-artstage #tab-town .mp { position: relative; }
 #townMap .action-sheet h2 { margin: 0; font-size: 22px; font-weight: 800; }
 #townMap .sheet-level,
 #townMap .sheet-note { margin: 2px 0 0; font-size: 15px; font-weight: 800; }
+#townMap .upgrade-confirm {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 3px solid var(--wood);
+  border-radius: 14px;
+  background: #fff6d2;
+}
+#townMap .upgrade-confirm p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
 #townMap .sheet-actions,
 #townMap .fn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 #townMap .sheet-art {

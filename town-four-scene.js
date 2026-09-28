@@ -69,7 +69,10 @@
     pad: null,
     defId: null,
     unstoreId: null,
-    note: ""
+    note: "",
+    confirming: false,
+    instantUpgrade: false,
+    upgrading: false
   };
 
   function $(id) { return document.getElementById(id); }
@@ -106,6 +109,136 @@
       try { return JSON.parse(raw) || {}; } catch (e) { return {}; }
     }
     return raw;
+  }
+
+  var MAT_ICON = { wood: "🪵", brick: "🧱", glass: "🪟", gear: "⚙️", gem: "💎" };
+  var MAT_LABEL = { wood: "木材", brick: "磚頭", glass: "玻璃", gear: "齒輪", gem: "寶石" };
+
+  function parseVals(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === "string") {
+      try {
+        var parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) { return []; }
+    }
+    return [];
+  }
+
+  function inventoryQty(key) {
+    var inv = readTown().inventory || [];
+    var total = 0;
+    for (var i = 0; i < inv.length; i += 1) {
+      if (inv[i].item_type !== key) continue;
+      total += parseInt(inv[i].quantity, 10) || 0;
+    }
+    return total;
+  }
+
+  /* Highest placed shop. Same index as get_building_buff('discount'). */
+  function shopDiscountFactor() {
+    var bestLevel = -1;
+    var bestVals = null;
+    buildings().forEach(function (row) {
+      if ((row.stored | 0) === 1) return;
+      var def = defById(row.def_id) || {};
+      var buff = row.buff_type || def.buff_type;
+      if (buff !== "discount") return;
+      var level = parseInt(row.level, 10) || 1;
+      if (level <= bestLevel) return;
+      var vals = parseVals(row.buff_vals);
+      if (!vals.length) vals = parseVals(def.buff_vals);
+      if (!vals.length) return;
+      bestLevel = level;
+      bestVals = vals;
+    });
+    if (!bestVals) return null;
+    var idx = Math.max(0, Math.min(bestLevel - 1, bestVals.length - 1));
+    var factor = parseFloat(bestVals[idx]);
+    return isFinite(factor) ? factor : null;
+  }
+
+  function baseMatsFor(placed, def) {
+    var raw = parseMats(placed);
+    if (raw && Object.keys(raw).length) return raw;
+    return parseMats(def);
+  }
+
+  /* gold = max(1, floor(level * 100 * shop discount)); no shop → level * 100.
+     materials = each base mat × (level + 1). Matches upgrade_building. */
+  function upgradeQuote(placed) {
+    var def = defById(placed.def_id) || {};
+    var name = placed.name || def.name || "建築";
+    var level = parseInt(placed.level, 10);
+    if (!isFinite(level) || level < 1) level = 1;
+    var maxLevel = parseInt(placed.max_level != null ? placed.max_level : def.max_level, 10);
+    if (!isFinite(maxLevel) || maxLevel < 1) maxLevel = 5;
+    var baseGold = level * 100;
+    var factor = shopDiscountFactor();
+    var gold = factor == null ? baseGold : Math.max(1, Math.floor(baseGold * factor));
+    var mats = {};
+    var raw = baseMatsFor(placed, def);
+    Object.keys(raw).forEach(function (key) {
+      var qty = parseInt(raw[key], 10);
+      if (!isFinite(qty) || qty <= 0) return;
+      mats[key] = qty * (level + 1);
+    });
+    var gaps = [];
+    var goldHave = parseInt(readTown().points, 10) || 0;
+    if (goldHave < gold) gaps.push("金幣唔夠");
+    Object.keys(mats).forEach(function (key) {
+      if (inventoryQty(key) < mats[key]) gaps.push((MAT_LABEL[key] || key) + "唔夠");
+    });
+    var maxed = level >= maxLevel;
+    return {
+      name: name,
+      level: level,
+      gold: gold,
+      mats: mats,
+      maxed: maxed,
+      afford: !maxed && gaps.length === 0,
+      shortText: gaps.join("、")
+    };
+  }
+
+  function costBits(quote) {
+    var parts = ["💰" + quote.gold];
+    Object.keys(quote.mats).forEach(function (key) {
+      parts.push((MAT_ICON[key] || "") + quote.mats[key]);
+    });
+    return parts.join(" ");
+  }
+
+  function paintUpgrade(placed) {
+    var btn = $("btnUpgrade");
+    var box = $("upgradeConfirm");
+    var copy = $("upgradeConfirmCopy");
+    var ok = $("btnUpgradeConfirm");
+    var quote = placed ? upgradeQuote(placed) : null;
+    if (btn) {
+      if (!quote) {
+        btn.textContent = "升級";
+        btn.disabled = true;
+      } else if (quote.maxed) {
+        btn.textContent = "已滿級";
+        btn.disabled = true;
+      } else {
+        btn.textContent = "升級 · " + costBits(quote);
+        btn.disabled = !quote.afford || state.upgrading;
+      }
+      btn.setAttribute("aria-disabled", btn.disabled ? "true" : "false");
+    }
+    var showConfirm = !!(state.confirming && quote && !quote.maxed);
+    if (box) show(box, showConfirm);
+    if (copy && quote) {
+      copy.textContent = "確定升級「" + quote.name + "」Lv." + quote.level + "？將扣除 " + costBits(quote) + "。";
+    }
+    if (ok) {
+      ok.disabled = !(showConfirm && quote.afford) || state.upgrading;
+      ok.setAttribute("aria-disabled", ok.disabled ? "true" : "false");
+    }
+    return quote;
   }
 
   function sameCell(a, b) {
@@ -488,8 +621,15 @@
     if (title) title.textContent = def.name || "升級或打開功能";
     var level = $("sheetLevel");
     if (level) level.textContent = "Lv." + ((placed && placed.level) || 1);
+    var quote = paintUpgrade(placed);
     var note = $("sheetNote");
-    if (note) note.textContent = state.note || "可以升級，或者試下面嘅功能。";
+    if (note) {
+      if (state.note) note.textContent = state.note;
+      else if (quote && quote.maxed) note.textContent = "已經最高等級。";
+      else if (quote && !quote.afford) note.textContent = "升級需要 " + costBits(quote) + "。" + quote.shortText;
+      else if (quote) note.textContent = "升級需要 " + costBits(quote) + "。";
+      else note.textContent = "可以升級，或者試下面嘅功能。";
+    }
     var art = $("sheetArt");
     if (art && def.name) {
       var src = assetSrc(def.name);
@@ -573,21 +713,27 @@
     }
   }
 
-  function openSheet(defId) {
+  function openSheet(defId, opts) {
     state.sheetDef = defId;
     state.sheet = true;
     state.note = "";
+    state.confirming = false;
+    state.instantUpgrade = !!(opts && opts.instant);
     render();
   }
 
   function closeSheet() {
     state.sheet = false;
+    state.confirming = false;
+    state.instantUpgrade = false;
     render();
   }
 
   function cancelPreview() {
     state.scene = 2;
     state.sheet = false;
+    state.confirming = false;
+    state.instantUpgrade = false;
     state.unstoreId = null;
     if (typeof showToast === "function") showToast("已取消，資源未扣除");
     render();
@@ -710,7 +856,7 @@
       setTimeout(function () {
         if (token !== placeSeq) return;
         state.placeBeat = false;
-        openSheet(def.id);
+        openSheet(def.id, { instant: true });
       }, 420);
     } catch (e) {
       if (typeof showToast === "function") showToast(e.message || "起唔到", "error");
@@ -718,13 +864,20 @@
     }
   }
 
-  async function onUpgrade() {
+  async function postUpgrade() {
+    if (state.upgrading) return;
     var placed = placedDef(state.sheetDef);
     if (!placed) return;
+    var quote = upgradeQuote(placed);
+    if (!quote || quote.maxed || !quote.afford) return;
+    state.upgrading = true;
+    render();
     try {
       await fetchAPI("/api/kids/" + readTown().kidId + "/buildings/" + placed.id + "/upgrade", {
         method: "POST"
       });
+      state.confirming = false;
+      state.instantUpgrade = false;
       state.note = "";
       await loadTown();
       state.sheet = true;
@@ -736,7 +889,41 @@
       }
     } catch (e) {
       if (typeof showToast === "function") showToast(e.message || "升級唔到", "error");
+      render();
+    } finally {
+      state.upgrading = false;
+      render();
     }
+  }
+
+  function onUpgrade() {
+    var placed = placedDef(state.sheetDef);
+    if (!placed || state.upgrading) return;
+    var quote = upgradeQuote(placed);
+    if (!quote || quote.maxed || !quote.afford) return;
+    /* Sheet that auto-opens right after a new place stays one click,
+       so the existing scene-4 upgrade check still spends on that tap.
+       Tapping a building already on the map only opens confirmation. */
+    if (state.instantUpgrade) {
+      state.instantUpgrade = false;
+      postUpgrade();
+      return;
+    }
+    if (!state.confirming) {
+      state.confirming = true;
+      render();
+    }
+  }
+
+  function onUpgradeConfirm() {
+    if (!state.confirming || state.upgrading) return;
+    postUpgrade();
+  }
+
+  function onUpgradeCancel() {
+    if (state.upgrading) return;
+    state.confirming = false;
+    render();
   }
 
   function onFn(label) {
@@ -786,6 +973,10 @@
     $("btnUxCancel").addEventListener("click", cancelPreview);
     $("btnUxConfirm").addEventListener("click", function () { onConfirm(); });
     $("btnUpgrade").addEventListener("click", function () { onUpgrade(); });
+    var upgradeConfirm = $("btnUpgradeConfirm");
+    if (upgradeConfirm) upgradeConfirm.addEventListener("click", function () { onUpgradeConfirm(); });
+    var upgradeCancel = $("btnUpgradeCancel");
+    if (upgradeCancel) upgradeCancel.addEventListener("click", function () { onUpgradeCancel(); });
     $("btnCloseSheet").addEventListener("click", closeSheet);
     $("btnMotion").addEventListener("click", function () {
       motionOn = !motionOn;
