@@ -17,6 +17,8 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 清單放返存倉要留喺四場景 8×8: `TC-FE-TOWN-STORE-UX-01`。篩選 `-k store_ux`。喺建築清單揀已經入倉嘅屋開始放返之後，`#placementBar` 唔好有 class `active`，`#townMap` 唔好被 `#placementBar.active ~ #townMap { visibility:hidden }` 收埋，`#townCanvasWrapper` 唔好露出大片淡 `↘️`／`.valid-plot`（24×16 舊格）或者綠色「按確認」。要留喺四場景等角格。唔好出現裁到只剩「確認」嘅紫色舊條。確認要 POST `/buildings/<id>/unstored`（或者同等產品 API），金幣同材料唔變，地圖見到嗰座屋，同一行變 `stored=0`。main `66bd1bc` 上四場景 `placeFromStore` 會叫 legacy `startUnstoreBuilding`，所以留紅。唔改產品。
 
+場景 4 升級要跟設計稿 `3b4671d`（PR #27，唔好 merge）：撳已起嘅屋 → `#actionSheet` 顯示成本 → 確認 → 先至升級。唔好一撳就升級。Case：`TC-FE-TOWN-UX-UPGRADE-COST-01`、`TC-FE-TOWN-UX-UPGRADE-COST-02`、`TC-FE-TOWN-UX-UPGRADE-CONFIRM-01`。篩選 `-k 'upgrade_cost or upgrade_confirm'`（分開係 `-k upgrade_cost`、`-k upgrade_confirm`）。稿入面嘅 `#actionSheet`、`#sheetTitle`、`#sheetLevel`、`#sheetNote`、`#btnUpgrade` 係對齊用嘅名。示範籌碼 💰50 🪵2 只係個樣，產品數字跟後端：金幣 `floor(level×100×商店折扣)`（冇商店就係 `level×100`），材料 `base×(level+1)`。`UX-05` 仍然只要求撳升級之後等級上升同 HUD 再扣，呢三條唔改嗰個斷言。而家 `#btnUpgrade` 只係「升級」，第一撳就 POST，所以留紅。整道具／接任務唔喺今次範圍。
+
 共用前置（除另註）：
 
 1. Session-scoped test server on a free port, `TESTING=True`, empty DB + seed.
@@ -332,6 +334,48 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **建議模組** | `tests/test_frontend.py`（`-k town_ux`） |
 | **步驟** | 1. 確定放置進入場景 4 2. 讀 sheet 等級同 HUD 3. 撳升級 4. 再讀等級同 HUD 5. 撳至少一個功能掣 |
 | **預期** | 等級上升，HUD 再扣（chips 反映新餘額）。功能掣之後 sheet／toast 有可見結果。功能本身唔好把剛扣完嘅餘額打回升級前。Mock 示範升級 💰50 🪵2 只係設計例子，產品斷言用前後差。 |
+| **備註** | 成本數字同「先確認先至 POST」係 `TC-FE-TOWN-UX-UPGRADE-COST-*`／`CONFIRM-01`。唔好為咗呢兩條而放寬本 case。 |
+
+---
+
+## TC-FE-TOWN-UX-UPGRADE-COST-01 — 場景 4 顯示升級金幣同材料
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-UX-UPGRADE-COST-01 |
+| **優先級** | P0（四場景升級 UX；#38 tip 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k upgrade_cost`） |
+| **前置** | 空庫合成 `test_fe_kid`，PIN `1357`。清走建築物。種 Lv.1 商店 `(0,2)`（折扣 0.9）同 Lv.2 健身室 `(2,1)`。金幣 5000、木材 80、磚 40（夠升級）。唔用真 PIN／production DB。 |
+| **步驟** | 1. 登入城鎮，停喺場景 1 2. 撳已起嘅健身室，打開 `#actionSheet`（設計稿 `3b4671d`：點已起屋先至係場景 4）3. 讀 `#btnUpgrade`、`#sheetNote`、`#sheetTitle`、`#sheetLevel` 4. 如果 sheet 未有數字，先撳 `#btnUpgrade`，睇確認層（呢一撳唔好 POST） |
+| **預期** | `#actionSheet` 附近或者確認層顯示金幣 need **180**（`floor(2×100×0.9)`）同材料 need **木材 30、磚 15**（種子 `wood 10`／`brick 5` × `(level+1)`）。have/need（例如 `80/30`）或者至少 need 都得。Header 籌碼唔算。稿嘅「升級 · 💰50 🪵2」只係示範個樣。而家 `#btnUpgrade` 只得「升級」，第一撳就 POST，所以留紅。 |
+| **備註** | 同 `TC-FE-TOWN-UX-05` 並列。UX-05 唔檢查成本文案。整道具／接任務唔喺本 case。 |
+
+---
+
+## TC-FE-TOWN-UX-UPGRADE-COST-02 — 材料唔夠就唔好升級
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-UX-UPGRADE-COST-02 |
+| **優先級** | P0（四場景升級 UX；#38 tip 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k upgrade_cost`） |
+| **前置** | 同上，但磚只得 **14**（need 15）。金幣 5000 同木材 80 都夠。 |
+| **步驟** | 1. 場景 1 撳健身室，打開 `#actionSheet` 2. 睇 `#btnUpgrade`；如果仍然 enabled 就撳一次 3. 如果 `#actionSheet` 或確認層入面嘅確定仍然 enabled，再撳確定 4. 睇有冇 POST `/buildings/<id>/upgrade`、等級、HUD、磚存量 |
+| **預期** | `#btnUpgrade` 或者確認要 disabled，或者 sheet 寫明唔夠／不足所以撳唔到。**唔好**呼叫 upgrade API（就算後端回 400 都算呼叫咗）。等級維持 Lv.2，HUD 同磚 14 唔變。而家掣係 enabled，一撳就 POST，所以留紅。 |
+
+---
+
+## TC-FE-TOWN-UX-UPGRADE-CONFIRM-01 — 先確認，取消唔扣，確定先至升級
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-UX-UPGRADE-CONFIRM-01 |
+| **優先級** | P0（四場景升級 UX；#38 tip 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k upgrade_confirm`） |
+| **前置** | 同 COST-01：Lv.1 商店折扣、Lv.2 健身室、金幣同材料夠（need 🪙180、🪵30、🧱15）。 |
+| **步驟** | 1. 場景 1 撳健身室，打開 `#actionSheet` 2. 撳 `#btnUpgrade` 3. 讀確認層（喺 `#actionSheet` 入面或者隔離嘅 dialog）：建築名、等級、會扣嘅金幣同材料 4. 撳「取消」 5. 再撳「升級」然後「確定」／「確認」 6. 讀等級同 HUD |
+| **預期** | 第一下 `#btnUpgrade` **唔好** POST，等級仍然 Lv.2，只係打開確認。確認要見到健身室、Lv.2（或者下一級 Lv.3）、金幣 180、木材 30、磚 15。取消之後等級同 HUD 唔變，仍然冇 POST。只有確認先至 POST `/upgrade` 成功；DB 同 `#sheetLevel` 變 Lv.3；HUD 金幣 −180、木材 −30、磚 −15，其他材料唔變。而家第一下就 POST 並升到 Lv.3，冇確認層，所以留紅。 |
+| **備註** | 放置條「確定放置」唔算升級確認。UX-05 仍然係「撳升級會升等級」嘅現有斷言，本 case 唔放寬佢。設計稿 `3b4671d` 嘅流程係撳屋 → sheet 顯示成本 → 確認 → 升級，唔係一撳升級。 |
 
 ---
 
@@ -546,10 +590,13 @@ python -m playwright install chromium
 python -m pytest tests/test_frontend.py -q -k 'town_grid or store_legacy' --tb=line
 python -m pytest tests/test_frontend.py -q -k 'store_list or store_place or store_confirm' --tb=line
 python -m pytest tests/test_frontend.py -q -k store_ux --tb=line
+python -m pytest tests/test_frontend.py -q -k upgrade_cost --tb=short
+python -m pytest tests/test_frontend.py -q -k upgrade_confirm --tb=short
+python -m pytest tests/test_frontend.py -q -k 'upgrade_cost or upgrade_confirm' --tb=line
 python -m pytest tests/test_frontend.py -q -k 'not town_grid and not store_legacy' --tb=line
 python -m pytest tests/test_frontend.py -q -k town_ux --tb=short
 ```
 
-`town_grid`／`store_legacy` 係 8×8 地圖同格外收倉（`TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`）。`store_list`／`store_place`／`store_confirm` 係已經入倉嘅屋唔好當新建築賣（`TC-FE-TOWN-STORE-LIST-01`、`TC-FE-TOWN-STORE-PLACE-01`、`TC-FE-TOWN-STORE-CONFIRM-01`）。`store_ux` 係清單放返存倉要留喺四場景 8×8（`TC-FE-TOWN-STORE-UX-01`）。`-k 'not town_grid and not store_legacy'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`，以及存倉紅測。接受尺寸係 8×8。收倉喺每次城鎮載入同建築物讀取時做。已經 `stored=1` 嘅屋要用 unstored 放返，而且清單呢條路徑要留喺四場景等角格，唔好打開 legacy `#placementBar`。
+`town_grid`／`store_legacy` 係 8×8 地圖同格外收倉（`TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`）。`store_list`／`store_place`／`store_confirm` 係已經入倉嘅屋唔好當新建築賣（`TC-FE-TOWN-STORE-LIST-01`、`TC-FE-TOWN-STORE-PLACE-01`、`TC-FE-TOWN-STORE-CONFIRM-01`）。`store_ux` 係清單放返存倉要留喺四場景 8×8（`TC-FE-TOWN-STORE-UX-01`）。`upgrade_cost`／`upgrade_confirm` 係場景 4 升級成本同確認（`TC-FE-TOWN-UX-UPGRADE-COST-01`、`COST-02`、`CONFIRM-01`）。函數名同時含 `town_ux`，所以 `-k town_ux` 會一齊跑呢三條紅測；UX-01..05 本身嘅斷言冇收窄。`-k 'not town_grid and not store_legacy'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`，以及存倉紅測。接受尺寸係 8×8。收倉喺每次城鎮載入同建築物讀取時做。已經 `stored=1` 嘅屋要用 unstored 放返，而且清單呢條路徑要留喺四場景等角格，唔好打開 legacy `#placementBar`。
 
 雙重驗證 (B) 人手步驟：[`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md)。跑完結果寫 [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md)。

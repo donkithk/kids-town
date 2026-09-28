@@ -33,6 +33,11 @@ Requirements:
   TC-FE-TOWN-STORE-UX-01  清單放返存倉屋要留喺四場景 8×8。唔好 `#placementBar.active`、
   唔好藏 `#townMap`、唔好露出 24×16 `.valid-plot`／`↘️`。確認走 POST `/unstored`。
   篩選 `-k store_ux`。
+  TC-FE-TOWN-UX-UPGRADE-COST-01  撳已起屋打開 #actionSheet，sheet 或確認層要顯示金幣同材料 need。
+  TC-FE-TOWN-UX-UPGRADE-COST-02  資源唔夠就唔好撳得，亦唔好 POST /upgrade。
+  TC-FE-TOWN-UX-UPGRADE-CONFIRM-01  第一撳 #btnUpgrade 只開確認；取消唔 POST；確定先至升級同扣 HUD。
+  對齊設計稿 3b4671d：撳屋 → #actionSheet 顯示成本 → 確認 → 升級。唔係一撳升級。
+  篩選 `-k 'upgrade_cost or upgrade_confirm'`。唔改 UX-05／store_ux 斷言。
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
   FE-P0-03  家長 A session 不能管理家長 B 嘅仔女
@@ -45,6 +50,7 @@ Requirements:
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import socket
@@ -3813,3 +3819,587 @@ def test_town_store_ux_place_stays_on_four_scene(
         )
     if problems:
         _store_ux_fail(case_id, " | ".join(problems))
+
+
+# ── TC-FE-TOWN-UX-UPGRADE-*: scene 4 cost + confirm (red on #38 tip) ──
+#
+# Design mock tip 3b4671d (PR #27, do not merge) scene 4:
+#   tap a placed building → #actionSheet shows the cost → confirm → then upgrade.
+#   Not a one-click upgrade. Mock ids: #actionSheet, #sheetTitle, #sheetLevel,
+#   #sheetNote, #btnUpgrade. The mock's demo purse (💰50 🪵2) is only the shape;
+#   product numbers follow upgrade_building:
+#   gold = max(1, floor(level * 100 * shop discount)), mats = base * (level + 1).
+# On #38 tip, onUpgrade() POSTs on the first click and #btnUpgrade is only 「升級」.
+# 整道具／接任務 stay out of scope. Do not weaken UX-05 or store_ux.
+
+UPGRADE_UX_TARGET = "健身室"
+UPGRADE_UX_LEVEL = 2
+UPGRADE_UX_SHOP = "商店"
+_UPGRADE_CONFIRM_NAME = re.compile(r"確定|確認")
+_UPGRADE_PLACE_CONFIRM = re.compile(r"確定放置|確認建造|去擺位置")
+_UPGRADE_CANCEL_NAME = re.compile(r"取消")
+_UPGRADE_SHORT_RE = re.compile(r"唔夠|不足|未夠|不夠|買唔起")
+UPGRADE_UX_RED = (
+    "Design mock 3b4671d scene 4 is tap building → #actionSheet showing gold and "
+    "material need → confirm → then upgrade. Not one click. "
+    "On this tip #btnUpgrade is only 「升級」 and the first tap POSTs /upgrade. "
+    "Show the backend cost in or near #actionSheet (or on the confirm layer): "
+    "gold = floor(level*100 × shop discount), materials = base×(level+1) "
+    "(have/need or at least need). The mock's 💰50 🪵2 is the demo shape, not the amount. "
+    "Short resources must disable #btnUpgrade or the confirm, and must not POST. "
+    "A full purse: the first #btnUpgrade tap only opens confirmation "
+    "(cost, building name, level); 取消 does not POST; only confirm POSTs. "
+    "整道具／接任務 are out of scope."
+)
+
+
+def _upgrade_ux_fail(case_id, detail):
+    pytest.fail(f"{case_id}: {detail} {UPGRADE_UX_RED}")
+
+
+def _upgrade_quote(test_db_path, kid_id, name):
+    """Same charge as upgrade_building: discounted gold, materials scaled by level+1."""
+    db = connect_db(test_db_path)
+    row = db.execute(
+        """
+        SELECT b.level AS level, bd.materials AS materials
+        FROM buildings b
+        JOIN building_defs bd ON bd.id = b.def_id
+        WHERE b.kid_id=? AND bd.name=? AND COALESCE(b.stored, 0)=0
+        ORDER BY b.id DESC LIMIT 1
+        """,
+        (kid_id, name),
+    ).fetchone()
+    shop = db.execute(
+        """
+        SELECT b.level AS level, bd.buff_vals AS buff_vals
+        FROM buildings b
+        JOIN building_defs bd ON bd.id = b.def_id
+        WHERE b.kid_id=? AND bd.buff_type='discount' AND COALESCE(b.stored, 0)=0
+        ORDER BY b.level DESC LIMIT 1
+        """,
+        (kid_id,),
+    ).fetchone()
+    db.close()
+    assert row, f"placed {name} missing from the synthetic kid"
+    level = int(row["level"])
+    base_gold = level * 100
+    gold = base_gold
+    if shop and shop["buff_vals"]:
+        vals = json.loads(shop["buff_vals"] or "[]")
+        if vals:
+            idx = max(0, min(int(shop["level"] or 1) - 1, len(vals) - 1))
+            gold = max(1, math.floor(base_gold * float(vals[idx])))
+    raw = json.loads(row["materials"] or "{}")
+    mats = {}
+    for key, qty in raw.items():
+        try:
+            qty = int(qty)
+        except (TypeError, ValueError):
+            continue
+        if qty > 0:
+            mats[str(key)] = qty * (level + 1)
+    return {
+        "name": name,
+        "level": level,
+        "base_gold": base_gold,
+        "gold": gold,
+        "mats": mats,
+    }
+
+
+def _seed_upgrade_sheet(test_db_path, kid_id, *, gold, wood, brick):
+    """Lv.1 商店 (discount 0.9) plus Lv.2 健身室. Quote is floor(200×0.9)=180, wood 30, brick 15.
+
+    Synthetic kid only. No production DB and no real PIN.
+    """
+    set_kid_points(test_db_path, kid_id, gold)
+    grant_inventory(
+        test_db_path,
+        kid_id,
+        {"wood": wood, "brick": brick, "glass": 7, "gear": 9, "gem": 3},
+    )
+    db = connect_db(test_db_path)
+    db.execute("DELETE FROM buildings WHERE kid_id=?", (kid_id,))
+    db.commit()
+    db.close()
+    insert_building(
+        test_db_path,
+        kid_id,
+        building_def_id(test_db_path, UPGRADE_UX_SHOP),
+        level=1,
+        cell_x=0,
+        cell_y=2,
+    )
+    insert_building(
+        test_db_path,
+        kid_id,
+        building_def_id(test_db_path, UPGRADE_UX_TARGET),
+        level=UPGRADE_UX_LEVEL,
+        cell_x=2,
+        cell_y=1,
+    )
+    quote = _upgrade_quote(test_db_path, kid_id, UPGRADE_UX_TARGET)
+    assert quote["level"] == UPGRADE_UX_LEVEL, quote
+    assert quote["base_gold"] == UPGRADE_UX_LEVEL * 100, quote
+    assert quote["gold"] == 180, quote  # floor(2*100*0.9) with the Lv.1 shop
+    assert quote["mats"] == {"wood": 30, "brick": 15}, quote  # base*(level+1)
+    return quote
+
+
+def _placed_level(test_db_path, kid_id, name):
+    db = connect_db(test_db_path)
+    row = db.execute(
+        """
+        SELECT b.level AS level FROM buildings b
+        JOIN building_defs bd ON bd.id = b.def_id
+        WHERE b.kid_id=? AND bd.name=? AND COALESCE(b.stored, 0)=0
+        ORDER BY b.id DESC LIMIT 1
+        """,
+        (kid_id, name),
+    ).fetchone()
+    db.close()
+    assert row, f"placed {name} missing"
+    return int(row["level"])
+
+
+def _has_whole_number(text, number):
+    return re.search(rf"(?<!\d){int(number)}(?!\d)", text or "") is not None
+
+
+def _missing_upgrade_needs(text, quote):
+    missing = []
+    if not _has_whole_number(text, quote["gold"]):
+        missing.append(f"gold {quote['gold']}")
+    for mat, qty in sorted(quote["mats"].items()):
+        if not _has_whole_number(text, qty):
+            missing.append(f"{mat} {qty}")
+    return missing
+
+
+def _upgrade_surface_text(page):
+    """#actionSheet and a confirm layer next to it. Header chips do not count.
+
+    Mock ids (3b4671d): #actionSheet, #sheetTitle, #sheetLevel, #sheetNote, #btnUpgrade.
+    """
+    return page.evaluate(
+        """() => {
+          const chunks = [];
+          const take = (el) => {
+            if (!el) return;
+            const cs = getComputedStyle(el);
+            if (el.hidden || cs.display === 'none' || cs.visibility === 'hidden') return;
+            chunks.push(el.innerText || '');
+            const label = el.getAttribute && el.getAttribute('aria-label');
+            if (label) chunks.push(label);
+          };
+          ['actionSheet', 'sheetTitle', 'sheetLevel', 'sheetNote', 'btnUpgrade'].forEach((id) => {
+            take(document.getElementById(id));
+          });
+          document.querySelectorAll(
+            '#actionSheet [data-upgrade-confirm], [data-upgrade-confirm], .upgrade-confirm, [role="dialog"]'
+          ).forEach(take);
+          return chunks.join('\\n');
+        }"""
+    )
+
+
+def _upgrade_button(page):
+    loc = page.locator("#actionSheet #btnUpgrade, #btnUpgrade")
+    for i in range(loc.count()):
+        btn = loc.nth(i)
+        try:
+            if btn.is_visible():
+                return btn
+        except Exception:
+            continue
+    named = page.get_by_role("button", name=re.compile(r"升級"))
+    for i in range(named.count()):
+        btn = named.nth(i)
+        try:
+            if btn.is_visible():
+                return btn
+        except Exception:
+            continue
+    return None
+
+
+def _button_label(btn):
+    try:
+        text = btn.inner_text() or ""
+    except Exception:
+        text = ""
+    try:
+        aria = btn.get_attribute("aria-label") or ""
+    except Exception:
+        aria = ""
+    return (text + " " + aria).strip()
+
+
+def _buttons_under(page, root_sel, pattern, *, skip=None):
+    root = page.locator(root_sel)
+    if root.count() == 0:
+        return []
+    loc = root.get_by_role("button", name=pattern)
+    found = []
+    for i in range(loc.count()):
+        btn = loc.nth(i)
+        try:
+            if not btn.is_visible():
+                continue
+        except Exception:
+            continue
+        label = _button_label(btn)
+        if skip is not None and skip.search(label):
+            continue
+        found.append(btn)
+    return found
+
+
+def _upgrade_confirm_buttons(page):
+    """Confirm controls in #actionSheet or a dialog. Place-bar 確定放置 does not count."""
+    found = []
+    for sel in ("#actionSheet", "[role='dialog']", "[data-upgrade-confirm]", ".upgrade-confirm"):
+        found.extend(
+            _buttons_under(page, sel, _UPGRADE_CONFIRM_NAME, skip=_UPGRADE_PLACE_CONFIRM)
+        )
+    return found
+
+
+def _upgrade_cancel_buttons(page):
+    found = []
+    for sel in ("#actionSheet", "[role='dialog']", "[data-upgrade-confirm]", ".upgrade-confirm"):
+        found.extend(_buttons_under(page, sel, _UPGRADE_CANCEL_NAME))
+    return found
+
+
+def _control_blocked(btn, surface):
+    """Disabled, aria-disabled, pointer-events:none, or a visible short-resource phrase."""
+    try:
+        if not btn.is_enabled():
+            return True
+    except Exception:
+        return True
+    aria = ""
+    try:
+        aria = (btn.get_attribute("aria-disabled") or "").lower()
+    except Exception:
+        aria = ""
+    if aria == "true":
+        return True
+    try:
+        pe = btn.evaluate("el => getComputedStyle(el).pointerEvents")
+    except Exception:
+        pe = ""
+    if pe == "none":
+        return True
+    return _UPGRADE_SHORT_RE.search(surface or "") is not None
+
+
+def _watch_upgrade_posts(page):
+    hits = []
+
+    def on_response(resp):
+        req = resp.request
+        url = req.url or ""
+        if (
+            req.method == "POST"
+            and "/buildings/" in url
+            and url.rstrip("/").endswith("/upgrade")
+        ):
+            hits.append({"url": url, "status": resp.status})
+
+    page.on("response", on_response)
+    return hits
+
+
+def _chip_snapshot(page, quote):
+    snap = {"gold": _hud_gold(page)}
+    mats = set(quote["mats"]) | {"wood", "brick", "glass", "gear"}
+    for mat in sorted(mats):
+        snap[mat] = _hud_mat_count(page, mat)
+    return snap
+
+
+def _expected_after_upgrade(before, quote):
+    after = dict(before)
+    after["gold"] = before["gold"] - quote["gold"]
+    for mat, qty in quote["mats"].items():
+        after[mat] = before.get(mat, 0) - qty
+    return after
+
+
+def _open_scene4_sheet(page, case_id, name):
+    """Tap a placed building on scene 1. Mock 3b4671d opens #actionSheet from that tap."""
+    pad = page.locator("#townMap, #village").get_by_role(
+        "button",
+        name=re.compile(rf"第\s*\d+\s*欄第\s*\d+\s*行，{re.escape(name)}(?:，|$)"),
+    )
+    if pad.count() == 0 or not pad.first.is_visible():
+        _upgrade_ux_fail(
+            case_id,
+            f"Scene 1 has no tappable pad for placed {name}. "
+            "Design mock 3b4671d: tap the building to open #actionSheet.",
+        )
+    pad.first.click()
+    sheet = page.locator("#actionSheet")
+    try:
+        sheet.wait_for(state="visible", timeout=8000)
+    except Exception:
+        _upgrade_ux_fail(
+            case_id,
+            f"Tapping placed {name} did not open #actionSheet. "
+            "Design mock 3b4671d scene 4 is that sheet, then cost, then confirm.",
+        )
+    title = (page.locator("#sheetTitle").inner_text() or "").strip()
+    if name not in title:
+        _upgrade_ux_fail(
+            case_id,
+            f"#sheetTitle should name {name} after the tap, saw {title!r}.",
+        )
+    upgrade = page.locator("#actionSheet #btnUpgrade")
+    if upgrade.count() == 0 or not upgrade.first.is_visible():
+        upgrade = _upgrade_button(page)
+        if upgrade is None:
+            _upgrade_ux_fail(case_id, "#actionSheet has no visible #btnUpgrade.")
+        return upgrade
+    return upgrade.first
+
+
+def _confirm_region_text(btn):
+    try:
+        return btn.evaluate(
+            """(el) => {
+              const root = el.closest(
+                '#actionSheet, .action-sheet, [role="dialog"], [data-upgrade-confirm], .upgrade-confirm'
+              ) || el.parentElement;
+              const label = el.getAttribute('aria-label') || '';
+              return ((root && root.innerText) || '') + '\\n' + label;
+            }"""
+        )
+    except Exception:
+        return _button_label(btn)
+
+
+@pytest.mark.case_id("TC-FE-TOWN-UX-UPGRADE-COST-01")
+def test_town_ux_upgrade_cost_sheet_shows_gold_and_mats(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-UX-UPGRADE-COST-01 撳屋打開 #actionSheet，上面或確認層要有金幣同材料 need。"""
+    case_id = "TC-FE-TOWN-UX-UPGRADE-COST-01"
+    kid_id = fe_ids["kid_id"]
+    quote = _seed_upgrade_sheet(test_db_path, kid_id, gold=5000, wood=80, brick=40)
+    _open_town_home(page, base_url)
+    posts = _watch_upgrade_posts(page)
+    upgrade = _open_scene4_sheet(page, case_id, UPGRADE_UX_TARGET)
+    surface = _upgrade_surface_text(page)
+    label = _button_label(upgrade)
+    missing = _missing_upgrade_needs(surface, quote)
+    if missing and not _upgrade_confirm_buttons(page):
+        upgrade.click()
+        page.wait_for_timeout(1200)
+        surface = _upgrade_surface_text(page)
+        for btn in _upgrade_confirm_buttons(page):
+            surface += "\n" + _confirm_region_text(btn)
+        missing = _missing_upgrade_needs(surface, quote)
+    problems = []
+    if missing:
+        problems.append(
+            "After tapping the building, #actionSheet / #btnUpgrade / #sheetNote "
+            "(or the confirm layer the first #btnUpgrade tap opens) must show gold need "
+            f"{quote['gold']} (floor({quote['base_gold']}×0.9 Lv.1 商店 discount)) "
+            f"and materials {quote['mats']} (base×(level+1)); have/need or at least need. "
+            f"Missing {missing}. #btnUpgrade={label!r}. Sheet={surface!r}."
+        )
+    if posts:
+        problems.append(
+            "The first #btnUpgrade tap POSTed /upgrade "
+            f"({posts}) instead of opening a confirm layer near #actionSheet. "
+            f"Level is now {_placed_level(test_db_path, kid_id, UPGRADE_UX_TARGET)}."
+        )
+    if problems:
+        _upgrade_ux_fail(case_id, " | ".join(problems))
+
+
+@pytest.mark.case_id("TC-FE-TOWN-UX-UPGRADE-COST-02")
+def test_town_ux_upgrade_cost_insufficient_does_not_post(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-UX-UPGRADE-COST-02 材料唔夠：升級／確認唔好撳得，亦唔好 POST。"""
+    case_id = "TC-FE-TOWN-UX-UPGRADE-COST-02"
+    kid_id = fe_ids["kid_id"]
+    quote = _seed_upgrade_sheet(test_db_path, kid_id, gold=5000, wood=80, brick=14)
+    _open_town_home(page, base_url)
+    posts = _watch_upgrade_posts(page)
+    upgrade = _open_scene4_sheet(page, case_id, UPGRADE_UX_TARGET)
+    hud_before = _chip_snapshot(page, quote)
+    surface = _upgrade_surface_text(page)
+    if upgrade.is_enabled() and not _control_blocked(upgrade, surface):
+        upgrade.click()
+        page.wait_for_timeout(1200)
+        surface = _upgrade_surface_text(page)
+    confirms = _upgrade_confirm_buttons(page)
+    enabled_confirm = [
+        btn for btn in confirms if btn.is_enabled() and not _control_blocked(btn, surface)
+    ]
+    if enabled_confirm and not posts:
+        enabled_confirm[0].click()
+        page.wait_for_timeout(1200)
+        surface = _upgrade_surface_text(page)
+    problems = []
+    if posts:
+        problems.append(
+            "insufficient brick (have 14, need "
+            f"{quote['mats']['brick']}) must not call POST /upgrade; saw {posts}. "
+            "A 400 from the API still counts as a call."
+        )
+    spend_open = bool(enabled_confirm) or (
+        not confirms and upgrade.is_enabled() and not _control_blocked(upgrade, surface)
+    )
+    if spend_open:
+        problems.append(
+            "upgrade/confirm stays actionable while brick is short "
+            f"(have 14, need {quote['mats']['brick']}; gold {quote['gold']} is enough). "
+            f"Label={_button_label(upgrade)!r}. Surface={surface!r}."
+        )
+    level_now = _placed_level(test_db_path, kid_id, UPGRADE_UX_TARGET)
+    if level_now != UPGRADE_UX_LEVEL:
+        problems.append(f"level changed {UPGRADE_UX_LEVEL} -> {level_now} without enough brick.")
+    hud_after = _chip_snapshot(page, quote)
+    if hud_after != hud_before:
+        problems.append(f"HUD changed while resources were short: {hud_before} -> {hud_after}.")
+    brick_now = inventory_map(test_db_path, kid_id).get("brick")
+    if brick_now != 14:
+        problems.append(f"brick inventory changed from 14 to {brick_now}.")
+    if problems:
+        _upgrade_ux_fail(case_id, " | ".join(problems))
+
+
+@pytest.mark.case_id("TC-FE-TOWN-UX-UPGRADE-CONFIRM-01")
+def test_town_ux_upgrade_confirm_cancel_then_post(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-UX-UPGRADE-CONFIRM-01 唔好即刻升級；取消唔 POST；確定先扣。"""
+    case_id = "TC-FE-TOWN-UX-UPGRADE-CONFIRM-01"
+    kid_id = fe_ids["kid_id"]
+    quote = _seed_upgrade_sheet(test_db_path, kid_id, gold=5000, wood=80, brick=40)
+    _open_town_home(page, base_url)
+    posts = _watch_upgrade_posts(page)
+    upgrade = _open_scene4_sheet(page, case_id, UPGRADE_UX_TARGET)
+    hud_before = _chip_snapshot(page, quote)
+    level_before = _placed_level(test_db_path, kid_id, UPGRADE_UX_TARGET)
+    label = _button_label(upgrade)
+    upgrade.click()
+    page.wait_for_timeout(1200)
+    confirms = _upgrade_confirm_buttons(page)
+    cancels = _upgrade_cancel_buttons(page)
+    problems = []
+    if posts:
+        problems.append(
+            f"the first #btnUpgrade tap POSTed /upgrade ({posts}); "
+            f"label was {label!r}. That tap must only open confirmation near #actionSheet."
+        )
+    level_mid = _placed_level(test_db_path, kid_id, UPGRADE_UX_TARGET)
+    if level_mid != level_before:
+        problems.append(
+            f"level changed {level_before} -> {level_mid} before 確定. "
+            "升級 must not spend on the first click."
+        )
+    if not confirms:
+        problems.append(
+            "no confirmation button inside #actionSheet or a confirm dialog "
+            "(確定／確認, not 確定放置) appeared after the first #btnUpgrade tap."
+        )
+    else:
+        copy = "\n".join(_confirm_region_text(btn) for btn in confirms)
+        if UPGRADE_UX_TARGET not in copy:
+            problems.append(f"confirm step must show the building name {UPGRADE_UX_TARGET}. copy={copy!r}")
+        shown_level = re.search(r"(?:Lv\.?\s*|等級\s*)(\d+)", copy)
+        shown_n = int(shown_level.group(1)) if shown_level else None
+        if shown_n not in (level_before, level_before + 1):
+            problems.append(
+                f"confirm step must show the building level (Lv.{level_before} or Lv.{level_before + 1}). "
+                f"copy={copy!r}"
+            )
+        missing = _missing_upgrade_needs(copy, quote)
+        if missing:
+            problems.append(
+                "confirm step must show the resources to deduct "
+                f"(gold {quote['gold']}, mats {quote['mats']}). Missing {missing}. copy={copy!r}"
+            )
+    if problems:
+        _upgrade_ux_fail(case_id, " | ".join(problems))
+
+    if not cancels:
+        _upgrade_ux_fail(case_id, "confirm step has no 取消 button.")
+    cancels[0].click()
+    page.wait_for_timeout(800)
+    problems = []
+    if posts:
+        problems.append(f"取消 must not POST /upgrade; saw {posts}.")
+    level_cancel = _placed_level(test_db_path, kid_id, UPGRADE_UX_TARGET)
+    if level_cancel != level_before:
+        problems.append(f"取消 changed the level {level_before} -> {level_cancel}.")
+    hud_cancel = _chip_snapshot(page, quote)
+    if hud_cancel != hud_before:
+        problems.append(f"取消 changed the HUD {hud_before} -> {hud_cancel}.")
+    if problems:
+        _upgrade_ux_fail(case_id, " | ".join(problems))
+
+    upgrade = _upgrade_button(page)
+    if upgrade is None:
+        upgrade = _open_scene4_sheet(page, case_id, UPGRADE_UX_TARGET)
+    upgrade.click()
+    page.wait_for_timeout(800)
+    if posts:
+        _upgrade_ux_fail(
+            case_id,
+            f"the second 升級 POSTed before 確定 ({posts}).",
+        )
+    confirms = _upgrade_confirm_buttons(page)
+    enabled = [btn for btn in confirms if btn.is_enabled()]
+    if not enabled:
+        _upgrade_ux_fail(case_id, "確認／確定 was not visible and enabled after 升級.")
+    with page.expect_response(
+        lambda r: r.request.method == "POST"
+        and "/buildings/" in r.url
+        and r.url.rstrip("/").endswith("/upgrade"),
+        timeout=8000,
+    ) as posted:
+        enabled[0].click()
+    if posted.value.status not in (200, 201):
+        _upgrade_ux_fail(
+            case_id,
+            f"確定 must POST /upgrade successfully, got HTTP {posted.value.status}.",
+        )
+    try:
+        page.wait_for_function(
+            """(gold) => {
+              const el = document.getElementById('hudCo');
+              return el && parseInt(el.textContent, 10) === gold;
+            }""",
+            arg=hud_before["gold"] - quote["gold"],
+            timeout=8000,
+        )
+    except Exception:
+        pass
+    sheet_level, sheet_text = _sheet_level(page)
+    level_after = _placed_level(test_db_path, kid_id, UPGRADE_UX_TARGET)
+    hud_after = _chip_snapshot(page, quote)
+    want = _expected_after_upgrade(hud_before, quote)
+    problems = []
+    if level_after != level_before + 1:
+        problems.append(f"DB level should be {level_before + 1}, got {level_after}.")
+    if sheet_level != level_before + 1:
+        problems.append(
+            f"sheet level should be Lv.{level_before + 1}, saw {sheet_level}. sheet={sheet_text!r}"
+        )
+    if hud_after != want:
+        problems.append(
+            f"HUD should drop gold {quote['gold']} and mats {quote['mats']}: "
+            f"{hud_before} -> {hud_after}, want {want}."
+        )
+    if len(posts) != 1:
+        problems.append(f"確定 should send exactly one POST /upgrade, saw {posts}.")
+    if problems:
+        _upgrade_ux_fail(case_id, " | ".join(problems))

@@ -2,6 +2,38 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## Four-scene upgrade cost + confirm — red on #38 tip (tests only, do not merge)
+
+> Recorded 2026-09-28 against **#38 tip** `46e03920bd893761b71277a16a223bc6cffabf49` (`46e0392`, branch `cursor/four-scene-store-place-eecb`). This is **not main**. When #38 merges, rebase this branch onto main.  
+> Aligned to design mock `3b4671d` (PR #27, do not merge). Scene 4 is: tap a placed building → `#actionSheet` shows gold and material need → confirm → then upgrade. Not one click. Mock ids used by the asserts: `#actionSheet`, `#sheetTitle`, `#sheetLevel`, `#sheetNote`, `#btnUpgrade`. The mock demo line 「升級 · 💰50 🪵2」 is only the shape. Product amounts follow the backend: gold `floor(level×100×shop discount)`, materials `base×(level+1)`.  
+> This change is tests + catalog only (`tests/test_frontend.py`, `docs/test-cases/FRONTEND_E2E.md`, this file). No product/UI/JS/CSS/backend. No new mock. Do not merge.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Empty seeded SQLite only.  
+> Fixture: Lv.1 商店 `(0,2)` so discount is 0.9; Lv.2 健身室 `(2,1)`. Quote is gold **180** (`floor(200×0.9)`) and mats wood **30** / brick **15** (`10×3` / `5×3`). COST-02 sets brick to 14. No production DB and no real PIN.  
+> On this tip, tapping 健身室 does open `#actionSheet` (`#sheetTitle` is 健身室). `#btnUpgrade` is only 「升級」. `#sheetNote` is 「可以升級，或者試下面嘅功能。」 No gold 180 and no material needs. The first tap POSTs. A short brick pile still enables the button and the API returns 400. A full purse returns 200 and the level goes 2 → 3 with no confirm button inside `#actionSheet`.  
+> Existing asserts were not weakened: `TC-FE-TOWN-UX-05` passed again after this alignment. `TC-FE-TOWN-STORE-UX-01` was not edited (it passed on this tip). 整道具／接任務 are out of scope.
+
+### Commands
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Upgrade cost | `python3 -m pytest tests/test_frontend.py -q -k upgrade_cost --tb=line` | **2 failed**, 46 deselected in 5.25s |
+| Upgrade confirm | `python3 -m pytest tests/test_frontend.py -q -k upgrade_confirm --tb=line` | **1 failed**, 47 deselected in 3.00s |
+| Both | `python3 -m pytest tests/test_frontend.py -q -k 'upgrade_cost or upgrade_confirm' --tb=line` | **3 failed**, 45 deselected in 7.49s |
+| UX-05 (unchanged assert) | `python3 -m pytest tests/test_frontend.py -q -k scene4_upgrade_feature_and_hud --tb=line` | **1 passed**, 47 deselected in 3.58s |
+| store_ux (unchanged assert) | `python3 -m pytest tests/test_frontend.py -q -k store_ux --tb=line` | **1 passed**, 47 deselected in 2.38s |
+
+The three new cases fail. UX-05 and store_ux asserts were not weakened.
+
+### Case ID → result on #38 tip `46e0392`
+
+| Case ID | Pytest | Result | Reason |
+|---------|--------|--------|--------|
+| TC-FE-TOWN-UX-UPGRADE-COST-01 | `test_town_ux_upgrade_cost_sheet_shows_gold_and_mats` | **FAIL** | Tap opens `#actionSheet`, but `#btnUpgrade` is 「升級」 and `#sheetNote` has no gold 180, wood 30, or brick 15. The first tap POSTed `/upgrade` HTTP 200 and the level became 3. No confirm layer showed the cost. |
+| TC-FE-TOWN-UX-UPGRADE-COST-02 | `test_town_ux_upgrade_cost_insufficient_does_not_post` | **FAIL** | Brick have 14 / need 15, but `#btnUpgrade` stayed actionable. The tap POSTed `/upgrade` HTTP 400. Level stayed Lv.2. |
+| TC-FE-TOWN-UX-UPGRADE-CONFIRM-01 | `test_town_ux_upgrade_confirm_cancel_then_post` | **FAIL** | First `#btnUpgrade` tap POSTed `/upgrade` HTTP 200. Level changed 2 → 3 before any 確定. No confirmation button inside `#actionSheet` (確定／確認, not 確定放置), so 取消 was never reached. |
+
+---
+
 ## Store place must stay on four-scene UX — red on main (tests only, do not merge)
 
 > Recorded 2026-09-27 against **main** `66bd1bc2802acd7a04ab3389b9ace1e242dcf302` (`66bd1bc`, Green #35).  

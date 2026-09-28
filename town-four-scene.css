@@ -327,26 +327,209 @@ body.kt-artstage #tab-town .mp { position: relative; }
   right: 12px;
   bottom: 10px;
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) auto;
+  grid-template-columns: 148px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  padding: 12px;
-  border: 3px solid var(--wood);
-  border-radius: 18px;
-  background: rgba(250, 246, 239, 0.98);
-  box-shadow: 0 -8px 0 rgba(92, 61, 40, 0.08);
+  padding: 16px 14px 14px;
+  border: 8px solid #3b2416;
+  border-radius: 22px;
+  color: #fff8ee;
+  background-color: #6e452b;
+  background-image:
+    radial-gradient(ellipse 22px 12px at 12% 78%, rgba(36, 18, 8, .42), transparent 72%),
+    radial-gradient(ellipse 16px 9px at 86% 22%, rgba(36, 18, 8, .32), transparent 70%),
+    repeating-linear-gradient(90deg, rgba(255, 220, 176, .06) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(
+      180deg,
+      #8d6240 0 26px,
+      #5c3a24 26px 29px,
+      #7a5134 29px 54px,
+      #4a2c1a 54px 57px
+    );
+  box-shadow:
+    inset 0 2px 0 rgba(232, 196, 140, .5),
+    inset 0 -6px 0 rgba(32, 18, 8, .55),
+    inset 4px 0 0 rgba(232, 196, 140, .16),
+    inset -4px 0 0 rgba(32, 18, 8, .38),
+    inset 0 0 0 3px rgba(92, 58, 32, .55),
+    0 8px 0 #2a180e,
+    0 16px 22px rgba(20, 10, 4, .38);
 }
 
-#townMap .action-sheet h2 { margin: 0; font-size: 22px; font-weight: 800; }
+#townMap .action-sheet::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  z-index: 0;
+  border: 2px solid rgba(255, 224, 176, .42);
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgba(42, 22, 10, .45);
+  pointer-events: none;
+}
+
+#townMap .action-sheet > * {
+  position: relative;
+  z-index: 1;
+}
+
+#townMap .action-sheet h2 {
+  margin: 0;
+  color: #fff8ee;
+  font-size: 22px;
+  font-weight: 800;
+  text-shadow: 0 1px 0 rgba(42, 22, 10, .45);
+}
 #townMap .sheet-level,
-#townMap .sheet-note { margin: 2px 0 0; font-size: 15px; font-weight: 800; }
+#townMap .sheet-note {
+  margin: 2px 0 0;
+  color: #ffe7c4;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-shadow: 0 1px 0 rgba(42, 22, 10, .4);
+}
+#townMap .sheet-note { color: #fff1dc; font-weight: 700; }
+#townMap .sheet-cost {
+  display: inline-block;
+  margin: 8px 0 0;
+  padding: 4px 12px;
+  border: 2px solid #6b3e12;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff6d2, #ffe3a0);
+  color: #3b2a1a;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  box-shadow: inset 0 1px 0 #fff, 0 2px 0 rgba(42, 22, 10, .35);
+}
 #townMap .sheet-actions,
 #townMap .fn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 #townMap .sheet-art {
-  width: 120px;
-  height: 100px;
+  width: 148px;
+  height: 120px;
   object-fit: contain;
+  object-position: center bottom;
+  border-radius: 12px;
+  background: #6d9844 url("mocks/town-building-proof/assets/ground-tile.svg") center 78% / 140% auto no-repeat;
   pointer-events: none;
+}
+#townMap #btnUpgrade:not(:disabled) {
+  border-color: #6b3e12;
+  background: linear-gradient(180deg, #ffe9a0, #e6a317);
+  color: #3b2a1a;
+  box-shadow: inset 0 1px 0 #fff6d2, 0 3px 0 #8a5a12;
+}
+#townMap #btnUpgrade:disabled {
+  opacity: 1;
+  border-style: dashed;
+  border-color: #5c4632;
+  background: #cbb89a;
+  color: #4a3828;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+#townMap .btn-close-sheet {
+  align-self: end;
+  border-color: #5c3d28;
+  background: linear-gradient(180deg, #fffaf2, #f3e0c4);
+  color: #3b2a1a;
+  box-shadow: inset 0 1px 0 #fff, 0 3px 0 #8b5e3c;
+}
+#townMap .fn {
+  border-color: #1d4a2e;
+  background: linear-gradient(180deg, #e7f6df, #b7d7a8);
+  color: #14361f;
+  box-shadow: inset 0 1px 0 #fff, 0 3px 0 #2f6b45;
+}
+
+/* Confirm popup is the last child of the 1280×720 stage (.stage), not #actionSheet. */
+.stage > #upgradeConfirm {
+  position: absolute;
+  z-index: 90;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background: rgba(28, 16, 8, .62);
+  font-family: var(--body-font, Nunito, sans-serif);
+}
+.stage > #upgradeConfirm[hidden] { display: none !important; }
+.stage > #upgradeConfirm:focus { outline: none; }
+#upgradeConfirm .upgrade-modal-card {
+  width: min(520px, 100%);
+  padding: 20px 22px 18px;
+  border: 10px solid #3b2416;
+  border-radius: 24px;
+  color: #3b2a1a;
+  background:
+    radial-gradient(circle at 10% 0, rgba(240, 193, 75, .28), transparent 36%),
+    repeating-linear-gradient(0deg, rgba(139, 94, 60, .06) 0 1px, transparent 1px 8px),
+    linear-gradient(180deg, #fffaf0, #f4e2c4);
+  box-shadow:
+    inset 0 0 0 4px #e7c48a,
+    inset 0 0 0 8px #6b4428,
+    inset 0 2px 0 rgba(255, 255, 255, .7),
+    0 18px 0 rgba(28, 16, 8, .38);
+}
+#upgradeConfirm .upgrade-kicker {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #6b4428;
+  color: #fff6e4;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+#upgradeConfirm h2 {
+  margin: 0;
+  color: #3b2a1a;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+#upgradeConfirm .upgrade-modal-card p {
+  margin: 8px 0 0;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+#upgradeConfirm .upgrade-modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+#upgradeConfirm .upgrade-modal-actions button {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 1 1 0;
+  min-width: 44px;
+  min-height: 52px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  border: 3px solid transparent;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+}
+#upgradeConfirm #btnUpgradeCancel {
+  border-color: #6e2416;
+  background: linear-gradient(180deg, #a33b24, #6e2416);
+  color: #fffaf6;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 3px 0 #6e2416;
+}
+#upgradeConfirm #btnUpgradeConfirm {
+  border-color: #14532d;
+  background: linear-gradient(180deg, #217a40, #14532d);
+  color: #f4fff6;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 3px 0 #14532d;
+}
+#upgradeConfirm #btnUpgradeConfirm:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 #townMap .fx-burst,
@@ -363,7 +546,10 @@ body.kt-artstage #tab-town .mp { position: relative; }
   height: 0;
 }
 
-#townMap .action-sheet > .fx-burst { z-index: 50; }
+#townMap .action-sheet > .fx-burst {
+  position: absolute;
+  z-index: 50;
+}
 
 #townMap .fx-bit {
   position: absolute;
