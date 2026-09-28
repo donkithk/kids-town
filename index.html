@@ -1561,7 +1561,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
   color: #4a3828 !important;
   box-shadow: none !important;
 }
-.gsw > #upgradeConfirm.upgrade-modal {
+.stage > #upgradeConfirm.upgrade-modal {
   position: absolute !important;
   top: 0 !important;
   right: 0 !important;
@@ -1576,7 +1576,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
   padding: 28px !important;
   background: rgba(28, 16, 8, .62) !important;
 }
-.gsw > #upgradeConfirm.upgrade-modal[hidden] { display: none !important; }
+.stage > #upgradeConfirm.upgrade-modal[hidden] { display: none !important; }
 #upgradeConfirm .upgrade-modal-card {
   width: min(520px, 100%) !important;
   box-sizing: border-box !important;
@@ -1608,12 +1608,14 @@ body.kt-pane-shop .kt-backpack-block{display:none}
   background-color: #6e2416 !important;
   background-image: linear-gradient(180deg, #a33b24, #6e2416) !important;
   color: #fffaf6 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 3px 0 #6e2416 !important;
 }
 #upgradeConfirm #btnUpgradeConfirm {
   border: 3px solid #14532d !important;
   background-color: #14532d !important;
   background-image: linear-gradient(180deg, #217a40, #14532d) !important;
   color: #f4fff6 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 3px 0 #14532d !important;
 }
 </style>
 </head>
@@ -1694,7 +1696,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 
 <!-- ═══════════════ MAIN APP ═══════════ -->
 <div id="app" style="display:none">
-  <div class="gsw">
+  <div class="gsw stage">
     <div class="gs">
       <div class="gh">
         <div class="av" id="hudAv">🐱</div>
