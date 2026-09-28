@@ -107,9 +107,10 @@
           <h2 id="sheetTitle" tabindex="-1">升級或打開功能</h2>
           <p class="sheet-level" id="sheetLevel">Lv.1 · 示範</p>
           <p class="sheet-note" id="sheetNote"></p>
+          <p class="sheet-cost" id="sheetCost">升級要 💰50 🪵2</p>
           <div class="sheet-picks" id="sheetPicks" aria-label="已起嘅屋"></div>
           <div class="sheet-actions">
-            <button id="btnUpgrade" type="button">升級 · 💰50 🪵2</button>
+            <button id="btnUpgrade" type="button" aria-haspopup="dialog" aria-controls="upgradeConfirm" aria-expanded="false">升級</button>
             <button id="btnOpenFn" type="button" aria-pressed="false">打開功能</button>
           </div>
           <div class="fn-row" id="sheetFns"></div>
@@ -117,6 +118,18 @@
         <button class="btn-close-sheet" id="btnCloseSheet" type="button">返去地圖</button>
       </section>
     </section>
+
+    <div class="upgrade-modal" id="upgradeConfirm" hidden role="dialog" aria-modal="true" aria-labelledby="upgradeConfirmTitle" aria-describedby="upgradeConfirmCopy" tabindex="-1">
+      <div class="upgrade-modal-card">
+        <p class="upgrade-kicker">確認視窗</p>
+        <h2 id="upgradeConfirmTitle" tabindex="-1">確定升級？</h2>
+        <p id="upgradeConfirmCopy"></p>
+        <div class="upgrade-modal-actions">
+          <button id="btnUpgradeCancel" type="button">取消</button>
+          <button id="btnUpgradeConfirm" type="button">確定升級</button>
+        </div>
+      </div>
+    </div>
 
     <p class="toast" id="toast" role="status" hidden></p>
 

@@ -68,7 +68,8 @@
     hover: null,
     fnsOpen: false,
     lastFn: null,
-    placeBeat: false
+    placeBeat: false,
+    confirm: false
   };
 
   var map = document.getElementById("townMap");
@@ -107,6 +108,10 @@
     if (cost.gear) parts.push("⚙️" + cost.gear);
     if (cost.glass) parts.push("🪟" + cost.glass);
     return parts.join(" ");
+  }
+
+  function upgradeCostText() {
+    return "💰" + UPGRADE_COST.gold + " 🪵" + UPGRADE_COST.wood;
   }
 
   function asset(id) {
@@ -158,10 +163,12 @@
       showToast("先揀一塊空地，同一座未起嘅屋。");
       state.scene = 2;
       state.sheet = false;
+      state.confirm = false;
       render();
       return;
     }
     state.sheet = false;
+    state.confirm = false;
     state.scene = next;
     state.hover = null;
     if (next === 1) {
@@ -189,6 +196,7 @@
 
   function closeSheet() {
     state.sheet = false;
+    state.confirm = false;
     render();
   }
 
@@ -303,11 +311,36 @@
       render();
       return;
     }
+    state.confirm = true;
+    render();
+  }
+
+  function closeConfirm() {
+    if (!state.confirm) return;
+    state.confirm = false;
+    showToast("已取消，未升級，資源未扣除。");
+    render();
+    var upgradeBtn = document.getElementById("btnUpgrade");
+    if (upgradeBtn) upgradeBtn.focus();
+  }
+
+  function onUpgradeConfirm() {
+    var def = defById[state.sheetId];
+    if (!state.confirm || !def || !findPos(def.id)) return;
+    if (!canAfford(UPGRADE_COST)) {
+      state.confirm = false;
+      showToast("資源唔夠升級「" + def.name + "」。");
+      render();
+      return;
+    }
+    state.confirm = false;
     spend(UPGRADE_COST);
     levels[def.id] = levelOf(def.id) + 1;
     showToast(def.name + " 升到 Lv." + levels[def.id] + "（示範）。");
     render();
     celebrate("upgrade", findPos(def.id));
+    var upgradeBtn = document.getElementById("btnUpgrade");
+    if (upgradeBtn) upgradeBtn.focus();
   }
 
   function cellBy(c, r) {
@@ -345,7 +378,9 @@
 
   /* Place plays on the new building while the sheet is still closed.
      Upgrade is the last child of the sheet, centered on the sheet art,
-     so the panel paints underneath the gold. Reduced motion keeps one ring. */
+     so the wood panel paints underneath the gold. The confirm popup
+     closes before this runs, so the burst is not covered. Reduced
+     motion keeps one ring. */
   function celebrate(kind, cellPos) {
     var cell = cellPos ? cellBy(cellPos.c, cellPos.r) : null;
     var sheetOpen = !!(state.sheet && sheet && !sheet.hidden);
@@ -760,13 +795,17 @@
       : (placedHere
         ? (state.fnsOpen
           ? "功能打開咗。揀下面一個掣試吓，呢度只係示範。"
-          : "可以升級，或者打開功能。升級先至扣 💰50 🪵2。")
+          : "可以升級，或者打開功能。撳「升級」會彈出確認窗，確定先至扣。")
         : "放好之後先至可以升級同打開功能。");
+    document.getElementById("sheetCost").textContent = placedHere
+      ? ("升級要 " + upgradeCostText())
+      : "未起好，未有升級費用";
     var art = document.getElementById("sheetArt");
     var next = asset(def.id);
     if (art.getAttribute("src") !== next) art.src = next;
     upgradeBtn.disabled = !placedHere || !canAfford(UPGRADE_COST);
-    upgradeBtn.textContent = placedHere ? "升級 · 💰50 🪵2" : "未起好，未可以升級";
+    upgradeBtn.textContent = placedHere ? "升級" : "未起好，未可以升級";
+    upgradeBtn.setAttribute("aria-expanded", state.confirm ? "true" : "false");
     openBtn.disabled = !placedHere;
     openBtn.textContent = "打開功能";
     openBtn.setAttribute("aria-pressed", state.fnsOpen ? "true" : "false");
@@ -798,6 +837,19 @@
     });
   }
 
+  function renderConfirm() {
+    var modal = document.getElementById("upgradeConfirm");
+    var opening = state.confirm && modal.hidden;
+    modal.hidden = !state.confirm;
+    if (!state.confirm) return;
+    var def = defById[state.sheetId] || defById.library;
+    document.getElementById("upgradeConfirmCopy").textContent =
+      "「" + def.name + "」而家 Lv." + levelOf(def.id) +
+      "，升級到 Lv." + (levelOf(def.id) + 1) +
+      " 會扣 " + upgradeCostText() + "。確定先至扣，取消只關呢個視窗。";
+    if (opening) modal.focus();
+  }
+
   function renderMotion() {
     var btn = document.getElementById("btnMotion");
     btn.setAttribute("aria-pressed", motionOn ? "true" : "false");
@@ -817,6 +869,7 @@
     renderRail();
     renderBars();
     renderSheet();
+    renderConfirm();
     renderMotion();
     document.getElementById("townMap").dataset.scene = String(current);
   }
@@ -838,6 +891,7 @@
       state.scene = 1;
       state.sheet = true;
       if (bldg && defById[bldg]) state.sheetId = bldg;
+      state.confirm = q.get("confirm") === "1" && !!findPos(state.sheetId);
     } else if (scene === 3) {
       if (!state.pad) state.pad = { c: 1, r: 0 };
       if (!state.bldg) state.bldg = "gym";
@@ -884,6 +938,7 @@
     state.fnsOpen = false;
     state.lastFn = null;
     state.placeBeat = false;
+    state.confirm = false;
     placeSeq += 1;
     showToast("示範已重置。資源返到 💰6000。");
     render();
@@ -914,6 +969,11 @@
   document.getElementById("btnCancel").addEventListener("click", cancelPreview);
   document.getElementById("btnConfirm").addEventListener("click", onConfirm);
   document.getElementById("btnUpgrade").addEventListener("click", onUpgrade);
+  document.getElementById("btnUpgradeConfirm").addEventListener("click", onUpgradeConfirm);
+  document.getElementById("btnUpgradeCancel").addEventListener("click", closeConfirm);
+  document.getElementById("upgradeConfirm").addEventListener("click", function (event) {
+    if (event.target === document.getElementById("upgradeConfirm")) closeConfirm();
+  });
   document.getElementById("btnOpenFn").addEventListener("click", onOpenFn);
   document.getElementById("btnCloseSheet").addEventListener("click", closeSheet);
   document.getElementById("btnReset").addEventListener("click", onReset);
@@ -938,6 +998,32 @@
   });
 
   document.addEventListener("keydown", function (event) {
+    if (state.confirm) {
+      var modal = document.getElementById("upgradeConfirm");
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeConfirm();
+        return;
+      }
+      if (event.key === "Tab" && modal) {
+        var items = Array.prototype.filter.call(
+          modal.querySelectorAll("button, [href], [tabindex]:not([tabindex='-1'])"),
+          function (el) { return !el.disabled; }
+        );
+        if (!items.length) return;
+        var first = items[0];
+        var last = items[items.length - 1];
+        var active = document.activeElement;
+        if (event.shiftKey && (active === first || active === modal || !modal.contains(active))) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && (active === last || !modal.contains(active))) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+      return;
+    }
     if (event.key !== "Escape") return;
     if (state.sheet) closeSheet();
     else if (state.scene === 3) cancelPreview();
