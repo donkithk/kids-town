@@ -97,6 +97,52 @@
     return String(n);
   }
 
+  /* Kid-readable Traditional Chinese. The English buff_type code is never shown.
+     N is buff_vals[level-1], same index as get_building_buff. */
+  var BUFF_LABEL = {
+    task_bonus: "任務多星",
+    streak_protect: "連續保護",
+    daily_gold: "每日金幣",
+    discount: "購物折扣",
+    expedition_recovery: "探險回復",
+    unlock_explore: "解鎖探險",
+    build_speed: "建築速度",
+    explore_range: "探險範圍",
+    expedition_gold: "探險金幣",
+    discovery_rate: "發現新區域"
+  };
+  var DISCOUNT_FOLD = [
+    [0.9, "九折"],
+    [0.85, "八五折"],
+    [0.8, "八折"],
+    [0.75, "七五折"],
+    [0.7, "七折"]
+  ];
+
+  function discountFold(value) {
+    var n = typeof value === "number" ? value : parseFloat(value);
+    if (!isFinite(n)) return "";
+    for (var i = 0; i < DISCOUNT_FOLD.length; i += 1) {
+      if (Math.abs(n - DISCOUNT_FOLD[i][0]) < 1e-6) return DISCOUNT_FOLD[i][1];
+    }
+    return "";
+  }
+
+  function kidBuffLabel(buffType, valueText, rawValue) {
+    var stem = BUFF_LABEL[buffType];
+    if (!stem) return "";
+    if (buffType === "unlock_explore") return stem;
+    if (buffType === "discount") {
+      var fold = discountFold(rawValue);
+      return fold ? (stem + " " + fold) : stem;
+    }
+    if (buffType === "task_bonus") return stem + " +" + valueText + "⭐";
+    if (buffType === "daily_gold") return stem + " +" + valueText + "🪙";
+    if (buffType === "explore_range") return stem + " +" + valueText;
+    if (buffType === "streak_protect") return stem + " ×" + valueText + " 漏打卡都唔斷";
+    return stem + " ×" + valueText;
+  }
+
   /* buff_vals[level-1], clamped like get_building_buff. Prefer the placed row. */
   function levelBuff(placed) {
     if (!placed) return null;
@@ -109,7 +155,9 @@
     if (!isFinite(level) || level < 1) level = 1;
     var idx = Math.max(0, Math.min(level - 1, vals.length - 1));
     var text = formatBuffValue(vals[idx]);
-    return { type: String(buffType), text: text, label: String(buffType) + " ×" + text };
+    var label = kidBuffLabel(String(buffType), text, vals[idx]);
+    if (!label) return null;
+    return { type: String(buffType), text: text, label: label };
   }
 
   function inventoryQty(key) {

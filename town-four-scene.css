@@ -402,6 +402,8 @@ body.kt-artstage #tab-town .mp { position: relative; }
   font-weight: 800;
   line-height: 1.3;
   text-align: left;
+  max-width: 100%;
+  white-space: normal;
   cursor: pointer;
 }
 #townMap #sheetBuff[hidden] { display: none !important; }
