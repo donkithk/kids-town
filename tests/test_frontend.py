@@ -43,10 +43,10 @@ Requirements:
   工坊 Lv.3：buff_type build_speed，buff_vals[2]＝4（種子 [2,3,4,5,6]）。篩選 `-k sheet_buff`。
   英文 code 加倍數（`build_speed ×4`）仍然滿足 01 嘅數字合約。小朋友睇得明嘅繁體中文
   由下面 ZH 兩條取代，唔好當 01 綠等於中文標籤過咗。
-  TC-FE-TOWN-UX-SHEET-BUFF-ZH-01  工坊 Lv.3：#sheetBuff 要有「建築速度」（或目錄同等句）同而家等級 4，
-  唔好出現 build_speed。種子「建築速度 x2」唔算。
-  TC-FE-TOWN-UX-SHEET-BUFF-ZH-02  健身室 Lv.1：中文「連續保護」或「漏一日都唔斷連續」同值 1，
-  唔好出現 streak_protect。
+  TC-FE-TOWN-UX-SHEET-BUFF-ZH-01  工坊 Lv.3：#sheetBuff 要係「建築速度 ×4」（×4 或 x4），
+  唔好 build_speed，亦唔好淨係種子「建築速度 x2」。
+  TC-FE-TOWN-UX-SHEET-BUFF-ZH-02  健身室 Lv.1：「連續保護 ×1」再加一句唔會斷連續
+  （例如「漏打卡都唔斷」）。唔好 streak_protect，亦唔好淨係四個字「連續保護」。
   篩選 `-k sheet_buff_zh`。函數名亦含 sheet_buff，所以 `-k sheet_buff` 會一齊跑到 ZH。
   唔改 upgrade_cost／upgrade_confirm／UX-05／store_ux 斷言。
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
@@ -4838,34 +4838,61 @@ SHEET_BUFF_ZH_FORBIDDEN = (
     "expedition_gold",
     "discovery_rate",
 )
-# Purpose phrases a kid can read. Any one phrase for that buff_type is enough.
-# The number must still be buff_vals[level-1], not the static seed effect.
-# Workshop seed effect is 「建築速度 x2」; Lv.3 is 4. Gym seed effect is 「連續保護」
-# with no number; Lv.1 value is 1.
-SHEET_BUFF_ZH_LABELS = {
-    "build_speed": ("建築速度", "起屋快啲"),
-    "streak_protect": ("連續保護", "漏一日都唔斷連續"),
-    "task_bonus": ("任務加星", "任務獎勵"),
-    "daily_gold": ("每日金幣",),
-    "discount": ("獎勵折扣", "買嘢平啲"),
-    "expedition_recovery": ("探險回復",),
-    "unlock_explore": ("解鎖探險",),
-    "explore_range": ("探險範圍",),
-    "expedition_gold": ("探險金幣",),
-    "discovery_rate": ("新區域發現",),
+# Locked copy (KT designer + Grok Bot): Traditional Chinese label + current-level
+# value. No bare English buff_type. Pytest hard-asserts 工坊 and 健身室; the other
+# rows are the same contract, documented in the catalog.
+#   task_bonus           任務多星 +N⭐
+#   streak_protect       連續保護 ×N  plus a kid aside (漏打卡都唔斷)
+#   daily_gold           每日金幣 +N🪙
+#   discount             購物折扣，0.9 → 九折
+#   expedition_recovery  探險回復 ×N
+#   unlock_explore       解鎖探險
+#   build_speed          建築速度 ×N   (工坊 Lv.3 = ×4)
+#   explore_range        探險範圍 +N
+#   expedition_gold      探險金幣 ×N
+#   discovery_rate       發現新區域 ×N
+SHEET_BUFF_ZH_STEMS = {
+    "build_speed": "建築速度",
+    "streak_protect": "連續保護",
+    "task_bonus": "任務多星",
+    "daily_gold": "每日金幣",
+    "discount": "購物折扣",
+    "expedition_recovery": "探險回復",
+    "unlock_explore": "解鎖探險",
+    "explore_range": "探險範圍",
+    "expedition_gold": "探險金幣",
+    "discovery_rate": "發現新區域",
 }
+# 連續保護 ×N alone is not enough. The aside has to say a missed check-in
+# does not break the streak. 漏打卡都唔斷 is the locked example.
+SHEET_BUFF_ZH_STREAK_ASIDES = (
+    "漏打卡都唔斷",
+    "漏打卡唔會斷",
+    "漏一日都唔斷",
+    "漏咗都唔斷",
+    "唔會斷連續",
+)
+# Shop factor → Chinese fold. 0.9 is 九折 (pay 90%), not the raw 0.9.
+SHEET_BUFF_ZH_DISCOUNT_FOLDS = (
+    (0.9, "九折"),
+    (0.85, "八五折"),
+    (0.8, "八折"),
+    (0.75, "七五折"),
+    (0.7, "七折"),
+)
+_ZH_MULT = r"(?:×|✕|x|X|＊|\*)"
+_ZH_PLUS = r"(?:\+|＋)"
 SHEET_BUFF_ZH_RED = (
-    "#sheetBuff must show a kid-readable Traditional Chinese purpose plus the "
-    "current-level value buff_vals[level-1]. "
-    "Do not use the English buff_type as the label "
+    "#sheetBuff must use the locked Traditional Chinese copy plus the "
+    "current-level value. Do not show a bare English buff_type "
     f"({', '.join(SHEET_BUFF_ZH_FORBIDDEN)}). "
-    "工坊 Lv.3 build_speed buff_vals[2]=4 → 「建築速度」 or 「起屋快啲」 with 4 "
-    "(×4 / x4 / 4). Seed effect 「建築速度 x2」 is the static blurb, not Lv.3. "
-    "健身室 Lv.1 streak_protect buff_vals[0]=1 → 「連續保護」 or 「漏一日都唔斷連續」 "
-    "with 1. "
+    "工坊 Lv.3 → 「建築速度 ×4」 or 「建築速度 x4」. "
+    "Not build_speed. Not seed effect 「建築速度 x2」 alone. "
+    "健身室 Lv.1 → 「連續保護 ×1」 plus a kid aside such as 「漏打卡都唔斷」. "
+    "Not streak_protect. Not only the four characters 連續保護. "
     "The same rule applies to #sheetNote when it restates the buff (including after "
     "tapping #sheetBuff). "
-    "#sheetFns .fn stays zero. #sheetCost and the upgrade confirm flow are unchanged."
+    "#sheetFns .fn stays zero. Upgrade confirm is unchanged."
 )
 
 
@@ -4878,18 +4905,41 @@ def _forbidden_buff_codes(text):
     return [code for code in SHEET_BUFF_ZH_FORBIDDEN if code in raw]
 
 
-def _zh_purpose_phrases(buff_type):
-    return SHEET_BUFF_ZH_LABELS.get(buff_type) or ()
-
-
-def _has_zh_purpose(text, buff_type):
-    raw = text or ""
-    return any(phrase in raw for phrase in _zh_purpose_phrases(buff_type))
-
-
 def _has_level_value_token(text, value):
     token = _format_buff_number(value)
     return re.search(rf"(?<!\d){re.escape(token)}(?!\d)", text or "") is not None
+
+
+def _has_mark_value(text, value, mark_re):
+    token = _format_buff_number(value)
+    return re.search(rf"{mark_re}\s*{re.escape(token)}(?!\d)", text or "") is not None
+
+
+def _discount_fold(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    for factor, fold in SHEET_BUFF_ZH_DISCOUNT_FOLDS:
+        if abs(number - factor) < 1e-9:
+            return fold
+    return None
+
+
+def _has_discount_fold(text, fold):
+    """九折 matches 九折. 八折 does not match inside 八五折."""
+    raw = text or ""
+    if not fold or fold not in raw:
+        return False
+    for _factor, other in SHEET_BUFF_ZH_DISCOUNT_FOLDS:
+        if other != fold and fold in other and other in raw:
+            return False
+    return True
+
+
+def _has_streak_aside(text):
+    raw = text or ""
+    return any(phrase in raw for phrase in SHEET_BUFF_ZH_STREAK_ASIDES)
 
 
 def _note_restates_buff(note, buff):
@@ -4897,38 +4947,87 @@ def _note_restates_buff(note, buff):
     raw = note or ""
     if _forbidden_buff_codes(raw):
         return True
-    if _has_zh_purpose(raw, buff["buff_type"]):
+    stem = SHEET_BUFF_ZH_STEMS.get(buff["buff_type"]) or ""
+    if stem and stem in raw:
         return True
-    return re.search(r"(?:×|✕|x|X|\*|＊)\s*\d", raw) is not None
+    if buff["buff_type"] == "streak_protect" and _has_streak_aside(raw):
+        return True
+    if buff["buff_type"] == "discount":
+        fold = _discount_fold(buff["value"])
+        if fold and _has_discount_fold(raw, fold):
+            return True
+    return re.search(r"(?:×|✕|x|X|＊|\*|\+|＋)\s*\d", raw) is not None
+
+
+def _missing_mark_detail(surface, text, buff, shown, mark_words):
+    bare = _has_level_value_token(text, buff["value"])
+    bare_note = f" A bare {shown} without {mark_words} is not the locked copy." if bare else ""
+    return (
+        f"{surface} must show the current-level value as {mark_words}{shown} "
+        f"(buff_vals[{buff['index']}] from {buff['vals']}). "
+        f"Seed effect {buff['effect']!r} is not that value.{bare_note} text={text!r}."
+    )
 
 
 def _zh_surface_problems(surface, text, buff):
-    """Problems for one visible string. Empty when the Chinese contract holds."""
+    """Problems for one visible string. Empty when the locked copy holds."""
+    raw = text or ""
+    kind = buff["buff_type"] or ""
+    shown = _format_buff_number(buff["value"])
+    stem = SHEET_BUFF_ZH_STEMS.get(kind) or ""
     problems = []
-    phrases = _zh_purpose_phrases(buff["buff_type"])
-    phrase_list = " / ".join(phrases) if phrases else "(no Traditional Chinese phrase mapped)"
-    forbidden = _forbidden_buff_codes(text)
-    has_zh = _has_zh_purpose(text, buff["buff_type"])
-    has_val = _has_level_value_token(text, buff["value"])
+    value_shown = False
+    forbidden = _forbidden_buff_codes(raw)
     if forbidden:
         problems.append(
             f"{surface} uses English buff_type code(s) {forbidden} as the label. "
-            f"text={text!r}."
+            f"text={raw!r}."
         )
-    if not has_zh:
+    if not stem:
+        problems.append(f"{surface} has no locked Traditional Chinese copy for {kind!r}.")
+        return problems
+    if stem not in raw:
+        problems.append(f"{surface} must include {stem}. text={raw!r}.")
+
+    if kind == "unlock_explore":
+        value_shown = stem in raw
+    elif kind == "discount":
+        fold = _discount_fold(buff["value"])
+        if not fold:
+            problems.append(
+                f"{surface} has no Chinese fold for discount factor {buff['value']!r}."
+            )
+        elif not _has_discount_fold(raw, fold):
+            problems.append(
+                f"{surface} must show 購物折扣 as {fold} "
+                f"(factor {shown} → {fold}, not the raw number). text={raw!r}."
+            )
+        else:
+            value_shown = True
+    elif kind in ("task_bonus", "daily_gold", "explore_range"):
+        value_shown = _has_mark_value(raw, buff["value"], _ZH_PLUS)
+        if not value_shown:
+            problems.append(_missing_mark_detail(surface, raw, buff, shown, "+"))
+        if kind == "task_bonus" and "⭐" not in raw:
+            problems.append(f"{surface} must show 任務多星 +{shown}⭐. text={raw!r}.")
+        if kind == "daily_gold" and "🪙" not in raw:
+            problems.append(f"{surface} must show 每日金幣 +{shown}🪙. text={raw!r}.")
+    else:
+        # build_speed, streak_protect, expedition_recovery, expedition_gold, discovery_rate
+        value_shown = _has_mark_value(raw, buff["value"], _ZH_MULT)
+        if not value_shown:
+            problems.append(_missing_mark_detail(surface, raw, buff, shown, "× or x"))
+        if kind == "streak_protect" and not _has_streak_aside(raw):
+            aside_list = " / ".join(SHEET_BUFF_ZH_STREAK_ASIDES)
+            problems.append(
+                f"{surface} must add a kid-readable aside that a missed check-in "
+                f"does not break the streak ({aside_list}). "
+                f"連續保護 ×{shown} alone is only the four-character label, not the "
+                f"protect meaning. text={raw!r}."
+            )
+    if value_shown and problems:
         problems.append(
-            f"{surface} is missing a kid-readable Traditional Chinese purpose "
-            f"({phrase_list}). text={text!r}."
-        )
-    if not has_val:
-        problems.append(
-            f"{surface} does not show current-level value {buff['value']} "
-            f"(buff_vals[{buff['index']}] from {buff['vals']}). "
-            f"Seed effect {buff['effect']!r} is not that value. text={text!r}."
-        )
-    elif forbidden or not has_zh:
-        problems.append(
-            f"{surface} does include current-level value {buff['value']}, "
+            f"{surface} does include current-level value {shown}, "
             "so this is not a missing-number failure."
         )
     return problems
@@ -5043,7 +5142,7 @@ def _assert_sheet_buff_zh(page, case_id, buff):
 def test_town_ux_sheet_buff_zh_workshop_shows_chinese_level_value(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 工坊 Lv.3：建築速度同 ×4，唔好 build_speed。"""
+    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 工坊 Lv.3：建築速度 ×4，唔好 build_speed，唔好種子 x2。"""
     case_id = "TC-FE-TOWN-UX-SHEET-BUFF-ZH-01"
     buff = _seed_sheet_buff_placed(
         test_db_path, fe_ids["kid_id"], SHEET_BUFF_NAME, SHEET_BUFF_LEVEL
@@ -5062,7 +5161,7 @@ def test_town_ux_sheet_buff_zh_workshop_shows_chinese_level_value(
 def test_town_ux_sheet_buff_zh_gym_shows_chinese_not_streak_code(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 健身室 Lv.1：連續保護同 ×1，唔好 streak_protect。"""
+    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 健身室 Lv.1：連續保護 ×1，再加漏打卡都唔斷。"""
     case_id = "TC-FE-TOWN-UX-SHEET-BUFF-ZH-02"
     buff = _seed_sheet_buff_placed(
         test_db_path, fe_ids["kid_id"], SHEET_BUFF_ZH_GYM, SHEET_BUFF_ZH_GYM_LEVEL
