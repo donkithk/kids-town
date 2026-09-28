@@ -2,6 +2,38 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## Four-scene upgrade cost + confirm — red on #38 tip (tests only, do not merge)
+
+> Recorded 2026-09-28 against **#38 tip** `46e03920bd893761b71277a16a223bc6cffabf49` (`46e0392`, branch `cursor/four-scene-store-place-eecb`). This is **not main**. When #38 merges, rebase this branch onto main.  
+> Acceptance: scene 4 upgrade shows gold need `floor(level×100×shop discount)` and materials `base×(level+1)` (have/need or at least need). Short resources disable the spend, or make it clearly not actionable, and do not POST `/upgrade`. Enough resources still do not upgrade on the first 「升級」 click: a confirm step shows the building name, level, and resources to deduct; 取消 leaves the level and does not POST; 確定 POSTs, Lv rises, and the HUD drops by that cost.  
+> This change is tests + catalog only (`tests/test_frontend.py`, `docs/test-cases/FRONTEND_E2E.md`, this file). No product/UI/JS/CSS/backend. Do not merge.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Empty seeded SQLite only.  
+> Fixture: Lv.1 商店 `(0,2)` so discount is 0.9; Lv.2 健身室 `(2,1)`. Quote is gold **180** (`floor(200×0.9)`) and mats wood **30** / brick **15** (`10×3` / `5×3`). COST-02 sets brick to 14. No production DB and no real PIN.  
+> On this tip `#btnUpgrade` is only 「升級」. `onUpgrade()` POSTs immediately. The sheet text is the name, `Lv.N`, the note, 「升級」, feature labels, and 「返去地圖」. No gold 180 and no material needs. A short brick pile still enables the button; the click POSTs and the API returns 400. A full purse POSTs 200 and the level goes 2 → 3 with no confirm button.  
+> Existing asserts were not weakened: `TC-FE-TOWN-UX-05` passed, and `TC-FE-TOWN-STORE-UX-01` passed on this tip (the #38 place path). 整道具／接任務 are out of scope.
+
+### Commands
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Upgrade cost | `python3 -m pytest tests/test_frontend.py -q -k upgrade_cost --tb=line` | **2 failed**, 46 deselected in 5.29s |
+| Upgrade confirm | `python3 -m pytest tests/test_frontend.py -q -k upgrade_confirm --tb=line` | **1 failed**, 47 deselected in 3.28s |
+| Both | `python3 -m pytest tests/test_frontend.py -q -k 'upgrade_cost or upgrade_confirm' --tb=short` | **3 failed**, 45 deselected in 8.22s |
+| UX-05 (unchanged assert) | `python3 -m pytest tests/test_frontend.py -q -k scene4_upgrade_feature_and_hud --tb=line` | **1 passed**, 47 deselected in 3.60s |
+| store_ux (unchanged assert) | `python3 -m pytest tests/test_frontend.py -q -k store_ux --tb=line` | **1 passed**, 47 deselected in 2.38s |
+
+The three new cases fail. UX-05 and store_ux asserts were not weakened.
+
+### Case ID → result on #38 tip `46e0392`
+
+| Case ID | Pytest | Result | Reason |
+|---------|--------|--------|--------|
+| TC-FE-TOWN-UX-UPGRADE-COST-01 | `test_town_ux_upgrade_cost_sheet_shows_gold_and_mats` | **FAIL** | Control label is 「升級」. Sheet has no gold 180, wood 30, or brick 15. Clicking 升級 POSTed `/upgrade` HTTP 200 and the level became 3. No confirm layer showed the cost. |
+| TC-FE-TOWN-UX-UPGRADE-COST-02 | `test_town_ux_upgrade_cost_insufficient_does_not_post` | **FAIL** | Brick have 14 / need 15, but 「升級」 stayed actionable. Click POSTed `/upgrade` HTTP 400. Level stayed Lv.2. |
+| TC-FE-TOWN-UX-UPGRADE-CONFIRM-01 | `test_town_ux_upgrade_confirm_cancel_then_post` | **FAIL** | First 「升級」 POSTed `/upgrade` HTTP 200. Level changed 2 → 3 before any 確定. No confirmation button (確定／確認) appeared, so 取消 was never reached. |
+
+---
+
 ## Store place must stay on four-scene UX — red on main (tests only, do not merge)
 
 > Recorded 2026-09-27 against **main** `66bd1bc2802acd7a04ab3389b9ace1e242dcf302` (`66bd1bc`, Green #35).  
