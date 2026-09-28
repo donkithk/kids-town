@@ -4,8 +4,8 @@
    Scope: /kids/
    ============================================ */
 
-const CACHE_NAME = 'kids-town-v8';
-const STATIC_CACHE = 'kids-town-static-v8';
+const CACHE_NAME = 'kids-town-v9';
+const STATIC_CACHE = 'kids-town-static-v9';
 
 // Files to precache on install
 const PRECACHE_URLS = [
@@ -56,10 +56,18 @@ self.addEventListener('fetch', event => {
   const isApi = url.pathname.startsWith('/api/') || url.pathname.startsWith('/kids/api/');
   const isStatic =
     url.pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|js|css|woff2?)$/);
+  const isCode = url.pathname.match(/\.(js|css)$/);
 
   // API calls: network-first with timeout, fallback to cache
   if (isApi) {
     event.respondWith(networkFirstWithTimeout(event.request));
+    return;
+  }
+
+  // Styles and scripts: network-first so a new sheet/confirm skin is not stuck
+  // behind a cache-first copy of town-four-scene.css.
+  if (isCode && isKidsTown) {
+    event.respondWith(networkFirst(event.request));
     return;
   }
 

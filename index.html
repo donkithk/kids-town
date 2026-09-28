@@ -1507,6 +1507,115 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 
 </style>
 <link rel="stylesheet" href="/kids/town-four-scene.css">
+<style>
+/* Upgrade panel. After the stylesheet so a cached town-four-scene.css cannot
+   leave the sheet pale or the confirm box as default buttons outside the stage. */
+#townMap #actionSheet.action-sheet {
+  border: 8px solid #3b2416 !important;
+  border-radius: 22px !important;
+  color: #fff8ee !important;
+  background-color: #6e452b !important;
+  background-image:
+    radial-gradient(ellipse 22px 12px at 12% 78%, rgba(36, 18, 8, .42), transparent 72%),
+    radial-gradient(ellipse 16px 9px at 86% 22%, rgba(36, 18, 8, .32), transparent 70%),
+    repeating-linear-gradient(90deg, rgba(255, 220, 176, .06) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(180deg, #8d6240 0 26px, #5c3a24 26px 29px, #7a5134 29px 54px, #4a2c1a 54px 57px) !important;
+  box-shadow:
+    inset 0 2px 0 rgba(232, 196, 140, .5),
+    inset 0 -6px 0 rgba(32, 18, 8, .55),
+    inset 4px 0 0 rgba(232, 196, 140, .16),
+    inset -4px 0 0 rgba(32, 18, 8, .38),
+    inset 0 0 0 3px rgba(92, 58, 32, .55),
+    0 8px 0 #2a180e,
+    0 16px 22px rgba(20, 10, 4, .38) !important;
+}
+#townMap #actionSheet.action-sheet::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 7px !important;
+  z-index: 0 !important;
+  border: 2px solid rgba(255, 224, 176, .42) !important;
+  border-radius: 12px !important;
+  box-shadow: inset 0 0 0 1px rgba(42, 22, 10, .45) !important;
+  pointer-events: none !important;
+}
+#townMap #actionSheet.action-sheet > * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+#townMap #actionSheet.action-sheet h2 { color: #fff8ee !important; }
+#townMap #sheetLevel,
+#townMap #sheetNote { color: #ffe7c4 !important; }
+#townMap #btnUpgrade {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  border: 3px solid #6b3e12 !important;
+  border-radius: 14px !important;
+  background: linear-gradient(180deg, #ffe9a0, #e6a317) !important;
+  color: #3b2a1a !important;
+  box-shadow: inset 0 1px 0 #fff6d2, 0 3px 0 #8a5a12 !important;
+}
+#townMap #btnUpgrade:disabled {
+  border-style: dashed !important;
+  background: #cbb89a !important;
+  color: #4a3828 !important;
+  box-shadow: none !important;
+}
+.gsw > #upgradeConfirm.upgrade-modal {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  z-index: 90 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 28px !important;
+  background: rgba(28, 16, 8, .62) !important;
+}
+.gsw > #upgradeConfirm.upgrade-modal[hidden] { display: none !important; }
+#upgradeConfirm .upgrade-modal-card {
+  width: min(520px, 100%) !important;
+  box-sizing: border-box !important;
+  padding: 20px 22px 18px !important;
+  border: 10px solid #3b2416 !important;
+  border-radius: 24px !important;
+  color: #3b2a1a !important;
+  background-color: #f4e2c4 !important;
+  background-image:
+    radial-gradient(circle at 10% 0, rgba(240, 193, 75, .28), transparent 36%),
+    repeating-linear-gradient(0deg, rgba(139, 94, 60, .06) 0 1px, transparent 1px 8px),
+    linear-gradient(180deg, #fffaf0, #f4e2c4) !important;
+  box-shadow: inset 0 0 0 4px #e7c48a, inset 0 0 0 8px #6b4428, 0 18px 0 rgba(28, 16, 8, .38) !important;
+}
+#upgradeConfirm .upgrade-modal-actions { display: flex !important; gap: 12px !important; }
+#upgradeConfirm .upgrade-modal-actions button {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  flex: 1 1 0 !important;
+  min-height: 52px !important;
+  border-radius: 14px !important;
+  font-family: inherit !important;
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+}
+#upgradeConfirm #btnUpgradeCancel {
+  border: 3px solid #6e2416 !important;
+  background-color: #6e2416 !important;
+  background-image: linear-gradient(180deg, #a33b24, #6e2416) !important;
+  color: #fffaf6 !important;
+}
+#upgradeConfirm #btnUpgradeConfirm {
+  border: 3px solid #14532d !important;
+  background-color: #14532d !important;
+  background-image: linear-gradient(180deg, #217a40, #14532d) !important;
+  color: #f4fff6 !important;
+}
+</style>
 </head>
 <body>
 <div class="kt-rotate" id="ktRotate" role="dialog" aria-label="請轉橫向">
@@ -1686,17 +1795,6 @@ body.kt-pane-shop .kt-backpack-block{display:none}
         <div class="bubble" id="charBubble">嗨！👋</div>
       </div>
       </div>
-    </div>
-  </div>
-</div>
-<div class="upgrade-modal" id="upgradeConfirm" data-upgrade-confirm hidden role="dialog" aria-modal="true" aria-labelledby="upgradeConfirmTitle" aria-describedby="upgradeConfirmCopy" tabindex="-1">
-  <div class="upgrade-modal-card">
-    <p class="upgrade-kicker">確認視窗</p>
-    <h2 id="upgradeConfirmTitle">確定升級？</h2>
-    <p id="upgradeConfirmCopy"></p>
-    <div class="upgrade-modal-actions">
-      <button id="btnUpgradeCancel" type="button">取消</button>
-      <button id="btnUpgradeConfirm" type="button">確定升級</button>
     </div>
   </div>
 </div>
@@ -2034,6 +2132,17 @@ body.kt-pane-shop .kt-backpack-block{display:none}
           <span class="kt-footer-label">背包</span>
         </button>
       </nav>
+    <div class="upgrade-modal" id="upgradeConfirm" data-upgrade-confirm hidden role="dialog" aria-modal="true" aria-labelledby="upgradeConfirmTitle" aria-describedby="upgradeConfirmCopy" tabindex="-1">
+      <div class="upgrade-modal-card">
+        <p class="upgrade-kicker">確認視窗</p>
+        <h2 id="upgradeConfirmTitle">確定升級？</h2>
+        <p id="upgradeConfirmCopy"></p>
+        <div class="upgrade-modal-actions">
+          <button id="btnUpgradeCancel" type="button">取消</button>
+          <button id="btnUpgradeConfirm" type="button">確定升級</button>
+        </div>
+      </div>
+    </div>
     </div>
     <div class="dov" id="dov" onclick="td()"></div>
     <div class="dr" id="dr">

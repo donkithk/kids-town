@@ -442,10 +442,10 @@ body.kt-artstage #tab-town .mp { position: relative; }
   box-shadow: inset 0 1px 0 #fff, 0 3px 0 #2f6b45;
 }
 
-/* Confirm popup sits on the town stage, not inside #actionSheet. */
-#tab-town > #upgradeConfirm {
+/* Confirm popup is a direct child of the 1280×720 stage (.gsw), not #actionSheet. */
+.gsw > #upgradeConfirm {
   position: absolute;
-  z-index: 70;
+  z-index: 90;
   inset: 0;
   display: flex;
   align-items: center;
@@ -454,8 +454,8 @@ body.kt-artstage #tab-town .mp { position: relative; }
   background: rgba(28, 16, 8, .62);
   font-family: var(--body-font, Nunito, sans-serif);
 }
-#tab-town > #upgradeConfirm[hidden] { display: none !important; }
-#tab-town > #upgradeConfirm:focus { outline: none; }
+.gsw > #upgradeConfirm[hidden] { display: none !important; }
+.gsw > #upgradeConfirm:focus { outline: none; }
 #upgradeConfirm .upgrade-modal-card {
   width: min(520px, 100%);
   padding: 20px 22px 18px;
@@ -502,12 +502,15 @@ body.kt-artstage #tab-town .mp { position: relative; }
   margin-top: 16px;
 }
 #upgradeConfirm .upgrade-modal-actions button {
+  appearance: none;
+  -webkit-appearance: none;
   flex: 1 1 0;
   min-width: 44px;
   min-height: 52px;
   padding: 10px 16px;
   border-radius: 14px;
   border: 3px solid transparent;
+  font-family: inherit;
   font-size: 18px;
   font-weight: 800;
   cursor: pointer;
