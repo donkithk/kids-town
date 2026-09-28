@@ -4,15 +4,16 @@
 
 ## Kid-readable Traditional Chinese sheet buff — red on #43 tip (tests only)
 
-> Recorded 2026-09-28 against **#43 green tip** `10ef23961139e7013dc0cf9736d9861c9b3a3cbc` (`10ef239`, branch `cursor/green-sheet-buff-d676`). Tests live on `cursor/red-sheet-buff-zh-5760`. This follow-up only records that run.  
+> Recorded 2026-09-28 against **#43 green tip** `10ef23961139e7013dc0cf9736d9861c9b3a3cbc` (`10ef239`, branch `cursor/green-sheet-buff-d676`). Locked copy is KT designer + Grok Bot. Tests live on `cursor/red-sheet-buff-zh-5760`. This follow-up records the run after that lock.  
 > Cases `TC-FE-TOWN-UX-SHEET-BUFF-ZH-01` and `TC-FE-TOWN-UX-SHEET-BUFF-ZH-02`. Filter `-k sheet_buff_zh`.  
-> Contract: visible `#sheetBuff` text (and `aria-label` when it is set) must be a kid-readable Traditional Chinese purpose plus `buff_vals[level-1]`. Do not show the English `buff_type` as the label (`build_speed`, `streak_protect`, `task_bonus`, and the other seed codes in the catalog map).  
-> 工坊 Lv.3 `build_speed` `buff_vals=[2,3,4,5,6]` → index 2 → **4**. Accept `建築速度` or `起屋快啲` with `×4` / `x4` / `4`. Reject `build_speed ×4`. Reject seed effect 「建築速度 x2」 (the number is 2).  
-> 健身室 Lv.1 `streak_protect` `buff_vals=[1,1,1,1,1]` → **1**. Accept `連續保護` or `漏一日都唔斷連續` with that value. Reject `streak_protect`. Seed effect 「連續保護」 has no number, so it is not enough.  
+> Contract: visible `#sheetBuff` text (and `aria-label` when it is set) is Traditional Chinese label + current-level value. No bare English `buff_type` (`build_speed`, `streak_protect`, `task_bonus`, and the other seed codes).  
+> 工坊 Lv.3 → 「建築速度 ×4」 or 「建築速度 x4」. Not `build_speed`. Not seed 「建築速度 x2」. Not a bare `4` without × or x.  
+> 健身室 Lv.1 → 「連續保護 ×1」 plus a kid aside that a missed check-in does not break the streak (locked example 「漏打卡都唔斷」). Not `streak_protect`. Not only the four characters 「連續保護」.  
+> Full map: 任務多星 +N⭐, 連續保護 ×N + aside, 每日金幣 +N🪙, 購物折扣 (0.9 → 九折), 探險回復 ×N, 解鎖探險, 建築速度 ×N, 探險範圍 +N, 探險金幣 ×N, 發現新區域 ×N.  
 > If `#sheetNote` restates the buff, including after a tap on `#sheetBuff`, the same rule applies. `#sheetFns .fn` stays zero.  
 > Fixture: empty DB, synthetic `test_fe_kid` only. Placed 工坊 `(4,1)` Lv.3, or 健身室 `(4,1)` Lv.1, `stored=0`. No production DB and no real PIN.  
 > Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux.  
-> On this tip, `#sheetFns` has zero `.fn`. `#sheetBuff` is visible and already shows the current-level number, but the label is the English code: 工坊 `build_speed ×4` (aria-label the same). Tapping it sets `#sheetNote` to `而家等級加成 build_speed ×4`. 健身室 is `streak_protect ×1`, and the note becomes `而家等級加成 streak_protect ×1`. The value is present, so this is not a missing-number failure.  
+> On this tip, `#sheetFns` has zero `.fn`. `#sheetBuff` is visible and already shows the current-level number, but the label is the English code: 工坊 `build_speed ×4` (aria-label the same). Tapping it sets `#sheetNote` to `而家等級加成 build_speed ×4`. 健身室 is `streak_protect ×1`, and the note becomes `而家等級加成 streak_protect ×1`. The value is present, so this is not a missing-number failure. The gym chip also has no kid aside.  
 > `TC-FE-TOWN-UX-SHEET-BUFF-01` / `02` still accept English `build_speed ×4` for the numeric-level and zero-`.fn` contract. That English-label acceptance is superseded by the ZH cases. Those two legacy asserts were not weakened and still pass when the Chinese cases are excluded. `-k sheet_buff` also selects the ZH tests, so that keyword is red.  
 > Upgrade cost chip, `#btnUpgrade`, and `#upgradeConfirm` stay on the existing `upgrade_cost` / `upgrade_confirm` asserts. `TC-FE-TOWN-UX-05` and `store_ux` asserts were not edited. Those suites passed again.
 
@@ -20,10 +21,10 @@
 
 | Suite | Command | Result |
 |-------|---------|--------|
-| Chinese sheet buff (new) | `python3 -m pytest tests/test_frontend.py -q -k sheet_buff_zh --tb=short` | **2 failed**, 50 deselected in 3.89s |
-| Legacy sheet buff only | `python3 -m pytest tests/test_frontend.py -q -k 'sheet_buff and not sheet_buff_zh' --tb=line` | **2 passed**, 50 deselected in 2.63s |
-| `sheet_buff` keyword (legacy + ZH) | `python3 -m pytest tests/test_frontend.py -q -k sheet_buff --tb=line` | **2 failed, 2 passed**, 48 deselected in 4.81s |
-| Upgrade + UX-05 + store_ux | `python3 -m pytest tests/test_frontend.py -q -k 'upgrade_cost or upgrade_confirm or scene4_upgrade_feature_and_hud or store_ux' --tb=line` | **5 passed**, 47 deselected in 10.48s |
+| Chinese sheet buff (new) | `python3 -m pytest tests/test_frontend.py -q -k sheet_buff_zh --tb=short` | **2 failed**, 50 deselected in 3.39s |
+| Legacy sheet buff only | `python3 -m pytest tests/test_frontend.py -q -k 'sheet_buff and not sheet_buff_zh' --tb=line` | **2 passed**, 50 deselected in 2.71s |
+| `sheet_buff` keyword (legacy + ZH) | `python3 -m pytest tests/test_frontend.py -q -k sheet_buff --tb=line` | **2 failed, 2 passed**, 48 deselected in 5.15s |
+| Upgrade + UX-05 + store_ux | `python3 -m pytest tests/test_frontend.py -q -k 'upgrade_cost or upgrade_confirm or scene4_upgrade_feature_and_hud or store_ux' --tb=line` | **5 passed**, 47 deselected in 10.79s |
 
 The two new cases fail because the label is an English `buff_type`, not because the level number or the zero-`.fn` rule is missing. The upgrade cost, upgrade confirm, scene-4 HUD, and store-place asserts were not weakened. Legacy `SHEET-BUFF-01` / `02` still pass on `build_speed ×4`.
 
@@ -31,8 +32,8 @@ The two new cases fail because the label is an English `buff_type`, not because 
 
 | Case ID | Pytest | Result | Reason |
 |---------|--------|--------|--------|
-| TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 | `test_town_ux_sheet_buff_zh_workshop_shows_chinese_level_value` | **FAIL** | `#sheetBuff` text and aria-label are `build_speed ×4`. Missing `建築速度` / `起屋快啲`. Value **4** is present (not a missing-number failure). After the tap, `#sheetNote` is `而家等級加成 build_speed ×4`. |
-| TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 | `test_town_ux_sheet_buff_zh_gym_shows_chinese_not_streak_code` | **FAIL** | `#sheetBuff` text and aria-label are `streak_protect ×1`. Missing `連續保護` / `漏一日都唔斷連續`. Value **1** is present. After the tap, `#sheetNote` is `而家等級加成 streak_protect ×1`. |
+| TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 | `test_town_ux_sheet_buff_zh_workshop_shows_chinese_level_value` | **FAIL** | `#sheetBuff` text and aria-label are `build_speed ×4`. Missing 「建築速度」. Value **4** is present (not a missing-number failure). Not 「建築速度 ×4」. After the tap, `#sheetNote` is `而家等級加成 build_speed ×4`. |
+| TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 | `test_town_ux_sheet_buff_zh_gym_shows_chinese_not_streak_code` | **FAIL** | `#sheetBuff` text and aria-label are `streak_protect ×1`. Missing 「連續保護」 and a kid aside such as 「漏打卡都唔斷」. Value **1** is present. 「連續保護 ×1」 alone would still fail. After the tap, `#sheetNote` is `而家等級加成 streak_protect ×1`. |
 | TC-FE-TOWN-UX-SHEET-BUFF-01 | `test_town_ux_sheet_buff_shows_level_buff_without_fn` | **PASS** | English `build_speed ×4` still satisfies this numeric-level assert. Superseded for the label language by ZH-01. Not weakened. |
 | TC-FE-TOWN-UX-SHEET-BUFF-02 | `test_town_ux_sheet_buff_no_stub_toast` | **PASS** | Zero `.fn`, no stub toast. Does not check Chinese. Not weakened. |
 
