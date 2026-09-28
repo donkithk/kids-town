@@ -224,16 +224,27 @@
         btn.textContent = "已滿級";
         btn.disabled = true;
       } else {
-        btn.textContent = "升級 · " + costBits(quote);
+        btn.textContent = "升級";
         btn.disabled = !quote.afford || state.upgrading;
       }
       btn.setAttribute("aria-disabled", btn.disabled ? "true" : "false");
     }
-    var showConfirm = !!(state.confirming && quote && !quote.maxed);
-    if (box) show(box, showConfirm);
-    if (copy && quote) {
-      copy.textContent = "確定升級「" + quote.name + "」Lv." + quote.level + "？將扣除 " + costBits(quote) + "。";
+    var cost = $("sheetCost");
+    if (cost) {
+      if (quote && !quote.maxed) cost.textContent = "升級要 " + costBits(quote);
+      else if (quote && quote.maxed) cost.textContent = "已滿級";
+      else cost.textContent = "";
     }
+    var showConfirm = !!(state.confirming && quote && !quote.maxed);
+    var wasHidden = !!(box && box.hidden);
+    if (box) show(box, showConfirm);
+    if (btn) btn.setAttribute("aria-expanded", showConfirm ? "true" : "false");
+    if (copy && quote) {
+      copy.textContent = "「" + quote.name + "」而家 Lv." + quote.level
+        + "，升級到 Lv." + (quote.level + 1)
+        + " 會扣 " + costBits(quote) + "。確定先至扣，取消只關呢個視窗。";
+    }
+    if (showConfirm && wasHidden && box && typeof box.focus === "function") box.focus();
     if (ok) {
       ok.disabled = !(showConfirm && quote.afford) || state.upgrading;
       ok.setAttribute("aria-disabled", ok.disabled ? "true" : "false");
@@ -614,7 +625,11 @@
     var sheet = $("actionSheet");
     if (!sheet) return;
     show(sheet, state.sheet);
-    if (!state.sheet) return;
+    if (!state.sheet) {
+      state.confirming = false;
+      paintUpgrade(null);
+      return;
+    }
     var def = defById(state.sheetDef) || {};
     var placed = placedDef(state.sheetDef);
     var title = $("sheetTitle");
@@ -626,8 +641,8 @@
     if (note) {
       if (state.note) note.textContent = state.note;
       else if (quote && quote.maxed) note.textContent = "已經最高等級。";
-      else if (quote && !quote.afford) note.textContent = "升級需要 " + costBits(quote) + "。" + quote.shortText;
-      else if (quote) note.textContent = "升級需要 " + costBits(quote) + "。";
+      else if (quote && !quote.afford) note.textContent = quote.shortText + "。未可以升級。";
+      else if (quote) note.textContent = "可以升級，或者打開功能。撳「升級」會彈出確認窗，確定先至扣。";
       else note.textContent = "可以升級，或者試下面嘅功能。";
     }
     var art = $("sheetArt");
@@ -977,6 +992,12 @@
     if (upgradeConfirm) upgradeConfirm.addEventListener("click", function () { onUpgradeConfirm(); });
     var upgradeCancel = $("btnUpgradeCancel");
     if (upgradeCancel) upgradeCancel.addEventListener("click", function () { onUpgradeCancel(); });
+    var upgradeModal = $("upgradeConfirm");
+    if (upgradeModal) {
+      upgradeModal.addEventListener("click", function (event) {
+        if (event.target === upgradeModal) onUpgradeCancel();
+      });
+    }
     $("btnCloseSheet").addEventListener("click", closeSheet);
     $("btnMotion").addEventListener("click", function () {
       motionOn = !motionOn;

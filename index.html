@@ -1664,15 +1664,9 @@ body.kt-pane-shop .kt-backpack-block{display:none}
         <h2 id="sheetTitle">升級或打開功能</h2>
         <p class="sheet-level" id="sheetLevel">Lv.1</p>
         <p class="sheet-note" id="sheetNote"></p>
-        <div class="upgrade-confirm" id="upgradeConfirm" data-upgrade-confirm hidden>
-          <p id="upgradeConfirmCopy"></p>
-          <div class="sheet-actions">
-            <button id="btnUpgradeConfirm" type="button">確定</button>
-            <button id="btnUpgradeCancel" type="button">取消</button>
-          </div>
-        </div>
+        <p class="sheet-cost" id="sheetCost"></p>
         <div class="sheet-actions">
-          <button id="btnUpgrade" type="button">升級</button>
+          <button id="btnUpgrade" type="button" aria-haspopup="dialog" aria-controls="upgradeConfirm" aria-expanded="false">升級</button>
         </div>
         <div class="fn-row" id="sheetFns"></div>
       </div>
@@ -1692,6 +1686,17 @@ body.kt-pane-shop .kt-backpack-block{display:none}
         <div class="bubble" id="charBubble">嗨！👋</div>
       </div>
       </div>
+    </div>
+  </div>
+</div>
+<div class="upgrade-modal" id="upgradeConfirm" data-upgrade-confirm hidden role="dialog" aria-modal="true" aria-labelledby="upgradeConfirmTitle" aria-describedby="upgradeConfirmCopy" tabindex="-1">
+  <div class="upgrade-modal-card">
+    <p class="upgrade-kicker">確認視窗</p>
+    <h2 id="upgradeConfirmTitle">確定升級？</h2>
+    <p id="upgradeConfirmCopy"></p>
+    <div class="upgrade-modal-actions">
+      <button id="btnUpgradeCancel" type="button">取消</button>
+      <button id="btnUpgradeConfirm" type="button">確定升級</button>
     </div>
   </div>
 </div>
