@@ -30,6 +30,9 @@ Requirements:
   TC-FE-TOWN-STORE-PLACE-01  用存倉／#placementBar／unstored 放返，地圖見到屋，金幣材料唔變，同一行 stored=0。
   TC-FE-TOWN-STORE-CONFIRM-01  唔好同時見到扣資源確認文案同「你已經興建咗呢種建築物」；正確放返之後資源唔變。
   篩選 `-k 'store_list or store_place or store_confirm'`。
+  TC-FE-TOWN-STORE-UX-01  清單放返存倉屋要留喺四場景 8×8。唔好 `#placementBar.active`、
+  唔好藏 `#townMap`、唔好露出 24×16 `.valid-plot`／`↘️`。確認走 POST `/unstored`。
+  篩選 `-k store_ux`。
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
   FE-P0-03  家長 A session 不能管理家長 B 嘅仔女
@@ -3413,3 +3416,400 @@ def test_town_store_confirm_does_not_pair_spend_copy_with_already_built(
         )
     if problems:
         _store_palette_fail("TC-FE-TOWN-STORE-CONFIRM-01", " | ".join(problems))
+
+
+# ── TC-FE-TOWN-STORE-UX: warehouse place stays on the four-scene 8×8 pad ──
+#
+# After #35, the 建築清單 warehouse row calls placeFromStore, which calls
+# legacy startUnstoreBuilding. That adds #placementBar.active. The sibling
+# rule `#placementBar.active ~ #townMap { visibility:hidden }` hides the iso
+# map and leaves the 24×16 #townCanvasWrapper .valid-plot / ↘️ grid.
+# Acceptance: stay on the four-scene 8×8 pad and confirm with POST /unstored.
+# Filter: `-k store_ux`.
+
+_STORE_UX_CHROME_JS = r"""
+() => {
+  const bar = document.getElementById('placementBar');
+  const map = document.getElementById('townMap');
+  const wrap = document.getElementById('townCanvasWrapper');
+  const barCs = bar ? getComputedStyle(bar) : null;
+  const mapCs = map ? getComputedStyle(map) : null;
+  const wrapCs = wrap ? getComputedStyle(wrap) : null;
+  const plots = [...document.querySelectorAll('#townCanvasWrapper .valid-plot')];
+  let arrows = 0;
+  let confirmCells = 0;
+  let faintPlots = 0;
+  for (const el of plots) {
+    const text = el.innerText || '';
+    if (text.includes('↘️')) arrows += 1;
+    if (text.includes('按確認')) confirmCells += 1;
+    const opacity = parseFloat(getComputedStyle(el).opacity || '1');
+    if (opacity < 0.9) faintPlots += 1;
+  }
+  const confirmBtn = bar ? bar.querySelector('.confirm-btn') : null;
+  const pads = [...document.querySelectorAll('#townMap .pad button, #village .pad button')];
+  let visiblePads = 0;
+  for (const el of pads) {
+    const cs = getComputedStyle(el);
+    if (cs.visibility !== 'hidden' && cs.display !== 'none') visiblePads += 1;
+  }
+  const stage = document.querySelector('body.kt-artstage .gsw');
+  const tab = document.getElementById('tab-town');
+  function clipRoot() {
+    return stage || tab || document.documentElement;
+  }
+  function rectOf(el) {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return {
+      x: Math.round(r.x), y: Math.round(r.y),
+      w: Math.round(r.width), h: Math.round(r.height),
+      sw: el.scrollWidth, cw: el.clientWidth
+    };
+  }
+  function cutBy(el, root) {
+    if (!el || !root) return null;
+    const rect = el.getBoundingClientRect();
+    const box = root.getBoundingClientRect();
+    const width = Math.min(rect.right, box.right) - Math.max(rect.left, box.left);
+    const height = Math.min(rect.bottom, box.bottom) - Math.max(rect.top, box.top);
+    return {
+      fullW: Math.round(rect.width),
+      fullH: Math.round(rect.height),
+      visW: Math.round(Math.max(0, width)),
+      visH: Math.round(Math.max(0, height)),
+      cut: width < rect.width - 2 || height < rect.height - 2
+    };
+  }
+  function visibleChars(el, root) {
+    if (!el || !root) return '';
+    const box = root.getBoundingClientRect();
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let out = '';
+    let node;
+    while ((node = walker.nextNode())) {
+      const text = node.textContent || '';
+      for (let i = 0; i < text.length; i += 1) {
+        const range = document.createRange();
+        range.setStart(node, i);
+        range.setEnd(node, i + 1);
+        const rects = range.getClientRects();
+        let seen = false;
+        for (const r of rects) {
+          const w = Math.min(r.right, box.right) - Math.max(r.left, box.left);
+          const h = Math.min(r.bottom, box.bottom) - Math.max(r.top, box.top);
+          if (w > 0.4 && h > 0.4) { seen = true; break; }
+        }
+        if (seen) out += text[i];
+        range.detach();
+      }
+    }
+    return out.replace(/\s+/g, ' ').trim();
+  }
+  const span = bar ? bar.querySelector('span') : null;
+  const root = clipRoot();
+  const visibleBar = visibleChars(bar, root);
+  const visibleConfirm = visibleChars(confirmBtn, root);
+  const barCut = cutBy(bar, root);
+  const confirmCut = cutBy(confirmBtn, root);
+  const spanCut = cutBy(span, root);
+  return {
+    barClass: bar ? bar.className : '',
+    barActive: !!(bar && bar.classList.contains('active')),
+    barDisplay: barCs ? barCs.display : '',
+    barBg: barCs ? barCs.backgroundColor : '',
+    barText: bar ? (bar.innerText || '').replace(/\s+/g, ' ').trim() : '',
+    barClipped: !!(barCut && barCut.cut) || !!(spanCut && spanCut.cut) || !!(confirmCut && confirmCut.cut),
+    confirmText: confirmBtn ? (confirmBtn.textContent || '').trim() : '',
+    confirmClipped: !!(confirmCut && confirmCut.cut),
+    visibleBar: visibleBar,
+    visibleConfirm: visibleConfirm,
+    barCut: barCut,
+    spanCut: spanCut,
+    confirmCut: confirmCut,
+    barBox: rectOf(bar),
+    spanBox: rectOf(span),
+    confirmBox: rectOf(confirmBtn),
+    mapVisibility: mapCs ? mapCs.visibility : '',
+    mapPointer: mapCs ? mapCs.pointerEvents : '',
+    scene: map ? (map.getAttribute('aria-label') || '') : '',
+    mapClass: map ? map.className : '',
+    plotCount: plots.length,
+    arrowCount: arrows,
+    confirmCells: confirmCells,
+    faintPlots: faintPlots,
+    visiblePads: visiblePads,
+    domPads: pads.length,
+    wrapShown: !!(wrapCs && wrapCs.display !== 'none' && wrapCs.visibility !== 'hidden'),
+  };
+}
+"""
+
+
+def _store_ux_fail(case_id, detail):
+    pytest.fail(
+        f"{case_id}: {detail} "
+        "Placing a stored building from the four-scene 建築清單 must stay on the "
+        "visible 8×8 iso pad. #placementBar must not gain class active, because "
+        "#placementBar.active ~ #townMap { visibility:hidden } hides the town map "
+        "and exposes the legacy 24×16 #townCanvasWrapper .valid-plot / ↘️ grid "
+        "and the purple 「確認建造」 bar. Confirm with POST /buildings/<id>/unstored "
+        "on that four-scene pad. Gold and materials stay unchanged, and the same "
+        "row becomes stored=0."
+    )
+
+
+def _store_ux_chrome(page):
+    return page.evaluate(_STORE_UX_CHROME_JS)
+
+
+def _wait_warehouse_place_ui(page):
+    """Legacy bar paints immediately; the 24×16 plots follow loadTown."""
+    page.wait_for_function(
+        """() => {
+          const bar = document.getElementById('placementBar');
+          const map = document.getElementById('townMap');
+          const active = !!(bar && bar.classList.contains('active'));
+          const scene3 = !!(map && /is-scene-3/.test(map.className || ''));
+          const confirm = document.getElementById('btnUxConfirm');
+          let confirmOn = false;
+          if (confirm) {
+            const cs = getComputedStyle(confirm);
+            const bar = confirm.closest('#uxPlaceBar');
+            confirmOn = !!bar && !bar.hidden && cs.visibility !== 'hidden' && cs.display !== 'none';
+          }
+          return active || scene3 || confirmOn;
+        }""",
+        timeout=8000,
+    )
+    if page.locator("#placementBar.active").count() == 0:
+        return
+    try:
+        page.wait_for_function(
+            "() => document.querySelectorAll('#townCanvasWrapper .valid-plot').length >= 48",
+            timeout=8000,
+        )
+    except Exception:
+        pass
+
+
+def _reveal_legacy_confirm(page):
+    """Select one legacy plot so the purple 「確認建造」 state is on screen.
+
+    Does not click the confirm button, so this does not POST.
+    """
+    plots = page.locator("#townCanvasWrapper .valid-plot")
+    if plots.count() == 0:
+        return
+    plots.first.dispatch_event("click")
+    try:
+        page.locator("#placementBar .confirm-btn").wait_for(state="attached", timeout=4000)
+    except Exception:
+        return
+    try:
+        page.wait_for_function(
+            """() => [...document.querySelectorAll('#townCanvasWrapper .valid-plot')]
+              .some((el) => (el.innerText || '').includes('按確認'))""",
+            timeout=8000,
+        )
+    except Exception:
+        pass
+
+
+def _collapsed(text):
+    return re.sub(r"\s+", "", text or "")
+
+
+def _confirm_fragment(chrome):
+    """On-screen confirm copy when the purple bar is truncated.
+
+    Preview leaves only a piece such as 「確認」. A full 「確認建造」 that is
+    still the legacy purple strip is reported by the caller separately.
+    """
+    visible = chrome.get("visibleBar") or ""
+    visible_confirm = chrome.get("visibleConfirm") or ""
+    full = chrome.get("barText") or ""
+    painted = _collapsed(visible)
+    dom = _collapsed(full)
+    clipped = bool(chrome.get("barClipped") or chrome.get("confirmClipped"))
+    if clipped or (dom and painted and painted != dom and "確認" in painted):
+        shown = visible_confirm or visible
+        return shown or "確認"
+    if "確認" in painted and "確認建造" not in painted and (
+        "確認建造" in dom or "確認建造" in (chrome.get("confirmText") or "")
+    ):
+        return visible_confirm or visible or "確認"
+    return None
+
+
+def _legacy_place_problems(chrome):
+    """Acceptance violations while a stored building is being placed.
+
+    The preview failure is the legacy purple #placementBar (often clipped so
+    only 「確認」 remains), a faint ↘️ / .valid-plot flood, and green 「按確認」
+    cells, instead of the four-scene 8×8 iso pad.
+    """
+    problems = []
+    if chrome["barActive"]:
+        fragment = _confirm_fragment(chrome)
+        if fragment:
+            problems.append(
+                "purple #placementBar is clipped/truncated: the visible confirm "
+                f"copy is only {fragment!r} (preview leaves 「確認」). "
+                f"DOM text was {chrome['barText']!r}, background={chrome['barBg']!r}"
+            )
+        else:
+            problems.append(
+                "#placementBar has class active. It is the legacy purple confirm "
+                f"strip (background={chrome['barBg']!r}, display={chrome['barDisplay']!r}, "
+                f"on-screen {chrome.get('visibleBar')!r}). "
+                "Preview clips this same strip so only 「確認」 remains. "
+                "That bar must not appear while placing a stored building"
+            )
+    if chrome["mapVisibility"] == "hidden":
+        problems.append(
+            "#townMap computed visibility is hidden "
+            f"(pointer-events={chrome['mapPointer']!r}). "
+            "#placementBar.active ~ #townMap { visibility:hidden } hides the four-scene map"
+        )
+    if chrome["plotCount"] >= 48 or chrome["arrowCount"] >= 24 or chrome.get("faintPlots", 0) >= 24:
+        problems.append(
+            "#townCanvasWrapper exposes a large legacy placement grid of faint "
+            f"per-cell icons: {chrome.get('faintPlots', 0)} faint .valid-plot, "
+            f"{chrome['plotCount']} .valid-plot total, and {chrome['arrowCount']} ↘️ "
+            f"(wrap shown={chrome['wrapShown']}). "
+            "That is the broken 24×16-style UI, not the four-scene 8×8 iso pad"
+        )
+    if chrome["confirmCells"]:
+        problems.append(
+            f"{chrome['confirmCells']} green .valid-plot cell(s) show 「按確認」"
+        )
+    on_iso = (
+        chrome["mapVisibility"] != "hidden"
+        and chrome["visiblePads"] == TOWN_GRID_COLS * TOWN_GRID_ROWS
+        and "場景" in (chrome["scene"] or "")
+    )
+    if not on_iso:
+        problems.append(
+            "placement left the visible four-scene 8×8 iso pad "
+            f"(visible pads {chrome['visiblePads']}, dom pads {chrome['domPads']}, "
+            f"aria={chrome['scene']!r}, class={chrome['mapClass']!r})"
+        )
+    return problems
+
+
+def _four_scene_confirm_button(page):
+    """Confirm control on the iso sheet. The legacy #placementBar button does not count."""
+    buttons = page.locator("#townMap").get_by_role(
+        "button", name=re.compile(r"確定放置|確定|確認")
+    )
+    for i in range(buttons.count()):
+        btn = buttons.nth(i)
+        try:
+            if not btn.is_visible():
+                continue
+        except Exception:
+            continue
+        label = _control_blob(btn)
+        if "取消" in label:
+            continue
+        return btn
+    return None
+
+
+def _confirm_stored_on_four_scene(page):
+    """Pick an iso pad if needed, then POST /unstored from the four-scene confirm."""
+    problems = []
+    scene = page.locator("#townMap").get_attribute("aria-label") or ""
+    if "場景 3" not in scene:
+        try:
+            _select_empty_pad(page, 1, 1)
+        except Exception as exc:
+            problems.append(f"four-scene empty pad was not usable ({exc})")
+            return problems
+        go = _go_place_button(page)
+        try:
+            if go.count() and go.first.is_visible() and go.first.is_enabled():
+                go.first.click()
+        except Exception:
+            pass
+    confirm = _four_scene_confirm_button(page)
+    if confirm is None:
+        problems.append(
+            "no four-scene confirm (確定放置 / 確定) on the visible 8×8 iso pad, "
+            "so POST /buildings/<id>/unstored did not run. "
+            "The legacy #placementBar 「確認建造」 button does not count."
+        )
+        return problems
+    try:
+        with page.expect_response(
+            lambda r: r.request.method == "POST" and "/buildings/" in r.url,
+            timeout=8000,
+        ) as resp_info:
+            confirm.click()
+        resp = resp_info.value
+    except Exception as exc:
+        problems.append(f"four-scene confirm did not POST /unstored ({exc})")
+        return problems
+    if "/unstored" not in resp.url:
+        problems.append(
+            "confirm must POST /buildings/<id>/unstored for the stored row. "
+            f"url={resp.url} HTTP {resp.status}"
+        )
+    elif resp.status not in (200, 201):
+        try:
+            body = resp.text()[:300]
+        except Exception:
+            body = ""
+        problems.append(f"unstored failed HTTP {resp.status}: {body}")
+    page.wait_for_timeout(400)
+    return problems
+
+
+@pytest.mark.case_id("TC-FE-TOWN-STORE-UX-01")
+def test_town_store_ux_place_stays_on_four_scene(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-STORE-UX-01 清單放返存倉屋要留喺四場景 8×8，確認走 unstored。"""
+    kid_id = fe_ids["kid_id"]
+    seeded = _seed_town_store_palette(test_db_path, kid_id)
+    guild = seeded["guild"]
+    workshop = seeded["workshop"]
+    _open_town_home(page, base_url)
+    before = _resource_snapshot(page, test_db_path, kid_id)
+    case_id = "TC-FE-TOWN-STORE-UX-01"
+    _enter_scene2(page, case_id)
+    _open_building_list(page)
+    btn, control = _palette_control(page, STORE_PALETTE_GUILD)
+    problems = []
+    if btn is None:
+        problems.append(f"建築清單 has no {STORE_PALETTE_GUILD} row to place")
+        _store_ux_fail(case_id, " | ".join(problems))
+    if "放返" not in control and "存倉" not in control:
+        problems.append(
+            f"warehouse row should be the list place control (存倉 / 放返), "
+            f"saw {control!r}"
+        )
+    btn.click()
+    try:
+        _wait_warehouse_place_ui(page)
+    except Exception as exc:
+        problems.append(f"place did not start from the 建築清單 row ({exc})")
+        _store_ux_fail(case_id, " | ".join(problems))
+    chrome = _store_ux_chrome(page)
+    if chrome["barActive"] and chrome["plotCount"] > 0 and "確認建造" not in chrome["confirmText"]:
+        _reveal_legacy_confirm(page)
+        chrome = _store_ux_chrome(page)
+    problems.extend(_legacy_place_problems(chrome))
+    if problems:
+        problems.append(
+            "Did not confirm on the four-scene 8×8 pad, so POST /buildings/<id>/unstored "
+            "was not sent from that UI. Gold, materials, and the stored row were left as seeded."
+        )
+    else:
+        problems.extend(_confirm_stored_on_four_scene(page))
+        _assert_guild_place_outcome(
+            page, test_db_path, kid_id, guild, workshop, before, problems
+        )
+    if problems:
+        _store_ux_fail(case_id, " | ".join(problems))

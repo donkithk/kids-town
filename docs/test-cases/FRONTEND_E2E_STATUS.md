@@ -2,6 +2,31 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## Store place must stay on four-scene UX — red on main (tests only, do not merge)
+
+> Recorded 2026-09-27 against **main** `66bd1bc2802acd7a04ab3389b9ace1e242dcf302` (`66bd1bc`, Green #35).  
+> Acceptance: placing a stored building from the four-scene 建築清單 stays on the visible 8×8 iso pad. `#placementBar` must not gain class `active`. `#townMap` must stay visible (`#placementBar.active ~ #townMap { visibility:hidden }` must not hide it). `#townCanvasWrapper` must not show the legacy 24×16 `.valid-plot` / `↘️` grid or the clipped purple 「確認建造」 bar. Confirm posts `/buildings/<id>/unstored`, gold and materials stay unchanged, and the same row becomes `stored=0` on the map.  
+> This change is tests + catalog only. No product code. Do not merge.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Empty seeded SQLite only.  
+> Fixture: 工坊 `(4,1)` Lv.1 `stored=0`; 探險公會 `stored=1`. No production DB and no real PIN.  
+> On this main, `placeFromStore` calls legacy `startUnstoreBuilding`. Preview shows that purple `#placementBar` clipped so only 「確認」 remains, a field of faint `↘️` icons, and a green 「按確認」 cell, instead of the 8×8 iso pad. The test sees the same strip: `#placementBar.active` (`display:flex`, background `rgb(99, 102, 241)`), on-screen copy ending in 「確認」 / 「確認建造」. `#townMap` computed visibility is `hidden` (`pointer-events:none`). `#townCanvasWrapper` shows 335 faint `.valid-plot`, 336 plots total, and 335 `↘️`, plus 1 green cell 「按確認」. Visible iso pads are 0 (the DOM still has 64, aria 「場景 2」). POST `/unstored` was not sent from the four-scene pad.
+
+### Commands
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Store place UX | `python3 -m pytest tests/test_frontend.py -q -k store_ux --tb=line` | **1 failed**, 44 deselected in 2.03s |
+
+The one new case fails. Asserts were not weakened.
+
+### Case ID → result on main `66bd1bc`
+
+| Case ID | Pytest | Result | Reason |
+|---------|--------|--------|--------|
+| TC-FE-TOWN-STORE-UX-01 | `test_town_store_ux_place_stays_on_four_scene` | **FAIL** | `#placementBar.active` purple strip (`rgb(99, 102, 241)`); Preview clips it so only 「確認」 shows. `#townMap` visibility is `hidden`. 335 faint `.valid-plot` / 335 `↘️`, plus 1 green 「按確認」 cell. Visible 8×8 iso pads: 0. Four-scene POST `/unstored` was not sent. |
+
+---
+
 ## Stored building must not use the new-build spend path — red on main (tests only, do not merge)
 
 > Recorded 2026-09-27 against **main** `0bd8c8729f750ec97019532f8acd60df1c11556b` (`0bd8c87`, Green #32).  
