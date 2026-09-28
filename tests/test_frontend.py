@@ -33,9 +33,10 @@ Requirements:
   TC-FE-TOWN-STORE-UX-01  清單放返存倉屋要留喺四場景 8×8。唔好 `#placementBar.active`、
   唔好藏 `#townMap`、唔好露出 24×16 `.valid-plot`／`↘️`。確認走 POST `/unstored`。
   篩選 `-k store_ux`。
-  TC-FE-TOWN-UX-UPGRADE-COST-01  場景 4 升級掣（或確認層）要顯示金幣同材料 need，公式同後端。
+  TC-FE-TOWN-UX-UPGRADE-COST-01  撳已起屋打開 #actionSheet，sheet 或確認層要顯示金幣同材料 need。
   TC-FE-TOWN-UX-UPGRADE-COST-02  資源唔夠就唔好撳得，亦唔好 POST /upgrade。
-  TC-FE-TOWN-UX-UPGRADE-CONFIRM-01  資源夠都要先確認；取消唔 POST；確定先至升級同扣 HUD。
+  TC-FE-TOWN-UX-UPGRADE-CONFIRM-01  第一撳 #btnUpgrade 只開確認；取消唔 POST；確定先至升級同扣 HUD。
+  對齊設計稿 3b4671d：撳屋 → #actionSheet 顯示成本 → 確認 → 升級。唔係一撳升級。
   篩選 `-k 'upgrade_cost or upgrade_confirm'`。唔改 UX-05／store_ux 斷言。
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
@@ -3822,13 +3823,13 @@ def test_town_store_ux_place_stays_on_four_scene(
 
 # ── TC-FE-TOWN-UX-UPGRADE-*: scene 4 cost + confirm (red on #38 tip) ──
 #
-# Backend POST /buildings/<id>/upgrade charges
-# gold = max(1, floor(level * 100 * shop discount)) and mats = base * (level + 1).
-# Legacy showBuildingUpgrade shows level*100 and have/need mats (base*(level+1));
-# with a placed 商店 the POST deducts the discounted gold. These cases require
-# that discounted gold plus the scaled materials (have/need, or at least need).
-# Four-scene onUpgrade() posts immediately; #btnUpgrade is only the label 「升級」.
-# These cases stay red until the action sheet shows the cost and asks before posting.
+# Design mock tip 3b4671d (PR #27, do not merge) scene 4:
+#   tap a placed building → #actionSheet shows the cost → confirm → then upgrade.
+#   Not a one-click upgrade. Mock ids: #actionSheet, #sheetTitle, #sheetLevel,
+#   #sheetNote, #btnUpgrade. The mock's demo purse (💰50 🪵2) is only the shape;
+#   product numbers follow upgrade_building:
+#   gold = max(1, floor(level * 100 * shop discount)), mats = base * (level + 1).
+# On #38 tip, onUpgrade() POSTs on the first click and #btnUpgrade is only 「升級」.
 # 整道具／接任務 stay out of scope. Do not weaken UX-05 or store_ux.
 
 UPGRADE_UX_TARGET = "健身室"
@@ -3839,15 +3840,15 @@ _UPGRADE_PLACE_CONFIRM = re.compile(r"確定放置|確認建造|去擺位置")
 _UPGRADE_CANCEL_NAME = re.compile(r"取消")
 _UPGRADE_SHORT_RE = re.compile(r"唔夠|不足|未夠|不夠|買唔起")
 UPGRADE_UX_RED = (
-    "Four-scene scene 4 still upgrades immediately. #btnUpgrade is only 「升級」: "
-    "no gold need, no material need, no confirm step. "
-    "Show the backend cost (gold = floor(level*100 × shop discount), "
-    "materials = base×(level+1); have/need or at least need). "
-    "Short resources must disable the spend (or make it clearly not actionable) "
-    "and must not POST /upgrade. "
-    "A full purse must open a confirm step (building name, level, resources to deduct) "
-    "before any POST; 取消 leaves the level and does not POST; 確定 then POSTs, "
-    "Lv goes up, and the HUD drops by that cost. "
+    "Design mock 3b4671d scene 4 is tap building → #actionSheet showing gold and "
+    "material need → confirm → then upgrade. Not one click. "
+    "On this tip #btnUpgrade is only 「升級」 and the first tap POSTs /upgrade. "
+    "Show the backend cost in or near #actionSheet (or on the confirm layer): "
+    "gold = floor(level*100 × shop discount), materials = base×(level+1) "
+    "(have/need or at least need). The mock's 💰50 🪵2 is the demo shape, not the amount. "
+    "Short resources must disable #btnUpgrade or the confirm, and must not POST. "
+    "A full purse: the first #btnUpgrade tap only opens confirmation "
+    "(cost, building name, level); 取消 does not POST; only confirm POSTs. "
     "整道具／接任務 are out of scope."
 )
 
@@ -3977,7 +3978,10 @@ def _missing_upgrade_needs(text, quote):
 
 
 def _upgrade_surface_text(page):
-    """Visible upgrade sheet / confirm copy only. Header chips do not count."""
+    """#actionSheet and a confirm layer next to it. Header chips do not count.
+
+    Mock ids (3b4671d): #actionSheet, #sheetTitle, #sheetLevel, #sheetNote, #btnUpgrade.
+    """
     return page.evaluate(
         """() => {
           const chunks = [];
@@ -3989,10 +3993,11 @@ def _upgrade_surface_text(page):
             const label = el.getAttribute && el.getAttribute('aria-label');
             if (label) chunks.push(label);
           };
-          take(document.getElementById('actionSheet'));
-          take(document.getElementById('btnUpgrade'));
+          ['actionSheet', 'sheetTitle', 'sheetLevel', 'sheetNote', 'btnUpgrade'].forEach((id) => {
+            take(document.getElementById(id));
+          });
           document.querySelectorAll(
-            '[role="dialog"], [data-upgrade-confirm], .upgrade-confirm'
+            '#actionSheet [data-upgrade-confirm], [data-upgrade-confirm], .upgrade-confirm, [role="dialog"]'
           ).forEach(take);
           return chunks.join('\\n');
         }"""
@@ -4031,8 +4036,11 @@ def _button_label(btn):
     return (text + " " + aria).strip()
 
 
-def _visible_buttons(page, pattern, *, skip=None):
-    loc = page.get_by_role("button", name=pattern)
+def _buttons_under(page, root_sel, pattern, *, skip=None):
+    root = page.locator(root_sel)
+    if root.count() == 0:
+        return []
+    loc = root.get_by_role("button", name=pattern)
     found = []
     for i in range(loc.count()):
         btn = loc.nth(i)
@@ -4049,11 +4057,20 @@ def _visible_buttons(page, pattern, *, skip=None):
 
 
 def _upgrade_confirm_buttons(page):
-    return _visible_buttons(page, _UPGRADE_CONFIRM_NAME, skip=_UPGRADE_PLACE_CONFIRM)
+    """Confirm controls in #actionSheet or a dialog. Place-bar 確定放置 does not count."""
+    found = []
+    for sel in ("#actionSheet", "[role='dialog']", "[data-upgrade-confirm]", ".upgrade-confirm"):
+        found.extend(
+            _buttons_under(page, sel, _UPGRADE_CONFIRM_NAME, skip=_UPGRADE_PLACE_CONFIRM)
+        )
+    return found
 
 
 def _upgrade_cancel_buttons(page):
-    return _visible_buttons(page, _UPGRADE_CANCEL_NAME)
+    found = []
+    for sel in ("#actionSheet", "[role='dialog']", "[data-upgrade-confirm]", ".upgrade-confirm"):
+        found.extend(_buttons_under(page, sel, _UPGRADE_CANCEL_NAME))
+    return found
 
 
 def _control_blocked(btn, surface):
@@ -4113,34 +4130,40 @@ def _expected_after_upgrade(before, quote):
 
 
 def _open_scene4_sheet(page, case_id, name):
-    """Scene 2 建築清單 → placed row opens the scene 4 action sheet."""
-    _enter_scene2(
-        page,
-        case_id,
-        "Scene 4 action sheet for a placed building opens from 「我要起屋」 → 建築清單.",
+    """Tap a placed building on scene 1. Mock 3b4671d opens #actionSheet from that tap."""
+    pad = page.locator("#townMap, #village").get_by_role(
+        "button",
+        name=re.compile(rf"第\s*\d+\s*欄第\s*\d+\s*行，{re.escape(name)}(?:，|$)"),
     )
-    _open_building_list(page)
-    row = page.locator("#paletteGrid").get_by_role(
-        "button", name=re.compile(rf"{re.escape(name)}，已起")
-    )
-    if row.count() == 0 or not row.first.is_visible():
+    if pad.count() == 0 or not pad.first.is_visible():
         _upgrade_ux_fail(
             case_id,
-            f"建築清單 has no placed 「{name}，已起」 row, so scene 4 cannot open.",
+            f"Scene 1 has no tappable pad for placed {name}. "
+            "Design mock 3b4671d: tap the building to open #actionSheet.",
         )
-    row.first.click()
+    pad.first.click()
     sheet = page.locator("#actionSheet")
     try:
         sheet.wait_for(state="visible", timeout=8000)
     except Exception:
-        _upgrade_ux_fail(case_id, f"Clicking placed {name} did not open #actionSheet.")
+        _upgrade_ux_fail(
+            case_id,
+            f"Tapping placed {name} did not open #actionSheet. "
+            "Design mock 3b4671d scene 4 is that sheet, then cost, then confirm.",
+        )
     title = (page.locator("#sheetTitle").inner_text() or "").strip()
     if name not in title:
-        _upgrade_ux_fail(case_id, f"Action sheet title should name {name}, saw {title!r}.")
-    upgrade = _upgrade_button(page)
-    if upgrade is None:
-        _upgrade_ux_fail(case_id, "Scene 4 has no visible 升級 control.")
-    return upgrade
+        _upgrade_ux_fail(
+            case_id,
+            f"#sheetTitle should name {name} after the tap, saw {title!r}.",
+        )
+    upgrade = page.locator("#actionSheet #btnUpgrade")
+    if upgrade.count() == 0 or not upgrade.first.is_visible():
+        upgrade = _upgrade_button(page)
+        if upgrade is None:
+            _upgrade_ux_fail(case_id, "#actionSheet has no visible #btnUpgrade.")
+        return upgrade
+    return upgrade.first
 
 
 def _confirm_region_text(btn):
@@ -4148,7 +4171,7 @@ def _confirm_region_text(btn):
         return btn.evaluate(
             """(el) => {
               const root = el.closest(
-                '#actionSheet, .action-sheet, [role="dialog"], [data-upgrade-confirm], .upgrade-confirm, .place-bar'
+                '#actionSheet, .action-sheet, [role="dialog"], [data-upgrade-confirm], .upgrade-confirm'
               ) || el.parentElement;
               const label = el.getAttribute('aria-label') || '';
               return ((root && root.innerText) || '') + '\\n' + label;
@@ -4162,7 +4185,7 @@ def _confirm_region_text(btn):
 def test_town_ux_upgrade_cost_sheet_shows_gold_and_mats(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-UX-UPGRADE-COST-01 升級掣或確認層要顯示金幣 need 同材料 need。"""
+    """TC-FE-TOWN-UX-UPGRADE-COST-01 撳屋打開 #actionSheet，上面或確認層要有金幣同材料 need。"""
     case_id = "TC-FE-TOWN-UX-UPGRADE-COST-01"
     kid_id = fe_ids["kid_id"]
     quote = _seed_upgrade_sheet(test_db_path, kid_id, gold=5000, wood=80, brick=40)
@@ -4182,15 +4205,16 @@ def test_town_ux_upgrade_cost_sheet_shows_gold_and_mats(
     problems = []
     if missing:
         problems.append(
-            "upgrade control or its confirm layer must show gold need "
+            "After tapping the building, #actionSheet / #btnUpgrade / #sheetNote "
+            "(or the confirm layer the first #btnUpgrade tap opens) must show gold need "
             f"{quote['gold']} (floor({quote['base_gold']}×0.9 Lv.1 商店 discount)) "
             f"and materials {quote['mats']} (base×(level+1)); have/need or at least need. "
-            f"Missing {missing}. Control label={label!r}. Surface={surface!r}."
+            f"Missing {missing}. #btnUpgrade={label!r}. Sheet={surface!r}."
         )
     if posts:
         problems.append(
-            "cost was not on the sheet, and clicking 升級 POSTed /upgrade immediately "
-            f"({posts}) instead of opening a confirm layer that shows the cost. "
+            "The first #btnUpgrade tap POSTed /upgrade "
+            f"({posts}) instead of opening a confirm layer near #actionSheet. "
             f"Level is now {_placed_level(test_db_path, kid_id, UPGRADE_UX_TARGET)}."
         )
     if problems:
@@ -4272,8 +4296,8 @@ def test_town_ux_upgrade_confirm_cancel_then_post(
     problems = []
     if posts:
         problems.append(
-            f"clicking 升級 POSTed /upgrade immediately ({posts}); "
-            f"label was {label!r}. A confirmation step has to appear before any POST."
+            f"the first #btnUpgrade tap POSTed /upgrade ({posts}); "
+            f"label was {label!r}. That tap must only open confirmation near #actionSheet."
         )
     level_mid = _placed_level(test_db_path, kid_id, UPGRADE_UX_TARGET)
     if level_mid != level_before:
@@ -4283,7 +4307,8 @@ def test_town_ux_upgrade_confirm_cancel_then_post(
         )
     if not confirms:
         problems.append(
-            "no confirmation button (確定／確認, not 確定放置) appeared after 升級."
+            "no confirmation button inside #actionSheet or a confirm dialog "
+            "(確定／確認, not 確定放置) appeared after the first #btnUpgrade tap."
         )
     else:
         copy = "\n".join(_confirm_region_text(btn) for btn in confirms)
