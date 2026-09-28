@@ -41,6 +41,13 @@ Requirements:
   TC-FE-TOWN-UX-SHEET-BUFF-01  已起屋面板：#sheetFns 冇 .fn；可見 #sheetBuff 顯示而家等級 buff。
   TC-FE-TOWN-UX-SHEET-BUFF-02  唔好有 FN 假動作；打開或撳舊 stub 都唔好 toast「整好一件道具」。
   工坊 Lv.3：buff_type build_speed，buff_vals[2]＝4（種子 [2,3,4,5,6]）。篩選 `-k sheet_buff`。
+  英文 code 加倍數（`build_speed ×4`）仍然滿足 01 嘅數字合約。小朋友睇得明嘅繁體中文
+  由下面 ZH 兩條取代，唔好當 01 綠等於中文標籤過咗。
+  TC-FE-TOWN-UX-SHEET-BUFF-ZH-01  工坊 Lv.3：#sheetBuff 要有「建築速度」（或目錄同等句）同而家等級 4，
+  唔好出現 build_speed。種子「建築速度 x2」唔算。
+  TC-FE-TOWN-UX-SHEET-BUFF-ZH-02  健身室 Lv.1：中文「連續保護」或「漏一日都唔斷連續」同值 1，
+  唔好出現 streak_protect。
+  篩選 `-k sheet_buff_zh`。函數名亦含 sheet_buff，所以 `-k sheet_buff` 會一齊跑到 ZH。
   唔改 upgrade_cost／upgrade_confirm／UX-05／store_ux 斷言。
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
@@ -4576,14 +4583,15 @@ def _seed_sheet_buff_workshop(test_db_path, kid_id):
     return buff
 
 
-def _open_placed_building_sheet(page, case_id, name):
+def _open_placed_building_sheet(page, case_id, name, fail_fn=None):
     """Tap a placed building on scene 1 so #actionSheet opens."""
+    fail = fail_fn or _sheet_buff_fail
     pad = page.locator("#townMap, #village").get_by_role(
         "button",
         name=re.compile(rf"第\s*\d+\s*欄第\s*\d+\s*行，{re.escape(name)}(?:，|$)"),
     )
     if pad.count() == 0 or not pad.first.is_visible():
-        _sheet_buff_fail(
+        fail(
             case_id,
             f"Scene 1 has no tappable pad for placed {name}.",
         )
@@ -4592,13 +4600,13 @@ def _open_placed_building_sheet(page, case_id, name):
     try:
         sheet.wait_for(state="visible", timeout=8000)
     except Exception:
-        _sheet_buff_fail(
+        fail(
             case_id,
             f"Tapping placed {name} did not open #actionSheet.",
         )
     title = (page.locator("#sheetTitle").inner_text() or "").strip()
     if name not in title:
-        _sheet_buff_fail(
+        fail(
             case_id,
             f"#sheetTitle should name {name} after the tap, saw {title!r}.",
         )
@@ -4806,3 +4814,265 @@ def test_town_ux_sheet_buff_no_stub_toast(
             )
     if problems:
         _sheet_buff_fail(case_id, " | ".join(problems))
+
+
+# ── TC-FE-TOWN-UX-SHEET-BUFF-ZH-*: kid-readable Traditional Chinese label ──
+#
+# SHEET-BUFF-01 still accepts an English buff_type plus the current-level number
+# (`build_speed ×4`). That label is not kid-readable. These cases supersede the
+# English-label contract. They keep the numeric-level contract and zero `.fn`.
+# Filter `-k sheet_buff_zh`. Names also contain `sheet_buff`, so `-k sheet_buff`
+# selects them too. Do not weaken upgrade_cost, upgrade_confirm, UX-05, or store_ux.
+
+SHEET_BUFF_ZH_GYM = "健身室"
+SHEET_BUFF_ZH_GYM_LEVEL = 1
+SHEET_BUFF_ZH_FORBIDDEN = (
+    "streak_protect",
+    "build_speed",
+    "task_bonus",
+    "daily_gold",
+    "discount",
+    "expedition_recovery",
+    "unlock_explore",
+    "explore_range",
+    "expedition_gold",
+    "discovery_rate",
+)
+# Purpose phrases a kid can read. Any one phrase for that buff_type is enough.
+# The number must still be buff_vals[level-1], not the static seed effect.
+# Workshop seed effect is 「建築速度 x2」; Lv.3 is 4. Gym seed effect is 「連續保護」
+# with no number; Lv.1 value is 1.
+SHEET_BUFF_ZH_LABELS = {
+    "build_speed": ("建築速度", "起屋快啲"),
+    "streak_protect": ("連續保護", "漏一日都唔斷連續"),
+    "task_bonus": ("任務加星", "任務獎勵"),
+    "daily_gold": ("每日金幣",),
+    "discount": ("獎勵折扣", "買嘢平啲"),
+    "expedition_recovery": ("探險回復",),
+    "unlock_explore": ("解鎖探險",),
+    "explore_range": ("探險範圍",),
+    "expedition_gold": ("探險金幣",),
+    "discovery_rate": ("新區域發現",),
+}
+SHEET_BUFF_ZH_RED = (
+    "#sheetBuff must show a kid-readable Traditional Chinese purpose plus the "
+    "current-level value buff_vals[level-1]. "
+    "Do not use the English buff_type as the label "
+    f"({', '.join(SHEET_BUFF_ZH_FORBIDDEN)}). "
+    "工坊 Lv.3 build_speed buff_vals[2]=4 → 「建築速度」 or 「起屋快啲」 with 4 "
+    "(×4 / x4 / 4). Seed effect 「建築速度 x2」 is the static blurb, not Lv.3. "
+    "健身室 Lv.1 streak_protect buff_vals[0]=1 → 「連續保護」 or 「漏一日都唔斷連續」 "
+    "with 1. "
+    "The same rule applies to #sheetNote when it restates the buff (including after "
+    "tapping #sheetBuff). "
+    "#sheetFns .fn stays zero. #sheetCost and the upgrade confirm flow are unchanged."
+)
+
+
+def _sheet_buff_zh_fail(case_id, detail):
+    pytest.fail(f"{case_id}: {detail} {SHEET_BUFF_ZH_RED}")
+
+
+def _forbidden_buff_codes(text):
+    raw = (text or "").lower()
+    return [code for code in SHEET_BUFF_ZH_FORBIDDEN if code in raw]
+
+
+def _zh_purpose_phrases(buff_type):
+    return SHEET_BUFF_ZH_LABELS.get(buff_type) or ()
+
+
+def _has_zh_purpose(text, buff_type):
+    raw = text or ""
+    return any(phrase in raw for phrase in _zh_purpose_phrases(buff_type))
+
+
+def _has_level_value_token(text, value):
+    token = _format_buff_number(value)
+    return re.search(rf"(?<!\d){re.escape(token)}(?!\d)", text or "") is not None
+
+
+def _note_restates_buff(note, buff):
+    """True when the note is talking about the buff, not the upgrade hint."""
+    raw = note or ""
+    if _forbidden_buff_codes(raw):
+        return True
+    if _has_zh_purpose(raw, buff["buff_type"]):
+        return True
+    return re.search(r"(?:×|✕|x|X|\*|＊)\s*\d", raw) is not None
+
+
+def _zh_surface_problems(surface, text, buff):
+    """Problems for one visible string. Empty when the Chinese contract holds."""
+    problems = []
+    phrases = _zh_purpose_phrases(buff["buff_type"])
+    phrase_list = " / ".join(phrases) if phrases else "(no Traditional Chinese phrase mapped)"
+    forbidden = _forbidden_buff_codes(text)
+    has_zh = _has_zh_purpose(text, buff["buff_type"])
+    has_val = _has_level_value_token(text, buff["value"])
+    if forbidden:
+        problems.append(
+            f"{surface} uses English buff_type code(s) {forbidden} as the label. "
+            f"text={text!r}."
+        )
+    if not has_zh:
+        problems.append(
+            f"{surface} is missing a kid-readable Traditional Chinese purpose "
+            f"({phrase_list}). text={text!r}."
+        )
+    if not has_val:
+        problems.append(
+            f"{surface} does not show current-level value {buff['value']} "
+            f"(buff_vals[{buff['index']}] from {buff['vals']}). "
+            f"Seed effect {buff['effect']!r} is not that value. text={text!r}."
+        )
+    elif forbidden or not has_zh:
+        problems.append(
+            f"{surface} does include current-level value {buff['value']}, "
+            "so this is not a missing-number failure."
+        )
+    return problems
+
+
+def _seed_sheet_buff_placed(test_db_path, kid_id, name, level):
+    """One placed building on the synthetic kid. No production DB and no real PIN."""
+    set_kid_points(test_db_path, kid_id, 8000)
+    grant_inventory(
+        test_db_path,
+        kid_id,
+        {"wood": 400, "brick": 300, "glass": 40, "gear": 120, "gem": 20},
+    )
+    db = connect_db(test_db_path)
+    db.execute("DELETE FROM buildings WHERE kid_id=?", (kid_id,))
+    db.commit()
+    db.close()
+    insert_building(
+        test_db_path,
+        kid_id,
+        building_def_id(test_db_path, name),
+        level=level,
+        cell_x=4,
+        cell_y=1,
+    )
+    return _placed_level_buff(test_db_path, kid_id, name)
+
+
+def _click_sheet_buff(page):
+    loc = page.locator("#sheetBuff")
+    if loc.count() == 0:
+        return False
+    try:
+        if not loc.first.is_visible():
+            return False
+    except Exception:
+        return False
+    loc.first.click()
+    page.wait_for_timeout(300)
+    return True
+
+
+def _assert_sheet_buff_zh(page, case_id, buff):
+    """Chinese purpose + current-level value, no English buff_type, zero .fn."""
+    problems = []
+    level_text = (page.locator("#sheetLevel").inner_text() or "").strip()
+    if not re.search(rf"Lv\.?\s*{buff['level']}(?!\d)", level_text):
+        problems.append(
+            f"#sheetLevel should show Lv.{buff['level']} for {buff['name']}, "
+            f"saw {level_text!r}."
+        )
+    fn_labels = _visible_fn_labels(page)
+    if fn_labels:
+        problems.append(
+            f"#sheetFns has {len(fn_labels)} .fn button(s) {fn_labels}; want zero."
+        )
+    extra = _stub_buttons_outside_fn_class(page)
+    if extra:
+        problems.append(f"stub action buttons without class fn: {extra}.")
+    reading = _read_sheet_buff(page)
+    if not reading["present"]:
+        problems.append(
+            "#sheetBuff is missing. It must show "
+            f"{buff['name']} Lv.{buff['level']} in Traditional Chinese, value "
+            f"{buff['value']} from buff_vals[{buff['index']}]={buff['vals']}."
+        )
+    elif not reading["visible"]:
+        problems.append(
+            f"#sheetBuff is in the DOM but not visible. "
+            f"text={reading['text']!r} aria={reading['aria']!r}."
+        )
+    else:
+        text_problems = _zh_surface_problems("#sheetBuff", reading["text"], buff)
+        problems.extend(text_problems)
+        if reading["aria"] and reading["aria"] != reading["text"]:
+            problems.extend(
+                _zh_surface_problems("#sheetBuff aria-label", reading["aria"], buff)
+            )
+        elif text_problems and reading["aria"] == reading["text"]:
+            problems.append("#sheetBuff aria-label repeats that same label.")
+    note_open = _sheet_note_text(page)
+    open_codes = _forbidden_buff_codes(note_open)
+    if open_codes:
+        problems.append(
+            f"#sheetNote already shows English buff_type code(s) {open_codes} "
+            f"before tapping #sheetBuff. note={note_open!r}."
+        )
+    tapped = _click_sheet_buff(page)
+    note_after = _sheet_note_text(page)
+    if reading["present"] and reading["visible"] and not tapped:
+        problems.append("#sheetBuff was visible but could not be tapped.")
+    elif tapped and _note_restates_buff(note_after, buff):
+        problems.extend(
+            _zh_surface_problems(
+                "#sheetNote after tapping #sheetBuff",
+                note_after,
+                buff,
+            )
+        )
+    elif tapped:
+        later_codes = _forbidden_buff_codes(note_after)
+        if later_codes:
+            problems.append(
+                f"#sheetNote after tapping #sheetBuff shows English buff_type "
+                f"code(s) {later_codes}. note={note_after!r}."
+            )
+    if problems:
+        _sheet_buff_zh_fail(case_id, " | ".join(problems))
+
+
+@pytest.mark.case_id("TC-FE-TOWN-UX-SHEET-BUFF-ZH-01")
+def test_town_ux_sheet_buff_zh_workshop_shows_chinese_level_value(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 工坊 Lv.3：建築速度同 ×4，唔好 build_speed。"""
+    case_id = "TC-FE-TOWN-UX-SHEET-BUFF-ZH-01"
+    buff = _seed_sheet_buff_placed(
+        test_db_path, fe_ids["kid_id"], SHEET_BUFF_NAME, SHEET_BUFF_LEVEL
+    )
+    assert buff["name"] == SHEET_BUFF_NAME, buff
+    assert buff["level"] == SHEET_BUFF_LEVEL, buff
+    assert buff["buff_type"] == SHEET_BUFF_TYPE, buff
+    assert buff["vals"] == SHEET_BUFF_VALS, buff
+    assert buff["value"] == SHEET_BUFF_VALUE, buff
+    _open_town_home(page, base_url)
+    _open_placed_building_sheet(page, case_id, SHEET_BUFF_NAME, fail_fn=_sheet_buff_zh_fail)
+    _assert_sheet_buff_zh(page, case_id, buff)
+
+
+@pytest.mark.case_id("TC-FE-TOWN-UX-SHEET-BUFF-ZH-02")
+def test_town_ux_sheet_buff_zh_gym_shows_chinese_not_streak_code(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 健身室 Lv.1：連續保護同 ×1，唔好 streak_protect。"""
+    case_id = "TC-FE-TOWN-UX-SHEET-BUFF-ZH-02"
+    buff = _seed_sheet_buff_placed(
+        test_db_path, fe_ids["kid_id"], SHEET_BUFF_ZH_GYM, SHEET_BUFF_ZH_GYM_LEVEL
+    )
+    assert buff["name"] == SHEET_BUFF_ZH_GYM, buff
+    assert buff["level"] == SHEET_BUFF_ZH_GYM_LEVEL, buff
+    assert buff["buff_type"] == "streak_protect", buff
+    assert buff["vals"] == [1, 1, 1, 1, 1], buff
+    assert buff["index"] == 0, buff
+    assert buff["value"] == 1, buff
+    _open_town_home(page, base_url)
+    _open_placed_building_sheet(page, case_id, SHEET_BUFF_ZH_GYM, fail_fn=_sheet_buff_zh_fail)
+    _assert_sheet_buff_zh(page, case_id, buff)
