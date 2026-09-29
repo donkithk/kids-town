@@ -121,17 +121,13 @@
     return "";
   }
 
-  function passivePoints(level) {
-    return 2 * level;
-  }
-
-  /* Name wins over the stored buff_type. The library has no task_bonus row. */
-  function sheetEffectLabel(name, level, buffType, rawValue, valueText) {
-    if (name === "圖書館") return "知識 +" + passivePoints(level);
-    if (name === "健身室") return "臂力 +" + passivePoints(level);
-    if (name === "工坊") return "創意 +" + passivePoints(level);
-    if (name === "競技場") return "臂力 +" + passivePoints(level) + "、速度 +" + level;
-    if (name === "探險公會") return "勇氣 +" + passivePoints(level);
+  /* Name wins over the stored buff_type. The library has no task_bonus row.
+     Passive sheets use passive_line from the town payload (live ability and
+     battle-stat diffs). The bracket words live with that formatter. */
+  function sheetEffectLabel(name, level, buffType, rawValue, valueText, placed) {
+    if (name === "圖書館" || name === "健身室" || name === "工坊" || name === "競技場" || name === "探險公會") {
+      return (placed && placed.passive_line) || "";
+    }
     if (name === "天文台") return "技能：流星雨（魔法攻擊全體敵人）";
     if (name === "醫院") return "技能：繃帶（小回復）";
     if (name === "燈塔") return "技能：強光（魔法攻擊，之後 2 次怪物攻擊打唔中）";
@@ -164,7 +160,7 @@
       rawValue = vals[idx];
       text = formatBuffValue(rawValue);
     }
-    var label = sheetEffectLabel(name, level, buffType, rawValue, text);
+    var label = sheetEffectLabel(name, level, buffType, rawValue, text, placed);
     if (!label) return null;
     return { type: buffType, text: text, label: label };
   }

@@ -586,7 +586,7 @@ _SKILL_RENAMES = (
 _SKILL_PATCHES = {
     '蓄力': {'description': '下次攻擊 2 倍'},
     '盾擊': {
-        'description': '減半，直到下一次被打中',
+        'description': '物理攻擊，怪物攻擊傷害減半，直到下一次被打中',
         'target': 'enemy',
         'base_value': 0,
         'per_level': 0,
@@ -613,7 +613,7 @@ _SKILL_PATCHES = {
 
 # Inserted only when that name is absent. Building is looked up by name.
 _SKILL_INSERTS = (
-    ('盾擊', '🛡️', 4, '競技場', 4, 'enemy', '減半，直到下一次被打中', 0, 0, 'str', 'utility'),
+    ('盾擊', '🛡️', 4, '競技場', 4, 'enemy', '物理攻擊，怪物攻擊傷害減半，直到下一次被打中', 0, 0, 'str', 'utility'),
     ('疾風斬', '🏃', 3, '探險公會', 4, 'enemy', '物理攻擊，施放嗰下唔受反擊', 0, 0, 'str', 'utility'),
     ('知識的力量', '📖', 2, '圖書館', 1, 'self', '魔法攻擊，之後 3 回合知識 +3×等級', 3, 0, 'none', 'buff'),
     ('鍛鍊的成果', '🏋️', 2, '健身室', 1, 'self', '物理攻擊，之後 3 回合臂力 +3×等級', 3, 0, 'none', 'buff'),
@@ -687,7 +687,7 @@ def seed_skill_defs():
         ('全體治療', '🌿', 14, 5, 5, 'all_allies', '全體回復', 18, 5, 'int', 'heal'),
         # 競技場 (9)
         ('橫掃', '🗡️', 6, 9, 2, 'all_enemies', '全體物理攻擊', 15, 4, 'str', 'damage'),
-        ('盾擊', '🛡️', 4, 9, 4, 'enemy', '減半，直到下一次被打中', 0, 0, 'str', 'utility'),
+        ('盾擊', '🛡️', 4, 9, 4, 'enemy', '物理攻擊，怪物攻擊傷害減半，直到下一次被打中', 0, 0, 'str', 'utility'),
         ('必殺', '💥', 10, 9, 5, 'enemy', '對低血量敵人特大傷害', 32, 8, 'str', 'damage'),
         # 圖書館 (1)
         ('火球', '🔥', 6, 1, 2, 'enemy', '魔法攻擊', 20, 5, 'int', 'damage'),
@@ -3720,6 +3720,77 @@ def calc_battle_stats(kid, buffs=None):
     }
 
 
+# Bracket words for the five passive sheets. Same glossary as
+# docs/ui-mocks/STAT_GLOSSARY.md: ability, battle-stat key, Chinese, percent.
+# Order matches calc_ability_buffs so 競技場 prints 臂力 then 速度.
+_PASSIVE_SHEET = (
+    ('str', '臂力', 'atk', '攻擊力', False),
+    ('int', '知識', 'matk', '魔法力', False),
+    ('spd', '速度', 'dodge', '閃避率', True),
+    ('crt', '創意', 'crt', '爆擊率', True),
+    ('brv', '勇氣', 'def', '防禦力', False),
+)
+_PASSIVE_SHEET_NAMES = frozenset(('圖書館', '健身室', '工坊', '競技場', '探險公會'))
+
+
+def _format_passive_number(value):
+    """At most one decimal place, and no trailing .0."""
+    rounded = round(float(value), 1)
+    if abs(rounded - round(rounded)) < 1e-9:
+        return str(int(round(rounded)))
+    return f'{rounded:.1f}'
+
+
+def _format_passive_line(with_buffs, without_buffs, with_stats, without_stats):
+    """Ability +N and the converted battle stat +M for one placed building."""
+    parts = []
+    for key, ability, stat_key, word, percent in _PASSIVE_SHEET:
+        n = float(with_buffs.get(key) or 0) - float(without_buffs.get(key) or 0)
+        if abs(n) < 1e-9:
+            continue
+        piece = f'{ability} +{_format_passive_number(n)}'
+        m = float(with_stats.get(stat_key) or 0) - float(without_stats.get(stat_key) or 0)
+        if abs(m) >= 1e-9:
+            suffix = '%' if percent else ''
+            piece += f'（{word} +{_format_passive_number(m)}{suffix}）'
+        parts.append(piece)
+    return '、'.join(parts)
+
+
+def _passive_lines_for(kid_id, kid, buildings):
+    """Live diffs from calc_ability_buffs and calc_battle_stats.
+
+    Each building is removed inside a transaction that is always rolled back,
+    so stored rows and the play database are left unchanged.
+    """
+    targets = [row for row in buildings if row.get('name') in _PASSIVE_SHEET_NAMES]
+    lines = {}
+    if not targets:
+        return lines
+    scratch = sqlite3.connect(DB_PATH, isolation_level=None)
+    scratch.row_factory = sqlite3.Row
+    scratch.execute('BEGIN')
+    try:
+        for building in targets:
+            scratch.execute('SAVEPOINT passive_sheet')
+            try:
+                with_buffs = calc_ability_buffs(scratch, kid_id)
+                with_stats = calc_battle_stats(kid, with_buffs)
+                scratch.execute('DELETE FROM buildings WHERE id=?', (building['id'],))
+                without_buffs = calc_ability_buffs(scratch, kid_id)
+                without_stats = calc_battle_stats(kid, without_buffs)
+                lines[building['id']] = _format_passive_line(
+                    with_buffs, without_buffs, with_stats, without_stats,
+                )
+            finally:
+                scratch.execute('ROLLBACK TO passive_sheet')
+                scratch.execute('RELEASE passive_sheet')
+    finally:
+        scratch.execute('ROLLBACK')
+        scratch.close()
+    return lines
+
+
 def calc_monster_stats(tier):
     """Monster stats from tier (= region number)."""
     t = max(1, tier)
@@ -4820,6 +4891,13 @@ def get_town_state(kid_id):
         SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect, bd.materials, bd.max_level
         FROM buildings b JOIN building_defs bd ON b.def_id=bd.id WHERE b.kid_id=? AND b.stored=0
     ''', (kid_id,)).fetchall()
+    building_rows = rows_to_list(buildings)
+    for row in building_rows:
+        row['passive_line'] = ''
+    for building_id, line in _passive_lines_for(kid_id, dict(kid), building_rows).items():
+        for row in building_rows:
+            if row.get('id') == building_id:
+                row['passive_line'] = line
     stored_buildings = db.execute('''
         SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect, bd.materials, bd.max_level
         FROM buildings b JOIN building_defs bd ON b.def_id=bd.id WHERE b.kid_id=? AND b.stored=1
@@ -4835,7 +4913,7 @@ def get_town_state(kid_id):
     farm_claimed_today = farm_claimed_today_for_placed(db, kid_id)
     return jsonify({
         'kid': kid_hud(kid),
-        'buildings': rows_to_list(buildings),
+        'buildings': building_rows,
         'stored_buildings': rows_to_list(stored_buildings),
         'inventory': rows_to_list(inventory),
         'explored': rows_to_list(explored),
