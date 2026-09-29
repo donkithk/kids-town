@@ -77,6 +77,14 @@
 
 要繼續綠、呢輪唔改預期：商店建造／升級金幣折扣（`P1-TC-BUFF-07`／`08`、`SHEET-BUFF-TRUTH-02`）、農場每日領取（`P1-TC-BUFF-05`、`POST /api/kids/<id>/farm/claim`、`farm_claimed_today`）。
 
+### TC-API-SEED-NO-TASK-BONUS — 種子唔好再有任務經驗
+
+新種子：`building_defs` 冇任何 `buff_type='task_bonus'`（圖書館都唔好）。
+
+舊種子：把圖書館改返 `task_bonus`、`buff_vals=[2,4,6,10,15]`、`effect=任務 +2⭐`，再跑 `migrate_db()`。之後仍然唔好有 `task_bonus` 行。
+
+圖書館擺喺度，完成 40 分任務：`experience_bonus` 係 0，`experience_total` 同小朋友經驗都加 20（`max(5, 40//2)`）。唔好再加舊曲線。
+
 ---
 
 ## 面板
@@ -85,14 +93,14 @@
 
 | ID | 描述 |
 |----|----|
-| TC-FE-TOWN-UX-SHEET-BUFF-01 | 圖書館 Lv.2「知識 +4」。零 `.fn`。唔好「任務多經驗」。 |
+| TC-FE-TOWN-UX-SHEET-BUFF-01 | 圖書館 Lv.2「知識 +4」（+2×等級）。零 `.fn`。唔讀 `task_bonus` 種子行。 |
 | TC-FE-TOWN-UX-SHEET-BUFF-02 | 工坊零 `.fn`、唔好 stub toast。唔查數字。要綠。 |
 | TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 | 工坊 Lv.3「創意 +6」。 |
 | TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 | 健身室 Lv.1「臂力 +2」。 |
 | TC-FE-SHEET-BUFFVAL-01 | 商店 Lv.2「起屋／升級金幣八五折」（`buff_vals[1]=0.85`，唔係九折）。要綠。 |
 | TC-FE-SHEET-UNWIRED-01 | 自訂 `zzz_unwired`、值 9：正好「未開放」，唔好出現 9。要綠。 |
 | TC-FE-SHEET-BANK-01 | 測試庫插入「銀行」：技能句「金錢砸」。而家係「未開放」，所以紅。 |
-| SHEET-BUFF-TRUTH-01 | 圖書館「知識 +2」。API bonus 0。 |
+| SHEET-BUFF-TRUTH-01 | 圖書館「知識 +2」。唔讀 `task_bonus` 種子行。API bonus 0。 |
 | SHEET-BUFF-TRUTH-02 | 商店「起屋／升級金幣九折」。要綠。 |
 | SHEET-BUFF-TRUTH-03 | 農場「每日金幣 +5」加可撳「領取」。要綠。 |
 | SHEET-BUFF-TRUTH-04 | 領完「今日已領」，同日只加一次。要綠。 |
@@ -122,7 +130,7 @@
 | TC-API-SKILL-TRAINING | 鍛鍊的成果 | 健身室。施放之後 3 回合臂力 +3×等級。普攻等於 `max(1, int(5+(str+3×等級)×1.5)−敵防)`，`player_str`／`player_atk` 同步。第 4 下返原值。施放嗰下亦要打中（`TC-API-SKILL-ALL-DAMAGE`，對物理普攻）。 |
 | TC-API-SKILL-MEAL | 營養餐 | 農場。持續回血，唔係即時治療。施放當下 HP 不變，MP 只扣消耗。之後 3 回合每回合回大約最大 HP 嘅 8%（允許大約 6%–14% 嘅取整同少量等級加成）。Lv5 每回合回血 ≥ Lv1。第 4 回合停止。唔好順便回 MP。 |
 | TC-API-SKILL-COIN | 金幣袋 | 商店。打贏先至多 20 金幣。逃跑唔加。冇用技能嘅勝場係對照。 |
-| TC-API-SKILL-FLASH | 強光 | 燈塔。有魔法傷害。之後兩次玩家行動敵人打唔中，第三次先至再扣血。 |
+| TC-API-SKILL-FLASH | 強光 | 燈塔。有魔法傷害。之後 2 次怪物攻擊打唔中（唔係命中率下降），第三次先至再扣血。測試用之後三次玩家行動嘅反擊量到。 |
 | TC-API-SKILL-METEOR | 流星雨 | 天文台。三隻敵人每一隻 HP 都跌。 |
 | TC-API-SKILL-GOLD | 金錢砸 | 要有 `building_defs` 名「銀行」。每次扣 10 金幣，傷害等於 3 倍普攻（方差 0）。金幣少過 10：400 `insufficient_gold`，金幣同怪物 HP 都唔變。 |
 

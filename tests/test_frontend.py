@@ -4444,11 +4444,6 @@ def test_town_ux_upgrade_confirm_cancel_then_post(
 
 SHEET_BUFF_NAME = "圖書館"
 SHEET_BUFF_LEVEL = 2
-SHEET_BUFF_TYPE = "task_bonus"
-SHEET_BUFF_VALS = [2, 4, 6, 10, 15]
-SHEET_BUFF_INDEX = SHEET_BUFF_LEVEL - 1
-SHEET_BUFF_VALUE = SHEET_BUFF_VALS[SHEET_BUFF_INDEX]
-SHEET_BUFF_LV1_VALUE = SHEET_BUFF_VALS[0]
 SHEET_BUFF_WORKSHOP = "工坊"
 SHEET_BUFF_WORKSHOP_LEVEL = 3
 SHEET_BUFF_STUB_LABELS = (
@@ -4501,7 +4496,7 @@ SHEET_BUFF_RED = (
     "FN_COPY lines such as 工坊：整好一件道具. "
     "SHEET-BUFF-01 shows the current-level effect in a visible #sheetBuff. "
     f"圖書館 Lv.{SHEET_BUFF_LEVEL} is 「知識 +{2 * SHEET_BUFF_LEVEL}」 "
-    "(+2 knowledge per level, not 「任務多經驗」 and not the seed effect 「任務 +2⭐」). "
+    "(+2 knowledge per level). The line does not read the library buff_vals row. "
     "#sheetNote, the toast, and #sheetCost do not count as #sheetBuff. "
     "Leave #btnUpgrade, the upgrade cost chip, and #upgradeConfirm unchanged."
 )
@@ -4539,51 +4534,34 @@ def _placed_level_buff(test_db_path, kid_id, name):
     assert row, f"placed {name} missing from the synthetic kid"
     vals = json.loads(row["buff_vals"] or "[]")
     level = int(row["level"])
-    assert vals, f"{name} buff_vals is empty"
-    index = max(0, min(level - 1, len(vals) - 1))
+    # 圖書館面板係知識被動，唔讀 task_bonus／buff_vals。其他座仍然要有曲線。
+    if row["name"] != "圖書館":
+        assert vals, f"{name} buff_vals is empty"
+    if vals:
+        index = max(0, min(level - 1, len(vals) - 1))
+        value = vals[index]
+    else:
+        index = max(0, level - 1)
+        value = None
     return {
         "name": row["name"],
         "level": level,
         "buff_type": row["buff_type"] or "",
         "vals": vals,
         "index": index,
-        "value": vals[index],
+        "value": value,
         "effect": row["effect"] or "",
     }
 
 
 def _seed_sheet_buff_library(test_db_path, kid_id):
-    """Placed 圖書館 Lv.2 only. task_bonus buff_vals[1] is 4, not the Lv.1 2.
+    """Placed 圖書館 Lv.2. The panel line is 知識 +2×等級, not the seed row.
 
     Synthetic kid only. No production DB and no real PIN.
     """
-    set_kid_points(test_db_path, kid_id, 8000)
-    grant_inventory(
-        test_db_path,
-        kid_id,
-        {"wood": 400, "brick": 300, "glass": 40, "gear": 120, "gem": 20},
+    return _seed_sheet_buff_placed(
+        test_db_path, kid_id, SHEET_BUFF_NAME, SHEET_BUFF_LEVEL
     )
-    db = connect_db(test_db_path)
-    db.execute("DELETE FROM buildings WHERE kid_id=?", (kid_id,))
-    db.commit()
-    db.close()
-    insert_building(
-        test_db_path,
-        kid_id,
-        building_def_id(test_db_path, SHEET_BUFF_NAME),
-        level=SHEET_BUFF_LEVEL,
-        cell_x=4,
-        cell_y=1,
-    )
-    buff = _placed_level_buff(test_db_path, kid_id, SHEET_BUFF_NAME)
-    assert buff["level"] == SHEET_BUFF_LEVEL, buff
-    assert buff["buff_type"] == SHEET_BUFF_TYPE, buff
-    assert buff["vals"] == SHEET_BUFF_VALS, buff
-    assert buff["index"] == SHEET_BUFF_INDEX, buff
-    assert buff["value"] == SHEET_BUFF_VALUE, buff
-    assert buff["value"] != SHEET_BUFF_LV1_VALUE, buff
-    assert "2" in (buff["effect"] or ""), buff
-    return buff
 
 
 def _seed_sheet_buff_workshop(test_db_path, kid_id):
@@ -4781,9 +4759,8 @@ def test_town_ux_sheet_buff_shows_level_buff_without_fn(
     if not reading["present"]:
         problems.append(
             "#sheetBuff is missing. The open sheet must show a visible #sheetBuff for "
-            f"{buff['name']} Lv.{buff['level']} {buff['buff_type']} "
-            f"buff_vals[{buff['index']}]={buff['value']} from {buff['vals']} "
-            f"as {want!r} (not the Lv.1 label {lv1!r})."
+            f"{buff['name']} Lv.{buff['level']} as {want!r} "
+            f"(+2 knowledge per level, not the Lv.1 label {lv1!r})."
         )
     elif not reading["visible"]:
         problems.append(
@@ -4794,8 +4771,7 @@ def test_town_ux_sheet_buff_shows_level_buff_without_fn(
         if reading["text"] != want or reading["aria"] != want:
             problems.append(
                 "#sheetBuff text and aria-label must equal the current-level honest "
-                f"label {want!r} (buff_vals[{buff['index']}]={buff['value']}, "
-                f"not Lv.1 {lv1!r} and not seed effect {buff['effect']!r}). "
+                f"label {want!r} (+2 knowledge per level, not Lv.1 {lv1!r}). "
                 f"text={reading['text']!r} aria={reading['aria']!r}."
             )
         for bad in ("⭐", "星", "任務多星", "任務多經驗"):
@@ -5192,8 +5168,6 @@ def test_town_ux_sheet_buff_truth_library_experience_not_stars(
     buff = _open_truth_building(
         page, base_url, test_db_path, fe_ids["kid_id"], case_id, "圖書館", 1
     )
-    assert buff["buff_type"] == "task_bonus", buff
-    assert buff["value"] == 2, buff
     consumed = consumed_buff_types_in_backend()
     problems = _truth_panel_problems(page, buff, consumed)
     if problems:
@@ -5368,7 +5342,7 @@ def _visit_truth_buildings(page, base_url, test_db_path, kid_id, case_id, rows):
     problems = []
     for row in rows:
         buff = _seed_sheet_buff_placed(test_db_path, kid_id, row["name"], row["level"])
-        if buff["buff_type"] != row["buff_type"]:
+        if row["buff_type"] and buff["buff_type"] != row["buff_type"]:
             problems.append(
                 f"{row['name']} buff_type is {buff['buff_type']!r}, "
                 f"want {row['buff_type']!r}."

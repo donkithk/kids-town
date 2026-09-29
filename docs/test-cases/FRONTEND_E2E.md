@@ -390,7 +390,7 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **ID** | TC-FE-TOWN-UX-SHEET-BUFF-01 |
 | **優先級** | P0（場景 4 已起屋 buff；而家等級數字同零 `.fn`。數字合約喺已接線嘅圖書館） |
 | **建議模組** | `tests/test_frontend.py`（`-k sheet_buff_shows_level_buff`；同 02 一齊用 `-k 'sheet_buff and not sheet_buff_zh and not sheet_buff_truth'`） |
-| **前置** | 空庫合成 `test_fe_kid`，PIN `1357`。清走建築物。只種圖書館 `(4,1)` Lv.2、`stored=0`（8×8 之內）。金幣同材料夠多，以免面板被資源擋住。唔用真 PIN／production DB。種子 `building_defs`：圖書館 `buff_type=task_bonus`，`buff_vals=[2,4,6,10,15]`，`effect=任務 +2⭐`。Lv.2 讀 index 1，值係 **4**。`buff_vals[0]` 係 2，同而家等級唔同。 |
+| **前置** | 空庫合成 `test_fe_kid`，PIN `1357`。清走建築物。只種圖書館 `(4,1)` Lv.2、`stored=0`（8×8 之內）。金幣同材料夠多，以免面板被資源擋住。唔用真 PIN／production DB。面板句由被動推出（每級知識 +2），唔讀圖書館 `buff_type`、`buff_vals` 或「任務 +2⭐」。 |
 | **步驟** | 1. 登入城鎮，停喺場景 1 2. 撳已起嘅圖書館，打開 `#actionSheet` 3. 數 `#sheetFns .fn`，並睇面板入面有冇整道具／修理／接任務／出發 4. 讀可見嘅 `#sheetBuff`（文字同 `aria-label`）同 `#sheetLevel` |
 | **預期** | `#sheetFns` 入面 `.fn` 係 0。面板唔好有整道具、修理、接任務、出發（以及其他 `FN` stub）掣。`#sheetLevel` 係 Lv.2。`#sheetBuff` 可見，文字同 `aria-label` 都等於「知識 +4」（每級 +2 知識）。唔好係「任務多經驗 +4」或者「知識 +2」。唔好有 ⭐、星、「任務多星」、或者「任務多經驗」。`#sheetNote` 同 `#sheetCost` 唔算 `#sheetBuff`。 |
 | **備註** | `buff_vals[level-1]` 嘅 index 合約改喺 `TC-FE-SHEET-BUFFVAL-01`（商店 Lv.2 八五折）。工坊標籤見 ZH-01「創意 +6」。唔好放寬升級成本 chip、`#btnUpgrade`、`#upgradeConfirm`。 |

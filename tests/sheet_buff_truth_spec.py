@@ -32,7 +32,7 @@ UNWIRED_BUFF_TYPES = frozenset(
 
 # name, level, buff_type. Level picks the value the lying panel currently shows.
 PANEL_BUILDINGS = (
-    {"name": "圖書館", "level": 1, "buff_type": "task_bonus"},
+    {"name": "圖書館", "level": 1, "buff_type": ""},
     {"name": "商店", "level": 1, "buff_type": "discount"},
     {"name": "農場", "level": 1, "buff_type": "daily_gold"},
     {"name": "健身室", "level": 1, "buff_type": "streak_protect"},
@@ -123,7 +123,7 @@ def sheet_effect_label(name: str, level: int, buff_type: str, value) -> str:
     if name == "醫院":
         return "技能：繃帶（小回復）"
     if name == "燈塔":
-        return "技能：強光（魔法攻擊，敵人命中率下降 2 回合）"
+        return "技能：強光（魔法攻擊，之後 2 次怪物攻擊打唔中）"
     if name == "銀行":
         return "技能：金錢砸（每次 10 金幣，傷害約普攻 3 倍）"
     if name == "商店" or buff_type == "discount":
@@ -158,6 +158,14 @@ def honest_buff_label(
     return UNAVAILABLE_LABEL
 
 
+def lighthouse_copy_ok(text: str) -> bool:
+    """強光：魔法攻擊，之後 2 次怪物攻擊打唔中。唔好再寫命中率下降。"""
+    raw = (text or "").strip()
+    if "命中率下降" in raw:
+        return False
+    return "魔法攻擊" in raw and "之後 2 次怪物攻擊打唔中" in raw
+
+
 def effect_line_matches(
     buff_type: str,
     value,
@@ -173,6 +181,8 @@ def effect_line_matches(
     """
     expected = honest_buff_label(buff_type, value, consumed, name=name, level=level)
     raw = (text or "").strip()
+    if name == "燈塔":
+        return lighthouse_copy_ok(raw)
     if expected.startswith("每日金幣"):
         return raw in (expected, expected + "🪙")
     return raw == expected
@@ -186,7 +196,7 @@ def dishonest_fragments(buff_type: str, name: str | None = None) -> tuple[str, .
         "健身室": ("漏打卡都唔斷", "連續保護"),
         "工坊": ("建築速度",),
         "醫院": ("探險回復",),
-        "燈塔": ("探險範圍",),
+        "燈塔": ("探險範圍", "命中率下降"),
         "競技場": ("探險金幣",),
         "天文台": ("發現新區域", "知識", "尋寶"),
         "銀行": ("帳本", "帳簿"),

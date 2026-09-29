@@ -633,10 +633,13 @@ def test_shop_coin_bag_adds_gold_only_when_the_battle_is_won(
 
 
 @pytest.mark.case_id("TC-API-SKILL-FLASH")
-def test_lighthouse_flash_drops_enemy_hit_rate_for_two_turns(
+def test_lighthouse_flash_makes_the_next_two_monster_attacks_miss(
     client, family, test_db, monkeypatch
 ):
-    """燈塔強光：魔法傷害，之後兩次玩家行動敵人打唔中（HP 唔跌），第三下先至再扣血。"""
+    """燈塔強光：魔法傷害。之後 2 次怪物攻擊打唔中，第三次先至再扣血。
+
+    怪物攻擊喺每次玩家行動之後先至發生，所以用連續三個玩家行動量反擊。
+    """
     kid_id = family.kid_a.id
     battle = _open(
         client,

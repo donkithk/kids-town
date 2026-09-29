@@ -15,7 +15,9 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from freezegun import freeze_time
 
+import backend_v2 as b
 from tests.factories import (
+    connect_db,
     get_kid_experience,
     get_kid_points,
     grant_inventory,
@@ -202,3 +204,67 @@ def test_sheet_buff_truth_api_only_three_buff_types_are_consumed(client, family,
     assert "task_bonus" not in found, found
     assert found == set(CONSUMED_EFFECT_TYPES), found
     assert UNWIRED_BUFF_TYPES.isdisjoint(found)
+
+
+def _task_bonus_rows(test_db):
+    db = connect_db(test_db)
+    rows = [
+        dict(row)
+        for row in db.execute(
+            "SELECT name, buff_type, effect FROM building_defs WHERE buff_type='task_bonus'"
+        ).fetchall()
+    ]
+    db.close()
+    return rows
+
+
+@pytest.mark.case_id("TC-API-SEED-NO-TASK-BONUS")
+def test_seed_and_migrate_drop_task_bonus_and_library_xp(client, family, test_db):
+    """圖書館唔好再有 task_bonus。40 分任務經驗係 20，唔加舊曲線。
+
+    新種子同舊種子（圖書館 buff_type=task_bonus、buff_vals=[2,4,6,10,15]、
+    effect=任務 +2⭐）跑完 migrate_db() 之後，building_defs 都唔好再有 task_bonus。
+    圖書館擺喺度都一樣：experience_bonus 係 0，experience_total 係 20。
+    """
+    kid_id = family.kid_a.id
+    problems = []
+    fresh = _task_bonus_rows(test_db)
+    if fresh:
+        problems.append(f"fresh seed still has task_bonus: {fresh}")
+
+    insert_building(
+        test_db, kid_id, def_id(test_db, "library"), level=1, stored=0, cell_x=0, cell_y=0
+    )
+    before_xp = get_kid_experience(test_db, kid_id) or 0
+    task_id = create_assigned_task(client, family, "no-task-bonus-xp", points=40)
+    done = _complete(client, task_id, kid_id)
+    if done.status_code != 200:
+        problems.append(f"complete status {done.status_code}: {response_text(done)}")
+    else:
+        data = json_or_text(done)
+        gained = get_kid_experience(test_db, kid_id) - before_xp
+        if data.get("experience_bonus") != 0 or data.get("experience_total") != 20 or gained != 20:
+            problems.append(
+                f"40-point task with a library should award 20 XP and bonus 0, "
+                f"got {data.get('experience_gained')!r} bonus "
+                f"{data.get('experience_bonus')!r} total {data.get('experience_total')!r} "
+                f"kid delta {gained}"
+            )
+
+    db = connect_db(test_db)
+    updated = db.execute(
+        """
+        UPDATE building_defs
+           SET buff_type='task_bonus', buff_vals='[2,4,6,10,15]', effect='任務 +2⭐'
+         WHERE name='圖書館'
+        """
+    ).rowcount
+    db.commit()
+    db.close()
+    if updated != 1:
+        problems.append(f"could not restore the old library task_bonus row ({updated})")
+    b.migrate_db()
+    migrated = _task_bonus_rows(test_db)
+    if migrated:
+        problems.append(f"after migrate_db task_bonus remains: {migrated}")
+    assert not problems, problems
