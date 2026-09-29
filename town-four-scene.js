@@ -36,7 +36,9 @@
     note: "",
     confirming: false,
     instantUpgrade: false,
-    upgrading: false
+    upgrading: false,
+    claiming: false,
+    farmClaimed: false
   };
 
   function $(id) { return document.getElementById(id); }
@@ -97,20 +99,12 @@
     return String(n);
   }
 
-  /* Kid-readable Traditional Chinese. The English buff_type code is never shown.
-     N is buff_vals[level-1], same index as get_building_buff. */
-  var BUFF_LABEL = {
-    task_bonus: "任務多星",
-    streak_protect: "連續保護",
-    daily_gold: "每日金幣",
-    discount: "購物折扣",
-    expedition_recovery: "探險回復",
-    unlock_explore: "解鎖探險",
-    build_speed: "建築速度",
-    explore_range: "探險範圍",
-    expedition_gold: "探險金幣",
-    discovery_rate: "發現新區域"
-  };
+  /* Only buff types backend_v2 passes to get_building_buff. Every other
+     type is 「未開放」 with no magnitude: the effect is not wired. */
+  var CONSUMED_BUFF = { task_bonus: 1, discount: 1, daily_gold: 1 };
+  var UNAVAILABLE_LABEL = "未開放";
+  var FARM_CLAIM_LABEL = "領取";
+  var FARM_CLAIMED_LABEL = "✓ 今日已領";
   var DISCOUNT_FOLD = [
     [0.9, "九折"],
     [0.85, "八五折"],
@@ -129,18 +123,14 @@
   }
 
   function kidBuffLabel(buffType, valueText, rawValue) {
-    var stem = BUFF_LABEL[buffType];
-    if (!stem) return "";
-    if (buffType === "unlock_explore") return stem;
+    if (!CONSUMED_BUFF[buffType]) return UNAVAILABLE_LABEL;
+    if (buffType === "task_bonus") return "任務多經驗 +" + valueText;
+    if (buffType === "daily_gold") return "每日金幣 +" + valueText + "🪙";
     if (buffType === "discount") {
       var fold = discountFold(rawValue);
-      return fold ? (stem + " " + fold) : stem;
+      return fold ? ("起屋／升級金幣" + fold) : "起屋／升級金幣";
     }
-    if (buffType === "task_bonus") return stem + " +" + valueText + "⭐";
-    if (buffType === "daily_gold") return stem + " +" + valueText + "🪙";
-    if (buffType === "explore_range") return stem + " +" + valueText;
-    if (buffType === "streak_protect") return stem + " ×" + valueText + " 漏打卡都唔斷";
-    return stem + " ×" + valueText;
+    return UNAVAILABLE_LABEL;
   }
 
   /* buff_vals[level-1], clamped like get_building_buff. Prefer the placed row. */
@@ -293,12 +283,78 @@
     if (!buff) {
       node.textContent = "";
       node.removeAttribute("aria-label");
+      node.classList.remove("is-unwired");
       show(node, false);
       return;
     }
     node.textContent = buff.label;
     node.setAttribute("aria-label", buff.label);
+    node.classList.toggle("is-unwired", buff.label === UNAVAILABLE_LABEL);
     show(node, true);
+  }
+
+  function farmClaimedNow() {
+    return !!(state.farmClaimed || readTown().farmClaimedToday);
+  }
+
+  function paintFarmClaim(placed) {
+    var btn = $("btnFarmClaim");
+    if (!btn) return;
+    var buff = levelBuff(placed);
+    var isFarm = !!(buff && buff.type === "daily_gold");
+    show(btn, isFarm);
+    if (!isFarm) return;
+    var claimed = farmClaimedNow();
+    btn.classList.toggle("is-claimed", claimed);
+    if (claimed) {
+      btn.textContent = FARM_CLAIMED_LABEL;
+      btn.setAttribute("aria-label", FARM_CLAIMED_LABEL);
+      btn.disabled = true;
+    } else {
+      btn.textContent = FARM_CLAIM_LABEL;
+      btn.setAttribute("aria-label", FARM_CLAIM_LABEL);
+      btn.disabled = !!state.claiming;
+    }
+    btn.setAttribute("aria-disabled", btn.disabled ? "true" : "false");
+  }
+
+  function markFarmClaimed(points) {
+    state.farmClaimed = true;
+    state.claiming = false;
+    state.note = "今日已領";
+    if (typeof townData !== "undefined" && townData) {
+      townData.farm_claimed_today = true;
+      if (points != null && townData.kid) townData.kid.points = points;
+    }
+    render();
+    if (typeof updateHeader === "function") updateHeader();
+  }
+
+  async function onFarmClaim() {
+    if (state.claiming || farmClaimedNow()) return;
+    var buff = levelBuff(placedDef(state.sheetDef));
+    if (!buff || buff.type !== "daily_gold") return;
+    var town = readTown();
+    if (!town.kidId || typeof fetchAPI !== "function") return;
+    state.claiming = true;
+    render();
+    try {
+      var data = await fetchAPI("/api/kids/" + town.kidId + "/farm/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      });
+      markFarmClaimed(data && data.points);
+    } catch (e) {
+      if (e && e.message === "already_claimed_today") {
+        markFarmClaimed(null);
+        return;
+      }
+      if (typeof showToast === "function") showToast("領唔到", "error");
+    } finally {
+      state.claiming = false;
+      render();
+    }
   }
 
   function sameCell(a, b) {
@@ -678,6 +734,7 @@
       state.confirming = false;
       paintUpgrade(null);
       paintSheetBuff(null);
+      paintFarmClaim(null);
       return;
     }
     var def = defById(state.sheetDef) || {};
@@ -696,6 +753,7 @@
       else note.textContent = "可以升級。";
     }
     paintSheetBuff(placed);
+    paintFarmClaim(placed);
     var art = $("sheetArt");
     if (art && def.name) {
       var src = assetSrc(def.name);
@@ -1044,6 +1102,8 @@
     }
     var sheetBuff = $("sheetBuff");
     if (sheetBuff) sheetBuff.addEventListener("click", function () { onSheetBuff(); });
+    var farmClaim = $("btnFarmClaim");
+    if (farmClaim) farmClaim.addEventListener("click", function () { onFarmClaim(); });
     $("btnCloseSheet").addEventListener("click", closeSheet);
     $("btnMotion").addEventListener("click", function () {
       motionOn = !motionOn;

@@ -4305,6 +4305,53 @@ def get_explored(kid_id):
     rows = db.execute("SELECT * FROM explored_regions WHERE kid_id=?", (kid_id,)).fetchall()
     return jsonify(rows_to_list(rows))
 
+def _stamp_prefix(value):
+    """Normalize SQLite / ISO timestamps for ordering. Empty if missing."""
+    if not value:
+        return ""
+    return str(value).replace("T", " ")[:19]
+
+
+def farm_claimed_today_for_placed(db, kid_id):
+    """Read-only. True when today's HK farm claim belongs to the farm on the map.
+
+    The sheet shows 「今日已領」 from this flag on load and reopen. It does not
+    grant gold. A farm placed after today's payout does not inherit the badge;
+    POST /farm/claim still returns already_claimed_today and the sheet then
+    switches to 「今日已領」 without adding gold.
+    """
+    claim = db.execute(
+        "SELECT claim_date FROM farm_claims WHERE kid_id=?", (kid_id,)
+    ).fetchone()
+    if not claim or claim["claim_date"] != hk_today_str():
+        return False
+    farm = db.execute(
+        """
+        SELECT b.built_at AS built_at
+        FROM buildings b
+        JOIN building_defs bd ON bd.id = b.def_id
+        WHERE b.kid_id=? AND COALESCE(b.stored, 0)=0 AND bd.buff_type='daily_gold'
+        ORDER BY b.id DESC LIMIT 1
+        """,
+        (kid_id,),
+    ).fetchone()
+    if not farm:
+        return False
+    log = db.execute(
+        """
+        SELECT created_at FROM points_log
+        WHERE kid_id=? AND reason='daily_gold'
+        ORDER BY id DESC LIMIT 1
+        """,
+        (kid_id,),
+    ).fetchone()
+    built_at = _stamp_prefix(farm["built_at"])
+    claimed_at = _stamp_prefix(log["created_at"]) if log else ""
+    if not built_at or not claimed_at:
+        return True
+    return built_at <= claimed_at
+
+
 @app.route('/api/kids/<int:kid_id>/town', methods=['GET'])
 def get_town_state(kid_id):
     db = get_db()
@@ -4328,6 +4375,7 @@ def get_town_state(kid_id):
     achievements = db.execute("SELECT * FROM achievements WHERE kid_id=? ORDER BY earned_at DESC", (kid_id,)).fetchall()
     streak = db.execute("SELECT * FROM streaks WHERE kid_id=?", (kid_id,)).fetchone()
     tiles = db.execute("SELECT cell_x, cell_y, tile_type FROM town_tiles WHERE kid_id=?", (kid_id,)).fetchall()
+    farm_claimed_today = farm_claimed_today_for_placed(db, kid_id)
     return jsonify({
         'kid': kid_hud(kid),
         'buildings': rows_to_list(buildings),
@@ -4338,6 +4386,7 @@ def get_town_state(kid_id):
         'achievements': rows_to_list(achievements),
         'streak': row_to_dict(streak) if streak else None,
         'tiles': [dict(t) for t in tiles],
+        'farm_claimed_today': farm_claimed_today,
     })
 
 # -- Town Tiles API --
