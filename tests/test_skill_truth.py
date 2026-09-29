@@ -1293,7 +1293,9 @@ def test_multihit_per_hit_unchanged_when_total_already_beats_basic(
             )
 
 
-# 414ffce seed text. The new description is this prefix plus that same remainder.
+# 414ffce strength words. A new description must start with the prefix, mention
+# 回復, and still contain this word. Exact equality is not required, so
+# 「物理攻擊，並小回復 HP」 passes as well as 「物理攻擊，小回復」.
 _HEAL_PREFIX = "物理攻擊，"
 _HEAL_OLD_TEXT = {
     "繃帶": "小回復",
@@ -1309,6 +1311,24 @@ _HEAL_TODAY = (
 )
 _HEAL_START_HP = 40
 _HEAL_PLAYER_DEF = 999
+
+
+def _heal_desc_problem(name, text):
+    """Prefix plus 回復 plus the skill's strength word. Not an exact string."""
+    strength = _HEAL_OLD_TEXT[name]
+    if text is None:
+        return f"{name} missing"
+    if (
+        not str(text).startswith(_HEAL_PREFIX)
+        or "回復" not in text
+        or strength not in text
+        or str(text).count(_HEAL_PREFIX) != 1
+    ):
+        return (
+            f"{name} actual {text!r}, expected prefix {_HEAL_PREFIX!r}, "
+            f"contains {strength!r} and 回復"
+        )
+    return None
 
 
 def _logged_heal(body):
@@ -1390,7 +1410,18 @@ def test_heal_amount_stays_at_today_baseline(
 
 @pytest.mark.case_id("TC-API-HEAL-DESC-PREFIX")
 def test_heal_descriptions_are_prefixed_with_physical_attack(test_db):
-    """三個治療技能嘅種子說明以「物理攻擊，」開頭，後面保留舊字，而且仍然有回復。"""
+    """三個治療技能嘅種子說明以「物理攻擊，」開頭，含回復，並且保留強度字。
+
+    唔好逐字。繃帶要含「小回復」，急救要含「中回復」，全體治療要含「全體回復」。
+    「物理攻擊，並小回復 HP」呢類寫法要過。
+    """
+    planned = {
+        "繃帶": "物理攻擊，並小回復 HP",
+        "急救": "物理攻擊，並中回復 HP",
+        "全體治療": "物理攻擊，並全體回復 HP",
+    }
+    for name, text in planned.items():
+        assert _heal_desc_problem(name, text) is None, (name, text)
     db = connect_db(test_db)
     rows = {
         row["name"]: row["description"] or ""
@@ -1398,14 +1429,10 @@ def test_heal_descriptions_are_prefixed_with_physical_attack(test_db):
     }
     db.close()
     problems = []
-    for name, old in _HEAL_OLD_TEXT.items():
-        text = rows.get(name)
-        expected = _HEAL_PREFIX + old
-        if text is None:
-            problems.append(f"{name} missing")
-            continue
-        if text != expected or not text.startswith(_HEAL_PREFIX) or "回復" not in text:
-            problems.append(f"{name} actual {text!r}, expected {expected!r}")
+    for name in _HEAL_OLD_TEXT:
+        problem = _heal_desc_problem(name, rows.get(name))
+        if problem:
+            problems.append(problem)
     assert not problems, "; ".join(problems)
 
 
@@ -1418,8 +1445,9 @@ def test_migrate_prefixes_old_heal_descriptions_and_keeps_the_kid(
     ``git show afbc1a6:backend_v2.py`` 嘅 ``seed_skill_defs`` 已經有醫院嘅
     繃帶、急救、全體治療，說明係小回復／中回復／全體回復。用
     ``_install_old_skill_seed`` 寫入 pytest 暫存庫，唔使再砌一份 414ffce
-    目錄，亦唔好打開版控嘅 ``kids_town.db``。migrate 之後原 id 嘅說明變成
-    前綴加舊字，再跑一次唔好變成「物理攻擊，物理攻擊，」。
+    目錄，亦唔好打開版控嘅 ``kids_town.db``。migrate 之後原 id 嘅說明以
+    「物理攻擊，」開頭，含回復，並且保留小回復／中回復／全體回復。
+    「物理攻擊，並小回復 HP」要過。再跑一次唔好變成「物理攻擊，物理攻擊，」。
     """
     play_digest = tracked_sha256()
 
@@ -1487,15 +1515,9 @@ def test_migrate_prefixes_old_heal_descriptions_and_keeps_the_kid(
         if not row or row["name"] != name:
             problems.append(f"{name} id {skill_id} actual {row}")
             continue
-        text = row["description"] or ""
-        expected = _HEAL_PREFIX + _HEAL_OLD_TEXT[name]
-        if (
-            text != expected
-            or not text.startswith(_HEAL_PREFIX)
-            or "回復" not in text
-            or text.count(_HEAL_PREFIX) != 1
-        ):
-            problems.append(f"{name} actual {text!r}, expected {expected!r}")
+        problem = _heal_desc_problem(name, row["description"] or "")
+        if problem:
+            problems.append(problem)
     assert not problems, "; ".join(problems)
 
     snapshot = _skill_snapshot(test_db)
