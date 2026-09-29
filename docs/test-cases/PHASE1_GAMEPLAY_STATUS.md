@@ -1,5 +1,7 @@
 # Phase 1 gameplay test status (TDD GREEN)
 
+> Sheet-buff panel copy versus the real effect is **SHEET-BUFF-TRUTH**（[`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md)、[`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md)）。API 錨點喺 `tests/test_sheet_buff_truth.py`，唔改下面 P1-TC-BUFF 歷史結果。
+
 > Recorded against product implementation on branch `cursor/phase1-gameplay-tdd-green-9aed`.  
 > Base: latest `main` (PR #9 red tests merged, commit `72b873e`).  
 > Date: 2026-09-19  
