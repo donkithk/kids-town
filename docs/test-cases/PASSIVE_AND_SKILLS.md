@@ -171,3 +171,21 @@
 ### TC-API-SEED-NO-DEAD-CURVE — 盾擊／疾風斬冇傷害曲線
 
 `skill_defs` 有 `base_value`、`per_level`（`REAL`，預設 0）。呢兩欄就係傷害曲線，所以唔跳過。盾擊同疾風斬嘅呢兩欄要係 `NULL` 或 0。如果表冇呢兩欄，測試先至 skip。
+
+### TC-API-SKILL-RECAST-REVERT — 再施放之後仍然要回到原值
+
+同一場戰鬥。知識的力量同鍛鍊的成果各一條（建築 Lv1）。
+
+先量未加成嘅數：知識用火球傷害同開戰 `player_int`（測試庫先把火球 `level_required` 改成 1）；臂力用一記普攻傷害、開戰 `player_str` 同 `player_atk`。唔好寫死 2 或者 5。
+
+施放一次。如果嗰下回應未見到加成，就再行動，直到知識或者臂力已經離開原值（加成生效）。跟住再施放一次。唔好斷言第二次係疊加定係刷新。
+
+再施放之後最多再行動 8 次（夠兩次 3 回合疊加）。buff 完結之後，`player_int`（鍛鍊嘅成果就係 `player_str` 同 `player_atk`）同埋對應傷害要返到第一次施放之前量到嘅原值。再施放唔好把加成後嘅數記成新底。
+
+### TC-API-GOLD-SMASH-ATOMIC — 金錢砸扣金要原子
+
+小朋友剛好 10 金幣。兩個 `battle-action` 金錢砸同時過金檢：兩條 thread，`SELECT points FROM kids` 讀完之後先一齊放行，所以兩邊都見到 10，先至有機會扣。
+
+預期剛好一個 200、一個 400 `insufficient_gold`。最後金幣係 0，唔好負數。`points_log` 剛好一行金額 −10、原因有「金錢砸」。
+
+如果實現唔用呢句 SELECT，而係用 `UPDATE ... WHERE points >= 10` 並且 0 行就當失敗，barrier 唔會觸發；兩個請求仍然並行，條件更新只可以成功一次。

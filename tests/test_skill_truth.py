@@ -6,6 +6,9 @@ do what the skill text says.
 """
 from __future__ import annotations
 
+import sqlite3
+import threading
+
 import pytest
 
 import backend_v2 as b
@@ -20,6 +23,7 @@ from tests.battle_truth import (
     skill_by_name,
 )
 from tests.factories import connect_db, get_kid_points, response_text
+from tests.phase1_helpers import login_kid
 
 # Region 1 weakness locked by TC-API-SKILL-SCOUT. Builder copies this onto the monster.
 REGION_WEAKNESS = {1: "火", 2: "冰", 3: "雷"}
@@ -1136,3 +1140,225 @@ def test_shield_and_gale_have_no_unused_damage_curve(test_db):
                 problems.append(f"{name}.{field}={value!r}")
     db.close()
     assert not problems, problems
+
+
+_RECAST_CASES = (
+    {
+        "name": "知識的力量",
+        "building": "library",
+        "stat": "player_int",
+        "meter": "fireball",
+    },
+    {
+        "name": "鍛鍊的成果",
+        "building": "gym",
+        "stat": "player_str",
+        "also": "player_atk",
+        "meter": "attack",
+    },
+)
+
+
+def _meter_action(client, kid_id, spec, meter_skill):
+    if spec["meter"] == "fireball":
+        return _ok(_use(client, kid_id, meter_skill))
+    return _ok(act(client, kid_id, "attack"))
+
+
+def _buff_visible(body, spec, original, baseline, dealt):
+    if body.get(spec["stat"]) != original[spec["stat"]]:
+        return True
+    also = spec.get("also")
+    if also and body.get(also) != original[also]:
+        return True
+    return dealt != baseline
+
+
+@pytest.mark.case_id("TC-API-SKILL-RECAST-REVERT")
+@pytest.mark.parametrize("spec", _RECAST_CASES, ids=[row["name"] for row in _RECAST_CASES])
+def test_recast_reverts_to_the_stat_from_before_the_first_cast(
+    client, family, test_db, monkeypatch, spec
+):
+    """再施放唔好把加成後嘅能力記成新底。完結之後要返第一次之前嘅原值。
+
+    唔判斷第二次係疊加定刷新。加成要先見到，先至再施放。
+    之後最多 8 次行動，夠兩次 3 回合。
+    """
+    kid_id = family.kid_a.id
+    if spec["meter"] == "fireball":
+        _set_level_required(test_db, "火球", 1)
+    battle = _open(
+        client,
+        family,
+        test_db,
+        monkeypatch,
+        [{"key": "guild", "x": 6}, {"key": spec["building"], "level": 1, "x": 2}],
+    )
+    skill = _require(battle, spec["name"])
+    meter_skill = None
+    if spec["meter"] == "fireball":
+        meter_skill = skill_by_name(battle, "火球")
+        assert meter_skill, battle.get("skills")
+    original = {spec["stat"]: battle[spec["stat"]]}
+    if spec.get("also"):
+        original[spec["also"]] = battle[spec["also"]]
+    _tune(test_db, kid_id, hp=8000, spd=50, player_def=999)
+    enemy_hp = 8000
+
+    opened = _meter_action(client, kid_id, spec, meter_skill)
+    baseline = enemy_hp - monster_hp(opened)
+    assert baseline > 0, opened
+    assert opened.get(spec["stat"]) == original[spec["stat"]], opened
+    enemy_hp = monster_hp(opened)
+
+    first = _ok(_use(client, kid_id, skill))
+    enemy_hp = monster_hp(first)
+    active = _buff_visible(first, spec, original, baseline, baseline)
+    if not active:
+        for _ in range(3):
+            probed = _meter_action(client, kid_id, spec, meter_skill)
+            dealt = enemy_hp - monster_hp(probed)
+            enemy_hp = monster_hp(probed)
+            if _buff_visible(probed, spec, original, baseline, dealt):
+                active = True
+                break
+    assert active, (spec["name"], original, first)
+
+    second = _ok(_use(client, kid_id, skill))
+    enemy_hp = monster_hp(second)
+    restored = None
+    last = second
+    for _ in range(8):
+        step = _meter_action(client, kid_id, spec, meter_skill)
+        dealt = enemy_hp - monster_hp(step)
+        enemy_hp = monster_hp(step)
+        last = step
+        stat_ok = step.get(spec["stat"]) == original[spec["stat"]]
+        also = spec.get("also")
+        also_ok = not also or step.get(also) == original[also]
+        if stat_ok and also_ok and dealt == baseline:
+            restored = step
+            break
+    assert restored is not None, (
+        spec["name"],
+        original,
+        {key: last.get(key) for key in original},
+        "damage did not return to the pre-cast hit",
+    )
+
+
+def _race_two_gold_smashes(app, family, kid_id, skill_id):
+    """Both gold reads observe 10 before either debit, when the code reads points.
+
+    sqlite3.Connection.execute is read-only, so the barrier sits on a proxy
+    returned from sqlite3.connect. Login happens first, on the real connect.
+    """
+    clients = [app.test_client(), app.test_client()]
+    for racer in clients:
+        login_kid(racer, family)
+
+    gate = threading.Barrier(2)
+    armed = {"on": True}
+    waits = {"n": 0}
+    lock = threading.Lock()
+    original_connect = sqlite3.connect
+
+    class _GoldConn:
+        def __init__(self, conn):
+            object.__setattr__(self, "_conn", conn)
+
+        def execute(self, sql, *params, **kw):
+            cursor = self._conn.execute(sql, *params, **kw)
+            text = sql.lower() if isinstance(sql, str) else ""
+            if armed["on"] and "select points from kids" in text:
+                with lock:
+                    waits["n"] += 1
+                    ordinal = waits["n"]
+                if ordinal <= 2:
+                    gate.wait(timeout=5)
+            return cursor
+
+        def __getattr__(self, name):
+            return getattr(self._conn, name)
+
+        def __setattr__(self, name, value):
+            setattr(self._conn, name, value)
+
+    def connect(*args, **kwargs):
+        return _GoldConn(original_connect(*args, **kwargs))
+
+    sqlite3.connect = connect
+    errors = []
+    responses = [None, None]
+    try:
+
+        def run(index):
+            try:
+                responses[index] = clients[index].post(
+                    f"/api/kids/{kid_id}/expedition/battle-action",
+                    json={"action": "skill", "skill_id": skill_id, "target_idx": 0},
+                )
+            except Exception as exc:  # noqa: BLE001 — surface the racer error in the assert
+                errors.append(repr(exc))
+
+        threads = [threading.Thread(target=run, args=(index,)) for index in (0, 1)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=15)
+    finally:
+        armed["on"] = False
+        sqlite3.connect = original_connect
+    return responses, errors
+
+
+@pytest.mark.case_id("TC-API-GOLD-SMASH-ATOMIC")
+def test_two_gold_smashes_cannot_both_spend_the_last_ten_gold(
+    app, client, family, test_db, monkeypatch
+):
+    """剛好 10 金幣。兩個金錢砸同時過金檢，只可以成功一次。
+
+    兩邊讀到 10 之後先一齊扣。最後金幣 0，帳本只有一行 −10。
+    """
+    kid_id = family.kid_a.id
+    _ensure_bank(test_db)
+    battle = _open(
+        client,
+        family,
+        test_db,
+        monkeypatch,
+        [{"key": "guild", "x": 6}, {"key": "bank", "level": 1, "x": 2}],
+        points=10,
+    )
+    skill = _require(battle, "金錢砸")
+    _tune(test_db, kid_id, hp=8000, spd=50)
+    assert get_kid_points(test_db, kid_id) == 10
+
+    responses, errors = _race_two_gold_smashes(app, family, kid_id, skill["id"])
+    assert not errors, errors
+    assert all(response is not None for response in responses), responses
+    codes = sorted(response.status_code for response in responses)
+    rejected = [response for response in responses if response.status_code == 400]
+    if len(rejected) == 1:
+        assert (rejected[0].get_json(silent=True) or {}).get("error") == "insufficient_gold"
+    gold = get_kid_points(test_db, kid_id)
+    db = connect_db(test_db)
+    debits = [
+        dict(row)
+        for row in db.execute(
+            """
+            SELECT amount, reason FROM points_log
+             WHERE kid_id=? AND amount=-10 AND reason LIKE '%金錢砸%'
+            """,
+            (kid_id,),
+        ).fetchall()
+    ]
+    db.close()
+    assert codes == [200, 400] and gold == 0 and len(debits) == 1, {
+        "codes": [
+            (response.status_code, (response.get_json(silent=True) or {}).get("error"))
+            for response in responses
+        ],
+        "gold": gold,
+        "debits": debits,
+    }
