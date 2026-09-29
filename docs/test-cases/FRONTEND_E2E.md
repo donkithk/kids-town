@@ -17,7 +17,9 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 清單放返存倉要留喺四場景 8×8: `TC-FE-TOWN-STORE-UX-01`。篩選 `-k store_ux`。喺建築清單揀已經入倉嘅屋開始放返之後，`#placementBar` 唔好有 class `active`，`#townMap` 唔好被 `#placementBar.active ~ #townMap { visibility:hidden }` 收埋，`#townCanvasWrapper` 唔好露出大片淡 `↘️`／`.valid-plot`（24×16 舊格）或者綠色「按確認」。要留喺四場景等角格。唔好出現裁到只剩「確認」嘅紫色舊條。確認要 POST `/buildings/<id>/unstored`（或者同等產品 API），金幣同材料唔變，地圖見到嗰座屋，同一行變 `stored=0`。main `66bd1bc` 上四場景 `placeFromStore` 會叫 legacy `startUnstoreBuilding`，所以留紅。唔改產品。
 
-場景 4 升級要跟設計稿 `3b4671d`（PR #27，唔好 merge）：撳已起嘅屋 → `#actionSheet` 顯示成本 → 確認 → 先至升級。唔好一撳就升級。Case：`TC-FE-TOWN-UX-UPGRADE-COST-01`、`TC-FE-TOWN-UX-UPGRADE-COST-02`、`TC-FE-TOWN-UX-UPGRADE-CONFIRM-01`。篩選 `-k 'upgrade_cost or upgrade_confirm'`（分開係 `-k upgrade_cost`、`-k upgrade_confirm`）。稿入面嘅 `#actionSheet`、`#sheetTitle`、`#sheetLevel`、`#sheetNote`、`#btnUpgrade` 係對齊用嘅名。示範籌碼 💰50 🪵2 只係個樣，產品數字跟後端：金幣 `floor(level×100×商店折扣)`（冇商店就係 `level×100`），材料 `base×(level+1)`。`UX-05` 仍然只要求撳升級之後等級上升同 HUD 再扣，呢三條唔改嗰個斷言。而家 `#btnUpgrade` 只係「升級」，第一撳就 POST，所以留紅。整道具／接任務唔喺今次範圍。
+場景 4 升級要跟設計稿 `3b4671d`（PR #27，唔好 merge）：撳已起嘅屋 → `#actionSheet` 顯示成本 → 確認 → 先至升級。唔好一撳就升級。Case：`TC-FE-TOWN-UX-UPGRADE-COST-01`、`TC-FE-TOWN-UX-UPGRADE-COST-02`、`TC-FE-TOWN-UX-UPGRADE-CONFIRM-01`。篩選 `-k 'upgrade_cost or upgrade_confirm'`（分開係 `-k upgrade_cost`、`-k upgrade_confirm`）。稿入面嘅 `#actionSheet`、`#sheetTitle`、`#sheetLevel`、`#sheetNote`、`#btnUpgrade` 係對齊用嘅名。示範籌碼 💰50 🪵2 只係個樣，產品數字跟後端：金幣 `floor(level×100×商店折扣)`（冇商店就係 `level×100`），材料 `base×(level+1)`。`UX-05` 仍然只要求撳升級之後等級上升同 HUD 再扣，呢三條唔改嗰個斷言。而家 `#btnUpgrade` 只係「升級」，第一撳就 POST，所以留紅。整道具／接任務唔喺升級成本呢三條範圍。
+
+已起屋嘅 `#actionSheet` 唔好再出假功能掣：`TC-FE-TOWN-UX-SHEET-BUFF-01`、`TC-FE-TOWN-UX-SHEET-BUFF-02`。篩選 `-k sheet_buff`。撳地圖上已經擺好嘅屋，打開場景 4 面板。`#sheetFns` 入面 `.fn` 要係 **零**（唔好再有整道具／修理／接任務／出發，亦唔好再行 `FN`／`onFn` 只改 `#sheetNote` 同 toast）。面板要顯示呢座屋**而家等級**嘅 buff，讀 API 欄位 `buff_type`、`buff_vals[level-1]`（同 `get_building_buff` 同一個 index），可以同時帶 `effect` 文字。可見節點 id 係 `#sheetBuff`（產品未有呢個 id，所以留紅）。可讀文字或者 `aria-label` 要有 `buff_vals[level-1]` 嗰個數字，再加上 `buff_type` 或者倍數符號。例子：工坊 Lv.3、`build_speed`、種子 `[2,3,4,5,6]` → index 2 → **4**（`×4`／`x4`／`build_speed` 加 `4` 都得）。唔要求某一句中文。種子 `effect`「建築速度 x2」係靜態介紹，**唔等於** Lv.3 嘅 4，淨係顯示呢句唔算過。`#sheetNote`、toast、升級成本 chip 唔算 `#sheetBuff`。打開面板，以及如果仲有舊 stub 可以撳，都唔好出現 `工坊：整好一件道具` 呢類假 toast。升級成本 chip、`#btnUpgrade`、`#upgradeConfirm`（`.stage` 最後一個子節點）、取消唔扣，仍然由 `upgrade_cost`／`upgrade_confirm` 守。`UX-05` 同 `store_ux` 嘅斷言唔改。呢兩條喺 main 上留紅。唔改產品。
 
 共用前置（除另註）：
 
@@ -379,6 +381,34 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 ---
 
+## TC-FE-TOWN-UX-SHEET-BUFF-01 — 已起屋面板顯示而家等級 buff，冇假功能掣
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-UX-SHEET-BUFF-01 |
+| **優先級** | P0（場景 4 已起屋 buff；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k sheet_buff`） |
+| **前置** | 空庫合成 `test_fe_kid`，PIN `1357`。清走建築物。只種工坊 `(4,1)` Lv.3、`stored=0`（8×8 之內）。金幣同材料夠多，以免面板被資源擋住。唔用真 PIN／production DB。種子 `building_defs`：工坊 `buff_type=build_speed`，`buff_vals=[2,3,4,5,6]`，`effect=建築速度 x2`。 |
+| **步驟** | 1. 登入城鎮，停喺場景 1 2. 撳已起嘅工坊，打開 `#actionSheet` 3. 數 `#sheetFns .fn`，並睇面板入面有冇整道具／修理／接任務／出發 4. 讀可見嘅 `#sheetBuff`（文字同 `aria-label`）同 `#sheetLevel` |
+| **預期** | `#sheetFns` 入面 `.fn` 係 0。面板唔好有整道具、修理、接任務、出發（以及其他 `FN` stub）掣。`#sheetLevel` 係 Lv.3。`#sheetBuff` 可見，而且可讀文字或 `aria-label` 有而家等級嘅值 **4**（`buff_vals[3-1]`，即 index 2），同時有 `build_speed` 或者倍數符號（`×4`、`x4`、`X4`、`*4`）。例子：`build_speed ×4`、`×4`、`build_speed 4`。唔要求某一句中文。淨係種子 `effect`「建築速度 x2」唔算（嗰個係 2，唔係 Lv.3 嘅 4）。`#sheetNote` 同 `#sheetCost` 唔算 `#sheetBuff`。而家 `#sheetFns` 有「整道具」「修理」，亦未有 `#sheetBuff`，所以留紅。 |
+| **備註** | 升級成本 chip、`#btnUpgrade`、`#upgradeConfirm` 唔喺本 case 放寬。`TC-FE-TOWN-UX-05` 仍然會搵一個功能掣睇可見結果，本 case 唔改嗰個斷言。 |
+
+---
+
+## TC-FE-TOWN-UX-SHEET-BUFF-02 — 唔好有假 FN 動作或者 stub toast
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-TOWN-UX-SHEET-BUFF-02 |
+| **優先級** | P0（場景 4 已起屋 buff；main 上留紅） |
+| **建議模組** | `tests/test_frontend.py`（`-k sheet_buff`） |
+| **前置** | 同 `TC-FE-TOWN-UX-SHEET-BUFF-01`。 |
+| **步驟** | 1. 場景 1 撳工坊，打開 `#actionSheet` 2. 讀 toast 同 `#sheetNote` 3. 如果 `#sheetFns` 仲有 `.fn`，撳「整道具」（冇呢個字就撳第一個 `.fn`）4. 再讀 toast 同 `#sheetNote` |
+| **預期** | 打開面板之後，toast 同 `#sheetNote` 都唔好有假功能文案（例如 `整好一件道具`、`修理好咗`、`接咗一個任務`、`準備出發`，以及 `FN_COPY` 其餘句）。`#sheetFns .fn` 要係 0，即係冇可撳嘅假動作。如果仲有 `.fn`，撳完都唔好出現 `工坊：整好一件道具`。而家一打開就有「整道具」「修理」，撳「整道具」會 toast 兼把 `#sheetNote` 改成「工坊：整好一件道具」，所以留紅。 |
+| **備註** | 唔好為咗呢條去改 `upgrade_cost`、`upgrade_confirm`、`TC-FE-TOWN-UX-05`、`store_ux`。取消升級仍然唔好扣資源；`#upgradeConfirm` 仍然係 `.stage` 最後一個子節點。 |
+
+---
+
 ## TC-FE-TOWN-HIT-01 — 等角背面格唔好被前面建築截走
 
 | 欄 | 內容 |
@@ -593,10 +623,12 @@ python -m pytest tests/test_frontend.py -q -k store_ux --tb=line
 python -m pytest tests/test_frontend.py -q -k upgrade_cost --tb=short
 python -m pytest tests/test_frontend.py -q -k upgrade_confirm --tb=short
 python -m pytest tests/test_frontend.py -q -k 'upgrade_cost or upgrade_confirm' --tb=line
+python -m pytest tests/test_frontend.py -q -k sheet_buff --tb=short
+python -m pytest tests/test_frontend.py -q -k 'upgrade_cost or upgrade_confirm or scene4_upgrade_feature_and_hud or store_ux' --tb=line
 python -m pytest tests/test_frontend.py -q -k 'not town_grid and not store_legacy' --tb=line
 python -m pytest tests/test_frontend.py -q -k town_ux --tb=short
 ```
 
-`town_grid`／`store_legacy` 係 8×8 地圖同格外收倉（`TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`）。`store_list`／`store_place`／`store_confirm` 係已經入倉嘅屋唔好當新建築賣（`TC-FE-TOWN-STORE-LIST-01`、`TC-FE-TOWN-STORE-PLACE-01`、`TC-FE-TOWN-STORE-CONFIRM-01`）。`store_ux` 係清單放返存倉要留喺四場景 8×8（`TC-FE-TOWN-STORE-UX-01`）。`upgrade_cost`／`upgrade_confirm` 係場景 4 升級成本同確認（`TC-FE-TOWN-UX-UPGRADE-COST-01`、`COST-02`、`CONFIRM-01`）。函數名同時含 `town_ux`，所以 `-k town_ux` 會一齊跑呢三條紅測；UX-01..05 本身嘅斷言冇收窄。`-k 'not town_grid and not store_legacy'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`，以及存倉紅測。接受尺寸係 8×8。收倉喺每次城鎮載入同建築物讀取時做。已經 `stored=1` 嘅屋要用 unstored 放返，而且清單呢條路徑要留喺四場景等角格，唔好打開 legacy `#placementBar`。
+`town_grid`／`store_legacy` 係 8×8 地圖同格外收倉（`TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`）。`store_list`／`store_place`／`store_confirm` 係已經入倉嘅屋唔好當新建築賣（`TC-FE-TOWN-STORE-LIST-01`、`TC-FE-TOWN-STORE-PLACE-01`、`TC-FE-TOWN-STORE-CONFIRM-01`）。`store_ux` 係清單放返存倉要留喺四場景 8×8（`TC-FE-TOWN-STORE-UX-01`）。`upgrade_cost`／`upgrade_confirm` 係場景 4 升級成本同確認（`TC-FE-TOWN-UX-UPGRADE-COST-01`、`COST-02`、`CONFIRM-01`）。`sheet_buff` 係已起屋面板唔好出假 `.fn`，改為顯示而家等級 buff（`TC-FE-TOWN-UX-SHEET-BUFF-01`、`SHEET-BUFF-02`）。工坊 Lv.3 嘅合約係 `build_speed` 同 `buff_vals[2]=4`，可見節點 `#sheetBuff`。升級三條同 sheet buff 兩條嘅函數名都含 `town_ux`，所以 `-k town_ux` 會一齊跑；UX-01..05 同升級／存倉嘅斷言冇收窄。`sheet_buff` 喺 main 上留紅。`-k 'not town_grid and not store_legacy'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`，以及存倉紅測。接受尺寸係 8×8。收倉喺每次城鎮載入同建築物讀取時做。已經 `stored=1` 嘅屋要用 unstored 放返，而且清單呢條路徑要留喺四場景等角格，唔好打開 legacy `#placementBar`。
 
 雙重驗證 (B) 人手步驟：[`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md)。跑完結果寫 [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md)。

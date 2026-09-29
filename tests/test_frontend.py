@@ -38,6 +38,10 @@ Requirements:
   TC-FE-TOWN-UX-UPGRADE-CONFIRM-01  第一撳 #btnUpgrade 只開確認；取消唔 POST；確定先至升級同扣 HUD。
   對齊設計稿 3b4671d：撳屋 → #actionSheet 顯示成本 → 確認 → 升級。唔係一撳升級。
   篩選 `-k 'upgrade_cost or upgrade_confirm'`。唔改 UX-05／store_ux 斷言。
+  TC-FE-TOWN-UX-SHEET-BUFF-01  已起屋面板：#sheetFns 冇 .fn；可見 #sheetBuff 顯示而家等級 buff。
+  TC-FE-TOWN-UX-SHEET-BUFF-02  唔好有 FN 假動作；打開或撳舊 stub 都唔好 toast「整好一件道具」。
+  工坊 Lv.3：buff_type build_speed，buff_vals[2]＝4（種子 [2,3,4,5,6]）。篩選 `-k sheet_buff`。
+  唔改 upgrade_cost／upgrade_confirm／UX-05／store_ux 斷言。
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
   FE-P0-03  家長 A session 不能管理家長 B 嘅仔女
@@ -4403,3 +4407,402 @@ def test_town_ux_upgrade_confirm_cancel_then_post(
         problems.append(f"確定 should send exactly one POST /upgrade, saw {posts}.")
     if problems:
         _upgrade_ux_fail(case_id, " | ".join(problems))
+
+
+# ── TC-FE-TOWN-UX-SHEET-BUFF-*: placed sheet shows the level buff, not fake FN ──
+#
+# Already-placed scene 4 must not render FN / onFn stubs (整道具／修理／接任務／出發)
+# that only toast and rewrite #sheetNote. Show this building's current-level buff
+# from API buff_type + buff_vals[level-1] (same index as get_building_buff).
+# Dedicated visible node: #sheetBuff. Product does not have that id yet, so these
+# stay red. Do not weaken upgrade_cost, upgrade_confirm, UX-05, or store_ux.
+
+SHEET_BUFF_NAME = "工坊"
+SHEET_BUFF_LEVEL = 3
+SHEET_BUFF_TYPE = "build_speed"
+SHEET_BUFF_VALS = [2, 3, 4, 5, 6]
+SHEET_BUFF_INDEX = SHEET_BUFF_LEVEL - 1
+SHEET_BUFF_VALUE = SHEET_BUFF_VALS[SHEET_BUFF_INDEX]
+SHEET_BUFF_STUB_LABELS = (
+    "整道具",
+    "修理",
+    "接任務",
+    "出發",
+    "借書",
+    "還書",
+    "鍛鍊",
+    "休息一下",
+    "收成",
+    "澆水",
+    "買賣",
+    "睇貨架",
+    "睇醫生",
+    "休息",
+    "望海",
+    "開燈",
+    "練習",
+    "比試",
+    "觀星",
+    "記錄",
+    "睇一看",
+)
+SHEET_BUFF_STUB_PHRASES = (
+    "整好一件道具",
+    "修理好咗",
+    "接咗一個任務",
+    "準備出發",
+    "借咗一本故事書",
+    "書還好咗",
+    "做完一輪鍛鍊",
+    "休息好咗",
+    "收成一籃菜",
+    "澆完水",
+    "買賣完成",
+    "睇完貨架",
+    "睇完醫生",
+    "望咗一望海",
+    "燈亮咗",
+    "練習完一輪",
+    "比試完一場",
+    "觀完星",
+    "寫低記錄",
+)
+SHEET_BUFF_RED = (
+    "A placed building's #actionSheet must not render fake FN buttons "
+    "(#sheetFns .fn, including 整道具／修理／接任務／出發) and must not toast "
+    "FN_COPY lines such as 工坊：整好一件道具. "
+    "Show the current-level buff in a visible #sheetBuff. "
+    f"工坊 Lv.{SHEET_BUFF_LEVEL} {SHEET_BUFF_TYPE} uses buff_vals[{SHEET_BUFF_INDEX}] "
+    f"from {SHEET_BUFF_VALS} → {SHEET_BUFF_VALUE}. "
+    "Readable text or aria-label must include that number and either the buff_type "
+    f"or a multiplier mark (×{SHEET_BUFF_VALUE} / x{SHEET_BUFF_VALUE}). "
+    "The seed effect 「建築速度 x2」 is the static blurb, not the Lv.3 value. "
+    "#sheetNote, the toast, and #sheetCost do not count as #sheetBuff. "
+    "Leave #btnUpgrade, the upgrade cost chip, and #upgradeConfirm unchanged."
+)
+
+
+def _sheet_buff_fail(case_id, detail):
+    pytest.fail(f"{case_id}: {detail} {SHEET_BUFF_RED}")
+
+
+def _format_buff_number(value):
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    if isinstance(value, int):
+        return str(value)
+    return format(value, "g")
+
+
+def _readable_level_buff(text, buff_type, value):
+    """True when text shows buff_vals[level-1] plus buff_type or a × / x mark.
+
+    Exact Chinese wording is not required. The static seed effect is not enough
+    when its number is a different level (工坊 effect is x2; Lv.3 is 4).
+    """
+    raw = text or ""
+    token = _format_buff_number(value)
+    has_number = re.search(rf"(?<!\d){re.escape(token)}(?!\d)", raw) is not None
+    has_type = bool(buff_type) and buff_type in raw
+    has_mult = re.search(
+        rf"(?:×|✕|x|X|\*|＊)\s*{re.escape(token)}(?!\d)",
+        raw,
+    ) is not None
+    return has_number and (has_type or has_mult)
+
+
+def _placed_level_buff(test_db_path, kid_id, name):
+    """buff_vals[level-1] for the placed row. Same index as get_building_buff."""
+    db = connect_db(test_db_path)
+    row = db.execute(
+        """
+        SELECT b.level AS level, bd.name AS name, bd.buff_type AS buff_type,
+               bd.buff_vals AS buff_vals, bd.effect AS effect
+        FROM buildings b
+        JOIN building_defs bd ON bd.id = b.def_id
+        WHERE b.kid_id=? AND bd.name=? AND COALESCE(b.stored, 0)=0
+        ORDER BY b.id DESC LIMIT 1
+        """,
+        (kid_id, name),
+    ).fetchone()
+    db.close()
+    assert row, f"placed {name} missing from the synthetic kid"
+    vals = json.loads(row["buff_vals"] or "[]")
+    level = int(row["level"])
+    assert vals, f"{name} buff_vals is empty"
+    index = max(0, min(level - 1, len(vals) - 1))
+    return {
+        "name": row["name"],
+        "level": level,
+        "buff_type": row["buff_type"] or "",
+        "vals": vals,
+        "index": index,
+        "value": vals[index],
+        "effect": row["effect"] or "",
+    }
+
+
+def _seed_sheet_buff_workshop(test_db_path, kid_id):
+    """Placed 工坊 Lv.3 only. build_speed buff_vals[2] is 4.
+
+    Synthetic kid only. No production DB and no real PIN.
+    """
+    set_kid_points(test_db_path, kid_id, 8000)
+    grant_inventory(
+        test_db_path,
+        kid_id,
+        {"wood": 400, "brick": 300, "glass": 40, "gear": 120, "gem": 20},
+    )
+    db = connect_db(test_db_path)
+    db.execute("DELETE FROM buildings WHERE kid_id=?", (kid_id,))
+    db.commit()
+    db.close()
+    insert_building(
+        test_db_path,
+        kid_id,
+        building_def_id(test_db_path, SHEET_BUFF_NAME),
+        level=SHEET_BUFF_LEVEL,
+        cell_x=4,
+        cell_y=1,
+    )
+    buff = _placed_level_buff(test_db_path, kid_id, SHEET_BUFF_NAME)
+    assert buff["level"] == SHEET_BUFF_LEVEL, buff
+    assert buff["buff_type"] == SHEET_BUFF_TYPE, buff
+    assert buff["vals"] == SHEET_BUFF_VALS, buff
+    assert buff["index"] == SHEET_BUFF_INDEX, buff
+    assert buff["value"] == SHEET_BUFF_VALUE, buff
+    return buff
+
+
+def _open_placed_building_sheet(page, case_id, name):
+    """Tap a placed building on scene 1 so #actionSheet opens."""
+    pad = page.locator("#townMap, #village").get_by_role(
+        "button",
+        name=re.compile(rf"第\s*\d+\s*欄第\s*\d+\s*行，{re.escape(name)}(?:，|$)"),
+    )
+    if pad.count() == 0 or not pad.first.is_visible():
+        _sheet_buff_fail(
+            case_id,
+            f"Scene 1 has no tappable pad for placed {name}.",
+        )
+    pad.first.click()
+    sheet = page.locator("#actionSheet")
+    try:
+        sheet.wait_for(state="visible", timeout=8000)
+    except Exception:
+        _sheet_buff_fail(
+            case_id,
+            f"Tapping placed {name} did not open #actionSheet.",
+        )
+    title = (page.locator("#sheetTitle").inner_text() or "").strip()
+    if name not in title:
+        _sheet_buff_fail(
+            case_id,
+            f"#sheetTitle should name {name} after the tap, saw {title!r}.",
+        )
+
+
+def _visible_fn_labels(page):
+    loc = page.locator("#sheetFns .fn")
+    labels = []
+    for i in range(loc.count()):
+        btn = loc.nth(i)
+        try:
+            if not btn.is_visible():
+                continue
+        except Exception:
+            continue
+        labels.append((btn.inner_text() or "").strip() or _button_label(btn))
+    return labels
+
+
+def _stub_buttons_outside_fn_class(page):
+    """FN labels rendered as buttons even if they drop class .fn."""
+    root = page.locator("#actionSheet")
+    if root.count() == 0:
+        return []
+    buttons = root.locator("button")
+    found = []
+    for i in range(buttons.count()):
+        btn = buttons.nth(i)
+        try:
+            if not btn.is_visible():
+                continue
+        except Exception:
+            continue
+        classes = (btn.get_attribute("class") or "").split()
+        if "fn" in classes:
+            continue
+        text = (btn.inner_text() or "").strip()
+        if text in SHEET_BUFF_STUB_LABELS:
+            found.append(text)
+    return found
+
+
+def _read_sheet_buff(page):
+    loc = page.locator("#sheetBuff")
+    if loc.count() == 0:
+        return {"present": False, "visible": False, "text": "", "aria": ""}
+    el = loc.first
+    try:
+        visible = el.is_visible()
+    except Exception:
+        visible = False
+    try:
+        data = el.evaluate(
+            """(node) => ({
+              text: (node.innerText || node.textContent || '').trim(),
+              aria: (node.getAttribute('aria-label') || '').trim()
+            })"""
+        )
+    except Exception:
+        data = {"text": "", "aria": ""}
+    return {
+        "present": True,
+        "visible": visible,
+        "text": data.get("text") or "",
+        "aria": data.get("aria") or "",
+    }
+
+
+def _toast_textcontent(page):
+    """#toast text, including after the fade hides the node."""
+    try:
+        return page.evaluate(
+            """() => {
+              const el = document.getElementById('toast');
+              return el ? (el.textContent || '') : '';
+            }"""
+        )
+    except Exception:
+        return _toast_text(page)
+
+
+def _sheet_note_text(page):
+    loc = page.locator("#sheetNote")
+    if loc.count() == 0:
+        return ""
+    try:
+        return loc.first.inner_text() or ""
+    except Exception:
+        return ""
+
+
+def _stub_phrases_in(*chunks):
+    blob = "\n".join(chunks)
+    return [phrase for phrase in SHEET_BUFF_STUB_PHRASES if phrase in blob]
+
+
+def _click_stub_fn(page):
+    """Click 整道具 if it is there, otherwise the first visible .fn. Return its label."""
+    loc = page.locator("#sheetFns .fn")
+    target = None
+    label = ""
+    for i in range(loc.count()):
+        btn = loc.nth(i)
+        try:
+            if not btn.is_visible():
+                continue
+        except Exception:
+            continue
+        text = (btn.inner_text() or "").strip()
+        if text == "整道具":
+            target = btn
+            label = text
+            break
+        if target is None:
+            target = btn
+            label = text
+    if target is None:
+        return None
+    target.click()
+    page.wait_for_timeout(400)
+    return label
+
+
+@pytest.mark.case_id("TC-FE-TOWN-UX-SHEET-BUFF-01")
+def test_town_ux_sheet_buff_shows_level_buff_without_fn(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-UX-SHEET-BUFF-01 已起工坊：#sheetFns 冇 .fn，#sheetBuff 顯示 Lv.3 ×4。"""
+    case_id = "TC-FE-TOWN-UX-SHEET-BUFF-01"
+    buff = _seed_sheet_buff_workshop(test_db_path, fe_ids["kid_id"])
+    _open_town_home(page, base_url)
+    _open_placed_building_sheet(page, case_id, SHEET_BUFF_NAME)
+    problems = []
+    level_text = (page.locator("#sheetLevel").inner_text() or "").strip()
+    if not re.search(rf"Lv\.?\s*{buff['level']}(?!\d)", level_text):
+        problems.append(
+            f"#sheetLevel should show Lv.{buff['level']} for the placed workshop, "
+            f"saw {level_text!r}."
+        )
+    fn_labels = _visible_fn_labels(page)
+    if fn_labels:
+        problems.append(
+            f"#sheetFns has {len(fn_labels)} .fn button(s) {fn_labels}; want zero "
+            "(no 整道具／修理／接任務／出發 stubs)."
+        )
+    extra = _stub_buttons_outside_fn_class(page)
+    if extra:
+        problems.append(f"stub action buttons without class fn: {extra}.")
+    reading = _read_sheet_buff(page)
+    blob = f"{reading['text']}\n{reading['aria']}"
+    if not reading["present"]:
+        problems.append(
+            "#sheetBuff is missing. The open sheet must show a visible #sheetBuff for "
+            f"{buff['name']} Lv.{buff['level']} {buff['buff_type']} "
+            f"buff_vals[{buff['index']}]={buff['value']} from {buff['vals']}."
+        )
+    elif not reading["visible"]:
+        problems.append(
+            f"#sheetBuff is in the DOM but not visible. "
+            f"text={reading['text']!r} aria={reading['aria']!r}."
+        )
+    elif not _readable_level_buff(blob, buff["buff_type"], buff["value"]):
+        problems.append(
+            "#sheetBuff must show the current-level buff: "
+            f"number {buff['value']} and either {buff['buff_type']!r} or a multiplier "
+            f"(×{buff['value']} / x{buff['value']}). "
+            f"Seed effect {buff['effect']!r} is not that value. "
+            f"text={reading['text']!r} aria={reading['aria']!r}."
+        )
+    if problems:
+        _sheet_buff_fail(case_id, " | ".join(problems))
+
+
+@pytest.mark.case_id("TC-FE-TOWN-UX-SHEET-BUFF-02")
+def test_town_ux_sheet_buff_no_stub_toast(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-TOWN-UX-SHEET-BUFF-02 唔好有 .fn 假動作，亦唔好 toast 工坊：整好一件道具。"""
+    case_id = "TC-FE-TOWN-UX-SHEET-BUFF-02"
+    _seed_sheet_buff_workshop(test_db_path, fe_ids["kid_id"])
+    _open_town_home(page, base_url)
+    _open_placed_building_sheet(page, case_id, SHEET_BUFF_NAME)
+    note_before = _sheet_note_text(page)
+    toast_before = _toast_textcontent(page)
+    problems = []
+    early = _stub_phrases_in(note_before, toast_before)
+    if early:
+        problems.append(
+            "opening the placed-building sheet already showed a fake FN result "
+            f"{early}. note={note_before!r} toast={toast_before!r}."
+        )
+    fn_labels = _visible_fn_labels(page)
+    if fn_labels:
+        clicked = _click_stub_fn(page)
+        note_after = _sheet_note_text(page)
+        toast_after = _toast_textcontent(page)
+        later = _stub_phrases_in(note_after, toast_after)
+        problems.append(
+            f"#sheetFns still has a fake FN click path: .fn buttons {fn_labels}."
+        )
+        if later:
+            problems.append(
+                f"clicking {clicked!r} produced stub copy {later}. "
+                f"note={note_after!r} toast={toast_after!r}."
+            )
+    if problems:
+        _sheet_buff_fail(case_id, " | ".join(problems))

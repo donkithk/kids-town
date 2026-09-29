@@ -2,6 +2,44 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## Placed-building sheet buff — red on main (tests only)
+
+> Recorded 2026-09-28 against test commit `5350e7ec5608fdc2f33f16f5601891433a869746` (`5350e7e`, branch `cursor/red-sheet-buff-3939`). Base is **main** `1944623328c283325289d0d918aaab8c6e6480cb` (`1944623`). This follow-up only records that run.  
+> Cases `TC-FE-TOWN-UX-SHEET-BUFF-01` and `TC-FE-TOWN-UX-SHEET-BUFF-02`. Filter `-k sheet_buff`.  
+> Contract: open a placed building's `#actionSheet`. `#sheetFns` has zero `.fn` buttons (no 整道具／修理／接任務／出發, and no `FN` / `onFn` path that only toasts and rewrites `#sheetNote`). A visible `#sheetBuff` shows the current-level buff from API `buff_type` and `buff_vals[level-1]` (same index as `get_building_buff`). Readable text or `aria-label` must include that number and either the buff type or a multiplier mark (`×4` / `x4` / `build_speed` plus `4`). Exact Chinese wording is not required.  
+> Fixture: empty DB, synthetic `test_fe_kid` only. Placed 工坊 `(4,1)` Lv.3 `stored=0`. Seed `build_speed` `buff_vals=[2,3,4,5,6]` so index 2 is **4**. Static `effect` 「建築速度 x2」 does not satisfy Lv.3. `#sheetNote`, the toast, and `#sheetCost` are not `#sheetBuff`. No production DB and no real PIN.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux.  
+> On this main, tapping 工坊 opens `#actionSheet` at Lv.3, but `#sheetFns` has `.fn` buttons 整道具 and 修理, and `#sheetBuff` does not exist. Clicking 整道具 sets `#sheetNote` and the toast to `工坊：整好一件道具`.  
+> Upgrade cost chip, `#btnUpgrade`, and `#upgradeConfirm` (last child of `.stage`; cancel does not spend) stay on the existing `upgrade_cost` / `upgrade_confirm` asserts. `TC-FE-TOWN-UX-05` and `store_ux` asserts were not edited. Those suites passed again.
+
+### Commands
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| Sheet buff (new) | `python3 -m pytest tests/test_frontend.py -q -k sheet_buff --tb=short` | **2 failed**, 48 deselected in 3.69s |
+| Upgrade + UX-05 + store_ux | `python3 -m pytest tests/test_frontend.py -q -k 'upgrade_cost or upgrade_confirm or scene4_upgrade_feature_and_hud or store_ux' --tb=line` | **5 passed**, 45 deselected in 10.52s |
+
+The two new cases fail. The upgrade cost, upgrade confirm, scene-4 HUD, and store-place asserts were not weakened.
+
+### Case ID → result on main `1944623` (tests at `5350e7e`)
+
+| Case ID | Pytest | Result | Reason |
+|---------|--------|--------|--------|
+| TC-FE-TOWN-UX-SHEET-BUFF-01 | `test_town_ux_sheet_buff_shows_level_buff_without_fn` | **FAIL** | `#sheetFns` has 2 `.fn` buttons: 整道具, 修理. `#sheetBuff` is missing, so Lv.3 `build_speed` `buff_vals[2]=4` from `[2,3,4,5,6]` is not shown. |
+| TC-FE-TOWN-UX-SHEET-BUFF-02 | `test_town_ux_sheet_buff_no_stub_toast` | **FAIL** | Fake FN click path still present (整道具, 修理). Clicking 整道具 set note and toast to `工坊：整好一件道具`. |
+
+### Regression (unchanged asserts) on the same run
+
+| Case ID | Pytest | Result |
+|---------|--------|--------|
+| TC-FE-TOWN-UX-UPGRADE-COST-01 | `test_town_ux_upgrade_cost_sheet_shows_gold_and_mats` | **PASS** |
+| TC-FE-TOWN-UX-UPGRADE-COST-02 | `test_town_ux_upgrade_cost_insufficient_does_not_post` | **PASS** |
+| TC-FE-TOWN-UX-UPGRADE-CONFIRM-01 | `test_town_ux_upgrade_confirm_cancel_then_post` | **PASS** |
+| TC-FE-TOWN-UX-05 | `test_town_ux_scene4_upgrade_feature_and_hud` | **PASS** |
+| TC-FE-TOWN-STORE-UX-01 | `test_town_store_ux_place_stays_on_four_scene` | **PASS** |
+
+---
+
 ## Four-scene upgrade cost + confirm — red on #38 tip (tests only, do not merge)
 
 > Recorded 2026-09-28 against **#38 tip** `46e03920bd893761b71277a16a223bc6cffabf49` (`46e0392`, branch `cursor/four-scene-store-place-eecb`). This is **not main**. When #38 merges, rebase this branch onto main.  
