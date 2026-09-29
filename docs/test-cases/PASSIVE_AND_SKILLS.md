@@ -110,12 +110,12 @@
 | ID | 技能 | 要見到嘅數字 |
 |----|----|----|
 | TC-API-SKILL-DOUBLE | 連擊 | 怪物 HP 下降等於兩次單體公式。健身室 Lv4、方差 0：一下 `max(1, int(16+4×4+player_str))`，兩下係兩倍。 |
-| TC-API-SKILL-FREEZE | 冰凍 | 有傷害，呢一回合反擊係 0，而且 `slow_turns >= 1`。對照普攻反擊 > 0。 |
+| TC-API-SKILL-FREEZE | 冰凍 | 魔法攻擊，怪物 HP 跌 `max(1, int(base_value + per_level×圖書館等級 + player_int))`（方差 0）。圖書館 Lv4、知識 0 係 56。`matk = int(5 + player_int×1.5)`，公式加嘅係 `player_int`。施放唔計入兩回合，嗰下反擊仍然係原本攻擊力，唔好變 0。之後兩次玩家行動先 `int(原攻×0.7)` 再代入 `max(0, 攻−玩家防)`。區 1 攻 7、防 0：原本 7，削弱後 4。第三次恢復 7。 |
 | TC-API-SKILL-EXECUTE | 必殺 | 敵人 HP ≤ 25% 上限時，傷害至少係滿血同一擊嘅 1.5 倍。 |
 | TC-API-SKILL-REPAIR | 修復 | 回復 MP，HP 唔變。防禦拉到 999，反擊係 0。 |
 | TC-API-SKILL-FORTIFY | 強化 | 下一擊受到嘅傷害少過冇開強化嘅對照反擊。 |
 | TC-API-SKILL-SCOUT | 偵察 | 怪物 HP 唔變。區 1 弱點係「火」（區 2「冰」、區 3「雷」）。 |
-| TC-API-SKILL-CHARGE | 蓄力 | 說明入面嘅 1.5 就係下一擊倍率：`int(普攻 × 1.5)`。而家係 ×2。蓄力本身唔造成傷害。 |
+| TC-API-SKILL-CHARGE | 蓄力 | 倍率鎖 ×2。下一擊等於 2×普攻（臂力 0、區 1：普攻 5，蓄力後 10）。蓄力本身唔造成傷害。說明要正好「下次攻擊 2 倍」（開戰 `skills`、`GET /api/kids/<id>/skills`、戰鬥 log）。而家說明係「下次攻擊 1.5 倍」。 |
 | TC-API-SKILL-SHIELD | 盾擊 | 舊名「挑釁」唔好再出現。有物理傷害，呢一回合受到嘅傷害係對照反擊嘅整數一半。 |
 | TC-API-SKILL-GALE | 疾風斬 | 舊名「迴避」唔好再出現。有物理傷害，呢一回合玩家 HP 唔跌。 |
 | TC-API-SKILL-KNOWLEDGE | 知識的力量 | 圖書館。施放之後 3 回合 `player_int` +3×等級（Lv1 +3、Lv5 +15）。火球傷害比對照多正好呢個數。第 4 下同 `player_int` 返原值。施放本身唔造成傷害。 |

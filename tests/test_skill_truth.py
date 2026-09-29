@@ -6,8 +6,6 @@ do what the skill text says.
 """
 from __future__ import annotations
 
-import re
-
 import pytest
 
 from tests.battle_truth import (
@@ -132,33 +130,66 @@ def test_combo_hits_twice(client, family, test_db, monkeypatch):
     assert dealt == 2 * one, f"dealt {dealt}, one hit {one}, want {2 * one}"
 
 
+def _magic_hit(skill, bldg_level, player_int):
+    """Magic skill damage, variance 0. int is added 1:1; matk = int(5 + int×1.5)."""
+    return max(1, int(skill["base_value"] + skill["per_level"] * bldg_level + player_int))
+
+
+def _counter_from_atk(monster_atk, player_def):
+    """Monster counter, variance 0: max(0, atk − player_def)."""
+    return max(0, int(monster_atk) - int(player_def))
+
+
 @pytest.mark.case_id("TC-API-SKILL-FREEZE")
-def test_freeze_slows_enemy_and_skips_counter(client, family, test_db, monkeypatch):
-    """冰凍要令敵人慢下來，呢一下反擊係 0，而且 slow_turns >= 1。對照普攻會扣血。"""
+def test_freeze_magic_hit_weakens_attack_for_two_turns(
+    client, family, test_db, monkeypatch
+):
+    """冰凍係魔法攻擊，之後兩回合怪攻 ×0.7，第三回合恢復。
+
+    施放唔計入兩回合，嗰下反擊仍然用原本攻擊力（唔好變 0，嗰個係疾風斬）。
+    魔法傷害用技能自己嘅魔法公式，方差 0：
+    max(1, int(base_value + per_level×圖書館等級 + player_int))。
+    知識 0、圖書館 Lv4 係 56。matk = int(5 + player_int×1.5)，公式加嘅係 player_int。
+    削弱先取 int(原攻×0.7)，再代入反擊 max(0, 攻−玩家防)。
+    區 1 攻 7、防 0：原本 7，削弱後 4。
+    """
     kid_id = family.kid_a.id
-    specs = [{"key": "guild", "x": 6}, {"key": "library", "level": 4}]
+    library_level = 4
+    battle = _open(
+        client,
+        family,
+        test_db,
+        monkeypatch,
+        [{"key": "guild", "x": 6}, {"key": "library", "level": library_level}],
+    )
+    skill = _require(battle, "冰凍")
+    monster_atk = battle["monsters"][0]["atk"]
+    player_def = battle["player_def"]
+    player_int = battle["player_int"]
+    normal = _counter_from_atk(monster_atk, player_def)
+    reduced = _counter_from_atk(int(monster_atk * 0.7), player_def)
+    magic = _magic_hit(skill, library_level, player_int)
+    assert (monster_atk, player_def, normal, reduced) == (7, 0, 7, 4)
+    assert magic == 56, (magic, skill, player_int)
+    assert reduced < normal
 
-    control = _open(client, family, test_db, monkeypatch, specs)
-    _tune(test_db, kid_id, spd=50, hp=5000)
-    control_hp = control["player_hp"]
-    punched = act(client, kid_id, "attack")
-    assert punched.status_code == 200, response_text(punched)
-    control_loss = _hp_loss(control_hp, punched.get_json())
-    assert control_loss > 0, punched.get_json()
+    _tune(test_db, kid_id, hp=8000, spd=50)
+    control = _ok(act(client, kid_id, "attack"))
+    assert _hp_loss(battle["player_hp"], control) == normal, control
+    enemy_hp = monster_hp(control)
 
-    frozen_start = _open(client, family, test_db, monkeypatch, specs)
-    skill = _require(frozen_start, "冰凍")
-    _tune(test_db, kid_id, spd=50, hp=5000)
-    before_hp = frozen_start["player_hp"]
-    before_enemy = 5000
-    done = _use(client, kid_id, skill)
-    assert done.status_code == 200, response_text(done)
-    body = done.get_json()
-    dealt = before_enemy - monster_hp(body)
-    assert dealt > 0, body["monsters"]
-    assert _hp_loss(before_hp, body) == 0, body
-    slow = body["monsters"][0].get("slow_turns", 0)
-    assert slow >= 1, body["monsters"][0]
+    cast = _ok(_use(client, kid_id, skill))
+    assert enemy_hp - monster_hp(cast) == magic, cast["monsters"]
+    assert _hp_loss(control["player_hp"], cast) == normal, cast
+
+    hp = cast["player_hp"]
+    for turn in (1, 2):
+        step = _ok(act(client, kid_id, "attack"))
+        loss = hp - step["player_hp"]
+        assert loss == reduced, (turn, loss, reduced, normal)
+        hp = step["player_hp"]
+    expired = _ok(act(client, kid_id, "attack"))
+    assert hp - expired["player_hp"] == normal, expired
 
 
 @pytest.mark.case_id("TC-API-SKILL-EXECUTE")
@@ -260,9 +291,12 @@ def test_scout_reveals_weakness_and_deals_no_damage(client, family, test_db, mon
     assert body["monsters"][0].get("weakness") == REGION_WEAKNESS[1], body["monsters"][0]
 
 
+CHARGE_TEXT = "下次攻擊 2 倍"
+
+
 @pytest.mark.case_id("TC-API-SKILL-CHARGE")
-def test_charge_multiplier_matches_description(client, family, test_db, monkeypatch):
-    """蓄力說明入面嘅 1.5 倍就要係下一擊嘅實際倍率（int(普攻 * 1.5)），唔好用 2 倍。"""
+def test_charge_doubles_next_attack_and_says_so(client, family, test_db, monkeypatch):
+    """蓄力下一擊係 2 倍（臂力 0、區 1：普攻 5，蓄力後 10）。說明要係「下次攻擊 2 倍」。"""
     kid_id = family.kid_a.id
     battle = _open(
         client,
@@ -272,19 +306,38 @@ def test_charge_multiplier_matches_description(client, family, test_db, monkeypa
         [{"key": "guild", "x": 6}, {"key": "gym", "level": 1}],
     )
     skill = _require(battle, "蓄力")
-    match = re.search(r"(\d+(?:\.\d+)?)", skill.get("description") or "")
-    assert match, skill
-    assert float(match.group(1)) == 1.5, skill["description"]
+    monster_def = battle["monsters"][0]["def"]
+    normal = max(1, battle["player_atk"] - monster_def)
+    assert (battle["player_atk"], monster_def, normal) == (5, 0, 5), battle
     _tune(test_db, kid_id, hp=5000, spd=50)
-    cast = _use(client, kid_id, skill)
-    assert cast.status_code == 200, response_text(cast)
-    charged = cast.get_json()
-    assert monster_hp(charged) == 5000, "蓄力本身唔好造成傷害"
-    follow = act(client, kid_id, "attack")
-    assert follow.status_code == 200, response_text(follow)
-    dealt = 5000 - monster_hp(follow.get_json())
-    normal = max(1, battle["player_atk"] - 0)
-    assert dealt == int(normal * 1.5), f"dealt {dealt}, normal {normal}, want {int(normal * 1.5)}"
+
+    control = _ok(act(client, kid_id, "attack"))
+    assert 5000 - monster_hp(control) == normal, control
+    enemy_hp = monster_hp(control)
+
+    cast = _ok(_use(client, kid_id, skill))
+    assert monster_hp(cast) == enemy_hp, "蓄力本身唔好造成傷害"
+    follow = _ok(act(client, kid_id, "attack"))
+    dealt = enemy_hp - monster_hp(follow)
+    assert dealt == normal * 2 == 10, f"dealt {dealt}, normal {normal}, want {normal * 2}"
+
+    listed = client.get(f"/api/kids/{kid_id}/skills")
+    assert listed.status_code == 200, response_text(listed)
+    listed_skill = next(
+        (row for row in listed.get_json() if row.get("name") == "蓄力"),
+        None,
+    )
+    action_skill = skill_by_name(cast, "蓄力") or {}
+    log_text = " ".join((cast.get("turns") or [{}])[-1].get("log") or [])
+    exposed = {
+        "battle-start": skill.get("description"),
+        "GET /skills": None if listed_skill is None else listed_skill.get("description"),
+        "battle-action": action_skill.get("description"),
+    }
+    bad = {where: text for where, text in exposed.items() if text != CHARGE_TEXT}
+    if CHARGE_TEXT not in log_text:
+        bad["battle log"] = log_text
+    assert not bad, bad
 
 
 @pytest.mark.case_id("TC-API-SKILL-SHIELD")
