@@ -602,6 +602,9 @@ _SKILL_PATCHES = {
         'effect_type': 'utility',
     },
     '冰凍': {'description': '魔法攻擊，之後 2 回合怪物攻擊力下降'},
+    '繃帶': {'description': '物理攻擊，並小回復 HP'},
+    '急救': {'description': '物理攻擊，並中回復 HP'},
+    '全體治療': {'description': '物理攻擊，並全體回復 HP'},
     '修復': {'description': '物理攻擊，並回復 MP'},
     '強化': {'description': '物理攻擊，防禦提升 3 回合'},
     '知識的力量': {'description': '魔法攻擊，之後 3 回合知識 +3×等級'},
@@ -682,9 +685,9 @@ def seed_skill_defs():
         ('重擊', '💪', 5, 2, 2, 'enemy', '強力物理攻擊', 20, 5, 'str', 'damage'),
         ('連擊', '⚡', 7, 2, 4, 'enemy', '連續攻擊 2 次', 16, 4, 'str', 'damage'),
         # 醫院 (5)
-        ('繃帶', '🩹', 3, 5, 1, 'ally', '小回復', 12, 4, 'int', 'heal'),
-        ('急救', '💚', 8, 5, 3, 'ally', '中回復', 25, 7, 'int', 'heal'),
-        ('全體治療', '🌿', 14, 5, 5, 'all_allies', '全體回復', 18, 5, 'int', 'heal'),
+        ('繃帶', '🩹', 3, 5, 1, 'ally', '物理攻擊，並小回復 HP', 12, 4, 'int', 'heal'),
+        ('急救', '💚', 8, 5, 3, 'ally', '物理攻擊，並中回復 HP', 25, 7, 'int', 'heal'),
+        ('全體治療', '🌿', 14, 5, 5, 'all_allies', '物理攻擊，並全體回復 HP', 18, 5, 'int', 'heal'),
         # 競技場 (9)
         ('橫掃', '🗡️', 6, 9, 2, 'all_enemies', '全體物理攻擊', 15, 4, 'str', 'damage'),
         ('盾擊', '🛡️', 4, 9, 4, 'enemy', '物理攻擊，怪物攻擊傷害減半，直到下一次被打中', 0, 0, 'str', 'utility'),
@@ -4331,9 +4334,18 @@ def battle_action(kid_id):
                 log.append(f'{skill["icon"]} {skill["name"]}！全體 {len([m for m in monsters if m["hp"]>0])} 隻受到傷害！')
 
             elif target == 'ally' or target == 'all_allies':
+                # One physical hit, then the same heal as before. 全體治療
+                # heals the party amount but strikes only the chosen monster.
+                dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+                dmg = _at_least_basic_attack(dmg, player_atk, target_monster.get('def'))
+                if bd.get('charge_boost'):
+                    dmg *= 2
+                    bd['charge_boost'] = False
+                    log.append('⚡ 蓄力爆發！')
+                target_monster['hp'] = max(0, target_monster['hp'] - dmg)
                 heal = _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale, bd.get('player_int', 0))
                 bd['player_hp'] = min(bd['player_max_hp'], bd['player_hp'] + heal)
-                log.append(f'{skill["icon"]} {skill["name"]}！回復 {heal} HP')
+                log.append(f'{skill["icon"]} {skill["name"]}！造成 {dmg} 點傷害，回復 {heal} HP')
         # Fortify writes player_def during the cast. The counter below reads
         # this local, which was captured before the skill.
         player_def = bd.get('player_def', player_def)
