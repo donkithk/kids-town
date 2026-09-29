@@ -4310,6 +4310,7 @@ def battle_action(kid_id):
 
             elif target == 'enemy':
                 dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+                dmg = _at_least_basic_attack(dmg, player_atk, target_monster.get('def'))
                 if bd.get('charge_boost'):
                     dmg *= 2
                     bd['charge_boost'] = False
@@ -4318,9 +4319,14 @@ def battle_action(kid_id):
                 log.append(f'{skill["icon"]} {skill["name"]}！造成 {dmg} 點傷害！')
 
             elif target == 'all_enemies':
+                pairs = []
                 for m in monsters:
-                    if m['hp'] <= 0: continue
+                    if m['hp'] <= 0:
+                        continue
                     dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd, 0.7)
+                    pairs.append([m, dmg])
+                _top_up_last_hit(pairs, player_atk, target_monster.get('def'))
+                for m, dmg in pairs:
                     m['hp'] = max(0, m['hp'] - dmg)
                 log.append(f'{skill["icon"]} {skill["name"]}！全體 {len([m for m in monsters if m["hp"]>0])} 隻受到傷害！')
 
@@ -4328,6 +4334,9 @@ def battle_action(kid_id):
                 heal = _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale, bd.get('player_int', 0))
                 bd['player_hp'] = min(bd['player_max_hp'], bd['player_hp'] + heal)
                 log.append(f'{skill["icon"]} {skill["name"]}！回復 {heal} HP')
+        # Fortify writes player_def during the cast. The counter below reads
+        # this local, which was captured before the skill.
+        player_def = bd.get('player_def', player_def)
         resolved_turn = True
 
     elif action == 'defend':
@@ -4419,8 +4428,9 @@ def _hurt(monster, dmg):
 
 
 def _arm_attack_weaken(monster, turns=2):
-    """Weaken starts on the next counter, not the cast turn."""
-    monster['atk_weaken_pending'] = int(turns)
+    """Weaken includes the counter on the cast turn."""
+    monster['atk_weaken_turns'] = int(turns)
+    monster.pop('atk_weaken_pending', None)
 
 
 def _promote_attack_weaken(monsters):
@@ -4431,8 +4441,9 @@ def _promote_attack_weaken(monsters):
 
 
 def _arm_flash_miss(bd, turns=2):
-    """Enemy misses start on the next counter, not the cast turn."""
-    bd['flash_miss_pending'] = int(turns)
+    """Enemy misses include the counter on the cast turn."""
+    bd['flash_miss_turns'] = int(turns)
+    bd.pop('flash_miss_pending', None)
 
 
 def _promote_flash_miss(bd):
@@ -4474,6 +4485,43 @@ def _promote_turn_buffs(bd):
     active = bd.setdefault('turn_buffs', {})
     for key, spec in pending.items():
         active[key] = spec
+
+
+def _activate_fortify_now(bd):
+    """Fortify's cast-turn counter is turn 1. Other buffs stay pending."""
+    pending = bd.get('pending_turn_buffs') or {}
+    spec = pending.pop('def', None)
+    if not pending:
+        bd.pop('pending_turn_buffs', None)
+    if not spec:
+        return
+    bd.setdefault('turn_buffs', {})['def'] = spec
+    bd['player_def'] = int(spec.get('base') or 0) + int(spec.get('amount') or 0)
+
+
+def _at_least_basic_attack(dmg, player_atk, monster_def):
+    """max(skill formula, this kid's normal attack) against the same monster.
+
+    Multipliers belong on the caller, after this max. Healing skills never
+    call it. A second variance roll is the attack formula's own roll.
+    """
+    floor = _physical_hit(player_atk, monster_def)
+    return max(int(dmg), floor)
+
+
+def _top_up_last_hit(pairs, player_atk, monster_def):
+    """If the whole skill is short of one normal attack, add the gap to the last hit.
+
+    Earlier hits stay at the skill formula. No change when the total already clears.
+    """
+    if not pairs:
+        return 0
+    total = sum(dmg for _monster, dmg in pairs)
+    floor = _physical_hit(player_atk, monster_def)
+    if total < floor:
+        pairs[-1][1] += floor - total
+        total = floor
+    return total
 
 
 def _meal_heal(max_hp, bldg_level):
@@ -4555,16 +4603,21 @@ def _apply_named_skill(skill, bd, target_monster, bldg_level, base, per_lv, attr
         return True
 
     if name == '連擊':
-        total = 0
+        pairs = []
         for _ in range(2):
             dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+            pairs.append([target_monster, dmg])
+        _top_up_last_hit(pairs, player_atk, target_monster.get('def'))
+        total = 0
+        for monster, dmg in pairs:
             total += dmg
-            target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+            monster['hp'] = max(0, monster['hp'] - dmg)
         log.append(f'{icon} 連擊！造成 {total} 點傷害！')
         return True
 
     if name == '冰凍':
         dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+        dmg = _at_least_basic_attack(dmg, player_atk, target_monster.get('def'))
         target_monster['hp'] = max(0, target_monster['hp'] - dmg)
         _arm_attack_weaken(target_monster, 2)
         log.append(f'{icon} 冰凍！造成 {dmg} 點傷害！')
@@ -4572,6 +4625,7 @@ def _apply_named_skill(skill, bd, target_monster, bldg_level, base, per_lv, attr
 
     if name == '必殺':
         dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+        dmg = _at_least_basic_attack(dmg, player_atk, target_monster.get('def'))
         max_hp = target_monster.get('max_hp') or target_monster.get('hp') or 0
         if max_hp and target_monster['hp'] * 4 <= max_hp:
             dmg = int(dmg * 1.5)
@@ -4595,8 +4649,8 @@ def _apply_named_skill(skill, bd, target_monster, bldg_level, base, per_lv, attr
         _queue_turn_buff(
             bd, 'def', 3, amount=bonus, base=int(bd.get('player_def') or 0),
         )
-        spec = bd['pending_turn_buffs']['def']
-        bd['player_def'] = int(spec['base']) + int(spec['amount'])
+        _activate_fortify_now(bd)
+        spec = bd['turn_buffs']['def']
         log.append(f'{icon} 強化！造成 {dmg} 點傷害，防禦 +{spec["amount"]}（3 回合）')
         return True
 
@@ -4625,7 +4679,11 @@ def _apply_named_skill(skill, bd, target_monster, bldg_level, base, per_lv, attr
         return True
 
     if name == '知識的力量':
-        dmg = _hurt(target_monster, _magic_basic(bd, target_monster.get('def')))
+        dmg = _magic_basic(bd, target_monster.get('def'))
+        dmg = _hurt(
+            target_monster,
+            _at_least_basic_attack(dmg, player_atk, target_monster.get('def')),
+        )
         amount = 3 * int(bldg_level)
         _queue_turn_buff(bd, 'int', 3, amount=amount, base=int(bd.get('player_int') or 0))
         shown = bd['pending_turn_buffs']['int']['amount']
@@ -4655,20 +4713,24 @@ def _apply_named_skill(skill, bd, target_monster, bldg_level, base, per_lv, attr
 
     if name == '強光':
         dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+        dmg = _at_least_basic_attack(dmg, player_atk, target_monster.get('def'))
         target_monster['hp'] = max(0, target_monster['hp'] - dmg)
         _arm_flash_miss(bd, 2)
         log.append(f'{icon} 強光！造成 {dmg} 點傷害！')
         return True
 
     if name == '流星雨':
-        hit = 0
+        pairs = []
         for monster in bd.get('monsters') or []:
             if monster.get('hp', 0) <= 0:
                 continue
             dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+            pairs.append([monster, dmg])
+        floor_def = pairs[0][0].get('def') if pairs else target_monster.get('def')
+        _top_up_last_hit(pairs, player_atk, floor_def)
+        for monster, dmg in pairs:
             monster['hp'] = max(0, monster['hp'] - dmg)
-            hit += 1
-        log.append(f'{icon} 流星雨！{hit} 隻受到魔法傷害！')
+        log.append(f'{icon} 流星雨！{len(pairs)} 隻受到魔法傷害！')
         return True
 
     if name == '金錢砸':
