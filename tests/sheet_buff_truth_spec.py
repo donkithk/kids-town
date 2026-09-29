@@ -118,8 +118,8 @@ def sheet_effect_label(name: str, level: int, buff_type: str, value) -> str:
     if name == "探險公會":
         return f"勇氣 +{passive_points(level)}"
     if name == "天文台":
-        # 10 percentage points per level. Same numbers as explore_treasure_chance.
-        return f"尋寶機率 +{10 * level}%"
+        # Treasure weights are not locked yet. The confirmed effect is the skill.
+        return "技能：流星雨（魔法攻擊全體敵人）"
     if name == "醫院":
         return "技能：繃帶（小回復）"
     if name == "燈塔":
@@ -188,7 +188,7 @@ def dishonest_fragments(buff_type: str, name: str | None = None) -> tuple[str, .
         "醫院": ("探險回復",),
         "燈塔": ("探險範圍",),
         "競技場": ("探險金幣",),
-        "天文台": ("發現新區域", "知識"),
+        "天文台": ("發現新區域", "知識", "尋寶"),
         "銀行": ("帳本", "帳簿"),
     }
     if name in by_name:

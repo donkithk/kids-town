@@ -1,4 +1,8 @@
-"""Locked building passives, removed old effects, and the observatory treasure contract.
+"""Locked building passives and removed old effects.
+
+Observatory treasure weights are deferred (post-battle roll_drop). This file
+does not lock a treasure-chance number. Observatory still must not grant knowledge.
+
 
 New behaviour is red on the current base. Shop discount and farm daily gold
 stay covered by P1-TC-BUFF-05..08 and SHEET-BUFF-TRUTH-02..04.
@@ -31,11 +35,6 @@ from tests.phase1_helpers import (
     login_kid,
     start_explore,
 )
-
-# explore_treasure_chance(level): 0 at 0, else min(0.50, 0.10 * level).
-# Claim JSON must include treasure_chance and treasure.
-# roll_explore_treasure(chance) is the single RNG hook (random.random() < chance).
-
 
 def _problems_for(body, expected, fields, label):
     problems = []
@@ -382,71 +381,6 @@ def _claim_explore(client, test_db, kid_id, region=1):
     claimed = client.post(f"/api/kids/{kid_id}/expedition/claim", json={})
     assert claimed.status_code == 200, response_text(claimed)
     return json_or_text(claimed)
-
-
-@pytest.mark.case_id("TC-API-BLD-TREASURE")
-def test_observatory_treasure_chance_rises_on_explore(client, family, test_db, monkeypatch):
-    """探險而家冇寶物欄位。鎖定最小合約：
-
-    backend_v2.explore_treasure_chance(level) = 0（level<=0）否則 min(0.50, 0.10*level)。
-    backend_v2.roll_explore_treasure(chance) 用 random.random() < chance，claim 要呼叫佢。
-    claim JSON 有 treasure_chance 同 treasure。Lv1 機會 0.10 唔中；Lv2 機會 0.20 中。
-    存倉天文台機會係 0。
-    """
-    assert hasattr(b, "explore_treasure_chance"), (
-        "explore claim has no treasure mechanic. "
-        "Add explore_treasure_chance(level): 0 if level<=0 else min(0.50, 0.10*level)."
-    )
-    assert b.explore_treasure_chance(0) == 0.0
-    assert b.explore_treasure_chance(1) == pytest.approx(0.10)
-    assert b.explore_treasure_chance(2) == pytest.approx(0.20)
-    assert b.explore_treasure_chance(6) == pytest.approx(0.50)
-    assert hasattr(b, "roll_explore_treasure"), (
-        "claim must call roll_explore_treasure(chance), implemented as random.random() < chance"
-    )
-
-    def _roll(chance):
-        return float(chance) >= 0.20
-
-    monkeypatch.setattr(b, "roll_explore_treasure", _roll)
-
-    kid_id = family.kid_a.id
-    prepare_kid(test_db, kid_id, points=80)
-    place(test_db, kid_id, "guild", cell_x=6)
-    place(test_db, kid_id, "observatory", level=1, cell_x=0)
-    login_kid(client, family)
-
-    low = _claim_explore(client, test_db, kid_id)
-    assert low.get("treasure_chance") == pytest.approx(0.10), low
-    assert low.get("treasure") is False, low
-
-    db = connect_db(test_db)
-    db.execute(
-        """
-        UPDATE buildings SET level=2
-         WHERE kid_id=? AND def_id=(SELECT id FROM building_defs WHERE name='天文台')
-        """,
-        (kid_id,),
-    )
-    db.commit()
-    db.close()
-    high = _claim_explore(client, test_db, kid_id)
-    assert high.get("treasure_chance") == pytest.approx(0.20), high
-    assert high.get("treasure") is True, high
-
-    db = connect_db(test_db)
-    db.execute(
-        """
-        UPDATE buildings SET stored=1
-         WHERE kid_id=? AND def_id=(SELECT id FROM building_defs WHERE name='天文台')
-        """,
-        (kid_id,),
-    )
-    db.commit()
-    db.close()
-    parked = _claim_explore(client, test_db, kid_id)
-    assert parked.get("treasure_chance") == pytest.approx(0.0), parked
-    assert parked.get("treasure") is False, parked
 
 
 @pytest.mark.case_id("TC-API-BLD-REMOVED-XP")

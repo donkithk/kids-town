@@ -26,9 +26,6 @@ from tests.factories import connect_db, get_kid_points, response_text
 REGION_WEAKNESS = {1: "火", 2: "冰", 3: "雷"}
 # 金幣袋 adds this much gold on top of the normal win payout.
 COIN_BAG_BONUS = 20
-# 營養餐 restore of HP and of MP, each, is inside this inclusive range.
-MEAL_MIN = 1
-MEAL_MAX = 15
 
 
 def _open(client, family, test_db, monkeypatch, specs, monsters=1, points=200):
@@ -88,6 +85,29 @@ def _use(client, kid_id, skill):
 
 def _hp_loss(before_hp, body):
     return before_hp - body["player_hp"]
+
+
+def _set_level_required(test_db, name, level_required):
+    """Test DB only. Lets a seeded skill be cast at a lower building level."""
+    db = connect_db(test_db)
+    cur = db.execute(
+        "UPDATE skill_defs SET level_required=? WHERE name=?",
+        (level_required, name),
+    )
+    db.commit()
+    changed = cur.rowcount
+    db.close()
+    assert changed == 1, name
+
+
+def _ok(response):
+    assert response.status_code == 200, response_text(response)
+    return response.get_json()
+
+
+def _physical_damage(str_v, monster_def):
+    """Basic attack with variance 0. atk = int(5 + str * 1.5)."""
+    return max(1, int(5 + str_v * 1.5) - monster_def)
 
 
 @pytest.mark.case_id("TC-API-SKILL-DOUBLE")
@@ -319,35 +339,170 @@ def test_gale_slash_hits_and_prevents_counter(client, family, test_db, monkeypat
     assert body["player_hp"] == before_hp, body
 
 
-@pytest.mark.case_id("TC-API-SKILL-MEAL")
-def test_farm_meal_restores_a_little_hp_and_mp(client, family, test_db, monkeypatch):
-    """農場營養餐回復少量 HP 同 MP（各 1 至 15）。反擊被 999 防禦擋走。"""
+def _meal_band(max_hp):
+    """About 8% of max HP, with room for rounding and a small level bump."""
+    low = max(1, int(max_hp * 0.06))
+    high = int(max_hp * 0.14) + 1
+    return low, high
+
+
+@pytest.mark.case_id("TC-API-SKILL-KNOWLEDGE")
+def test_library_knowledge_power_boosts_magic_for_three_turns(
+    client, family, test_db, monkeypatch
+):
+    """圖書館「知識的力量」：施放之後三回合知識 +3×建築等級，第 4 下返原值。
+
+    施放嗰下唔計入三回合，亦唔好造成傷害。魔法傷害用火球量：
+    而家公式把 player_int 一比一加落去，所以加成期間每下比對照多正好 3×等級
+    （方差 0）。Lv1 多 3，Lv5 多 15。戰鬥 JSON 嘅 player_int 同步升降。
+    測試庫先把火球 level_required 改成 1，Lv1 圖書館先能量到魔法傷害。
+    """
     kid_id = family.kid_a.id
-    battle = _open(
-        client,
-        family,
-        test_db,
-        monkeypatch,
-        [{"key": "guild", "x": 6}, {"key": "farm", "level": 1, "x": 2}],
-    )
-    skill = _require(battle, "營養餐")
-    hp_before = battle["player_max_hp"] - 40
-    mp_before = battle["player_max_mp"] - 20
-    _tune(
-        test_db,
-        kid_id,
-        spd=50,
-        player_def=999,
-        player_hp=hp_before,
-        player_mp=mp_before,
-    )
-    done = _use(client, kid_id, skill)
-    assert done.status_code == 200, response_text(done)
-    body = done.get_json()
-    hp_gain = body["player_hp"] - hp_before
-    mp_gain = body["player_mp"] - mp_before
-    assert MEAL_MIN <= hp_gain <= MEAL_MAX, body
-    assert MEAL_MIN <= mp_gain <= MEAL_MAX, body
+    seen = {}
+    for level in (1, 5):
+        _set_level_required(test_db, "火球", 1)
+        battle = _open(
+            client,
+            family,
+            test_db,
+            monkeypatch,
+            [{"key": "guild", "x": 6}, {"key": "library", "level": level}],
+        )
+        power = _require(battle, "知識的力量")
+        bolt = skill_by_name(battle, "火球")
+        assert bolt, battle.get("skills")
+        _tune(test_db, kid_id, hp=8000, spd=50, player_def=999)
+        base_int = battle["player_int"]
+        bonus = 3 * level
+
+        opened = _ok(_use(client, kid_id, bolt))
+        plain = 8000 - monster_hp(opened)
+        assert plain > 0, opened
+        enemy_hp = monster_hp(opened)
+
+        cast = _ok(_use(client, kid_id, power))
+        assert monster_hp(cast) == enemy_hp, "知識的力量 must not deal damage"
+
+        for turn in (1, 2, 3):
+            hit = _ok(_use(client, kid_id, bolt))
+            dealt = enemy_hp - monster_hp(hit)
+            assert dealt == plain + bonus, (level, turn, dealt, plain, bonus)
+            assert hit["player_int"] == base_int + bonus, (level, turn, hit["player_int"])
+            enemy_hp = monster_hp(hit)
+
+        expired = _ok(_use(client, kid_id, bolt))
+        assert enemy_hp - monster_hp(expired) == plain, (level, expired)
+        assert expired["player_int"] == base_int, (level, expired["player_int"])
+        seen[level] = plain + bonus
+
+    assert seen[5] - seen[1] != 0
+    assert seen[1] > 0 and seen[5] > seen[1]
+
+
+@pytest.mark.case_id("TC-API-SKILL-TRAINING")
+def test_gym_training_result_boosts_physical_for_three_turns(
+    client, family, test_db, monkeypatch
+):
+    """健身室「鍛鍊的成果」：施放之後三回合臂力 +3×等級，普攻上升，第 4 下返原值。
+
+    普攻傷害係 max(1, int(5 + str×1.5) − 敵防)，方差 0。
+    施放唔造成傷害。player_str 同 player_atk 喺三回合入面要係加成後嘅值。
+    Lv1 臂力 +3，Lv5 臂力 +15。
+    """
+    kid_id = family.kid_a.id
+    boosted_hits = {}
+    for level in (1, 5):
+        battle = _open(
+            client,
+            family,
+            test_db,
+            monkeypatch,
+            [{"key": "guild", "x": 6}, {"key": "gym", "level": level}],
+        )
+        skill = _require(battle, "鍛鍊的成果")
+        monster_def = battle["monsters"][0]["def"]
+        base_str = battle["player_str"]
+        bonus = 3 * level
+        _tune(test_db, kid_id, hp=8000, spd=50)
+        plain = _physical_damage(base_str, monster_def)
+        boosted = _physical_damage(base_str + bonus, monster_def)
+        assert boosted > plain, (level, plain, boosted)
+
+        control = _ok(act(client, kid_id, "attack"))
+        assert 8000 - monster_hp(control) == plain, control
+        enemy_hp = monster_hp(control)
+
+        cast = _ok(_use(client, kid_id, skill))
+        assert monster_hp(cast) == enemy_hp, "鍛鍊的成果 must not deal damage"
+
+        for turn in (1, 2, 3):
+            hit = _ok(act(client, kid_id, "attack"))
+            dealt = enemy_hp - monster_hp(hit)
+            assert dealt == boosted, (level, turn, dealt, boosted)
+            assert hit["player_str"] == base_str + bonus, (level, turn, hit.get("player_str"))
+            assert hit["player_atk"] == int(5 + (base_str + bonus) * 1.5), hit.get("player_atk")
+            enemy_hp = monster_hp(hit)
+
+        expired = _ok(act(client, kid_id, "attack"))
+        assert enemy_hp - monster_hp(expired) == plain, (level, expired)
+        assert expired["player_str"] == base_str, expired.get("player_str")
+        assert expired["player_atk"] == int(5 + base_str * 1.5), expired.get("player_atk")
+        boosted_hits[level] = boosted
+
+    assert boosted_hits[5] > boosted_hits[1]
+
+
+@pytest.mark.case_id("TC-API-SKILL-MEAL")
+def test_farm_meal_heals_over_three_turns(client, family, test_db, monkeypatch):
+    """農場「營養餐」係三回合持續回血，大約最大 HP 嘅 8%，等級高唔少過等級低。
+
+    施放當下 HP、MP 都唔好即時回復（MP 只可以扣技能消耗）。
+    之後三個玩家回合每回合 HP 上升，第四回合停止。反擊被 999 防禦擋走。
+    """
+    kid_id = family.kid_a.id
+    per_level = {}
+    for level in (1, 5):
+        battle = _open(
+            client,
+            family,
+            test_db,
+            monkeypatch,
+            [{"key": "guild", "x": 6}, {"key": "farm", "level": level, "x": 2}],
+        )
+        skill = _require(battle, "營養餐")
+        max_hp = battle["player_max_hp"]
+        hp_before = max(1, max_hp // 2)
+        mp_before = max(0, battle["player_max_mp"] - 15)
+        _tune(
+            test_db,
+            kid_id,
+            hp=5000,
+            spd=50,
+            player_def=999,
+            player_hp=hp_before,
+            player_mp=mp_before,
+        )
+        cast = _ok(_use(client, kid_id, skill))
+        assert cast["player_hp"] == hp_before, cast
+        assert cast["player_mp"] == mp_before - int(skill.get("mp_cost") or 0), cast
+        low, high = _meal_band(max_hp)
+        hp = cast["player_hp"]
+        mp = cast["player_mp"]
+        ticks = []
+        for turn in (1, 2, 3):
+            step = _ok(act(client, kid_id, "attack"))
+            gain = step["player_hp"] - hp
+            assert low <= gain <= high, (level, turn, gain, low, high, max_hp)
+            assert step["player_mp"] == mp, (level, turn, step["player_mp"], mp)
+            ticks.append(gain)
+            hp = step["player_hp"]
+        stopped = _ok(act(client, kid_id, "attack"))
+        assert stopped["player_hp"] == hp, (level, stopped["player_hp"], hp)
+        assert stopped["player_mp"] == mp, stopped["player_mp"]
+        per_level[level] = ticks
+
+    for fast, slow in zip(per_level[5], per_level[1]):
+        assert fast >= slow, (per_level[5], per_level[1])
 
 
 def _clear_win(test_db, kid_id):

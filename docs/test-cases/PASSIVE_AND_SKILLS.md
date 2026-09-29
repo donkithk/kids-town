@@ -45,16 +45,7 @@
 
 `GET /api/kids/<id>/abilities` 嘅 `buffs.int` 要係 0，`total.int` 等於 `base.int`。開戰 `player_matk` 要係 5。而家 `calc_ability_buffs` 天文台每級 +2 知識，所以呢條紅。
 
-### TC-API-BLD-TREASURE — 天文台尋寶
-
-探險而家冇寶物。claim 只擲材料、龍鱗、毛皮、金幣、經驗。`discovery_rate` 冇人讀。
-
-最小合約（builder 要加，測試先紅）：
-
-- `backend_v2.explore_treasure_chance(level)`：`level <= 0` 係 0，否則 `min(0.50, 0.10 × level)`。Lv1 = 0.10，Lv2 = 0.20，Lv6 封頂 0.50。
-- `backend_v2.roll_explore_treasure(chance)` 係 `random.random() < chance`。claim 要呼叫佢。
-- claim JSON 有 `treasure_chance`（浮點）同 `treasure`（布林）。
-- 測試把 `roll_explore_treasure` 換成 `chance >= 0.20`：Lv1 唔中，Lv2 中。存倉天文台機會係 0、`treasure` 係 false。
+天文台尋寶機率**暫緩**。數值未定，會用戰鬥之後嘅 `roll_drop` 稀有度權重。呢份目錄同測試都唔鎖定 `explore_treasure_chance` 或者百分比。面板改為描述已確定嘅技能「流星雨」，唔好寫「尋寶機率」。`TC-API-SKILL-METEOR` 同 `TC-API-BLD-PASSIVE-OBS` 仍然要。
 
 ---
 
@@ -127,10 +118,12 @@
 | TC-API-SKILL-CHARGE | 蓄力 | 說明入面嘅 1.5 就係下一擊倍率：`int(普攻 × 1.5)`。而家係 ×2。蓄力本身唔造成傷害。 |
 | TC-API-SKILL-SHIELD | 盾擊 | 舊名「挑釁」唔好再出現。有物理傷害，呢一回合受到嘅傷害係對照反擊嘅整數一半。 |
 | TC-API-SKILL-GALE | 疾風斬 | 舊名「迴避」唔好再出現。有物理傷害，呢一回合玩家 HP 唔跌。 |
-| TC-API-SKILL-MEAL | 營養餐 | 農場。HP 同 MP 各自回復 1 至 15。 |
+| TC-API-SKILL-KNOWLEDGE | 知識的力量 | 圖書館。施放之後 3 回合 `player_int` +3×等級（Lv1 +3、Lv5 +15）。火球傷害比對照多正好呢個數。第 4 下同 `player_int` 返原值。施放本身唔造成傷害。 |
+| TC-API-SKILL-TRAINING | 鍛鍊的成果 | 健身室。施放之後 3 回合臂力 +3×等級。普攻等於 `max(1, int(5+(str+3×等級)×1.5)−敵防)`，`player_str`／`player_atk` 同步。第 4 下返原值。施放本身唔造成傷害。 |
+| TC-API-SKILL-MEAL | 營養餐 | 農場。持續回血，唔係即時治療。施放當下 HP 不變，MP 只扣消耗。之後 3 回合每回合回大約最大 HP 嘅 8%（允許大約 6%–14% 嘅取整同少量等級加成）。Lv5 每回合回血 ≥ Lv1。第 4 回合停止。唔好順便回 MP。 |
 | TC-API-SKILL-COIN | 金幣袋 | 商店。打贏先至多 20 金幣。逃跑唔加。冇用技能嘅勝場係對照。 |
 | TC-API-SKILL-FLASH | 強光 | 燈塔。有魔法傷害。之後兩次玩家行動敵人打唔中，第三次先至再扣血。 |
 | TC-API-SKILL-METEOR | 流星雨 | 天文台。三隻敵人每一隻 HP 都跌。 |
 | TC-API-SKILL-GOLD | 金錢砸 | 要有 `building_defs` 名「銀行」。每次扣 10 金幣，傷害等於 3 倍普攻（方差 0）。金幣少過 10：400 `insufficient_gold`，金幣同怪物 HP 都唔變。 |
 
-新技能假設所屬建築 Lv1 就學到。舊技能嘅等級門檻照種子：蓄力健身室 1、連擊 4、冰凍圖書館 4、偵察公會 2、修復工坊 2、強化 4、必殺競技場 5。
+新技能假設所屬建築 Lv1 就學到（知識的力量、鍛鍊的成果、營養餐都係）。舊技能嘅等級門檻照種子：蓄力健身室 1、連擊 4、冰凍圖書館 4、火球圖書館 2、偵察公會 2、修復工坊 2、強化 4、必殺競技場 5。`TC-API-SKILL-KNOWLEDGE` 喺測試庫把火球 `level_required` 改成 1，先至能量 Lv1 圖書館嘅魔法傷害；產品種子唔改。
