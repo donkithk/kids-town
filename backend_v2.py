@@ -539,6 +539,8 @@ def seed_building_defs():
         ("🗼", "燈塔", 800, '{"wood":30,"brick":25,"gear":15,"gem":3}', "探險範圍 +1", "explore_range", "[1,2,2,3,3]", 5, "r3"),
         ("⚔️", "競技場", 1000, '{"wood":40,"brick":30,"gear":20,"gem":5}', "探險金幣 x2", "expedition_gold", "[2,3,4,5,6]", 5, "r4"),
         ("🔭", "天文台", 1500, '{"wood":50,"brick":40,"gear":25,"gem":10,"glass":3}', "新區域發現率", "discovery_rate", "[1.5,2,2.5,3,4]", 5, "r5"),
+        # Skill building only. Not a ledger passive.
+        ("🏦", "銀行", 600, '{"wood":10,"brick":5}', "技能：金錢砸", "skill", "[0]", 5, None),
     ]
     for d in defs:
         db.execute(
@@ -584,6 +586,25 @@ def seed_skill_defs():
         db.execute(
             "INSERT INTO skill_defs (name, icon, mp_cost, bldg_def_id, level_required, target, description, base_value, per_level, attr_scale, effect_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             d
+        )
+    # New skills are learned at building level 1. Ids follow the building name,
+    # not the insert position, so 銀行 can sit after the original ten.
+    extra = [
+        ('知識的力量', '📖', 2, '圖書館', 1, 'self', '施放後 3 回合知識 +3×等級', 3, 0, 'none', 'buff'),
+        ('鍛鍊的成果', '🏋️', 2, '健身室', 1, 'self', '施放後 3 回合臂力 +3×等級', 3, 0, 'none', 'buff'),
+        ('營養餐', '🍱', 4, '農場', 1, 'self', '之後 3 回合持續回復 HP', 0, 0, 'none', 'heal'),
+        ('金幣袋', '💰', 2, '商店', 1, 'self', '戰鬥勝利額外獲得 20 金幣', 0, 0, 'none', 'utility'),
+        ('強光', '💡', 6, '燈塔', 1, 'enemy', '魔法攻擊，之後 2 回合敵人攻擊落空', 20, 5, 'int', 'damage'),
+        ('流星雨', '☄️', 8, '天文台', 1, 'all_enemies', '魔法攻擊全體敵人', 20, 5, 'int', 'damage'),
+        ('金錢砸', '🪙', 0, '銀行', 1, 'enemy', '消耗 10 金幣，造成 3 倍普攻傷害', 0, 0, 'none', 'utility'),
+    ]
+    for name, icon, mp, bldg_name, level_required, target, description, base, per, attr, effect in extra:
+        bldg = db.execute("SELECT id FROM building_defs WHERE name=?", (bldg_name,)).fetchone()
+        if not bldg:
+            raise RuntimeError(f'seed_skill_defs missing building {bldg_name}')
+        db.execute(
+            "INSERT INTO skill_defs (name, icon, mp_cost, bldg_def_id, level_required, target, description, base_value, per_level, attr_scale, effect_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (name, icon, mp, bldg[0], level_required, target, description, base, per, attr, effect),
         )
     db.commit()
     db.close()
@@ -4014,6 +4035,7 @@ def battle_action(kid_id):
     player_def = bd.get('player_def', 5)
     log = []
     defending = False
+    resolved_turn = False
 
     # Find a valid target
     alive_targets = [m for m in monsters if m['hp'] > 0]
@@ -4031,6 +4053,8 @@ def battle_action(kid_id):
 
     # --- Player action ---
     if action == 'attack':
+        _begin_turn_buffs(bd)
+        player_atk = bd['player_atk']
         dmg = max(1, player_atk - target_monster['def'] + random.randint(0, 2))
         # Charge boost: 2x damage
         if bd.get('charge_boost'):
@@ -4044,11 +4068,17 @@ def battle_action(kid_id):
             log.append('💥 爆擊！')
         target_monster['hp'] = max(0, target_monster['hp'] - dmg)
         log.append(f'⚔️ 對 {target_monster["name"]} 造成 {dmg} 點傷害')
+        resolved_turn = True
 
     elif action == 'skill' and skill_id:
         skill = next((s for s in bd.get('skills', []) if s['id'] == skill_id), None)
         if not skill:
             return jsonify({'error': 'Skill not found'}), 400
+        if skill.get('name') == '金錢砸':
+            kid_row = db.execute("SELECT points FROM kids WHERE id=?", (kid_id,)).fetchone()
+            held = int(kid_row['points']) if kid_row and kid_row['points'] is not None else 0
+            if held < 10:
+                return jsonify({'error': 'insufficient_gold'}), 400
         # Check MP
         if bd['player_mp'] < skill['mp_cost']:
             log.append(f'❌ MP 不足！需要 {skill["mp_cost"]} MP')
@@ -4058,6 +4088,14 @@ def battle_action(kid_id):
             bd['battle_result'] = 'fighting'
             return jsonify(bd)
         bd['player_mp'] -= skill['mp_cost']
+        if skill.get('name') == '金錢砸':
+            db.execute("UPDATE kids SET points=points-10 WHERE id=?", (kid_id,))
+            db.execute(
+                "INSERT INTO points_log (kid_id, amount, reason) VALUES (?,?,?)",
+                (kid_id, -10, '金錢砸'),
+            )
+        _begin_turn_buffs(bd)
+        player_atk = bd['player_atk']
 
         target = skill.get('target', 'enemy')
         base = skill.get('base_value', 0)
@@ -4099,12 +4137,15 @@ def battle_action(kid_id):
                 heal = _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale, bd.get('player_int', 0))
                 bd['player_hp'] = min(bd['player_max_hp'], bd['player_hp'] + heal)
                 log.append(f'{skill["icon"]} {skill["name"]}！回復 {heal} HP')
+        resolved_turn = True
 
     elif action == 'defend':
+        _begin_turn_buffs(bd)
         defending = True
         bd['charge_boost'] = True
         # 防禦時暫減 30% 傷害
         log.append('🛡️ 蓄力！下一擊傷害 x2')
+        resolved_turn = True
 
     elif action == 'flee':
         bd['status'] = 'fled'
@@ -4114,6 +4155,8 @@ def battle_action(kid_id):
         db.commit()
         bd['battle_result'] = 'fled'
         return jsonify(bd)
+    if resolved_turn:
+        _finish_turn_buffs(bd)
     # Check all monsters defeated
     if all(m['hp'] <= 0 for m in monsters):
         bd['status'] = 'won'
@@ -4141,6 +4184,8 @@ def battle_action(kid_id):
     bd.pop('skip_counter', None)
     bd.pop('halve_counter', None)
     _promote_attack_weaken(monsters)
+    _promote_flash_miss(bd)
+    _promote_turn_buffs(bd)
 
     # Check player defeated
     if bd['player_hp'] <= 0:
@@ -4178,6 +4223,82 @@ def _promote_attack_weaken(monsters):
         pending = monster.pop('atk_weaken_pending', None)
         if pending:
             monster['atk_weaken_turns'] = int(pending)
+
+
+def _arm_flash_miss(bd, turns=2):
+    """Enemy misses start on the next counter, not the cast turn."""
+    bd['flash_miss_pending'] = int(turns)
+
+
+def _promote_flash_miss(bd):
+    pending = bd.pop('flash_miss_pending', None)
+    if pending:
+        bd['flash_miss_turns'] = int(pending)
+
+
+def _consume_flash_miss(bd):
+    left = int(bd.get('flash_miss_turns') or 0)
+    if left <= 0:
+        return False
+    bd['flash_miss_turns'] = left - 1
+    return True
+
+
+def _queue_turn_buff(bd, key, turns, **fields):
+    """Arm a buff for the next `turns` player actions. The cast action is excluded."""
+    pending = bd.setdefault('pending_turn_buffs', {})
+    pending[key] = {'turns': int(turns), **fields}
+
+
+def _promote_turn_buffs(bd):
+    pending = bd.pop('pending_turn_buffs', None) or {}
+    if not pending:
+        return
+    active = bd.setdefault('turn_buffs', {})
+    for key, spec in pending.items():
+        active[key] = spec
+
+
+def _meal_heal(max_hp, bldg_level):
+    """About 8% of max HP, plus 1 HP per level above 1."""
+    base = max(1, int(int(max_hp) * 0.08))
+    bonus = max(0, int(bldg_level) - 1)
+    cap = int(int(max_hp) * 0.14) + 1
+    return min(cap, base + bonus)
+
+
+def _begin_turn_buffs(bd):
+    """Apply buffs already active. A turn count of 0 restores the saved base."""
+    active = bd.get('turn_buffs') or {}
+    intel = active.get('int')
+    if intel:
+        base = int(intel.get('base') or 0)
+        if int(intel.get('turns') or 0) > 0:
+            bd['player_int'] = base + int(intel.get('amount') or 0)
+        else:
+            bd['player_int'] = base
+    trained = active.get('str')
+    if trained:
+        base = int(trained.get('base') or 0)
+        if int(trained.get('turns') or 0) > 0:
+            bd['player_str'] = base + int(trained.get('amount') or 0)
+        else:
+            bd['player_str'] = base
+        bd['player_atk'] = int(5 + bd['player_str'] * 1.5)
+    meal = active.get('meal')
+    if meal and int(meal.get('turns') or 0) > 0:
+        heal = int(meal.get('heal') or 0)
+        if heal > 0:
+            cap = int(bd.get('player_max_hp') or bd.get('player_hp') or 0)
+            bd['player_hp'] = min(cap, int(bd.get('player_hp') or 0) + heal)
+
+
+def _finish_turn_buffs(bd):
+    active = bd.get('turn_buffs') or {}
+    for spec in active.values():
+        left = int(spec.get('turns') or 0)
+        if left > 0:
+            spec['turns'] = left - 1
 
 
 def _consume_weakened_atk(attacker):
@@ -4267,6 +4388,54 @@ def _apply_named_skill(skill, bd, target_monster, bldg_level, base, per_lv, attr
         log.append(f'{icon} 疾風斬！造成 {dmg} 點傷害！')
         return True
 
+    if name == '知識的力量':
+        amount = 3 * int(bldg_level)
+        _queue_turn_buff(bd, 'int', 3, amount=amount, base=int(bd.get('player_int') or 0))
+        log.append(f'{icon} 知識的力量！知識 +{amount}（3 回合）')
+        return True
+
+    if name == '鍛鍊的成果':
+        amount = 3 * int(bldg_level)
+        _queue_turn_buff(bd, 'str', 3, amount=amount, base=int(bd.get('player_str') or 0))
+        log.append(f'{icon} 鍛鍊的成果！臂力 +{amount}（3 回合）')
+        return True
+
+    if name == '營養餐':
+        heal = _meal_heal(bd.get('player_max_hp') or 0, bldg_level)
+        _queue_turn_buff(bd, 'meal', 3, heal=heal)
+        log.append(f'{icon} 營養餐！之後 3 回合各回復 {heal} HP')
+        return True
+
+    if name == '金幣袋':
+        bd['coin_bag'] = True
+        log.append(f'{icon} 金幣袋！勝利額外 20 金幣')
+        return True
+
+    if name == '強光':
+        dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+        target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        _arm_flash_miss(bd, 2)
+        log.append(f'{icon} 強光！造成 {dmg} 點傷害！')
+        return True
+
+    if name == '流星雨':
+        hit = 0
+        for monster in bd.get('monsters') or []:
+            if monster.get('hp', 0) <= 0:
+                continue
+            dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+            monster['hp'] = max(0, monster['hp'] - dmg)
+            hit += 1
+        log.append(f'{icon} 流星雨！{hit} 隻受到魔法傷害！')
+        return True
+
+    if name == '金錢砸':
+        struck = max(1, int(player_atk) - int(target_monster.get('def') or 0) + random.randint(0, 2))
+        dmg = struck * 3
+        target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        log.append(f'{icon} 金錢砸！造成 {dmg} 點傷害！')
+        return True
+
     return False
 
 
@@ -4276,6 +4445,8 @@ def _monster_counterattack(bd, attacker, player_def):
         return (f'💨 先手！{attacker["name"]} 未及反擊', 0)
     if bd.get('player_dodge', 0) > 0 and random.randint(1, 100) <= bd['player_dodge']:
         return (f'💨 回避！{attacker["name"]} 攻擊落空', 0)
+    if _consume_flash_miss(bd):
+        return (f'💡 強光！{attacker["name"]} 攻擊落空', 0)
     atk = _consume_weakened_atk(attacker)
     dmg = max(0, atk - player_def + random.randint(0, 2))
     if bd.get('halve_counter'):
@@ -4351,6 +4522,8 @@ def _award_battle_rewards(db, kid_id, bd, monsters=None):
     # Gold (scale with number of monsters)
     num_monsters = len(monsters) if monsters else 1
     gold = gold * num_monsters
+    if bd.get('coin_bag'):
+        gold += 20
 
     # Gold
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
