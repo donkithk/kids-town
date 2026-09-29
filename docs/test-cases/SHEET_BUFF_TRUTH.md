@@ -22,7 +22,7 @@
 
 - `#sheetFns .fn` 數量係 0（`TC-FE-TOWN-UX-SHEET-BUFF-01`／`02`）。
 - `#upgradeConfirm` 係 `div.gsw.stage` 最後一個元素子節點（`TC-FE-TOWN-UX-UPGRADE-CONFIRM-01`）。
-- `SHEET-BUFF-01` 仍然接受工坊 Lv.3 見到數字 **4**（英文或倍數都得）。呢個綠 **唔** 等於標籤誠實。
+- `SHEET-BUFF-01` 喺圖書館 `task_bonus` Lv.2 要求「任務多經驗 +4」（`buff_vals[1]`，唔係 Lv.1 嘅 2）。工坊唔再做數字合約。
 
 舊 ZH 鎖定文案已經改走，原因見下面「改過嘅舊斷言」。
 
@@ -118,7 +118,8 @@
 |----|----|----|
 | `TC-FE-TOWN-UX-SHEET-BUFF-ZH-01` | 唔再要求「建築速度 ×4」。改為「未開放」，並且 `#sheetBuff`／`#sheetNote` 唔好有「建築速度 ×」。 | `build_speed` 冇後端消費。舊斷言鎖死咗假效果。 |
 | `TC-FE-TOWN-UX-SHEET-BUFF-ZH-02` | 唔再要求「連續保護 ×1」加「漏打卡都唔斷」。改為「未開放」，並且唔好再出現「漏打卡都唔斷」。 | `streak_protect` 冇後端消費。舊旁白描述咗一個未實作嘅保護。 |
-| `TC-FE-TOWN-UX-SHEET-BUFF-01`／`02` | **冇改**。仍然係零 `.fn`，同工坊 Lv.3 見到數字 4。 | 數字合約唔等於誠實標籤。01 喺「建築速度 ×4」上仍然可以綠。 |
+| `TC-FE-TOWN-UX-SHEET-BUFF-01` | 數字合約由工坊 `build_speed` Lv.3（要見到 4／`×4`）搬去圖書館 `task_bonus` Lv.2。`#sheetBuff` 文字同 `aria-label` 要等於「任務多經驗 +4」（`buff_vals[1]`，唔係 `buff_vals[0]=2`，亦唔係種子「任務 +2⭐」）。零 `.fn` 仍然要。 | 工坊未接線，要求「建築速度 ×4」同 ZH-01／TRUTH-05 嘅「未開放」打架。#48 只係因為呢條舊斷言紅。 |
+| `TC-FE-TOWN-UX-SHEET-BUFF-02` | **冇改斷言**。仍然開工坊查零 `.fn` 同唔好 stub toast。唔再當佢同 01 共用「要見到數字 4」嘅前置。 | 02 從來唔查 buff 數值。 |
 | `upgrade_cost`／`upgrade_confirm`／`store_ux` | **冇改**。 | `#upgradeConfirm` 仍然係 `div.gsw.stage` 最後一個元素子節點。 |
 
 `tests/test_frontend.py` 入面舊嘅 `_zh_surface_problems` 唔再係預期文案。兩條 ZH 測試改呼叫未開放面板斷言。

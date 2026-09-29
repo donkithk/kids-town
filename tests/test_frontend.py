@@ -39,10 +39,11 @@ Requirements:
   對齊設計稿 3b4671d：撳屋 → #actionSheet 顯示成本 → 確認 → 升級。唔係一撳升級。
   篩選 `-k 'upgrade_cost or upgrade_confirm'`。唔改 UX-05／store_ux 斷言。
   TC-FE-TOWN-UX-SHEET-BUFF-01  已起屋面板：#sheetFns 冇 .fn；可見 #sheetBuff 顯示而家等級 buff。
+  數字合約搬去已接線嘅圖書館 task_bonus Lv.2：buff_vals=[2,4,6,10,15]，
+  index 1 係 4，同 Lv.1／種子「任務 +2⭐」唔同。#sheetBuff 要係「任務多經驗 +4」。
+  工坊 build_speed 未接線，唔再要求任何數字。
   TC-FE-TOWN-UX-SHEET-BUFF-02  唔好有 FN 假動作；打開或撳舊 stub 都唔好 toast「整好一件道具」。
-  工坊 Lv.3：buff_type build_speed，buff_vals[2]＝4（種子 [2,3,4,5,6]）。篩選 `-k sheet_buff`。
-  英文 code 加倍數（`build_speed ×4`）仍然滿足 01 嘅數字合約。小朋友睇得明嘅繁體中文
-  由下面 ZH 兩條取代，唔好當 01 綠等於中文標籤過咗。
+  02 仍然開工坊，只查零 .fn 同 stub toast，唔查 buff 數字。篩選 `-k sheet_buff`。
   TC-FE-TOWN-UX-SHEET-BUFF-ZH-01  工坊 Lv.3：#sheetBuff 要係「未開放」。
   唔好再寫「建築速度 ×」（build_speed 冇後端消費）。舊「建築速度 ×4」係假效果。
   TC-FE-TOWN-UX-SHEET-BUFF-ZH-02  健身室 Lv.1：#sheetBuff 要係「未開放」。
@@ -51,7 +52,6 @@ Requirements:
   SHEET-BUFF-TRUTH-01..06  面板文字要等於真實效果。見 docs/test-cases/SHEET_BUFF_TRUTH.md。
   篩選 `-k sheet_buff_truth`。`-k sheet_buff` 會一齊跑到。
   唔改 upgrade_cost／upgrade_confirm／UX-05／store_ux 斷言。
-  SHEET-BUFF-01／02 嘅數字同零 .fn 斷言冇改。
   FE-P0-01  未登入不能經 UI／瀏覽器完成任務或改金幣
   FE-P0-02  小朋友登入成功；頁面／回應唔顯示明文 PIN
   FE-P0-03  家長 A session 不能管理家長 B 嘅仔女
@@ -4436,15 +4436,22 @@ def test_town_ux_upgrade_confirm_cancel_then_post(
 # Already-placed scene 4 must not render FN / onFn stubs (整道具／修理／接任務／出發)
 # that only toast and rewrite #sheetNote. Show this building's current-level buff
 # from API buff_type + buff_vals[level-1] (same index as get_building_buff).
-# Dedicated visible node: #sheetBuff. Product does not have that id yet, so these
-# stay red. Do not weaken upgrade_cost, upgrade_confirm, UX-05, or store_ux.
+# Dedicated visible node: #sheetBuff.
+# The current-level number lives on a wired buff. Library task_bonus
+# buff_vals=[2,4,6,10,15]; Lv.2 is index 1 → 4, which is not buff_vals[0]
+# and not the static seed effect 「任務 +2⭐」. Unwired 工坊 is 「未開放」
+# and is not a numeric contract. Do not weaken upgrade_cost, upgrade_confirm,
+# UX-05, or store_ux.
 
-SHEET_BUFF_NAME = "工坊"
-SHEET_BUFF_LEVEL = 3
-SHEET_BUFF_TYPE = "build_speed"
-SHEET_BUFF_VALS = [2, 3, 4, 5, 6]
+SHEET_BUFF_NAME = "圖書館"
+SHEET_BUFF_LEVEL = 2
+SHEET_BUFF_TYPE = "task_bonus"
+SHEET_BUFF_VALS = [2, 4, 6, 10, 15]
 SHEET_BUFF_INDEX = SHEET_BUFF_LEVEL - 1
 SHEET_BUFF_VALUE = SHEET_BUFF_VALS[SHEET_BUFF_INDEX]
+SHEET_BUFF_LV1_VALUE = SHEET_BUFF_VALS[0]
+SHEET_BUFF_WORKSHOP = "工坊"
+SHEET_BUFF_WORKSHOP_LEVEL = 3
 SHEET_BUFF_STUB_LABELS = (
     "整道具",
     "修理",
@@ -4493,12 +4500,13 @@ SHEET_BUFF_RED = (
     "A placed building's #actionSheet must not render fake FN buttons "
     "(#sheetFns .fn, including 整道具／修理／接任務／出發) and must not toast "
     "FN_COPY lines such as 工坊：整好一件道具. "
-    "Show the current-level buff in a visible #sheetBuff. "
-    f"工坊 Lv.{SHEET_BUFF_LEVEL} {SHEET_BUFF_TYPE} uses buff_vals[{SHEET_BUFF_INDEX}] "
-    f"from {SHEET_BUFF_VALS} → {SHEET_BUFF_VALUE}. "
-    "Readable text or aria-label must include that number and either the buff_type "
-    f"or a multiplier mark (×{SHEET_BUFF_VALUE} / x{SHEET_BUFF_VALUE}). "
-    "The seed effect 「建築速度 x2」 is the static blurb, not the Lv.3 value. "
+    "SHEET-BUFF-01 shows the current-level wired buff in a visible #sheetBuff. "
+    f"圖書館 Lv.{SHEET_BUFF_LEVEL} {SHEET_BUFF_TYPE} uses buff_vals[{SHEET_BUFF_INDEX}] "
+    f"from {SHEET_BUFF_VALS} → {SHEET_BUFF_VALUE} "
+    f"(not Lv.1 / seed value {SHEET_BUFF_LV1_VALUE}). "
+    "Text and aria-label must be 「任務多經驗 +4」. "
+    "「任務多星 +4⭐」 and the seed effect 「任務 +2⭐」 do not count. "
+    "工坊 build_speed is unwired: do not require a number there; the panel is 「未開放」. "
     "#sheetNote, the toast, and #sheetCost do not count as #sheetBuff. "
     "Leave #btnUpgrade, the upgrade cost chip, and #upgradeConfirm unchanged."
 )
@@ -4516,23 +4524,6 @@ def _format_buff_number(value):
     if isinstance(value, int):
         return str(value)
     return format(value, "g")
-
-
-def _readable_level_buff(text, buff_type, value):
-    """True when text shows buff_vals[level-1] plus buff_type or a × / x mark.
-
-    Exact Chinese wording is not required. The static seed effect is not enough
-    when its number is a different level (工坊 effect is x2; Lv.3 is 4).
-    """
-    raw = text or ""
-    token = _format_buff_number(value)
-    has_number = re.search(rf"(?<!\d){re.escape(token)}(?!\d)", raw) is not None
-    has_type = bool(buff_type) and buff_type in raw
-    has_mult = re.search(
-        rf"(?:×|✕|x|X|\*|＊)\s*{re.escape(token)}(?!\d)",
-        raw,
-    ) is not None
-    return has_number and (has_type or has_mult)
 
 
 def _placed_level_buff(test_db_path, kid_id, name):
@@ -4566,8 +4557,8 @@ def _placed_level_buff(test_db_path, kid_id, name):
     }
 
 
-def _seed_sheet_buff_workshop(test_db_path, kid_id):
-    """Placed 工坊 Lv.3 only. build_speed buff_vals[2] is 4.
+def _seed_sheet_buff_library(test_db_path, kid_id):
+    """Placed 圖書館 Lv.2 only. task_bonus buff_vals[1] is 4, not the Lv.1 2.
 
     Synthetic kid only. No production DB and no real PIN.
     """
@@ -4595,7 +4586,20 @@ def _seed_sheet_buff_workshop(test_db_path, kid_id):
     assert buff["vals"] == SHEET_BUFF_VALS, buff
     assert buff["index"] == SHEET_BUFF_INDEX, buff
     assert buff["value"] == SHEET_BUFF_VALUE, buff
+    assert buff["value"] != SHEET_BUFF_LV1_VALUE, buff
+    assert "2" in (buff["effect"] or ""), buff
     return buff
+
+
+def _seed_sheet_buff_workshop(test_db_path, kid_id):
+    """Placed 工坊 for the zero-.fn / no-stub check. Do not assert a buff number.
+
+    build_speed is unwired. The panel contract for this building is 「未開放」
+    (ZH-01 / SHEET-BUFF-TRUTH-05), not buff_vals[2].
+    """
+    return _seed_sheet_buff_placed(
+        test_db_path, kid_id, SHEET_BUFF_WORKSHOP, SHEET_BUFF_WORKSHOP_LEVEL
+    )
 
 
 def _open_placed_building_sheet(page, case_id, name, fail_fn=None):
@@ -4749,16 +4753,20 @@ def _click_stub_fn(page):
 def test_town_ux_sheet_buff_shows_level_buff_without_fn(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-UX-SHEET-BUFF-01 已起工坊：#sheetFns 冇 .fn，#sheetBuff 顯示 Lv.3 ×4。"""
+    """TC-FE-TOWN-UX-SHEET-BUFF-01 圖書館 Lv.2：零 .fn，#sheetBuff 係「任務多經驗 +4」。"""
     case_id = "TC-FE-TOWN-UX-SHEET-BUFF-01"
-    buff = _seed_sheet_buff_workshop(test_db_path, fe_ids["kid_id"])
+    buff = _seed_sheet_buff_library(test_db_path, fe_ids["kid_id"])
+    want = honest_buff_label(buff["buff_type"], buff["value"])
+    lv1 = honest_buff_label(buff["buff_type"], buff["vals"][0])
+    assert want == f"任務多經驗 +{_format_buff_number(SHEET_BUFF_VALUE)}", want
+    assert lv1 != want, (lv1, want)
     _open_town_home(page, base_url)
     _open_placed_building_sheet(page, case_id, SHEET_BUFF_NAME)
     problems = []
     level_text = (page.locator("#sheetLevel").inner_text() or "").strip()
     if not re.search(rf"Lv\.?\s*{buff['level']}(?!\d)", level_text):
         problems.append(
-            f"#sheetLevel should show Lv.{buff['level']} for the placed workshop, "
+            f"#sheetLevel should show Lv.{buff['level']} for the placed library, "
             f"saw {level_text!r}."
         )
     fn_labels = _visible_fn_labels(page)
@@ -4771,26 +4779,34 @@ def test_town_ux_sheet_buff_shows_level_buff_without_fn(
     if extra:
         problems.append(f"stub action buttons without class fn: {extra}.")
     reading = _read_sheet_buff(page)
-    blob = f"{reading['text']}\n{reading['aria']}"
     if not reading["present"]:
         problems.append(
             "#sheetBuff is missing. The open sheet must show a visible #sheetBuff for "
             f"{buff['name']} Lv.{buff['level']} {buff['buff_type']} "
-            f"buff_vals[{buff['index']}]={buff['value']} from {buff['vals']}."
+            f"buff_vals[{buff['index']}]={buff['value']} from {buff['vals']} "
+            f"as {want!r} (not the Lv.1 label {lv1!r})."
         )
     elif not reading["visible"]:
         problems.append(
             f"#sheetBuff is in the DOM but not visible. "
             f"text={reading['text']!r} aria={reading['aria']!r}."
         )
-    elif not _readable_level_buff(blob, buff["buff_type"], buff["value"]):
-        problems.append(
-            "#sheetBuff must show the current-level buff: "
-            f"number {buff['value']} and either {buff['buff_type']!r} or a multiplier "
-            f"(×{buff['value']} / x{buff['value']}). "
-            f"Seed effect {buff['effect']!r} is not that value. "
-            f"text={reading['text']!r} aria={reading['aria']!r}."
-        )
+    else:
+        if reading["text"] != want or reading["aria"] != want:
+            problems.append(
+                "#sheetBuff text and aria-label must equal the current-level honest "
+                f"label {want!r} (buff_vals[{buff['index']}]={buff['value']}, "
+                f"not Lv.1 {lv1!r} and not seed effect {buff['effect']!r}). "
+                f"text={reading['text']!r} aria={reading['aria']!r}."
+            )
+        for bad in ("⭐", "星", "任務多星"):
+            blob = f"{reading['text']}\n{reading['aria']}"
+            if bad in blob:
+                problems.append(
+                    f"#sheetBuff must not describe stars ({bad!r}). "
+                    f"text={reading['text']!r} aria={reading['aria']!r}."
+                )
+                break
     if problems:
         _sheet_buff_fail(case_id, " | ".join(problems))
 
@@ -4803,7 +4819,7 @@ def test_town_ux_sheet_buff_no_stub_toast(
     case_id = "TC-FE-TOWN-UX-SHEET-BUFF-02"
     _seed_sheet_buff_workshop(test_db_path, fe_ids["kid_id"])
     _open_town_home(page, base_url)
-    _open_placed_building_sheet(page, case_id, SHEET_BUFF_NAME)
+    _open_placed_building_sheet(page, case_id, SHEET_BUFF_WORKSHOP)
     note_before = _sheet_note_text(page)
     toast_before = _toast_textcontent(page)
     problems = []
@@ -4833,9 +4849,8 @@ def test_town_ux_sheet_buff_no_stub_toast(
 
 # ── TC-FE-TOWN-UX-SHEET-BUFF-ZH-*: kid-readable Traditional Chinese label ──
 #
-# SHEET-BUFF-01 still accepts an English buff_type plus the current-level number
-# (`build_speed ×4`). That numeric contract is not an honest label.
-# ZH-01 / ZH-02 now require 「未開放」: build_speed and streak_protect are not
+# SHEET-BUFF-01 now checks library Lv.2 「任務多經驗 +4」 (wired task_bonus).
+# ZH-01 / ZH-02 require 「未開放」: build_speed and streak_protect are not
 # consumed. The old 「建築速度 ×4」 / 「漏打卡都唔斷」 sentences were a lie.
 # Filter `-k sheet_buff_zh`. Names also contain `sheet_buff`, so `-k sheet_buff`
 # selects them too. Do not weaken upgrade_cost, upgrade_confirm, UX-05, or store_ux.
@@ -4921,16 +4936,13 @@ def test_town_ux_sheet_buff_zh_workshop_shows_chinese_level_value(
 ):
     """TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 工坊 Lv.3：未開放。唔好再寫建築速度 ×。"""
     case_id = "TC-FE-TOWN-UX-SHEET-BUFF-ZH-01"
-    buff = _seed_sheet_buff_placed(
-        test_db_path, fe_ids["kid_id"], SHEET_BUFF_NAME, SHEET_BUFF_LEVEL
-    )
-    assert buff["name"] == SHEET_BUFF_NAME, buff
-    assert buff["level"] == SHEET_BUFF_LEVEL, buff
-    assert buff["buff_type"] == SHEET_BUFF_TYPE, buff
-    assert buff["vals"] == SHEET_BUFF_VALS, buff
-    assert buff["value"] == SHEET_BUFF_VALUE, buff
+    buff = _seed_sheet_buff_workshop(test_db_path, fe_ids["kid_id"])
+    assert buff["name"] == SHEET_BUFF_WORKSHOP, buff
+    assert buff["level"] == SHEET_BUFF_WORKSHOP_LEVEL, buff
+    assert buff["buff_type"] == "build_speed", buff
+    assert buff["vals"] == [2, 3, 4, 5, 6], buff
     _open_town_home(page, base_url)
-    _open_placed_building_sheet(page, case_id, SHEET_BUFF_NAME, fail_fn=_sheet_buff_zh_fail)
+    _open_placed_building_sheet(page, case_id, SHEET_BUFF_WORKSHOP, fail_fn=_sheet_buff_zh_fail)
     _assert_sheet_buff_zh(page, case_id, buff)
 
 

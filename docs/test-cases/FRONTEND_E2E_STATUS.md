@@ -2,6 +2,31 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## SHEET-BUFF-01 moved off the unwired workshop (follow-up on #47)
+
+> Recorded 2026-09-29. `TC-FE-TOWN-UX-SHEET-BUFF-01` no longer requires 工坊 Lv.3 to show `4` / `build_speed` / `×4`. `build_speed` is unwired; that panel is 「未開放」 (`SHEET-BUFF-ZH-01` / `SHEET-BUFF-TRUTH-05`).  
+> The current-level contract now uses 圖書館 `task_bonus` Lv.2. Seed `buff_vals=[2,4,6,10,15]`, so index 1 is **4**, which is not `buff_vals[0]` (2) and not the static effect 「任務 +2⭐」. `#sheetBuff` text and `aria-label` must equal 「任務多經驗 +4」. `#sheetFns .fn` stays 0.  
+> `SHEET-BUFF-02` still opens 工坊 and only checks zero `.fn` plus no stub toast. It does not read a buff number.  
+> Product files were not changed. The #48 check checked out `5b99ed2` product files locally, ran the test, then restored them. Nothing was pushed to `cursor/green-sheet-buff-truth-6a00`.
+
+### Commands
+
+| Suite | Product | Result |
+|-------|---------|--------|
+| `python3 -m pytest tests/test_frontend.py -q -k 'test_town_ux_sheet_buff_shows_level_buff_without_fn or test_town_ux_sheet_buff_no_stub_toast' --tb=short` | this branch (main `8ed2720` product) | **1 failed, 1 passed** in 2.92s |
+| same command | #48 tip `5b99ed2` product files, tests from this branch | **2 passed** in 2.46s |
+
+| Case ID | On main product (`8ed2720`) | On #48 product (`5b99ed2`) |
+|---------|-----------------------------|----------------------------|
+| TC-FE-TOWN-UX-SHEET-BUFF-01 | **FAIL** | **PASS** |
+| TC-FE-TOWN-UX-SHEET-BUFF-02 | **PASS** | **PASS** |
+
+SHEET-BUFF-01 fails on main because `#sheetBuff` text and aria-label are `任務多星 +4⭐`. The wanted string is `任務多經驗 +4`. The number **4** is `buff_vals[1]` (Lv.2), not the seed / Lv.1 value 2, so this is dishonest star copy, not a missing sheet or a wrong level. Zero `.fn` did not fail. On `5b99ed2` the same sheet is `任務多經驗 +4`, so the test passes.
+
+The section below is the earlier #47 run, when SHEET-BUFF-01 still accepted `建築速度 ×4`. That row is historical.
+
+---
+
 ## Honest `#sheetBuff` labels — red on main `8ed2720` (tests only)
 
 > Recorded 2026-09-29 against **main** `8ed2720a8ac8a593bc6868d5d32b2de6a49e7b14` (`8ed2720`, PRs #42–#45 merged). Cases live in [`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md). Tests only; no product code.  
