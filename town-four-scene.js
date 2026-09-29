@@ -99,9 +99,8 @@
     return String(n);
   }
 
-  /* Only buff types backend_v2 passes to get_building_buff. Every other
-     type is 「未開放」 with no magnitude: the effect is not wired. */
-  var CONSUMED_BUFF = { task_bonus: 1, discount: 1, daily_gold: 1 };
+  /* Shop and farm still read buff_vals. Other sheets name the passive or
+     skill the backend applies. Anything else is 「未開放」 with no number. */
   var UNAVAILABLE_LABEL = "未開放";
   var FARM_CLAIM_LABEL = "領取";
   var FARM_CLAIMED_LABEL = "✓ 今日已領";
@@ -122,32 +121,53 @@
     return "";
   }
 
-  function kidBuffLabel(buffType, valueText, rawValue) {
-    if (!CONSUMED_BUFF[buffType]) return UNAVAILABLE_LABEL;
-    if (buffType === "task_bonus") return "任務多經驗 +" + valueText;
-    if (buffType === "daily_gold") return "每日金幣 +" + valueText + "🪙";
-    if (buffType === "discount") {
+  function passivePoints(level) {
+    return 2 * level;
+  }
+
+  /* Name wins over the stored buff_type. Library still seeds task_bonus;
+     the sheet must say the knowledge passive, not task XP. */
+  function sheetEffectLabel(name, level, buffType, rawValue, valueText) {
+    if (name === "圖書館") return "知識 +" + passivePoints(level);
+    if (name === "健身室") return "臂力 +" + passivePoints(level);
+    if (name === "工坊") return "創意 +" + passivePoints(level);
+    if (name === "競技場") return "臂力 +" + passivePoints(level) + "、速度 +" + level;
+    if (name === "探險公會") return "勇氣 +" + passivePoints(level);
+    if (name === "天文台") return "技能：流星雨（魔法攻擊全體敵人）";
+    if (name === "醫院") return "技能：繃帶（小回復）";
+    if (name === "燈塔") return "技能：強光（魔法攻擊，敵人命中率下降 2 回合）";
+    if (name === "銀行") return "技能：金錢砸（每次 10 金幣，傷害約普攻 3 倍）";
+    if (name === "商店" || buffType === "discount") {
       var fold = discountFold(rawValue);
       return fold ? ("起屋／升級金幣" + fold) : "起屋／升級金幣";
+    }
+    if (name === "農場" || buffType === "daily_gold") {
+      return "每日金幣 +" + valueText + "🪙";
     }
     return UNAVAILABLE_LABEL;
   }
 
-  /* buff_vals[level-1], clamped like get_building_buff. Prefer the placed row. */
+  /* buff_vals[level-1] for shop and farm. Prefer the placed row. */
   function levelBuff(placed) {
     if (!placed) return null;
     var def = defById(placed.def_id) || {};
-    var buffType = placed.buff_type || def.buff_type || "";
+    var buffType = String(placed.buff_type || def.buff_type || "");
+    var name = placed.name || def.name || "";
     var vals = parseVals(placed.buff_vals);
     if (!vals.length) vals = parseVals(def.buff_vals);
-    if (!buffType || !vals.length) return null;
+    if (!buffType && !name) return null;
     var level = parseInt(placed.level, 10);
     if (!isFinite(level) || level < 1) level = 1;
-    var idx = Math.max(0, Math.min(level - 1, vals.length - 1));
-    var text = formatBuffValue(vals[idx]);
-    var label = kidBuffLabel(String(buffType), text, vals[idx]);
+    var rawValue = null;
+    var text = "";
+    if (vals.length) {
+      var idx = Math.max(0, Math.min(level - 1, vals.length - 1));
+      rawValue = vals[idx];
+      text = formatBuffValue(rawValue);
+    }
+    var label = sheetEffectLabel(name, level, buffType, rawValue, text);
     if (!label) return null;
-    return { type: String(buffType), text: text, label: label };
+    return { type: buffType, text: text, label: label };
   }
 
   function inventoryQty(key) {
