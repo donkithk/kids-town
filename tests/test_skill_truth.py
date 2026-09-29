@@ -23,6 +23,7 @@ from tests.battle_truth import (
     skill_by_name,
 )
 from tests.factories import connect_db, get_kid_points, response_text
+from tests.historical_seed import historical_catalogs, tracked_sha256, use_temp_database
 from tests.phase1_helpers import login_kid
 
 # Region 1 weakness locked by TC-API-SKILL-SCOUT. Builder copies this onto the monster.
@@ -740,24 +741,6 @@ def test_bank_gold_smash_costs_ten_and_deals_triple(client, family, test_db, mon
     assert still["monsters"][0]["hp"] == 4000, still["monsters"]
 
 
-# Historical skill_defs from the base seed (afbc1a6). Building names, not raw ids.
-_OLD_SKILL_SEED = (
-    ("蓄力", "🔥", 3, "健身室", 1, "self", "下次攻擊 1.5 倍", 0, 0, "none", "buff"),
-    ("重擊", "💪", 5, "健身室", 2, "enemy", "強力物理攻擊", 20, 5, "str", "damage"),
-    ("連擊", "⚡", 7, "健身室", 4, "enemy", "連續攻擊 2 次", 16, 4, "str", "damage"),
-    ("繃帶", "🩹", 3, "醫院", 1, "ally", "小回復", 12, 4, "int", "heal"),
-    ("急救", "💚", 8, "醫院", 3, "ally", "中回復", 25, 7, "int", "heal"),
-    ("全體治療", "🌿", 14, "醫院", 5, "all_allies", "全體回復", 18, 5, "int", "heal"),
-    ("橫掃", "🗡️", 6, "競技場", 2, "all_enemies", "全體物理攻擊", 15, 4, "str", "damage"),
-    ("挑釁", "🛡️", 4, "競技場", 4, "self", "強制敵方攻擊自己", 0, 0, "none", "buff"),
-    ("必殺", "💥", 10, "競技場", 5, "enemy", "對低血量敵人特大傷害", 32, 8, "str", "damage"),
-    ("火球", "🔥", 6, "圖書館", 2, "enemy", "魔法攻擊", 20, 5, "int", "damage"),
-    ("冰凍", "❄️", 8, "圖書館", 4, "enemy", "魔法攻擊 + 減速", 28, 7, "int", "damage"),
-    ("偵察", "👁️", 2, "探險公會", 2, "enemy", "查看怪物弱點", 0, 0, "none", "utility"),
-    ("迴避", "🏃", 3, "探險公會", 4, "self", "完全回避下次攻擊", 0, 0, "none", "buff"),
-    ("修復", "🔧", 4, "工坊", 2, "ally", "回復 MP", 10, 3, "int", "heal"),
-    ("強化", "🛡️", 5, "工坊", 4, "ally", "提升防禦力", 3, 1, "none", "buff"),
-)
 _NEW_SKILL_NAMES = (
     "知識的力量",
     "鍛鍊的成果",
@@ -805,10 +788,15 @@ def _ensure_bank(test_db):
 
 
 def _install_old_skill_seed(test_db):
-    """Replace skill_defs with the historical catalog. Returns rows by name."""
+    """Replace skill_defs with the afbc1a6 catalog. Returns rows by name.
+
+    The rows come from ``git show afbc1a6:backend_v2.py`` ``seed_skill_defs``.
+    ``test_db`` is the pytest temp file. This does not open ``kids_town.db``.
+    """
+    _buildings, old_skills = historical_catalogs()
     db = connect_db(test_db)
     db.execute("DELETE FROM skill_defs")
-    for name, icon, mp_cost, bldg_name, level_required, target, description, base_value, per_level, attr_scale, effect_type in _OLD_SKILL_SEED:
+    for name, icon, mp_cost, bldg_name, level_required, target, description, base_value, per_level, attr_scale, effect_type in old_skills:
         bldg = db.execute(
             "SELECT id FROM building_defs WHERE name=?",
             (bldg_name,),
@@ -856,15 +844,23 @@ def _skill_snapshot(test_db):
 
 @pytest.mark.case_id("TC-API-MIGRATE-SKILLS")
 def test_migrate_renames_skills_in_place_and_keeps_learned_ids(
-    client, family, test_db, monkeypatch
+    client, family, test_db, monkeypatch, request
 ):
     """舊 skill_defs 就地改名，唔好刪行再插入。學咗嘅 id 仍然打得到。
 
-    舊目錄係基礎分支種子：挑釁、迴避、蓄力說明「1.5 倍」，冇七個新技能。
-    小朋友用 skill id 學咗呢三個。migrate_db() 之後原 id 叫盾擊／疾風斬，
-    蓄力說明有「2 倍」或「2倍」，七個新技能都在，舊 id 全部仲在，行數只增唔減。
-    用原 id 開戰打得到。再跑一次 migrate_db() 唔改變、唔重複。
+    舊目錄係 ``git show afbc1a6:backend_v2.py`` 嘅 ``seed_skill_defs``，寫入
+    pytest 暫存庫。唔好打開版控嘅 ``kids_town.db``。挑釁、迴避、蓄力說明
+    「1.5 倍」，冇七個新技能。小朋友用 skill id 學咗呢三個。migrate_db()
+    之後原 id 叫盾擊／疾風斬，蓄力說明有「2 倍」或「2倍」，七個新技能都在，
+    舊 id 全部仲在，行數只增唔減。用原 id 開戰打得到。再跑一次 migrate_db()
+    唔改變、唔重複。
     """
+    play_digest = tracked_sha256()
+
+    def _play_db_unchanged():
+        assert tracked_sha256() == play_digest, "tracked kids_town.db changed"
+
+    request.addfinalizer(_play_db_unchanged)
     kid_id = family.kid_a.id
     prepare_kid(test_db, kid_id, points=200)
     place(test_db, kid_id, "gym", level=1, cell_x=0)
@@ -895,7 +891,8 @@ def test_migrate_renames_skills_in_place_and_keeps_learned_ids(
     db.commit()
     db.close()
 
-    b.migrate_db()
+    with use_temp_database(test_db):
+        b.migrate_db()
 
     db = connect_db(test_db)
     by_id = {
@@ -931,7 +928,8 @@ def test_migrate_renames_skills_in_place_and_keeps_learned_ids(
         assert body.get("error") != "Skill not found", body
 
     snapshot = _skill_snapshot(test_db)
-    b.migrate_db()
+    with use_temp_database(test_db):
+        b.migrate_db()
     assert _skill_snapshot(test_db) == snapshot
     db = connect_db(test_db)
     counts = dict(

@@ -16,6 +16,7 @@ import pytest
 from freezegun import freeze_time
 
 import backend_v2 as b
+from tests.historical_seed import build_historical_building_db, tracked_sha256
 from tests.factories import (
     connect_db,
     get_kid_experience,
@@ -219,13 +220,22 @@ def _task_bonus_rows(test_db):
 
 
 @pytest.mark.case_id("TC-API-SEED-NO-TASK-BONUS")
-def test_seed_and_migrate_drop_task_bonus_and_library_xp(client, family, test_db):
+def test_seed_and_migrate_drop_task_bonus_and_library_xp(
+    client, family, test_db, tmp_path, request
+):
     """圖書館唔好再有 task_bonus。40 分任務經驗係 20，唔加舊曲線。
 
-    新種子同舊種子（圖書館 buff_type=task_bonus、buff_vals=[2,4,6,10,15]、
-    effect=任務 +2⭐）跑完 migrate_db() 之後，building_defs 都唔好再有 task_bonus。
+    新種子同舊種子跑完 migrate_db() 之後，building_defs 都唔好再有 task_bonus。
+    舊種子係 ``git show afbc1a6:backend_v2.py`` 嘅 ``seed_building_defs``，
+    寫入 pytest 暫存庫，唔好打開版控嘅 ``kids_town.db``。
     圖書館擺喺度都一樣：experience_bonus 係 0，experience_total 係 20。
     """
+    play_digest = tracked_sha256()
+
+    def _play_db_unchanged():
+        assert tracked_sha256() == play_digest, "tracked kids_town.db changed"
+
+    request.addfinalizer(_play_db_unchanged)
     kid_id = family.kid_a.id
     problems = []
     fresh = _task_bonus_rows(test_db)
@@ -251,20 +261,13 @@ def test_seed_and_migrate_drop_task_bonus_and_library_xp(client, family, test_db
                 f"kid delta {gained}"
             )
 
-    db = connect_db(test_db)
-    updated = db.execute(
-        """
-        UPDATE building_defs
-           SET buff_type='task_bonus', buff_vals='[2,4,6,10,15]', effect='任務 +2⭐'
-         WHERE name='圖書館'
-        """
-    ).rowcount
-    db.commit()
-    db.close()
-    if updated != 1:
-        problems.append(f"could not restore the old library task_bonus row ({updated})")
-    b.migrate_db()
-    migrated = _task_bonus_rows(test_db)
-    if migrated:
-        problems.append(f"after migrate_db task_bonus remains: {migrated}")
+    old_db = str(tmp_path / "old_library_seed.db")
+    try:
+        build_historical_building_db(old_db)
+    except Exception as exc:  # noqa: BLE001 — keep the product failure visible
+        problems.append(f"could not build the old seed in tmp_path: {exc!r}")
+    else:
+        migrated = _task_bonus_rows(old_db)
+        if migrated:
+            problems.append(f"after migrate_db task_bonus remains: {migrated}")
     assert not problems, problems

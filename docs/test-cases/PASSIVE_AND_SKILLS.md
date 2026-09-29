@@ -2,7 +2,7 @@
 
 > **狀態**：紅燈測試。只加測試同呢份目錄，唔改產品。  
 > **基線**：`cursor/green-sheet-buff-truth-6a00` `afbc1a6`。  
-> **Fixture**：空庫 SQLite、合成帳號（`test_kid_a`／`test_fe_kid`，PIN `1357`）。唔好抄 production DB，唔好用真密碼。  
+> **Fixture**：空庫 SQLite、合成帳號（`test_kid_a`／`test_fe_kid`，PIN `1357`）。唔好抄 production DB，唔好用真密碼。版控嘅 `kids_town.db` 係小朋友遊玩進度：測試唔好改、重新 seed、migrate，或者 commit。舊種子只可以從 git 歷史寫入 pytest `tmp_path`。  
 > **模組**：`tests/test_building_passives.py`、`tests/test_skill_truth.py`、`tests/test_frontend.py`、`tests/sheet_buff_truth_spec.py`。
 
 戰鬥公式（`calc_battle_stats`，小朋友自身屬性係 0）：
@@ -81,7 +81,7 @@
 
 新種子：`building_defs` 冇任何 `buff_type='task_bonus'`（圖書館都唔好）。
 
-舊種子：把圖書館改返 `task_bonus`、`buff_vals=[2,4,6,10,15]`、`effect=任務 +2⭐`，再跑 `migrate_db()`。之後仍然唔好有 `task_bonus` 行。
+舊種子：`git show afbc1a6:backend_v2.py` 嘅 `seed_building_defs`（圖書館 `task_bonus`、`buff_vals=[2,4,6,10,15]`、`effect=任務 +2⭐`）寫入 pytest `tmp_path` 嘅新檔，再跑 `migrate_db()`。之後仍然唔好有 `task_bonus` 行。唔好打開版控嘅 `kids_town.db` 嚟寫。
 
 圖書館擺喺度，完成 40 分任務：`experience_bonus` 係 0，`experience_total` 同小朋友經驗都加 20（`max(5, 40//2)`）。唔好再加舊曲線。
 
@@ -159,7 +159,7 @@
 
 ### TC-API-MIGRATE-SKILLS — 舊技能就地改名
 
-測試先把 `skill_defs` 換成基礎分支種子（`afbc1a6`）：有挑釁、迴避，蓄力說明係「下次攻擊 1.5 倍」，冇七個新技能。合成小朋友用 `kid_skills.skill_id` 學咗呢三個 id，並放好健身室 Lv1、競技場 Lv4、探險公會 Lv4。
+測試先把 `skill_defs` 換成 `git show afbc1a6:backend_v2.py` 嘅 `seed_skill_defs`，寫入 pytest 暫存庫：有挑釁、迴避，蓄力說明係「下次攻擊 1.5 倍」，冇七個新技能。合成小朋友用 `kid_skills.skill_id` 學咗呢三個 id，並放好健身室 Lv1、競技場 Lv4、探險公會 Lv4。`migrate_db()` 只可以連呢個暫存檔，唔好打開版控嘅 `kids_town.db`。
 
 `migrate_db()` 之後：
 
