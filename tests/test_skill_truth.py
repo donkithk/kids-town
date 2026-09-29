@@ -1165,26 +1165,42 @@ def _meter_action(client, kid_id, spec, meter_skill):
     return _ok(act(client, kid_id, "attack"))
 
 
-def _buff_visible(body, spec, original, baseline, dealt):
-    if body.get(spec["stat"]) != original[spec["stat"]]:
-        return True
-    also = spec.get("also")
-    if also and body.get(also) != original[also]:
-        return True
-    return dealt != baseline
+def _single_cast_expect(spec, original, bonus, monster_def, baseline):
+    """One cast adds 3×level. A second cast must not add it again."""
+    stat_name = spec["stat"]
+    stat = original[stat_name] + bonus
+    expect = {stat_name: stat}
+    if spec["meter"] == "fireball":
+        expect["damage"] = baseline + bonus
+    else:
+        atk = int(5 + stat * 1.5)
+        expect["player_atk"] = atk
+        expect["damage"] = max(1, atk - monster_def)
+    return expect
+
+
+def _assert_profile(body, dealt, expect, label):
+    for key, value in expect.items():
+        if key == "damage":
+            assert dealt == value, (label, dealt, expect)
+        else:
+            assert body.get(key) == value, (label, key, body.get(key), expect)
 
 
 @pytest.mark.case_id("TC-API-SKILL-RECAST-REVERT")
 @pytest.mark.parametrize("spec", _RECAST_CASES, ids=[row["name"] for row in _RECAST_CASES])
-def test_recast_reverts_to_the_stat_from_before_the_first_cast(
+def test_recast_refreshes_three_turns_without_stacking(
     client, family, test_db, monkeypatch, spec
 ):
-    """再施放唔好把加成後嘅能力記成新底。完結之後要返第一次之前嘅原值。
+    """再施放只刷新 3 回合，唔疊加，亦唔改底。
 
-    唔判斷第二次係疊加定刷新。加成要先見到，先至再施放。
-    之後最多 8 次行動，夠兩次 3 回合。
+    加成係一次 +3×等級。Lv1 圖書館如果開戰知識係 2，加成後係 5，唔好變 8。
+    第二次施放唔計入三回合。之後三下維持一次加成，第四下返第一次之前嘅原值。
+    原值同傷害跟呢一場開戰數，唔寫死。
     """
     kid_id = family.kid_a.id
+    level = 1
+    bonus = 3 * level
     if spec["meter"] == "fireball":
         _set_level_required(test_db, "火球", 1)
     battle = _open(
@@ -1192,7 +1208,7 @@ def test_recast_reverts_to_the_stat_from_before_the_first_cast(
         family,
         test_db,
         monkeypatch,
-        [{"key": "guild", "x": 6}, {"key": spec["building"], "level": 1, "x": 2}],
+        [{"key": "guild", "x": 6}, {"key": spec["building"], "level": level, "x": 2}],
     )
     skill = _require(battle, spec["name"])
     meter_skill = None
@@ -1202,49 +1218,39 @@ def test_recast_reverts_to_the_stat_from_before_the_first_cast(
     original = {spec["stat"]: battle[spec["stat"]]}
     if spec.get("also"):
         original[spec["also"]] = battle[spec["also"]]
+    monster_def = battle["monsters"][0]["def"]
     _tune(test_db, kid_id, hp=8000, spd=50, player_def=999)
     enemy_hp = 8000
 
     opened = _meter_action(client, kid_id, spec, meter_skill)
     baseline = enemy_hp - monster_hp(opened)
     assert baseline > 0, opened
-    assert opened.get(spec["stat"]) == original[spec["stat"]], opened
+    _assert_profile(opened, baseline, {**original, "damage": baseline}, "before cast")
     enemy_hp = monster_hp(opened)
+    single = _single_cast_expect(spec, original, bonus, monster_def, baseline)
+    assert single[spec["stat"]] != original[spec["stat"]]
 
     first = _ok(_use(client, kid_id, skill))
     enemy_hp = monster_hp(first)
-    active = _buff_visible(first, spec, original, baseline, baseline)
-    if not active:
-        for _ in range(3):
-            probed = _meter_action(client, kid_id, spec, meter_skill)
-            dealt = enemy_hp - monster_hp(probed)
-            enemy_hp = monster_hp(probed)
-            if _buff_visible(probed, spec, original, baseline, dealt):
-                active = True
-                break
-    assert active, (spec["name"], original, first)
+    if first.get(spec["stat"]) == original[spec["stat"]]:
+        probed = _meter_action(client, kid_id, spec, meter_skill)
+        dealt = enemy_hp - monster_hp(probed)
+        enemy_hp = monster_hp(probed)
+        _assert_profile(probed, dealt, single, "buff must be active before the recast")
+    else:
+        stats_only = {key: value for key, value in single.items() if key != "damage"}
+        _assert_profile(first, None, stats_only, "first cast")
 
     second = _ok(_use(client, kid_id, skill))
     enemy_hp = monster_hp(second)
-    restored = None
-    last = second
-    for _ in range(8):
+    for turn in (1, 2, 3):
         step = _meter_action(client, kid_id, spec, meter_skill)
         dealt = enemy_hp - monster_hp(step)
         enemy_hp = monster_hp(step)
-        last = step
-        stat_ok = step.get(spec["stat"]) == original[spec["stat"]]
-        also = spec.get("also")
-        also_ok = not also or step.get(also) == original[also]
-        if stat_ok and also_ok and dealt == baseline:
-            restored = step
-            break
-    assert restored is not None, (
-        spec["name"],
-        original,
-        {key: last.get(key) for key in original},
-        "damage did not return to the pre-cast hit",
-    )
+        _assert_profile(step, dealt, single, f"turn {turn} after recast")
+    expired = _meter_action(client, kid_id, spec, meter_skill)
+    dealt = enemy_hp - monster_hp(expired)
+    _assert_profile(expired, dealt, {**original, "damage": baseline}, "after expiry")
 
 
 def _race_two_gold_smashes(app, family, kid_id, skill_id):
