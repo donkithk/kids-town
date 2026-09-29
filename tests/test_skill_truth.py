@@ -1175,7 +1175,8 @@ def test_cast_damage_meets_basic_attack_on_skewed_stats(
     """除偵察外，施放總傷害 ≥ 同一個小朋友嘅物理普攻。
 
     高臂力／低知識同低臂力／高知識各一場。普攻同施放係兩場全新戰鬥，怪防相同。
-    爆擊關，方差 0。連擊、流星雨、橫掃用成次施放嘅總扣血，唔好逐下逐隻各自比。
+    爆擊關，方差 0。連擊、流星雨、橫掃只比較總扣血。每一下唔使 ≥ 普攻。
+    總數唔夠先補總數，總數已經夠就唔改每一下。
     偵察要 0。怪物血量高過任何一擊，所以唔好被剩餘 HP 封頂。
     """
     kid_id, _skill, probe = _open_floor(
@@ -1201,6 +1202,95 @@ def test_cast_damage_meets_basic_attack_on_skewed_stats(
         assert cast_total == 0, f"actual {cast_total}, expected 0"
         return
     assert cast_total >= basic, f"actual {cast_total}, expected >= {basic}"
+
+
+# 414ffce, abilities 0, crit off, variance 0. Total already clears a basic attack.
+_MULTIHIT_TODAY = (
+    {
+        "name": "連擊",
+        "building": "gym",
+        "level": 4,
+        "monsters": 1,
+        "hits": (40, 40),
+    },
+    {
+        "name": "流星雨",
+        "building": "observatory",
+        "level": 1,
+        "monsters": 3,
+        "hits": (25, 25, 25),
+    },
+)
+
+
+def _record_skill_hits(monkeypatch):
+    """Each cast-time skill-damage roll, in order. Test spy only."""
+    hits = []
+    original = b._calc_skill_damage
+
+    def record(*args, **kwargs):
+        dealt = original(*args, **kwargs)
+        hits.append(dealt)
+        return dealt
+
+    monkeypatch.setattr(b, "_calc_skill_damage", record)
+    return hits
+
+
+@pytest.mark.case_id("TC-API-MULTIHIT-UNCHANGED")
+def test_multihit_per_hit_unchanged_when_total_already_beats_basic(
+    client, family, test_db, monkeypatch
+):
+    """總數已經高過普攻時，連擊同流星雨每一下要保持 414ffce 嘅數字。
+
+    平衡合成小朋友（能力 0）。爆擊關，方差 0。補底只可以喺總數唔夠嗰陣加總數，
+    所以呢兩條而家嘅每一下唔好變。連擊戰鬥記錄只得總數，每一下由施放時計到嘅
+    傷害讀出，而且怪物扣血要等於呢兩下加總。流星雨每一隻嘅扣血就係嗰一下。
+    """
+    kid_id = family.kid_a.id
+    for spec in _MULTIHIT_TODAY:
+        hits = spec["hits"]
+        battle = _open(
+            client,
+            family,
+            test_db,
+            monkeypatch,
+            [{"key": "guild", "x": 6}, {"key": spec["building"], "level": spec["level"], "x": 2}],
+            monsters=spec["monsters"],
+        )
+        _tune(test_db, kid_id, hp=50000, spd=50, player_crt=0)
+        _exp, tuned = running_battle(test_db, kid_id)
+        assert int(tuned.get("player_crt") or 0) == 0
+        basic_body = _ok(act(client, kid_id, "attack"))
+        basic = 50000 - monster_hp(basic_body)
+        formula = max(1, int(tuned["player_atk"]) - int(tuned["monsters"][0]["def"]))
+        assert basic == formula, f"{spec['name']} actual {basic}, expected {formula}"
+        assert sum(hits) > basic, (spec["name"], sum(hits), basic)
+
+        battle = _open(
+            client,
+            family,
+            test_db,
+            monkeypatch,
+            [{"key": "guild", "x": 6}, {"key": spec["building"], "level": spec["level"], "x": 2}],
+            monsters=spec["monsters"],
+        )
+        skill = _require(battle, spec["name"])
+        _tune(test_db, kid_id, hp=50000, spd=50, player_crt=0)
+        recorded = _record_skill_hits(monkeypatch)
+        cast = _ok(_use(client, kid_id, skill))
+        drops = [50000 - monster_hp(cast, index) for index in range(spec["monsters"])]
+        assert recorded == list(hits), (
+            f"{spec['name']} per-hit actual {recorded}, expected {list(hits)}"
+        )
+        if spec["monsters"] == 1:
+            assert drops == [sum(hits)], (
+                f"{spec['name']} total actual {drops[0]}, expected {sum(hits)}"
+            )
+        else:
+            assert drops == list(hits), (
+                f"{spec['name']} per-target actual {drops}, expected {list(hits)}"
+            )
 
 
 @pytest.mark.case_id("TC-API-FORTIFY-TURNS")
