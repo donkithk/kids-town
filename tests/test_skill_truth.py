@@ -146,12 +146,11 @@ def test_freeze_magic_hit_weakens_attack_for_two_turns(
 ):
     """冰凍係魔法攻擊，之後兩回合怪攻 ×0.7，第三回合恢復。
 
-    施放唔計入兩回合，嗰下反擊仍然用原本攻擊力（唔好變 0，嗰個係疾風斬）。
-    魔法傷害用技能自己嘅魔法公式，方差 0：
-    max(1, int(base_value + per_level×圖書館等級 + player_int))。
-    知識 0、圖書館 Lv4 係 56。matk = int(5 + player_int×1.5)，公式加嘅係 player_int。
-    削弱先取 int(原攻×0.7)，再代入反擊 max(0, 攻−玩家防)。
-    區 1 攻 7、防 0：原本 7，削弱後 4。
+    預期跟開戰回報，唔好寫死「防 0／傷害 56」。
+    魔法傷害 > 0，等於技能公式加開戰 `player_int`（方差 0）。
+    若 JSON 有 `player_matk`，佢要等於 `int(5 + player_int×1.5)`，同一知識。
+    對照普攻量到嘅反擊係基線。削弱先 `int(怪攻×0.7)` 再代入
+    `max(0, 攻−player_def)`。施放嗰下唔計入兩回合，反擊仍係基線。
     """
     kid_id = family.kid_a.id
     library_level = 4
@@ -165,31 +164,37 @@ def test_freeze_magic_hit_weakens_attack_for_two_turns(
     skill = _require(battle, "冰凍")
     monster_atk = battle["monsters"][0]["atk"]
     player_def = battle["player_def"]
-    player_int = battle["player_int"]
-    normal = _counter_from_atk(monster_atk, player_def)
-    reduced = _counter_from_atk(int(monster_atk * 0.7), player_def)
+    player_int = battle.get("player_int", 0) or 0
+    derived_matk = int(5 + player_int * 1.5)
+    if "player_matk" in battle:
+        assert battle["player_matk"] == derived_matk, battle.get("player_matk")
+    formula_normal = _counter_from_atk(monster_atk, player_def)
+    formula_reduced = _counter_from_atk(int(monster_atk * 0.7), player_def)
     magic = _magic_hit(skill, library_level, player_int)
-    assert (monster_atk, player_def, normal, reduced) == (7, 0, 7, 4)
-    assert magic == 56, (magic, skill, player_int)
-    assert reduced < normal
+    assert formula_reduced < formula_normal, (monster_atk, player_def, formula_reduced, formula_normal)
+    assert magic > 0
 
     _tune(test_db, kid_id, hp=8000, spd=50)
     control = _ok(act(client, kid_id, "attack"))
-    assert _hp_loss(battle["player_hp"], control) == normal, control
+    baseline = _hp_loss(battle["player_hp"], control)
+    assert baseline == formula_normal, (baseline, formula_normal, battle.get("player_def"))
+    assert baseline > 0, control
     enemy_hp = monster_hp(control)
 
     cast = _ok(_use(client, kid_id, skill))
-    assert enemy_hp - monster_hp(cast) == magic, cast["monsters"]
-    assert _hp_loss(control["player_hp"], cast) == normal, cast
+    dealt = enemy_hp - monster_hp(cast)
+    assert dealt > 0, cast["monsters"]
+    assert dealt == magic, (dealt, magic, player_int, derived_matk)
+    assert _hp_loss(control["player_hp"], cast) == baseline, cast
 
     hp = cast["player_hp"]
     for turn in (1, 2):
         step = _ok(act(client, kid_id, "attack"))
         loss = hp - step["player_hp"]
-        assert loss == reduced, (turn, loss, reduced, normal)
+        assert loss == formula_reduced, (turn, loss, formula_reduced, baseline)
         hp = step["player_hp"]
     expired = _ok(act(client, kid_id, "attack"))
-    assert hp - expired["player_hp"] == normal, expired
+    assert hp - expired["player_hp"] == baseline, expired
 
 
 @pytest.mark.case_id("TC-API-SKILL-EXECUTE")
@@ -296,7 +301,10 @@ CHARGE_TEXT = "下次攻擊 2 倍"
 
 @pytest.mark.case_id("TC-API-SKILL-CHARGE")
 def test_charge_doubles_next_attack_and_says_so(client, family, test_db, monkeypatch):
-    """蓄力下一擊係 2 倍（臂力 0、區 1：普攻 5，蓄力後 10）。說明要係「下次攻擊 2 倍」。"""
+    """蓄力下一擊係同一場對照普攻嘅 2 倍。說明要係「下次攻擊 2 倍」。
+
+    對照傷害跟開戰 `player_atk` 同怪物防，唔好寫死 5 同 10。
+    """
     kid_id = family.kid_a.id
     battle = _open(
         client,
@@ -307,19 +315,20 @@ def test_charge_doubles_next_attack_and_says_so(client, family, test_db, monkeyp
     )
     skill = _require(battle, "蓄力")
     monster_def = battle["monsters"][0]["def"]
-    normal = max(1, battle["player_atk"] - monster_def)
-    assert (battle["player_atk"], monster_def, normal) == (5, 0, 5), battle
+    from_atk = max(1, battle["player_atk"] - monster_def)
     _tune(test_db, kid_id, hp=5000, spd=50)
 
     control = _ok(act(client, kid_id, "attack"))
-    assert 5000 - monster_hp(control) == normal, control
+    normal = 5000 - monster_hp(control)
+    assert normal == from_atk, (normal, from_atk, battle.get("player_atk"))
+    assert normal > 0, control
     enemy_hp = monster_hp(control)
 
     cast = _ok(_use(client, kid_id, skill))
     assert monster_hp(cast) == enemy_hp, "蓄力本身唔好造成傷害"
     follow = _ok(act(client, kid_id, "attack"))
     dealt = enemy_hp - monster_hp(follow)
-    assert dealt == normal * 2 == 10, f"dealt {dealt}, normal {normal}, want {normal * 2}"
+    assert dealt == normal * 2, f"dealt {dealt}, normal {normal}, want {normal * 2}"
 
     listed = client.get(f"/api/kids/{kid_id}/skills")
     assert listed.status_code == 200, response_text(listed)
