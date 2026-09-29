@@ -559,7 +559,7 @@ def seed_skill_defs():
     # bldg_def_id: 1=圖書館,2=健身室,3=農場,4=商店,5=醫院,6=探險公會,7=工坊,8=燈塔,9=競技場,10=天文台
     defs = [
         # 健身室 (2)
-        ('蓄力', '🔥', 3, 2, 1, 'self', '下次攻擊 1.5 倍', 0, 0, 'none', 'buff'),
+        ('蓄力', '🔥', 3, 2, 1, 'self', '下次攻擊 2 倍', 0, 0, 'none', 'buff'),
         ('重擊', '💪', 5, 2, 2, 'enemy', '強力物理攻擊', 20, 5, 'str', 'damage'),
         ('連擊', '⚡', 7, 2, 4, 'enemy', '連續攻擊 2 次', 16, 4, 'str', 'damage'),
         # 醫院 (5)
@@ -568,14 +568,14 @@ def seed_skill_defs():
         ('全體治療', '🌿', 14, 5, 5, 'all_allies', '全體回復', 18, 5, 'int', 'heal'),
         # 競技場 (9)
         ('橫掃', '🗡️', 6, 9, 2, 'all_enemies', '全體物理攻擊', 15, 4, 'str', 'damage'),
-        ('挑釁', '🛡️', 4, 9, 4, 'self', '強制敵方攻擊自己', 0, 0, 'none', 'buff'),
+        ('盾擊', '🛡️', 4, 9, 4, 'enemy', '物理攻擊，本回合受傷減半', 0, 0, 'str', 'damage'),
         ('必殺', '💥', 10, 9, 5, 'enemy', '對低血量敵人特大傷害', 32, 8, 'str', 'damage'),
         # 圖書館 (1)
         ('火球', '🔥', 6, 1, 2, 'enemy', '魔法攻擊', 20, 5, 'int', 'damage'),
         ('冰凍', '❄️', 8, 1, 4, 'enemy', '魔法攻擊 + 減速', 28, 7, 'int', 'damage'),
         # 探險公會 (6)
         ('偵察', '👁️', 2, 6, 2, 'enemy', '查看怪物弱點', 0, 0, 'none', 'utility'),
-        ('迴避', '🏃', 3, 6, 4, 'self', '完全回避下次攻擊', 0, 0, 'none', 'buff'),
+        ('疾風斬', '🏃', 3, 6, 4, 'enemy', '物理攻擊，本回合不受反擊', 0, 0, 'str', 'damage'),
         # 工坊 (7)
         ('修復', '🔧', 4, 7, 2, 'ally', '回復 MP', 10, 3, 'int', 'heal'),
         ('強化', '🛡️', 5, 7, 4, 'ally', '提升防禦力', 3, 1, 'none', 'buff'),
@@ -4073,37 +4073,30 @@ def battle_action(kid_id):
         if bldg_skills:
             bldg_level = bldg_skills['level']
 
-        if target == 'self':
-            # Handle buffs
-            if skill['name'] == '蓄力' or skill['effect_type'] == 'buff':
-                bd['charge_boost'] = True
-                log.append(f'🔥 {skill["name"]}！{skill.get("description","")}')
-            else:
+        if not _apply_named_skill(
+            skill, bd, target_monster, bldg_level, base, per_lv, attr_scale, player_atk, log,
+        ):
+            if target == 'self':
                 log.append(f'🔥 {skill["name"]}！')
 
-        elif target == 'enemy':
-            dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
-            if bd.get('charge_boost'):
-                dmg *= 2
-                bd['charge_boost'] = False
-                log.append('⚡ 蓄力爆發！')
-            target_monster['hp'] = max(0, target_monster['hp'] - dmg)
-            log.append(f'{skill["icon"]} {skill["name"]}！造成 {dmg} 點傷害！')
+            elif target == 'enemy':
+                dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+                if bd.get('charge_boost'):
+                    dmg *= 2
+                    bd['charge_boost'] = False
+                    log.append('⚡ 蓄力爆發！')
+                target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+                log.append(f'{skill["icon"]} {skill["name"]}！造成 {dmg} 點傷害！')
 
-        elif target == 'all_enemies':
-            for m in monsters:
-                if m['hp'] <= 0: continue
-                dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd, 0.7)
-                m['hp'] = max(0, m['hp'] - dmg)
-            log.append(f'{skill["icon"]} {skill["name"]}！全體 {len([m for m in monsters if m["hp"]>0])} 隻受到傷害！')
+            elif target == 'all_enemies':
+                for m in monsters:
+                    if m['hp'] <= 0: continue
+                    dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd, 0.7)
+                    m['hp'] = max(0, m['hp'] - dmg)
+                log.append(f'{skill["icon"]} {skill["name"]}！全體 {len([m for m in monsters if m["hp"]>0])} 隻受到傷害！')
 
-        elif target == 'ally' or target == 'all_allies':
-            heal = _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale, bd.get('player_int', 0))
-            if target == 'ally':
-                # Heal player
-                bd['player_hp'] = min(bd['player_max_hp'], bd['player_hp'] + heal)
-                log.append(f'{skill["icon"]} {skill["name"]}！回復 {heal} HP')
-            else:
+            elif target == 'ally' or target == 'all_allies':
+                heal = _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale, bd.get('player_int', 0))
                 bd['player_hp'] = min(bd['player_max_hp'], bd['player_hp'] + heal)
                 log.append(f'{skill["icon"]} {skill["name"]}！回復 {heal} HP')
 
@@ -4139,12 +4132,15 @@ def battle_action(kid_id):
 
     # --- Monster counter-attack (recompute alive targets after player action) ---
     alive_after = [m for m in monsters if m['hp'] > 0]
-    if not defending and alive_after:
+    if not defending and not bd.get('skip_counter') and alive_after:
         attacker = alive_after[0]
         log_line, dmg = _monster_counterattack(bd, attacker, player_def)
         log.append(log_line)
         if dmg > 0:
             bd['player_hp'] -= dmg
+    bd.pop('skip_counter', None)
+    bd.pop('halve_counter', None)
+    _promote_attack_weaken(monsters)
 
     # Check player defeated
     if bd['player_hp'] <= 0:
@@ -4164,13 +4160,126 @@ def battle_action(kid_id):
     return jsonify(bd)
 
 
+REGION_WEAKNESS = {1: '火', 2: '冰', 3: '雷'}
+
+
+def _physical_hit(player_atk, monster_def):
+    """Basic physical hit. Variance is randint(0, 2), same as a normal attack."""
+    return max(1, int(player_atk) - int(monster_def or 0) + random.randint(0, 2))
+
+
+def _arm_attack_weaken(monster, turns=2):
+    """Weaken starts on the next counter, not the cast turn."""
+    monster['atk_weaken_pending'] = int(turns)
+
+
+def _promote_attack_weaken(monsters):
+    for monster in monsters:
+        pending = monster.pop('atk_weaken_pending', None)
+        if pending:
+            monster['atk_weaken_turns'] = int(pending)
+
+
+def _consume_weakened_atk(attacker):
+    """int(atk × 0.7) while weaken turns remain. Original atk is kept."""
+    atk = attacker.get('atk', 0)
+    left = int(attacker.get('atk_weaken_turns') or 0)
+    if left > 0:
+        atk = int(atk * 0.7)
+        attacker['atk_weaken_turns'] = left - 1
+    return atk
+
+
+def _apply_named_skill(skill, bd, target_monster, bldg_level, base, per_lv, attr_scale, player_atk, log):
+    """Old skills whose battle effect is not the generic target switch.
+
+    Returns True when this skill was handled.
+    """
+    name = skill.get('name')
+    icon = skill.get('icon') or ''
+
+    if name == '蓄力':
+        bd['charge_boost'] = True
+        log.append(f'🔥 蓄力！{skill.get("description") or "下次攻擊 2 倍"}')
+        return True
+
+    if name == '連擊':
+        total = 0
+        for _ in range(2):
+            dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+            total += dmg
+            target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        log.append(f'{icon} 連擊！造成 {total} 點傷害！')
+        return True
+
+    if name == '冰凍':
+        dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+        target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        _arm_attack_weaken(target_monster, 2)
+        log.append(f'{icon} 冰凍！造成 {dmg} 點傷害！')
+        return True
+
+    if name == '必殺':
+        dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+        max_hp = target_monster.get('max_hp') or target_monster.get('hp') or 0
+        if max_hp and target_monster['hp'] * 4 <= max_hp:
+            dmg = int(dmg * 1.5)
+        target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        log.append(f'{icon} 必殺！造成 {dmg} 點傷害！')
+        return True
+
+    if name == '修復':
+        gained = _calc_skill_heal(
+            skill, base, per_lv, bldg_level, attr_scale, bd.get('player_int', 0),
+        )
+        cap = bd.get('player_max_mp', bd['player_mp'] + gained)
+        bd['player_mp'] = min(int(cap), bd['player_mp'] + gained)
+        log.append(f'{icon} 修復！回復 {gained} MP')
+        return True
+
+    if name == '強化':
+        bonus = max(1, int((base or 0) + (per_lv or 0) * bldg_level))
+        bd['player_def'] = int(bd.get('player_def') or 0) + bonus
+        log.append(f'{icon} 強化！防禦 +{bonus}')
+        return True
+
+    if name == '偵察':
+        try:
+            region_id = int(bd.get('region_id') or 1)
+        except (TypeError, ValueError):
+            region_id = 1
+        weakness = REGION_WEAKNESS.get(region_id, '火')
+        target_monster['weakness'] = weakness
+        log.append(f'{icon} 偵察！弱點 {weakness}')
+        return True
+
+    if name == '盾擊':
+        dmg = _physical_hit(player_atk, target_monster.get('def'))
+        target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        bd['halve_counter'] = True
+        log.append(f'{icon} 盾擊！造成 {dmg} 點傷害！')
+        return True
+
+    if name == '疾風斬':
+        dmg = _physical_hit(player_atk, target_monster.get('def'))
+        target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        bd['skip_counter'] = True
+        log.append(f'{icon} 疾風斬！造成 {dmg} 點傷害！')
+        return True
+
+    return False
+
+
 def _monster_counterattack(bd, attacker, player_def):
     """Monster counter-attack with 先手 (spd) + 回避 (dodge). Returns (log, damage)."""
     if bd.get('player_spd', 0) > attacker.get('spd', 0):
         return (f'💨 先手！{attacker["name"]} 未及反擊', 0)
     if bd.get('player_dodge', 0) > 0 and random.randint(1, 100) <= bd['player_dodge']:
         return (f'💨 回避！{attacker["name"]} 攻擊落空', 0)
-    dmg = max(0, attacker['atk'] - player_def + random.randint(0, 2))
+    atk = _consume_weakened_atk(attacker)
+    dmg = max(0, atk - player_def + random.randint(0, 2))
+    if bd.get('halve_counter'):
+        dmg = dmg // 2
     if dmg > 0:
         return (f'🐾 {attacker["name"]} 反擊 {dmg} 點傷害', dmg)
     return ('🛡️ 擋住攻擊！', 0)
