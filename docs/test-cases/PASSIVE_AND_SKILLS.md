@@ -93,7 +93,7 @@
 
 | ID | 描述 |
 |----|----|
-| TC-FE-TOWN-UX-SHEET-BUFF-01 | 圖書館 Lv.2 係「知識 +N（戰鬥 HUD 標籤 +M）」。N、M 由函數差計。零 `.fn`。唔讀 `task_bonus` 種子行。 |
+| TC-FE-TOWN-UX-SHEET-BUFF-01 | 圖書館 Lv.2 跟 `STAT_GLOSSARY.md`。M 唔係 0 先至「知識 +N（魔法力 +M）」；M 係 0 就只得「知識 +N」。N、M 由函數差計。零 `.fn`。唔讀 `task_bonus` 種子行。 |
 | TC-FE-TOWN-UX-SHEET-BUFF-02 | 工坊零 `.fn`、唔好 stub toast。唔查數字。要綠。 |
 | TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 | 工坊 Lv.3 兩層數字，唔好「建築速度 ×」或者「未開放」。 |
 | TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 | 健身室 Lv.1 兩層數字，唔好「漏打卡都唔斷」或者「未開放」。 |
@@ -101,8 +101,9 @@
 | TC-FE-SHEET-UNWIRED-01 | 自訂 `zzz_unwired`、值 9：正好「未開放」，唔好出現 9。要綠。 |
 | TC-FE-SHEET-BANK-01 | 測試庫插入「銀行」：技能句「金錢砸」。而家係「未開放」，所以紅。 |
 | SHEET-BUFF-TRUTH-01 | 圖書館兩層數字。唔讀 `task_bonus` 種子行。API bonus 0。 |
-| TC-FE-SHEET-TWO-LAYER | 五座被動、Lv.1 同 Lv.3：能力 +N 等於 `calc_ability_buffs` 有座同冇座嘅差；括號 +M 等於同一個人 `calc_battle_stats` 嘅差；括號個字等於戰鬥 HUD 顯示嗰個屬性嘅字。`stored=1` 唔計。競技場兩種能力都要。數字唔寫死。 |
-| TC-API-SHEET-TWO-LAYER | 同一五座、Lv.1 同 Lv.3：`stored=1` 唔改變 `calc_ability_buffs` 同 `calc_battle_stats`。擺出嚟先至有能力差。 |
+| TC-FE-SHEET-TWO-LAYER | 五座被動、Lv.1 同 Lv.3。用字同單位讀 `docs/ui-mocks/STAT_GLOSSARY.md`，唔對戰鬥 HUD。N、M 由函數差計。`stored=1` 唔計。競技場兩種能力都要。唔好「魔力」或者爆擊傷害倍率。 |
+| TC-API-SHEET-TWO-LAYER | 同一五座、Lv.1 同 Lv.3：`stored=1` 唔改變 `calc_ability_buffs` 同 `calc_battle_stats`。擺出嚟嘅能力鍵同括號鍵要同詞彙表一致。 |
+| TC-DOC-STAT-GLOSSARY | 詞彙表兩張表解析到。單位只係整數或百分比。戰鬥層每個 `calc_battle_stats` 鍵都要係函數輸出，避免 `player_eva`。`player_crit_dmg` 唔入表。 |
 | SHEET-BUFF-TRUTH-02 | 商店「起屋／升級金幣九折」。要綠。 |
 | SHEET-BUFF-TRUTH-03 | 農場「每日金幣 +5」加可撳「領取」。要綠。 |
 | SHEET-BUFF-TRUTH-04 | 領完「今日已領」，同日只加一次。要綠。 |
@@ -115,18 +116,24 @@
 
 圖書館、健身室、工坊、競技場、探險公會。每座至少 Lv.1 同 Lv.3。空庫、合成小朋友。
 
-格式係「能力 +N（戰鬥 HUD 標籤 +M）」，例如能力名同括號標籤可以唔同，但括號個字必須同戰鬥畫面顯示嗰個屬性一樣。競技場兩段，用「、」接住，臂力同速度都要。
+用字唔好對戰鬥 HUD，亦唔好寫死。測試讀 `docs/ui-mocks/STAT_GLOSSARY.md` 嘅「能力層」同「戰鬥數值層」（欄位、中文、單位、備註），再讀「顯示規則」邊個能力對邊個 `player_*`。
+
+格式係「能力中文 +N（戰鬥數值中文 +M）」。單位係百分比先加 `%`，貼住數字。例子（數字只係例子）：「速度 +1（閃避率 +1.5%）」。競技場兩段用「、」接住。HP、MP 保持英文。唔好寫「魔力」。`player_crit_dmg` 係倍率，唔好出現喺面板或者括號。
 
 - N：`calc_ability_buffs` 有呢座（`stored=0`）減冇呢座。`stored=1` 要同冇座一樣（`TC-API-SHEET-TWO-LAYER`）。
-- M：同一個人，`calc_battle_stats` 有呢座減冇呢座。轉換欄由函數邊個數會郁決定（臂力→atk、知識→matk、創意→crt、勇氣→def、速度→dodge）。
-- 能力個字讀 `index.html` 嘅 `TIP_NAMES`（臂力、知識、速度、創意、勇氣）。
-- 括號個字唔好估。測試開一場戰鬥，將對應能力加幾點，睇戰鬥 HUD（怪物列同戰鬥 toast 唔計）邊個字旁邊嘅數跟住 `calc_battle_stats` 郁。HUD 冇顯示，呢條就紅，唔好自己寫「魔攻」。
+- M：同一個人，`calc_battle_stats` 對住詞彙表備註嗰個短鍵嘅差（例如 `player_atk` 對 `atk`）。
+- 最多一個小數位。整數唔寫 `.0`。
+- 詞彙表寫明 M 係 0 就唔寫括號，唔好寫「（… +0）」。而家呢條基線 `calc_battle_stats` 唔讀建築，所以 M 係 0，預期句係「知識 +N」呢種，直到函數開始計建築。
 
-而家呢條基線 `calc_battle_stats` 唔讀建築，所以 M 跟函數會係 0，直到函數開始計建築。面板而家亦未有兩層，所以紅。#52、#53 預期都係紅。
+面板而家未跟詞彙表，所以紅。#53 預期都係紅。
+
+### TC-DOC-STAT-GLOSSARY — 詞彙表解析
+
+`STAT_GLOSSARY.md` 兩張表要解析到。單位只可以係「整數」或者「百分比」。戰鬥數值層每一列，如果備註話自己係 `calc_battle_stats` 鍵，嗰個鍵同 `player_` 後面嗰截都要出現喺函數輸出。備註話「唔係」嘅列（MP）跳過。`player_crit_dmg` 唔好列喺戰鬥數值層。
 
 ### TC-API-SHEET-TWO-LAYER — 存倉唔計
 
-同一五座、Lv.1 同 Lv.3。`stored=1` 呼叫 `calc_ability_buffs` 同 `calc_battle_stats` 要等於冇座。擺出嚟嘅能力鍵要同函數一致。數字唔寫死。
+同一五座、Lv.1 同 Lv.3。`stored=1` 呼叫 `calc_ability_buffs` 同 `calc_battle_stats` 要等於冇座。擺出嚟嘅能力鍵要同函數一致，括號用嘅短鍵要係詞彙表嗰個，而且函數真係返回佢。數字唔寫死。
 
 ---
 

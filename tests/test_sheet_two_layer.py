@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import pytest
 
+import backend_v2 as b
 from tests.factories import building_def_id, connect_db, insert_building
 from tests.sheet_two_layer import (
     TWO_LAYER_BUILDINGS,
     abilities_touched,
+    battle_stats,
     segments_for,
     stored_building_counts,
 )
@@ -57,6 +59,17 @@ def test_stored_passive_does_not_change_ability_or_battle_stats(family, test_db)
                 problems.append(
                     f"{name} Lv.{level} abilities {got} != calc_ability_buffs {touched}."
                 )
+            db = connect_db(test_db)
+            kid = dict(db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone())
+            buffs = dict(b.calc_ability_buffs(db, kid_id))
+            stats = battle_stats(kid, buffs)
+            db.close()
+            for seg in segments:
+                if seg["stat_key"] not in stats:
+                    problems.append(
+                        f"{name} Lv.{level} glossary key {seg['stat_key']} "
+                        "is not in calc_battle_stats."
+                    )
             db = connect_db(test_db)
             db.execute("DELETE FROM buildings WHERE kid_id=?", (kid_id,))
             db.commit()

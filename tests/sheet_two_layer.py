@@ -2,16 +2,14 @@
 
 Test harness only. Product code must not import this module.
 
-The ability +N is the difference in ``calc_ability_buffs`` with the placed
-building versus the same kid without that building. The bracketed +M is the
-difference in ``calc_battle_stats`` for the converted field of that ability.
-Neither number is a handwritten ``2 * level``. A ``stored=1`` copy must not
-change either function.
+The words and the percent sign come from ``docs/ui-mocks/STAT_GLOSSARY.md``.
+Nothing here hard-codes 攻擊力, 魔法力, 爆擊率, 閃避率, or 防禦力. The ability
++N is the ``calc_ability_buffs`` difference with the placed building versus
+without it. The bracketed +M is the ``calc_battle_stats`` difference on the
+glossary-mapped key. A ``stored=1`` copy must not change either function.
 
-The words in front of +N are the ability names the HUD tooltip already uses
-(``TIP_NAMES`` in ``index.html``). The word inside the brackets has to be the
-label the battle HUD shows for that converted stat. This module does not
-invent that word.
+When the glossary says a zero battle diff omits the bracket, the line is only
+``能力 +N``.
 """
 from __future__ import annotations
 
@@ -23,41 +21,140 @@ import backend_v2 as b
 from tests.factories import connect_db
 
 REPO = Path(__file__).resolve().parents[1]
-INDEX_HTML = REPO / "index.html"
+GLOSSARY_PATH = REPO / "docs" / "ui-mocks" / "STAT_GLOSSARY.md"
 
 # Placed passives whose sheet is two numbers. Observatory is not one of them.
 TWO_LAYER_BUILDINGS = ("圖書館", "健身室", "工坊", "競技場", "探險公會")
 
-_TIP_NAMES_RE = re.compile(r"TIP_NAMES\s*=\s*\{([^}]+)\}")
-_TIP_PAIR_RE = re.compile(r"(str|int|spd|crt|brv)\s*:\s*'([^']+)'")
-_SEGMENT_RE = re.compile(
-    r"(?P<ability>\S+?)\s+\+(?P<n>[0-9]+(?:\.[0-9]+)?)"
-    r"（(?P<label>\S+?)\s+\+(?P<m>[0-9]+(?:\.[0-9]+)?)）"
+_UNITS = ("整數", "百分比")
+_ABILITY_KEYS = ("str", "int", "spd", "crt", "brv")
+_HEADING_RE = re.compile(r"^##\s+(.+?)\s*$", re.M)
+_STATS_KEY_RE = re.compile(r"calc_battle_stats\s*鍵\s*([A-Za-z_][A-Za-z0-9_]*)")
+_NOT_STATS_RE = re.compile(r"唔係\s*calc_battle_stats\s*鍵")
+_MAP_RE = re.compile(
+    r"^\|\s*(\S+)\s+(str|int|spd|crt|brv)\s*"
+    r"\|\s*(\S+)\s+(player_[A-Za-z0-9_]+)\s*\|",
+    re.M,
 )
-
-_ABILITY_COLUMNS = {
-    "str": "ability_str",
-    "int": "ability_int",
-    "spd": "ability_spd",
-    "crt": "ability_crt",
-    "brv": "ability_brv",
-}
-# Stats that copy the ability points. A change equal to the bump is the echo,
-# not the converted battle stat. ``crt`` is already a conversion (percent).
-_ECHO_KEYS = frozenset({"str", "int", "spd", "brv"})
+_CHUNK_RE = re.compile(
+    r"(?P<ability>\S+?)\s+\+(?P<n>[0-9]+(?:\.[0-9])?)"
+    r"(?:（(?P<label>\S+?)\s+\+(?P<m>[0-9]+(?:\.[0-9])?)(?P<pct>%)?）)?"
+)
+_BANNED_SHEET = ("魔力", "爆擊傷害", "player_crit_dmg", "crit_dmg", "倍率")
 
 
-def ability_labels() -> dict[str, str]:
-    """Ability words the HUD tooltip renders. Read from index.html."""
-    text = INDEX_HTML.read_text(encoding="utf-8")
-    block = _TIP_NAMES_RE.search(text)
-    if not block:
-        raise AssertionError("index.html has no TIP_NAMES ability labels")
-    found = dict(_TIP_PAIR_RE.findall(block.group(1)))
-    missing = [key for key in _ABILITY_COLUMNS if key not in found]
+def glossary_text() -> str:
+    if not GLOSSARY_PATH.is_file():
+        raise AssertionError(f"missing stat glossary {GLOSSARY_PATH}")
+    return GLOSSARY_PATH.read_text(encoding="utf-8")
+
+
+def _section(text: str, title: str) -> str:
+    marks = list(_HEADING_RE.finditer(text))
+    for index, mark in enumerate(marks):
+        if mark.group(1).strip() != title:
+            continue
+        end = marks[index + 1].start() if index + 1 < len(marks) else len(text)
+        return text[mark.end() : end]
+    raise AssertionError(f"STAT_GLOSSARY.md has no ## {title}")
+
+
+def _is_separator(cells: list[str]) -> bool:
+    return all(re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in cells)
+
+
+def _table_rows(section: str) -> list[dict]:
+    rows = []
+    for line in section.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if len(cells) < 4:
+            continue
+        if cells[0] == "欄位" or _is_separator(cells):
+            continue
+        unit = cells[2]
+        if unit not in _UNITS:
+            raise AssertionError(
+                f"glossary unit {unit!r} for {cells[0]!r} is not 整數 or 百分比"
+            )
+        rows.append(
+            {
+                "field": cells[0],
+                "zh": cells[1],
+                "unit": unit,
+                "note": cells[3],
+            }
+        )
+    if not rows:
+        raise AssertionError("glossary table has no data rows")
+    return rows
+
+
+def battle_stat_key(row: dict) -> str | None:
+    """Short ``calc_battle_stats`` key named in the note, if this row has one."""
+    if _NOT_STATS_RE.search(row["note"]):
+        return None
+    match = _STATS_KEY_RE.search(row["note"])
+    if not match:
+        return None
+    return match.group(1)
+
+
+def load_glossary() -> dict:
+    """Parse the two glossary tables and the ability-to-battle mapping."""
+    text = glossary_text()
+    abilities = {row["field"]: row for row in _table_rows(_section(text, "能力層"))}
+    battles = {row["field"]: row for row in _table_rows(_section(text, "戰鬥數值層"))}
+    missing = [key for key in _ABILITY_KEYS if key not in abilities]
     if missing:
-        raise AssertionError(f"TIP_NAMES is missing {missing}")
-    return found
+        raise AssertionError(f"能力層 is missing {missing}")
+    bindings = []
+    seen = set()
+    for match in _MAP_RE.finditer(_section(text, "顯示規則")):
+        ability_zh, ability, battle_zh, player_field = match.groups()
+        if ability in seen:
+            raise AssertionError(f"顯示規則 lists {ability} twice")
+        seen.add(ability)
+        if abilities[ability]["zh"] != ability_zh:
+            raise AssertionError(
+                f"顯示規則 calls {ability} {ability_zh!r}, "
+                f"能力層 says {abilities[ability]['zh']!r}"
+            )
+        battle = battles.get(player_field)
+        if battle is None:
+            raise AssertionError(f"顯示規則 uses {player_field}, missing from 戰鬥數值層")
+        if battle["zh"] != battle_zh:
+            raise AssertionError(
+                f"顯示規則 calls {player_field} {battle_zh!r}, "
+                f"戰鬥數值層 says {battle['zh']!r}"
+            )
+        stat_key = battle_stat_key(battle)
+        if not stat_key:
+            raise AssertionError(f"{player_field} has no calc_battle_stats key")
+        bindings.append(
+            {
+                "ability": ability,
+                "ability_word": abilities[ability]["zh"],
+                "player_field": player_field,
+                "label": battle["zh"],
+                "unit": battle["unit"],
+                "stat_key": stat_key,
+            }
+        )
+    if set(seen) != set(_ABILITY_KEYS):
+        raise AssertionError(f"顯示規則 maps {sorted(seen)}, want {list(_ABILITY_KEYS)}")
+    return {
+        "abilities": abilities,
+        "battles": battles,
+        "bindings": bindings,
+        "omit_zero_bracket": "M 係 0 就唔寫括號" in text,
+    }
+
+
+def sheet_bindings() -> list[dict]:
+    return load_glossary()["bindings"]
 
 
 def battle_stats(kid, buffs):
@@ -73,21 +170,12 @@ def battle_stats(kid, buffs):
 
 
 def fmt_num(value) -> str:
+    """At most one decimal place. Integers have no ``.0``."""
     number = float(value)
-    if abs(number - round(number)) < 1e-9:
-        return str(int(round(number)))
-    return format(number, "g")
-
-
-def _zero_kid():
-    return {
-        "ability_str": 0,
-        "ability_int": 0,
-        "ability_spd": 0,
-        "ability_crt": 0,
-        "ability_brv": 0,
-        "level": 1,
-    }
+    nearest = round(number * 10) / 10
+    if abs(nearest - round(nearest)) < 1e-9:
+        return str(int(round(nearest)))
+    return f"{nearest:.1f}"
 
 
 def abilities_touched(name: str, level: int = 1) -> list[str]:
@@ -113,38 +201,6 @@ def abilities_touched(name: str, level: int = 1) -> list[str]:
     )
     without = b.calc_ability_buffs(_Cursor([]), 1)
     return [key for key in with_rows if with_rows[key] != without[key]]
-
-
-def converted_field(ability: str) -> str:
-    """Which ``calc_battle_stats`` key moves when this ability moves.
-
-    Raw echoes (``str`` / ``int`` / ``spd`` / ``brv`` changing by the same
-    amount as the points) are not the bracket. ``crit_dmg`` is the second
-    creativity conversion; the percent field ``crt`` is the one the battle
-    already publishes as ``player_crt``.
-    """
-    if ability not in _ABILITY_COLUMNS:
-        raise AssertionError(f"unknown ability {ability}")
-    bump = 4
-    base = battle_stats(_zero_kid(), {})
-    bumped_kid = _zero_kid()
-    bumped_kid[_ABILITY_COLUMNS[ability]] = bump
-    bumped = battle_stats(bumped_kid, {})
-    changed = []
-    for key in base:
-        delta = float(bumped[key]) - float(base[key])
-        if abs(delta) < 1e-9:
-            continue
-        if key in _ECHO_KEYS and abs(delta - bump) < 1e-9:
-            continue
-        changed.append(key)
-    if "crt" in changed:
-        changed = [key for key in changed if key != "crit_dmg"]
-    if len(changed) != 1:
-        raise AssertionError(
-            f"ability {ability} should convert to one battle stat, saw {changed}"
-        )
-    return changed[0]
 
 
 def _diff_maps(db_path, kid_id, building_id):
@@ -189,65 +245,94 @@ def placed_row(db_path, kid_id, name):
 def segments_for(db_path, kid_id, name) -> list[dict]:
     """One segment per ability this placed building changes.
 
-    ``n`` and ``m`` come from the two functions. ``field`` is the converted
-    battle stat. ``label`` is filled in by the caller from the battle HUD.
+    ``n`` and ``m`` come from the two functions. ``label`` and ``unit`` come
+    from the glossary, not from a handwritten word list.
     """
+    glossary = load_glossary()
     row = placed_row(db_path, kid_id, name)
     buffs_with, buffs_without, stats_with, stats_without = _diff_maps(
         db_path, kid_id, row["id"]
     )
-    labels = ability_labels()
+    by_ability = {item["ability"]: item for item in glossary["bindings"]}
     segments = []
     for key in buffs_with:
         n = float(buffs_with[key]) - float(buffs_without[key])
         if abs(n) < 1e-9:
             continue
-        field = converted_field(key)
+        binding = by_ability.get(key)
+        if binding is None:
+            raise AssertionError(f"glossary has no sheet binding for {key}")
+        field = binding["stat_key"]
+        if field not in stats_with:
+            raise AssertionError(
+                f"glossary maps {key} to calc_battle_stats {field}, "
+                f"which this build does not return"
+            )
         m = float(stats_with[field]) - float(stats_without[field])
+        omit = glossary["omit_zero_bracket"] and abs(m) < 1e-9
         segments.append(
             {
                 "ability": key,
-                "ability_word": labels[key],
+                "ability_word": binding["ability_word"],
                 "n": n,
                 "field": field,
+                "stat_key": field,
+                "player_field": binding["player_field"],
+                "label": binding["label"],
+                "unit": binding["unit"],
                 "m": m,
+                "omit_bracket": omit,
             }
         )
     return segments
 
 
-def format_segments(segments, hud_labels) -> str:
+def _token(value, unit: str) -> str:
+    body = fmt_num(value)
+    if unit == "百分比":
+        return body + "%"
+    return body
+
+
+def format_segments(segments) -> str:
     parts = []
     for seg in segments:
-        label = hud_labels[seg["field"]]
-        parts.append(
-            f"{seg['ability_word']} +{fmt_num(seg['n'])}"
-            f"（{label} +{fmt_num(seg['m'])}）"
-        )
+        ability = f"{seg['ability_word']} +{_token(seg['n'], '整數')}"
+        if seg["omit_bracket"]:
+            parts.append(ability)
+            continue
+        parts.append(f"{ability}（{seg['label']} +{_token(seg['m'], seg['unit'])}）")
     return "、".join(parts)
 
 
-def parse_segments(text: str) -> list[dict] | None:
-    """Parse ``能力 +N（標籤 +M）`` pieces joined by ``、``.
+def _bad_decimal(token: str) -> bool:
+    if "." not in token:
+        return False
+    frac = token.split(".", 1)[1]
+    return frac == "0" or len(frac) != 1
 
-    Returns None when the line is not that shape. The bracket word is whatever
-    the sheet wrote; it is not checked against the HUD here.
-    """
+
+def parse_segments(text: str) -> list[dict] | None:
+    """Parse ``能力 +N`` pieces, with an optional ``（標籤 +M[%]）``."""
     raw = (text or "").strip()
     if not raw:
         return None
-    chunks = raw.split("、")
     parsed = []
-    for chunk in chunks:
-        match = _SEGMENT_RE.fullmatch(chunk.strip())
-        if not match:
+    for chunk in raw.split("、"):
+        match = _CHUNK_RE.fullmatch(chunk.strip())
+        if not match or _bad_decimal(match.group("n")):
+            return None
+        if match.group("m") is not None and _bad_decimal(match.group("m")):
             return None
         parsed.append(
             {
                 "ability_word": match.group("ability"),
+                "n_token": match.group("n"),
                 "n": float(match.group("n")),
                 "label": match.group("label"),
-                "m": float(match.group("m")),
+                "m_token": match.group("m"),
+                "m": None if match.group("m") is None else float(match.group("m")),
+                "pct": match.group("pct") == "%",
             }
         )
     return parsed
@@ -257,70 +342,77 @@ def _numbers_close(got, want) -> bool:
     return abs(float(got) - float(want)) < 1e-9
 
 
-def line_problems(text, db_path, kid_id, name, hud_labels=None) -> list[str]:
-    """Problems when ``text`` is not the two-layer line for this placed building.
-
-    ``hud_labels`` maps a ``calc_battle_stats`` key to the battle HUD's word.
-    When it is omitted, the bracket word only has to be present. When it is
-    provided, the bracket word must be that HUD word.
-    """
+def line_problems(text, db_path, kid_id, name) -> list[str]:
+    """Problems when ``text`` is not the glossary line for this placed building."""
     if name not in TWO_LAYER_BUILDINGS:
         return []
+    raw = (text or "").strip()
+    problems = [
+        f"#sheetBuff contains {banned!r}."
+        for banned in _BANNED_SHEET
+        if banned in raw
+    ]
     segments = segments_for(db_path, kid_id, name)
     if not segments:
-        return [
+        problems.append(
             f"{name} did not change calc_ability_buffs, so there is no ability +N."
-        ]
-    sketch = "、".join(
-        f"{seg['ability_word']} +{fmt_num(seg['n'])}"
-        f"（<{seg['field']} 嘅戰鬥 HUD 標籤> +{fmt_num(seg['m'])}）"
-        for seg in segments
-    )
-    parsed = parse_segments(text)
-    problems = []
+        )
+        return problems
+    sketch = format_segments(segments)
+    parsed = parse_segments(raw)
     if parsed is None:
         problems.append(
-            f"#sheetBuff is {(text or '').strip()!r}, want {sketch}. "
-            "兩個數都要由 calc_ability_buffs 同 calc_battle_stats 嘅差計出。"
+            f"#sheetBuff is {raw!r}, want {sketch}. "
+            "用詞跟 STAT_GLOSSARY.md。兩個數都係函數差。"
         )
         return problems
     if len(parsed) != len(segments):
         problems.append(
             f"#sheetBuff has {len(parsed)} segment(s), want {len(segments)}: {sketch}. "
-            f"text={(text or '').strip()!r}."
+            f"text={raw!r}."
         )
         return problems
     for got, seg in zip(parsed, segments):
         if got["ability_word"] != seg["ability_word"]:
             problems.append(
                 f"ability word is {got['ability_word']!r}, "
-                f"HUD ability label is {seg['ability_word']!r}."
+                f"glossary says {seg['ability_word']!r}."
             )
-        if not _numbers_close(got["n"], seg["n"]):
+        if got["n_token"] != _token(seg["n"], "整數") or not _numbers_close(
+            got["n"], seg["n"]
+        ):
             problems.append(
-                f"{seg['ability_word']} +N is {fmt_num(got['n'])}, "
-                f"calc_ability_buffs diff is {fmt_num(seg['n'])}."
+                f"{seg['ability_word']} +N is {got['n_token']}, "
+                f"calc_ability_buffs diff is {_token(seg['n'], '整數')}."
             )
-        if not _numbers_close(got["m"], seg["m"]):
+        if seg["omit_bracket"]:
+            if got["label"] is not None:
+                problems.append(
+                    f"{seg['ability_word']} battle diff is 0, "
+                    f"so the glossary omits the bracket. Sheet has "
+                    f"（{got['label']} +{got['m_token']}）."
+                )
+            continue
+        want_m = _token(seg["m"], seg["unit"])
+        if got["label"] != seg["label"]:
             problems.append(
-                f"{seg['ability_word']} bracket +M is {fmt_num(got['m'])}, "
-                f"calc_battle_stats {seg['field']} diff is {fmt_num(seg['m'])}."
+                f"bracket label is {got['label']!r}, "
+                f"glossary {seg['player_field']} says {seg['label']!r}."
             )
-        if hud_labels is not None:
-            label = hud_labels.get(seg["field"])
-            if not label:
-                problems.append(
-                    f"battle HUD has no label for {seg['field']} "
-                    f"({seg['ability_word']}). Do not invent one. Sheet bracket is "
-                    f"{got['label']!r}."
-                )
-            elif got["label"] != label:
-                problems.append(
-                    f"bracket label for {seg['field']} is {got['label']!r}, "
-                    f"battle HUD says {label!r}. "
-                    f"Use 「{seg['ability_word']} +{fmt_num(seg['n'])}"
-                    f"（{label} +{fmt_num(seg['m'])}）」."
-                )
+        got_m = f"{got['m_token']}{'%' if got['pct'] else ''}"
+        if got["m"] is None or got_m != want_m or not _numbers_close(got["m"], seg["m"]):
+            problems.append(
+                f"{seg['ability_word']} bracket +M is {got_m}, "
+                f"calc_battle_stats {seg['stat_key']} diff is {want_m}."
+            )
+        wants_pct = seg["unit"] == "百分比"
+        if got["pct"] != wants_pct:
+            problems.append(
+                f"{seg['label']} unit is {seg['unit']}, "
+                f"{'%' if wants_pct else 'no %'} is required."
+            )
+    if problems and sketch not in " ".join(problems):
+        problems.append(f"want {sketch}.")
     return problems
 
 
@@ -371,41 +463,3 @@ def stored_building_counts(db_path, kid_id, name, level) -> list[str]:
                 f"{absent} -> {got}."
             )
     return problems
-
-
-def bump_delta(ability: str, before_stats, after_stats) -> tuple[str, float]:
-    """Primary field and how far it moved between two ``calc_battle_stats``."""
-    field = converted_field(ability)
-    delta = float(after_stats[field]) - float(before_stats[field])
-    return field, delta
-
-
-def label_tracking(before_text, after_text, old_value, new_value) -> list[str]:
-    """Labels in the battle HUD whose number moved from old_value to new_value.
-
-    Only words that are already in the HUD text are returned.
-    """
-    labeled = re.compile(r"([A-Za-z\u4e00-\u9fff]{1,8})\s*([0-9]+(?:\.[0-9]+)?)")
-
-    def collect(text):
-        found = {}
-        for match in labeled.finditer(text or ""):
-            found.setdefault(match.group(1), []).append(float(match.group(2)))
-        return found
-
-    before = collect(before_text)
-    after = collect(after_text)
-    hits = []
-    for label, nums in after.items():
-        old_nums = before.get(label, [])
-        new_hit = any(abs(num - float(new_value)) < 1e-6 for num in nums)
-        if not new_hit:
-            continue
-        if old_nums:
-            old_hit = any(abs(num - float(old_value)) < 1e-6 for num in old_nums)
-            if old_hit:
-                hits.append(label)
-        elif abs(float(new_value) - float(old_value)) >= 1e-9:
-            # The HUD started showing the stat once it was non-trivial.
-            hits.append(label)
-    return hits

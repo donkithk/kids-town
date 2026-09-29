@@ -39,13 +39,13 @@ Requirements:
   對齊設計稿 3b4671d：撳屋 → #actionSheet 顯示成本 → 確認 → 升級。唔係一撳升級。
   篩選 `-k 'upgrade_cost or upgrade_confirm'`。唔改 UX-05／store_ux 斷言。
   TC-FE-TOWN-UX-SHEET-BUFF-01  已起屋面板：#sheetFns 冇 .fn；可見 #sheetBuff 顯示而家等級效果。
-  圖書館 Lv.2 係「知識 +N（戰鬥 HUD 標籤 +M）」。N、M 由函數差計，唔寫死 +2×等級。
+  圖書館 Lv.2 跟 STAT_GLOSSARY.md。M 係 0 就只得「知識 +N」。N、M 由函數差計。
   buff_vals[level-1] 嘅數字合約搬去商店 Lv.2「起屋／升級金幣八五折」（TC-FE-SHEET-BUFFVAL-01）。
   TC-FE-TOWN-UX-SHEET-BUFF-02  唔好有 FN 假動作；打開或撳舊 stub 都唔好 toast「整好一件道具」。
   02 仍然開工坊，只查零 .fn 同 stub toast，唔查 buff 數字。篩選 `-k sheet_buff`。
-  TC-FE-TOWN-UX-SHEET-BUFF-ZH-01  工坊 Lv.3：#sheetBuff 要係「創意 +N（戰鬥 HUD 標籤 +M）」。
+  TC-FE-TOWN-UX-SHEET-BUFF-ZH-01  工坊 Lv.3：#sheetBuff 跟 STAT_GLOSSARY.md（M 係 0 就只得「創意 +N」）。
   唔好再寫「建築速度 ×」或者「未開放」。
-  TC-FE-TOWN-UX-SHEET-BUFF-ZH-02  健身室 Lv.1：#sheetBuff 要係「臂力 +N（戰鬥 HUD 標籤 +M）」。
+  TC-FE-TOWN-UX-SHEET-BUFF-ZH-02  健身室 Lv.1：#sheetBuff 跟 STAT_GLOSSARY.md（M 係 0 就只得「臂力 +N」）。
   唔好再寫「漏打卡都唔斷」或者「未開放」。
   篩選 `-k sheet_buff_zh`。函數名亦含 sheet_buff，所以 `-k sheet_buff` 會一齊跑到 ZH。
   TC-FE-SHEET-BUFFVAL-01  商店 Lv.2：buff_vals[1]=0.85 →「起屋／升級金幣八五折」。
@@ -104,13 +104,9 @@ from tests.sheet_buff_truth_spec import (  # noqa: E402
 )
 from tests.sheet_two_layer import (  # noqa: E402
     TWO_LAYER_BUILDINGS,
-    abilities_touched,
-    bump_delta,
-    label_tracking,
     line_problems,
     stored_building_counts,
 )
-from tests.sheet_two_layer import battle_stats as two_layer_battle_stats  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FE_KID_NAME = "TestKid"
@@ -4504,7 +4500,8 @@ SHEET_BUFF_RED = (
     "(#sheetFns .fn, including 整道具／修理／接任務／出發) and must not toast "
     "FN_COPY lines such as 工坊：整好一件道具. "
     "SHEET-BUFF-01 shows the current-level effect in a visible #sheetBuff. "
-    f"圖書館 Lv.{SHEET_BUFF_LEVEL} is 「知識 +N（戰鬥 HUD 標籤 +M）」. "
+    f"圖書館 Lv.{SHEET_BUFF_LEVEL} follows STAT_GLOSSARY.md "
+    "(omit the bracket when the battle diff is 0). "
     "N is the calc_ability_buffs diff and M is the calc_battle_stats diff. "
     "The line does not read the library buff_vals row. "
     "#sheetNote, the toast, and #sheetCost do not count as #sheetBuff. "
@@ -4894,7 +4891,7 @@ def _click_sheet_buff(page):
 
 SHEET_BUFF_ZH_RED = (
     "Panel text must equal the real passive, two numbers from the functions. "
-    "工坊 and 健身室 are 「能力 +N（戰鬥 HUD 標籤 +M）」, not 「未開放」, not "
+    "工坊 and 健身室 follow STAT_GLOSSARY.md, not 「未開放」, not "
     "「建築速度 ×4」, and not 「漏打卡都唔斷」. "
     "#sheetFns .fn stays zero. #upgradeConfirm stays the last element child of "
     "div.gsw.stage."
@@ -4957,7 +4954,7 @@ def test_town_ux_sheet_buff_zh_gym_shows_chinese_not_streak_code(
 
 SHEET_BUFF_TRUTH_RED = (
     " #sheetBuff must equal the real effect. "
-    "圖書館、健身室、工坊、競技場、探險公會 are 「能力 +N（戰鬥 HUD 標籤 +M）」. "
+    "圖書館、健身室、工坊、競技場、探險公會 follow STAT_GLOSSARY.md. "
     "N is the calc_ability_buffs diff and M is the calc_battle_stats diff, "
     "not a handwritten +2×level line, and not 「任務多經驗」 or stars. "
     "discount is build/upgrade gold only （起屋／升級金幣 + the fold of buff_vals[level-1]）. "
@@ -5112,7 +5109,7 @@ def _truth_panel_problems(page, buff, consumed, db_path=None, kid_id=None):
     name, level = _label_args(buff)
     if not reading["present"] or not reading["visible"]:
         if name in TWO_LAYER_BUILDINGS:
-            expected = "能力 +N（戰鬥 HUD 標籤 +M）"
+            expected = "STAT_GLOSSARY.md two-layer line"
         else:
             expected = honest_buff_label(
                 buff["buff_type"], buff["value"], consumed, name=name, level=level
@@ -5537,16 +5534,7 @@ def test_bank_sheet_describes_gold_smash_skill(page, base_url, test_db_path, fe_
         _sheet_buff_truth_fail(case_id, " | ".join(problems))
 
 
-# ── TC-FE-SHEET-TWO-LAYER: ability +N and the battle HUD's converted stat ──
-
-
-_ABILITY_COLUMNS = {
-    "str": "ability_str",
-    "int": "ability_int",
-    "spd": "ability_spd",
-    "crt": "ability_crt",
-    "brv": "ability_brv",
-}
+# ── TC-FE-SHEET-TWO-LAYER: ability +N and the glossary battle-stat label ──
 
 
 def _snapshot_kid_combat(test_db_path, kid_id):
@@ -5619,127 +5607,16 @@ def _restore_kid_combat(test_db_path, kid_id, abilities, buildings):
     db.close()
 
 
-def _set_abilities(test_db_path, kid_id, values):
-    db = connect_db(test_db_path)
-    db.execute(
-        """
-        UPDATE kids
-           SET ability_str=?, ability_int=?, ability_spd=?,
-               ability_crt=?, ability_brv=?
-         WHERE id=?
-        """,
-        (
-            values.get("str", 0),
-            values.get("int", 0),
-            values.get("spd", 0),
-            values.get("crt", 0),
-            values.get("brv", 0),
-            kid_id,
-        ),
-    )
-    db.commit()
-    db.close()
-
-
-def _clear_running_battle(test_db_path, kid_id):
-    db = connect_db(test_db_path)
-    db.execute(
-        "UPDATE expeditions SET status='completed' WHERE kid_id=? AND status='running'",
-        (kid_id,),
-    )
-    db.commit()
-    db.close()
-
-
-def _battle_player_hud_text(page):
-    """Text of the battle HUD, without the monster row or the combat toast."""
-    return page.evaluate(
-        """() => {
-          const hud = document.getElementById('hudHp');
-          const scene = document.querySelector('.battle-scene');
-          const head = hud ? (hud.innerText || '') : '';
-          if (!scene) return head;
-          const clone = scene.cloneNode(true);
-          clone.querySelectorAll(
-            '.monster-zone, .kt-toast, .result-overlay, .vh, #hp-meter'
-          ).forEach((node) => node.remove());
-          return head + '\\n' + (clone.innerText || '');
-        }"""
-    )
-
-
-def _open_battle_hud(page):
-    _goto_battle_lobby(page)
-    page.locator("button.exp-btn.go").first.click()
-    page.locator(".battle-scene").first.wait_for(state="visible", timeout=8000)
-
-
-def _kid_battle_stats(test_db_path, kid_id):
-    import backend_v2 as backend
-
-    db = connect_db(test_db_path)
-    kid = dict(db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone())
-    buffs = dict(backend.calc_ability_buffs(db, kid_id))
-    db.close()
-    return dict(two_layer_battle_stats(kid, buffs))
-
-
-def _discover_battle_hud_labels(page, base_url, test_db_path, kid_id):
-    """Label next to each converted stat, read from the live battle HUD.
-
-    Bump one ability, restart the fight, and keep the word whose number moved
-    by the same amount as ``calc_battle_stats``. No word is filled in when the
-    HUD does not show that stat.
-    """
-    _seed_sheet_buff_placed(test_db_path, kid_id, "探險公會", 1)
-    keys = []
-    for name in TWO_LAYER_BUILDINGS:
-        for key in abilities_touched(name, 1):
-            if key not in keys:
-                keys.append(key)
-    labels = {}
-    notes = []
-    _set_abilities(test_db_path, kid_id, {})
-    _clear_running_battle(test_db_path, kid_id)
-    _open_town_home(page, base_url)
-    _open_battle_hud(page)
-    base_text = _battle_player_hud_text(page)
-    base_stats = _kid_battle_stats(test_db_path, kid_id)
-    for key in keys:
-        _set_abilities(test_db_path, kid_id, {key: 4})
-        _clear_running_battle(test_db_path, kid_id)
-        _open_town_home(page, base_url)
-        _open_battle_hud(page)
-        bumped_text = _battle_player_hud_text(page)
-        bumped_stats = _kid_battle_stats(test_db_path, kid_id)
-        field, _delta = bump_delta(key, base_stats, bumped_stats)
-        hits = label_tracking(
-            base_text, bumped_text, base_stats[field], bumped_stats[field]
-        )
-        if len(hits) == 1:
-            labels[field] = hits[0]
-        else:
-            notes.append(
-                f"{field}: battle HUD has no label whose number moves "
-                f"{base_stats[field]} -> {bumped_stats[field]} (saw {hits})."
-            )
-            if "sample" not in labels:
-                notes.append(f"battle HUD text: {bumped_text!r}.")
-                labels["sample"] = True
-        _set_abilities(test_db_path, kid_id, {})
-    labels.pop("sample", None)
-    return labels, notes
-
-
 @pytest.mark.case_id("TC-FE-SHEET-TWO-LAYER")
-def test_passive_sheet_shows_ability_and_battle_hud_stat(
+def test_passive_sheet_shows_ability_and_glossary_stat(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-SHEET-TWO-LAYER 被動面板兩個數，括號標籤等於戰鬥 HUD。
+    """TC-FE-SHEET-TWO-LAYER 被動面板兩個數，用字跟 STAT_GLOSSARY.md。
 
     圖書館、健身室、工坊、競技場、探險公會，Lv.1 同 Lv.3。
     能力 +N 係 calc_ability_buffs 有座同冇座嘅差。括號 +M 係同一個人
-    calc_battle_stats 嘅差。stored=1 唔計。括號個字要同戰鬥 HUD 一樣。
+    calc_battle_stats 對住詞彙表嗰鍵嘅差。stored=1 唔計。
+    詞彙表話 M 係 0 就唔寫括號。唔好有魔力或者爆擊傷害倍率。
     """
     case_id = "TC-FE-SHEET-TWO-LAYER"
     kid_id = fe_ids["kid_id"]
@@ -5751,14 +5628,6 @@ def test_passive_sheet_shows_ability_and_battle_hud_stat(
                 problems.extend(
                     stored_building_counts(test_db_path, kid_id, name, level)
                 )
-        try:
-            labels, hud_notes = _discover_battle_hud_labels(
-                page, base_url, test_db_path, kid_id
-            )
-            problems.extend(hud_notes)
-        except Exception as exc:
-            labels = {}
-            problems.append(f"battle HUD label discovery failed: {exc}")
         for name in TWO_LAYER_BUILDINGS:
             for level in (1, 3):
                 _seed_sheet_buff_placed(test_db_path, kid_id, name, level)
@@ -5773,14 +5642,10 @@ def test_passive_sheet_shows_ability_and_battle_hud_stat(
                         f"({reading!r})."
                     )
                     continue
-                for item in line_problems(
-                    reading["text"], test_db_path, kid_id, name, hud_labels=labels
-                ):
+                for item in line_problems(reading["text"], test_db_path, kid_id, name):
                     problems.append(f"{name} Lv.{level}: {item}")
                 if reading["aria"].strip() and reading["aria"].strip() != reading["text"].strip():
-                    for item in line_problems(
-                        reading["aria"], test_db_path, kid_id, name, hud_labels=labels
-                    ):
+                    for item in line_problems(reading["aria"], test_db_path, kid_id, name):
                         problems.append(f"{name} Lv.{level} aria: {item}")
     finally:
         _restore_kid_combat(test_db_path, kid_id, abilities, buildings)
