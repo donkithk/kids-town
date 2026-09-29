@@ -135,7 +135,7 @@
     if (name === "探險公會") return "勇氣 +" + passivePoints(level);
     if (name === "天文台") return "技能：流星雨（魔法攻擊全體敵人）";
     if (name === "醫院") return "技能：繃帶（小回復）";
-    if (name === "燈塔") return "技能：強光（魔法攻擊，敵人命中率下降 2 回合）";
+    if (name === "燈塔") return "技能：強光（魔法攻擊，之後 2 次怪物攻擊打唔中）";
     if (name === "銀行") return "技能：金錢砸（每次 10 金幣，傷害約普攻 3 倍）";
     if (name === "商店" || buffType === "discount") {
       var fold = discountFold(rawValue);

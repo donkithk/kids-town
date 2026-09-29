@@ -556,6 +556,11 @@ def seed_skill_defs():
     """Insert default skill definitions if empty."""
     db = sqlite3.connect(DB_PATH)
     if db.execute("SELECT COUNT(*) FROM skill_defs").fetchone()[0] > 0:
+        db.execute(
+            "UPDATE skill_defs SET description=? WHERE name=?",
+            ('魔法攻擊，之後 2 次怪物攻擊打唔中', '強光'),
+        )
+        db.commit()
         db.close()
         return
     # bldg_def_id: 1=圖書館,2=健身室,3=農場,4=商店,5=醫院,6=探險公會,7=工坊,8=燈塔,9=競技場,10=天文台
@@ -594,7 +599,7 @@ def seed_skill_defs():
         ('鍛鍊的成果', '🏋️', 2, '健身室', 1, 'self', '施放後 3 回合臂力 +3×等級', 3, 0, 'none', 'buff'),
         ('營養餐', '🍱', 4, '農場', 1, 'self', '之後 3 回合持續回復 HP', 0, 0, 'none', 'heal'),
         ('金幣袋', '💰', 2, '商店', 1, 'self', '戰鬥勝利額外獲得 20 金幣', 0, 0, 'none', 'utility'),
-        ('強光', '💡', 6, '燈塔', 1, 'enemy', '魔法攻擊，之後 2 回合敵人攻擊落空', 20, 5, 'int', 'damage'),
+        ('強光', '💡', 6, '燈塔', 1, 'enemy', '魔法攻擊，之後 2 次怪物攻擊打唔中', 20, 5, 'int', 'damage'),
         ('流星雨', '☄️', 8, '天文台', 1, 'all_enemies', '魔法攻擊全體敵人', 20, 5, 'int', 'damage'),
         ('金錢砸', '🪙', 0, '銀行', 1, 'enemy', '消耗 10 金幣，造成 3 倍普攻傷害', 0, 0, 'none', 'utility'),
     ]
