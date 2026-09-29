@@ -28,9 +28,10 @@
 | player_dodge | 閃避率 | 百分比 | calc_battle_stats 鍵 dodge。代碼冇 evasion。min(40, spd×1.5)，同 1 到 100 嘅骰比較。餵 spd 速度。競技場。 |
 | player_def | 防禦力 | 整數 | calc_battle_stats 鍵 def。int(brv×0.6)。餵 brv 勇氣。探險公會。 |
 | player_spd | 速度 | 整數 | calc_battle_stats 鍵 spd，等於速度能力點，用嚟先手。面板括號唔用呢鍵；速度能力嘅括號係 player_dodge。 |
-| player_crit_dmg | 爆傷 | 整數 | 設計師要確認中文。實際係倍率 1.5 + crt×0.02，可以有小數，唔係百分比。單位欄只准整數或百分比，所以標整數，面板唔加 %。餵 crt 創意。括號只用 player_crt。 |
 | player_hp | HP | 整數 | calc_battle_stats 鍵 hp。跟等級 20 + level×8。被動建築唔改。HUD 字面 HP。亦有 player_max_hp。 |
 | player_mp | MP | 整數 | 唔係 calc_battle_stats 鍵。跟等級 10 + level×3。被動建築唔改。HUD 字面 MP。唔好叫魔力。亦有 player_max_mp。 |
+
+`player_crit_dmg`（爆擊傷害倍率，1.5 + crt×0.02）唔入面板、唔入括號；將來 HUD 如果要顯示，中文用「爆擊傷害」，格式待定。
 
 `calc_battle_stats` 亦返回 `str`、`int`、`brv`。佢哋係能力點原值，唔另起中文，亦唔入括號。
 
@@ -68,3 +69,5 @@
 - `randint(1, 100)` 只出整數，所以存咗 1.5 嘅時候只有骰出 1 先算閃到。單位仍然係百分比。面板跟函數嘅 1.5，寫 `+1.5%`。
 
 `player_spd` 唔係百分比：第 3577 行 `'spd': spd_v`，第 4166 行用 `player_spd > 怪物 spd` 決定先手。`player_crit_dmg` 亦唔係百分比：第 3575 行 `1.5 + crt_v * 0.02`，第 4039 行爆擊時 `dmg * player_crit_dmg`。
+
+「未排除 stored=1／未讀建築加成／未輸出 player_matk」呢幾句描述基線分支 #49 `d2850d5`（紅燈，被動數值轉綠嘅 #50 之前），唔係最終產品。
