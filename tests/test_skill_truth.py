@@ -1080,11 +1080,17 @@ def test_shield_halves_the_first_real_hit_not_a_miss(
 
 
 _DESC_FORBIDDEN = ("唔會打傷害", "不造成傷害", "無傷害", "0 傷害")
+# 冰凍 slows nothing. The copy must say the monster's attack drops.
+_FREEZE_ATTACK_DROP = ("攻擊力下降", "攻擊下降", "攻擊力減", "傷害減少")
+_FREEZE_TARGET = ("怪物", "敵人")
 
 
 @pytest.mark.case_id("TC-API-SKILL-DESC-05")
 def test_skill_descriptions_use_the_locked_keywords(test_db):
-    """說明只鎖關鍵字，唔好逐字。"""
+    """說明只鎖關鍵字，唔好逐字。
+
+    冰凍唔好寫減速。要講怪物或者敵人嘅攻擊下降。
+    """
     db = connect_db(test_db)
     rows = {
         row["name"]: row["description"] or ""
@@ -1107,6 +1113,19 @@ def test_skill_descriptions_use_the_locked_keywords(test_db):
         problems.append("強光 missing")
     elif "2 次" not in flash or ("打唔中" not in flash and "打不中" not in flash):
         problems.append(f"強光 description {flash!r} missing 2 次 and 打唔中/打不中")
+    freeze = rows.get("冰凍")
+    if freeze is None:
+        problems.append("冰凍 missing")
+    else:
+        if "減速" in freeze:
+            problems.append(f"冰凍 description contains 減速: {freeze!r}")
+        drop = next((word for word in _FREEZE_ATTACK_DROP if word in freeze), None)
+        target = next((word for word in _FREEZE_TARGET if word in freeze), None)
+        if drop is None or target is None:
+            problems.append(
+                "冰凍 description must mention the monster attack drop "
+                f"(one of {_FREEZE_ATTACK_DROP} together with 怪物 or 敵人): {freeze!r}"
+            )
     for name in ("知識的力量", "鍛鍊的成果", "營養餐", "金幣袋", "修復", "強化"):
         text = rows.get(name)
         if text is None:
