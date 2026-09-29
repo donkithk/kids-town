@@ -1891,21 +1891,21 @@ def assign_ability(kid_id):
 # -- Ability Buffs from Buildings --
 
 BUILDING_ABILITY_MAP = {
-    '健身室': 'str',    # Gym → +臂力 💪
-    '競技場': 'str',    # Arena → +臂力 💪
-    '圖書館': 'int',    # Library → +知識 📖
-    '天文台': 'int',    # Observatory → +知識 📖
-    '工坊':   'crt',    # Workshop → +創意 🎨
-    '探險公會': 'brv',  # Expedition Guild → +勇氣 ⚔️
+    '健身室': 'str',    # Gym → +2 臂力 per level
+    '競技場': 'str',    # Arena → +2 臂力 per level (speed is separate)
+    '圖書館': 'int',    # Library → +2 知識 per level
+    '工坊':   'crt',    # Workshop → +2 創意 per level
+    '探險公會': 'brv',  # Expedition Guild → +2 勇氣 per level
+    # Observatory no longer grants 知識. Treasure weights are deferred.
 }
 
 def calc_ability_buffs(db, kid_id):
-    """Calculate bonus ability points from owned buildings."""
+    """Bonus ability points from placed buildings. stored=1 adds nothing."""
     buffs = {'str': 0, 'int': 0, 'spd': 0, 'crt': 0, 'brv': 0}
     rows = db.execute("""
         SELECT bd.name, b.level FROM buildings b
         JOIN building_defs bd ON b.def_id = bd.id
-        WHERE b.kid_id = ?
+        WHERE b.kid_id = ? AND COALESCE(b.stored, 0)=0
     """, (kid_id,)).fetchall()
     for row in rows:
         ability = BUILDING_ABILITY_MAP.get(row['name'])
@@ -1955,20 +1955,16 @@ MATERIAL_POOLS = {
 def award_task_drops(kid_id, task_points, db, source='task', apply=True):
     """Award random materials and experience when completing a task or expedition.
 
-    Base XP is max(5, points//2). Library task_bonus is added on top and
-    reported separately (GAMEPLAY_REDESIGN §6.1 / §6.4).
+    Base XP is max(5, points//2). The library no longer adds task XP;
+    experience_bonus stays 0. Knowledge is a battle passive instead.
     When apply=False, roll and report amounts without mutating gold/XP/inventory
     (parent-approval foreshadow, GAMEPLAY_REDESIGN §6.7).
     """
     drops = {'materials': [], 'experience': 0, 'experience_bonus': 0, 'experience_total': 0}
 
     exp_amount = max(5, int(task_points or 0) // 2)
-    bonus_raw = get_building_buff(kid_id, 'task_bonus', db)
-    try:
-        bonus = int(bonus_raw or 0)
-    except (TypeError, ValueError):
-        bonus = 0
-    total = exp_amount + bonus
+    bonus = 0
+    total = exp_amount
 
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
     if kid:
@@ -3558,13 +3554,18 @@ def answer_quiz(kid_id):
 # -- Battle --
 
 
-def calc_battle_stats(kid):
-    """v2: HP from level, ATK from 臂力(str), DEF from 勇氣(brv)."""
-    str_v = kid['ability_str'] or 0
-    int_v = kid['ability_int'] or 0
-    spd_v = kid['ability_spd'] or 0
-    crt_v = kid['ability_crt'] or 0
-    brv_v = kid['ability_brv'] or 0
+def calc_battle_stats(kid, buffs=None):
+    """v2: HP from level, ATK from 臂力(str), DEF from 勇氣(brv).
+
+    buffs is calc_ability_buffs output (placed buildings only). Omit it to
+    score the kid's own points.
+    """
+    extra = buffs or {}
+    str_v = (kid['ability_str'] or 0) + (extra.get('str') or 0)
+    int_v = (kid['ability_int'] or 0) + (extra.get('int') or 0)
+    spd_v = (kid['ability_spd'] or 0) + (extra.get('spd') or 0)
+    crt_v = (kid['ability_crt'] or 0) + (extra.get('crt') or 0)
+    brv_v = (kid['ability_brv'] or 0) + (extra.get('brv') or 0)
     lvl = kid['level'] or 1
     return {
         'hp': 20 + lvl * 8,
@@ -3813,7 +3814,7 @@ def boss_summon(kid_id):
         for s in bldg_skills:
             skills.append(dict(s))
 
-    p_stats = calc_battle_stats(kid)
+    p_stats = calc_battle_stats(kid, calc_ability_buffs(db, kid_id))
     p_hp = p_stats['hp']
     p_mp = 10 + kid['level'] * 3
 
@@ -3823,6 +3824,7 @@ def boss_summon(kid_id):
         'player_max_hp': p_hp, 'player_hp': p_hp,
         'player_max_mp': p_mp, 'player_mp': p_mp,
         'player_atk': p_stats['atk'],
+        'player_matk': p_stats['matk'],
         'player_def': p_stats.get('def', p_stats['atk'] // 2),
         'player_crt': p_stats['crt'],
         'player_crit_dmg': p_stats.get('crit_dmg', 1.5),
@@ -3931,7 +3933,7 @@ def battle_start(kid_id):
         for s in bldg_skills:
             skills.append(dict(s))
 
-    p_stats = calc_battle_stats(kid)
+    p_stats = calc_battle_stats(kid, calc_ability_buffs(db, kid_id))
     p_hp = p_stats['hp']
     p_mp = 10 + kid['level'] * 3  # Base MP: 10 + 3/level
     # Multiple monsters (1-3), stats from tier formula. Preview forces 1 so the body sprite is clear.
@@ -3960,6 +3962,7 @@ def battle_start(kid_id):
         'player_max_mp': p_mp,
         'player_mp': p_mp,
         'player_atk': p_stats['atk'],
+        'player_matk': p_stats['matk'],
         'player_def': p_stats.get('def', p_stats['atk'] // 2),
         'player_crt': p_stats['crt'],
         'player_crit_dmg': p_stats.get('crit_dmg', 1.5),
