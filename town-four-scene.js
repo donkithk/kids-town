@@ -21,42 +21,6 @@
     "天文台": "observatory"
   };
 
-  var FN = {
-    "圖書館": ["借書", "還書"],
-    "健身室": ["鍛鍊", "休息一下"],
-    "農場": ["收成", "澆水"],
-    "商店": ["買賣", "睇貨架"],
-    "醫院": ["睇醫生", "休息"],
-    "探險公會": ["接任務", "出發"],
-    "工坊": ["整道具", "修理"],
-    "燈塔": ["望海", "開燈"],
-    "競技場": ["練習", "比試"],
-    "天文台": ["觀星", "記錄"]
-  };
-
-  var FN_COPY = {
-    "借書": "借咗一本故事書",
-    "還書": "書還好咗",
-    "鍛鍊": "做完一輪鍛鍊",
-    "休息一下": "休息好咗",
-    "收成": "收成一籃菜",
-    "澆水": "澆完水",
-    "買賣": "買賣完成",
-    "睇貨架": "睇完貨架",
-    "睇醫生": "睇完醫生",
-    "休息": "休息好咗",
-    "接任務": "接咗一個任務",
-    "出發": "準備出發",
-    "整道具": "整好一件道具",
-    "修理": "修理好咗",
-    "望海": "望咗一望海",
-    "開燈": "燈亮咗",
-    "練習": "練習完一輪",
-    "比試": "比試完一場",
-    "觀星": "觀完星",
-    "記錄": "寫低記錄"
-  };
-
   var pads = [];
   var built = false;
   var placeSeq = 0;
@@ -124,6 +88,28 @@
       } catch (e) { return []; }
     }
     return [];
+  }
+
+  function formatBuffValue(value) {
+    var n = typeof value === "number" ? value : parseFloat(value);
+    if (!isFinite(n)) return String(value);
+    if (Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+    return String(n);
+  }
+
+  /* buff_vals[level-1], clamped like get_building_buff. Prefer the placed row. */
+  function levelBuff(placed) {
+    if (!placed) return null;
+    var def = defById(placed.def_id) || {};
+    var buffType = placed.buff_type || def.buff_type || "";
+    var vals = parseVals(placed.buff_vals);
+    if (!vals.length) vals = parseVals(def.buff_vals);
+    if (!buffType || !vals.length) return null;
+    var level = parseInt(placed.level, 10);
+    if (!isFinite(level) || level < 1) level = 1;
+    var idx = Math.max(0, Math.min(level - 1, vals.length - 1));
+    var text = formatBuffValue(vals[idx]);
+    return { type: String(buffType), text: text, label: String(buffType) + " ×" + text };
   }
 
   function inventoryQty(key) {
@@ -250,6 +236,21 @@
       ok.setAttribute("aria-disabled", ok.disabled ? "true" : "false");
     }
     return quote;
+  }
+
+  function paintSheetBuff(placed) {
+    var node = $("sheetBuff");
+    if (!node) return;
+    var buff = levelBuff(placed);
+    if (!buff) {
+      node.textContent = "";
+      node.removeAttribute("aria-label");
+      show(node, false);
+      return;
+    }
+    node.textContent = buff.label;
+    node.setAttribute("aria-label", buff.label);
+    show(node, true);
   }
 
   function sameCell(a, b) {
@@ -628,6 +629,7 @@
     if (!state.sheet) {
       state.confirming = false;
       paintUpgrade(null);
+      paintSheetBuff(null);
       return;
     }
     var def = defById(state.sheetDef) || {};
@@ -642,9 +644,10 @@
       if (state.note) note.textContent = state.note;
       else if (quote && quote.maxed) note.textContent = "已經最高等級。";
       else if (quote && !quote.afford) note.textContent = quote.shortText + "。未可以升級。";
-      else if (quote) note.textContent = "可以升級，或者打開功能。撳「升級」會彈出確認窗，確定先至扣。";
-      else note.textContent = "可以升級，或者試下面嘅功能。";
+      else if (quote) note.textContent = "可以升級。撳「升級」會彈出確認窗，確定先至扣。";
+      else note.textContent = "可以升級。";
     }
+    paintSheetBuff(placed);
     var art = $("sheetArt");
     if (art && def.name) {
       var src = assetSrc(def.name);
@@ -656,14 +659,6 @@
     var keep = fns.querySelectorAll(".fx-burst");
     fns.textContent = "";
     keep.forEach(function (node) { fns.appendChild(node); });
-    (FN[def.name] || ["睇一看"]).forEach(function (label) {
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "fn";
-      btn.textContent = label;
-      btn.addEventListener("click", function () { onFn(label); });
-      fns.appendChild(btn);
-    });
   }
 
   function renderMotion() {
@@ -941,12 +936,13 @@
     render();
   }
 
-  function onFn(label) {
-    var def = defById(state.sheetDef);
-    var name = def && def.name ? def.name : "建築";
-    state.note = name + "：" + (FN_COPY[label] || label);
+  /* Buff chip is the scene-4 feature. Tapping it restates the live bonus in
+     the note. It does not toast an FN stub or spend resources. */
+  function onSheetBuff() {
+    var buff = levelBuff(placedDef(state.sheetDef));
+    if (!buff) return;
+    state.note = "而家等級加成 " + buff.label;
     renderSheet();
-    if (typeof showToast === "function") showToast(state.note);
   }
 
   function wire() {
@@ -998,6 +994,8 @@
         if (event.target === upgradeModal) onUpgradeCancel();
       });
     }
+    var sheetBuff = $("sheetBuff");
+    if (sheetBuff) sheetBuff.addEventListener("click", function () { onSheetBuff(); });
     $("btnCloseSheet").addEventListener("click", closeSheet);
     $("btnMotion").addEventListener("click", function () {
       motionOn = !motionOn;
