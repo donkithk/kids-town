@@ -39,13 +39,13 @@ Requirements:
   對齊設計稿 3b4671d：撳屋 → #actionSheet 顯示成本 → 確認 → 升級。唔係一撳升級。
   篩選 `-k 'upgrade_cost or upgrade_confirm'`。唔改 UX-05／store_ux 斷言。
   TC-FE-TOWN-UX-SHEET-BUFF-01  已起屋面板：#sheetFns 冇 .fn；可見 #sheetBuff 顯示而家等級效果。
-  圖書館 Lv.2 被動係知識 +4（每級 +2，唔係「任務多經驗」）。
+  圖書館 Lv.2 係「知識 +N（戰鬥 HUD 標籤 +M）」。N、M 由函數差計，唔寫死 +2×等級。
   buff_vals[level-1] 嘅數字合約搬去商店 Lv.2「起屋／升級金幣八五折」（TC-FE-SHEET-BUFFVAL-01）。
   TC-FE-TOWN-UX-SHEET-BUFF-02  唔好有 FN 假動作；打開或撳舊 stub 都唔好 toast「整好一件道具」。
   02 仍然開工坊，只查零 .fn 同 stub toast，唔查 buff 數字。篩選 `-k sheet_buff`。
-  TC-FE-TOWN-UX-SHEET-BUFF-ZH-01  工坊 Lv.3：#sheetBuff 要係「創意 +6」。
+  TC-FE-TOWN-UX-SHEET-BUFF-ZH-01  工坊 Lv.3：#sheetBuff 要係「創意 +N（戰鬥 HUD 標籤 +M）」。
   唔好再寫「建築速度 ×」或者「未開放」。
-  TC-FE-TOWN-UX-SHEET-BUFF-ZH-02  健身室 Lv.1：#sheetBuff 要係「臂力 +2」。
+  TC-FE-TOWN-UX-SHEET-BUFF-ZH-02  健身室 Lv.1：#sheetBuff 要係「臂力 +N（戰鬥 HUD 標籤 +M）」。
   唔好再寫「漏打卡都唔斷」或者「未開放」。
   篩選 `-k sheet_buff_zh`。函數名亦含 sheet_buff，所以 `-k sheet_buff` 會一齊跑到 ZH。
   TC-FE-SHEET-BUFFVAL-01  商店 Lv.2：buff_vals[1]=0.85 →「起屋／升級金幣八五折」。
@@ -102,6 +102,15 @@ from tests.sheet_buff_truth_spec import (  # noqa: E402
     effect_line_matches,
     honest_buff_label,
 )
+from tests.sheet_two_layer import (  # noqa: E402
+    TWO_LAYER_BUILDINGS,
+    abilities_touched,
+    bump_delta,
+    label_tracking,
+    line_problems,
+    stored_building_counts,
+)
+from tests.sheet_two_layer import battle_stats as two_layer_battle_stats  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FE_KID_NAME = "TestKid"
@@ -4438,9 +4447,9 @@ def test_town_ux_upgrade_confirm_cancel_then_post(
 # that only toast and rewrite #sheetNote. Show this building's current-level buff
 # from API buff_type + buff_vals[level-1] (same index as get_building_buff).
 # Dedicated visible node: #sheetBuff.
-# Library Lv.2 shows the knowledge passive 「知識 +4」 (2 per level), not
-# 「任務多經驗」. Shop and farm still read buff_vals[level-1]. Do not weaken
-# upgrade_cost, upgrade_confirm, UX-05, or store_ux.
+# Library Lv.2 shows two numbers: ability diff and battle-stat diff, not
+# 「任務多經驗」 and not a handwritten 「知識 +4」. Shop and farm still read
+# buff_vals[level-1]. Do not weaken upgrade_cost, upgrade_confirm, UX-05, or store_ux.
 
 SHEET_BUFF_NAME = "圖書館"
 SHEET_BUFF_LEVEL = 2
@@ -4495,8 +4504,9 @@ SHEET_BUFF_RED = (
     "(#sheetFns .fn, including 整道具／修理／接任務／出發) and must not toast "
     "FN_COPY lines such as 工坊：整好一件道具. "
     "SHEET-BUFF-01 shows the current-level effect in a visible #sheetBuff. "
-    f"圖書館 Lv.{SHEET_BUFF_LEVEL} is 「知識 +{2 * SHEET_BUFF_LEVEL}」 "
-    "(+2 knowledge per level). The line does not read the library buff_vals row. "
+    f"圖書館 Lv.{SHEET_BUFF_LEVEL} is 「知識 +N（戰鬥 HUD 標籤 +M）」. "
+    "N is the calc_ability_buffs diff and M is the calc_battle_stats diff. "
+    "The line does not read the library buff_vals row. "
     "#sheetNote, the toast, and #sheetCost do not count as #sheetBuff. "
     "Leave #btnUpgrade, the upgrade cost chip, and #upgradeConfirm unchanged."
 )
@@ -4555,7 +4565,7 @@ def _placed_level_buff(test_db_path, kid_id, name):
 
 
 def _seed_sheet_buff_library(test_db_path, kid_id):
-    """Placed 圖書館 Lv.2. The panel line is 知識 +2×等級, not the seed row.
+    """Placed 圖書館 Lv.2. The panel line is the two-layer knowledge line, not the seed row.
 
     Synthetic kid only. No production DB and no real PIN.
     """
@@ -4567,7 +4577,7 @@ def _seed_sheet_buff_library(test_db_path, kid_id):
 def _seed_sheet_buff_workshop(test_db_path, kid_id):
     """Placed 工坊 for the zero-.fn / no-stub check. Do not assert a buff number.
 
-    The label contract is 「創意 +6」 (ZH-01 / SHEET-BUFF-TRUTH-05), not buff_vals[2].
+    The label contract is the two-layer creativity line (ZH-01 / SHEET-BUFF-TRUTH-05), not buff_vals[2].
     """
     return _seed_sheet_buff_placed(
         test_db_path, kid_id, SHEET_BUFF_WORKSHOP, SHEET_BUFF_WORKSHOP_LEVEL
@@ -4725,18 +4735,9 @@ def _click_stub_fn(page):
 def test_town_ux_sheet_buff_shows_level_buff_without_fn(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-UX-SHEET-BUFF-01 圖書館 Lv.2：零 .fn，#sheetBuff 係「知識 +4」。"""
+    """TC-FE-TOWN-UX-SHEET-BUFF-01 圖書館 Lv.2：零 .fn，#sheetBuff 係兩層數字。"""
     case_id = "TC-FE-TOWN-UX-SHEET-BUFF-01"
     buff = _seed_sheet_buff_library(test_db_path, fe_ids["kid_id"])
-    want = honest_buff_label(
-        buff["buff_type"], buff["value"], name=buff["name"], level=buff["level"]
-    )
-    lv1 = honest_buff_label(
-        buff["buff_type"], buff["value"], name=buff["name"], level=1
-    )
-    assert want == f"知識 +{2 * SHEET_BUFF_LEVEL}", want
-    assert lv1 == "知識 +2", lv1
-    assert lv1 != want, (lv1, want)
     _open_town_home(page, base_url)
     _open_placed_building_sheet(page, case_id, SHEET_BUFF_NAME)
     problems = []
@@ -4759,8 +4760,7 @@ def test_town_ux_sheet_buff_shows_level_buff_without_fn(
     if not reading["present"]:
         problems.append(
             "#sheetBuff is missing. The open sheet must show a visible #sheetBuff for "
-            f"{buff['name']} Lv.{buff['level']} as {want!r} "
-            f"(+2 knowledge per level, not the Lv.1 label {lv1!r})."
+            f"{buff['name']} Lv.{buff['level']} as the two-layer knowledge line."
         )
     elif not reading["visible"]:
         problems.append(
@@ -4768,11 +4768,16 @@ def test_town_ux_sheet_buff_shows_level_buff_without_fn(
             f"text={reading['text']!r} aria={reading['aria']!r}."
         )
     else:
-        if reading["text"] != want or reading["aria"] != want:
-            problems.append(
-                "#sheetBuff text and aria-label must equal the current-level honest "
-                f"label {want!r} (+2 knowledge per level, not Lv.1 {lv1!r}). "
-                f"text={reading['text']!r} aria={reading['aria']!r}."
+        problems.extend(
+            line_problems(
+                reading["text"], test_db_path, fe_ids["kid_id"], buff["name"]
+            )
+        )
+        if reading["aria"] and reading["aria"].strip() != (reading["text"] or "").strip():
+            problems.extend(
+                line_problems(
+                    reading["aria"], test_db_path, fe_ids["kid_id"], buff["name"]
+                )
             )
         for bad in ("⭐", "星", "任務多星", "任務多經驗"):
             blob = f"{reading['text']}\n{reading['aria']}"
@@ -4824,9 +4829,10 @@ def test_town_ux_sheet_buff_no_stub_toast(
 
 # ── TC-FE-TOWN-UX-SHEET-BUFF-ZH-*: kid-readable Traditional Chinese label ──
 #
-# SHEET-BUFF-01 checks library Lv.2 「知識 +4」 (+2 knowledge per level).
-# ZH-01 / ZH-02 require the same real passives: 工坊 Lv.3 「創意 +6」,
-# 健身室 Lv.1 「臂力 +2」. The old 「建築速度 ×4」 / 「漏打卡都唔斷」 / 「未開放」
+# SHEET-BUFF-01 checks the library two-layer line.
+# ZH-01 / ZH-02 require the same shape: 工坊 and 健身室 show ability +N
+# and the converted battle stat in brackets. The old 「建築速度 ×4」 /
+# 「漏打卡都唔斷」 / 「未開放」 / handwritten 「+2×等級」
 # sentences are not the effect. Filter `-k sheet_buff_zh`. Names also contain
 # `sheet_buff`, so `-k sheet_buff` selects them too. Do not weaken
 # upgrade_cost, upgrade_confirm, UX-05, or store_ux.
@@ -4887,10 +4893,9 @@ def _click_sheet_buff(page):
 
 
 SHEET_BUFF_ZH_RED = (
-    "Panel text must equal the real passive. "
-    "工坊 Lv.3 is 「創意 +6」 (+2 creativity per level), not 「未開放」 and not "
-    "「建築速度 ×4」. 健身室 Lv.1 is 「臂力 +2」, not 「未開放」 and not "
-    "「漏打卡都唔斷」. "
+    "Panel text must equal the real passive, two numbers from the functions. "
+    "工坊 and 健身室 are 「能力 +N（戰鬥 HUD 標籤 +M）」, not 「未開放」, not "
+    "「建築速度 ×4」, and not 「漏打卡都唔斷」. "
     "#sheetFns .fn stays zero. #upgradeConfirm stays the last element child of "
     "div.gsw.stage."
 )
@@ -4900,16 +4905,18 @@ def _sheet_buff_zh_fail(case_id, detail):
     pytest.fail(f"{case_id}: {detail} {SHEET_BUFF_ZH_RED}")
 
 
-def _assert_sheet_buff_zh(page, case_id, buff):
+def _assert_sheet_buff_zh(page, case_id, buff, db_path, kid_id):
     """#sheetBuff equals the locked passive for this building."""
-    _assert_truth_unwired_panel(page, case_id, buff, fail_fn=_sheet_buff_zh_fail)
+    _assert_truth_unwired_panel(
+        page, case_id, buff, fail_fn=_sheet_buff_zh_fail, db_path=db_path, kid_id=kid_id
+    )
 
 
 @pytest.mark.case_id("TC-FE-TOWN-UX-SHEET-BUFF-ZH-01")
 def test_town_ux_sheet_buff_zh_workshop_shows_chinese_level_value(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 工坊 Lv.3：創意 +6。唔好寫建築速度 ×或者未開放。"""
+    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 工坊 Lv.3：創意兩層數字。唔好寫建築速度 ×或者未開放。"""
     case_id = "TC-FE-TOWN-UX-SHEET-BUFF-ZH-01"
     buff = _seed_sheet_buff_workshop(test_db_path, fe_ids["kid_id"])
     assert buff["name"] == SHEET_BUFF_WORKSHOP, buff
@@ -4918,14 +4925,14 @@ def test_town_ux_sheet_buff_zh_workshop_shows_chinese_level_value(
     assert buff["vals"] == [2, 3, 4, 5, 6], buff
     _open_town_home(page, base_url)
     _open_placed_building_sheet(page, case_id, SHEET_BUFF_WORKSHOP, fail_fn=_sheet_buff_zh_fail)
-    _assert_sheet_buff_zh(page, case_id, buff)
+    _assert_sheet_buff_zh(page, case_id, buff, test_db_path, fe_ids["kid_id"])
 
 
 @pytest.mark.case_id("TC-FE-TOWN-UX-SHEET-BUFF-ZH-02")
 def test_town_ux_sheet_buff_zh_gym_shows_chinese_not_streak_code(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 健身室 Lv.1：臂力 +2。唔好寫漏打卡都唔斷或者未開放。"""
+    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 健身室 Lv.1：臂力兩層數字。唔好寫漏打卡都唔斷或者未開放。"""
     case_id = "TC-FE-TOWN-UX-SHEET-BUFF-ZH-02"
     buff = _seed_sheet_buff_placed(
         test_db_path, fe_ids["kid_id"], SHEET_BUFF_ZH_GYM, SHEET_BUFF_ZH_GYM_LEVEL
@@ -4938,7 +4945,7 @@ def test_town_ux_sheet_buff_zh_gym_shows_chinese_not_streak_code(
     assert buff["value"] == 1, buff
     _open_town_home(page, base_url)
     _open_placed_building_sheet(page, case_id, SHEET_BUFF_ZH_GYM, fail_fn=_sheet_buff_zh_fail)
-    _assert_sheet_buff_zh(page, case_id, buff)
+    _assert_sheet_buff_zh(page, case_id, buff, test_db_path, fe_ids["kid_id"])
 
 
 # ── SHEET-BUFF-TRUTH: panel text must match the real backend effect ──
@@ -4950,7 +4957,9 @@ def test_town_ux_sheet_buff_zh_gym_shows_chinese_not_streak_code(
 
 SHEET_BUFF_TRUTH_RED = (
     " #sheetBuff must equal the real effect. "
-    "圖書館 is 「知識 +N」（+2 per level）, not 「任務多經驗」 and not stars. "
+    "圖書館、健身室、工坊、競技場、探險公會 are 「能力 +N（戰鬥 HUD 標籤 +M）」. "
+    "N is the calc_ability_buffs diff and M is the calc_battle_stats diff, "
+    "not a handwritten +2×level line, and not 「任務多經驗」 or stars. "
     "discount is build/upgrade gold only （起屋／升級金幣 + the fold of buff_vals[level-1]）. "
     "daily_gold needs a visible 領取 control; after a successful claim the same day "
     "shows 今日已領 and a second claim does not add gold. "
@@ -5019,15 +5028,23 @@ def _label_args(buff):
     return buff.get("name"), buff.get("level")
 
 
-def _line_problems(surface, buff, text, consumed):
+def _line_problems(surface, buff, text, consumed, db_path=None, kid_id=None):
     kind = buff["buff_type"]
     value = buff["value"]
     name, level = _label_args(buff)
     raw = (text or "").strip()
-    expected = honest_buff_label(kind, value, consumed, name=name, level=level)
     problems = []
-    if not effect_line_matches(kind, value, raw, consumed, name=name, level=level):
-        problems.append(f"{surface} is {raw!r}, want {expected!r}.")
+    if name in TWO_LAYER_BUILDINGS:
+        if db_path is None or kid_id is None:
+            problems.append(f"{surface}: two-layer line needs the synthetic kid.")
+            return problems
+        for item in line_problems(raw, db_path, kid_id, name):
+            problems.append(f"{surface}: {item}")
+        expected = None
+    else:
+        expected = honest_buff_label(kind, value, consumed, name=name, level=level)
+        if not effect_line_matches(kind, value, raw, consumed, name=name, level=level):
+            problems.append(f"{surface} is {raw!r}, want {expected!r}.")
     lowered = raw.lower()
     for code in SHEET_BUFF_ZH_FORBIDDEN:
         if code in lowered:
@@ -5047,7 +5064,7 @@ def _line_problems(surface, buff, text, consumed):
     return problems
 
 
-def _note_problems(buff, note, consumed):
+def _note_problems(buff, note, consumed, db_path=None, kid_id=None):
     raw = note or ""
     name, level = _label_args(buff)
     problems = []
@@ -5058,27 +5075,31 @@ def _note_problems(buff, note, consumed):
         problems.append(f"#sheetNote contains 「建築速度 ×」. note={raw!r}.")
     if "而家等級加成" in raw:
         rest = raw.split("而家等級加成", 1)[1].strip()
-        expected = honest_buff_label(
-            buff["buff_type"], buff["value"], consumed, name=name, level=level
-        )
-        if not effect_line_matches(
-            buff["buff_type"], buff["value"], rest, consumed, name=name, level=level
-        ):
-            problems.append(f"#sheetNote restates {rest!r}, want {expected!r}.")
+        if name in TWO_LAYER_BUILDINGS:
+            for item in line_problems(rest, db_path, kid_id, name):
+                problems.append(f"#sheetNote: {item}")
+        else:
+            expected = honest_buff_label(
+                buff["buff_type"], buff["value"], consumed, name=name, level=level
+            )
+            if not effect_line_matches(
+                buff["buff_type"], buff["value"], rest, consumed, name=name, level=level
+            ):
+                problems.append(f"#sheetNote restates {rest!r}, want {expected!r}.")
     return problems
 
 
-def _assert_truth_unwired_panel(page, case_id, buff, fail_fn=None):
+def _assert_truth_unwired_panel(page, case_id, buff, fail_fn=None, db_path=None, kid_id=None):
     """#sheetBuff equals the locked label. The buff_type is not a gold/XP caller."""
     fail = fail_fn or _sheet_buff_truth_fail
     consumed = consumed_buff_types_in_backend()
     assert buff["buff_type"] not in ("discount", "daily_gold"), buff
-    problems = _truth_panel_problems(page, buff, consumed)
+    problems = _truth_panel_problems(page, buff, consumed, db_path, kid_id)
     if problems:
         fail(case_id, " | ".join(problems))
 
 
-def _truth_panel_problems(page, buff, consumed):
+def _truth_panel_problems(page, buff, consumed, db_path=None, kid_id=None):
     problems = []
     level_text = (page.locator("#sheetLevel").inner_text() or "").strip()
     if not re.search(rf"Lv\.?\s*{buff['level']}(?!\d)", level_text):
@@ -5090,34 +5111,56 @@ def _truth_panel_problems(page, buff, consumed):
     reading = _read_sheet_buff(page)
     name, level = _label_args(buff)
     if not reading["present"] or not reading["visible"]:
-        expected = honest_buff_label(
-            buff["buff_type"], buff["value"], consumed, name=name, level=level
-        )
+        if name in TWO_LAYER_BUILDINGS:
+            expected = "能力 +N（戰鬥 HUD 標籤 +M）"
+        else:
+            expected = honest_buff_label(
+                buff["buff_type"], buff["value"], consumed, name=name, level=level
+            )
         problems.append(
             f"#sheetBuff is missing or hidden, so it cannot equal {expected!r}. "
             f"present={reading['present']} visible={reading['visible']} "
             f"text={reading['text']!r}."
         )
     else:
-        problems.extend(_line_problems("#sheetBuff", buff, reading["text"], consumed))
+        problems.extend(
+            _line_problems(
+                "#sheetBuff", buff, reading["text"], consumed, db_path, kid_id
+            )
+        )
         if reading["aria"] and reading["aria"].strip() != (reading["text"] or "").strip():
             problems.extend(
-                _line_problems("#sheetBuff aria-label", buff, reading["aria"], consumed)
+                _line_problems(
+                    "#sheetBuff aria-label",
+                    buff,
+                    reading["aria"],
+                    consumed,
+                    db_path,
+                    kid_id,
+                )
             )
-        elif reading["aria"] and not effect_line_matches(
-            buff["buff_type"],
-            buff["value"],
-            reading["text"],
-            consumed,
-            name=name,
-            level=level,
+        elif reading["aria"] and name in TWO_LAYER_BUILDINGS and line_problems(
+            reading["text"], db_path, kid_id, name
+        ):
+            problems.append("#sheetBuff aria-label repeats that label.")
+        elif (
+            reading["aria"]
+            and name not in TWO_LAYER_BUILDINGS
+            and not effect_line_matches(
+                buff["buff_type"],
+                buff["value"],
+                reading["text"],
+                consumed,
+                name=name,
+                level=level,
+            )
         ):
             problems.append("#sheetBuff aria-label repeats that label.")
     note_open = _sheet_note_text(page)
-    problems.extend(_note_problems(buff, note_open, consumed))
+    problems.extend(_note_problems(buff, note_open, consumed, db_path, kid_id))
     if reading["present"] and reading["visible"]:
         _click_sheet_buff(page)
-        problems.extend(_note_problems(buff, _sheet_note_text(page), consumed))
+        problems.extend(_note_problems(buff, _sheet_note_text(page), consumed, db_path, kid_id))
     return problems
 
 
@@ -5163,13 +5206,15 @@ def _seed_farm_sheet(test_db_path, kid_id):
 def test_town_ux_sheet_buff_truth_library_experience_not_stars(
     page, base_url, test_db_path, fe_ids
 ):
-    """SHEET-BUFF-TRUTH-01 圖書館：知識 +2，唔好任務多經驗，亦唔好星。"""
+    """SHEET-BUFF-TRUTH-01 圖書館：知識兩層數字，唔好任務多經驗，亦唔好星。"""
     case_id = "SHEET-BUFF-TRUTH-01"
     buff = _open_truth_building(
         page, base_url, test_db_path, fe_ids["kid_id"], case_id, "圖書館", 1
     )
     consumed = consumed_buff_types_in_backend()
-    problems = _truth_panel_problems(page, buff, consumed)
+    problems = _truth_panel_problems(
+        page, buff, consumed, test_db_path, fe_ids["kid_id"]
+    )
     if problems:
         _sheet_buff_truth_fail(case_id, " | ".join(problems))
 
@@ -5352,7 +5397,7 @@ def _visit_truth_buildings(page, base_url, test_db_path, kid_id, case_id, rows):
         _open_placed_building_sheet(
             page, case_id, row["name"], fail_fn=_sheet_buff_truth_fail
         )
-        for item in _truth_panel_problems(page, buff, consumed):
+        for item in _truth_panel_problems(page, buff, consumed, test_db_path, kid_id):
             problems.append(f"{row['name']}: {item}")
         if row["buff_type"] == "daily_gold" and not _farm_claim_controls(page):
             reading = _read_sheet_buff(page)
@@ -5488,5 +5533,256 @@ def test_bank_sheet_describes_gold_smash_skill(page, base_url, test_db_path, fe_
     _open_town_home(page, base_url)
     _open_placed_building_sheet(page, case_id, "銀行", fail_fn=_sheet_buff_truth_fail)
     problems = _truth_panel_problems(page, buff, consumed_buff_types_in_backend())
+    if problems:
+        _sheet_buff_truth_fail(case_id, " | ".join(problems))
+
+
+# ── TC-FE-SHEET-TWO-LAYER: ability +N and the battle HUD's converted stat ──
+
+
+_ABILITY_COLUMNS = {
+    "str": "ability_str",
+    "int": "ability_int",
+    "spd": "ability_spd",
+    "crt": "ability_crt",
+    "brv": "ability_brv",
+}
+
+
+def _snapshot_kid_combat(test_db_path, kid_id):
+    db = connect_db(test_db_path)
+    abilities = dict(
+        db.execute(
+            """
+            SELECT ability_str, ability_int, ability_spd, ability_crt, ability_brv
+            FROM kids WHERE id=?
+            """,
+            (kid_id,),
+        ).fetchone()
+    )
+    buildings = [
+        dict(row)
+        for row in db.execute(
+            """
+            SELECT def_id, plot_idx, level, cell_x, cell_y, stored
+            FROM buildings WHERE kid_id=?
+            ORDER BY id
+            """,
+            (kid_id,),
+        ).fetchall()
+    ]
+    db.close()
+    return abilities, buildings
+
+
+def _restore_kid_combat(test_db_path, kid_id, abilities, buildings):
+    db = connect_db(test_db_path)
+    db.execute(
+        """
+        UPDATE kids
+           SET ability_str=?, ability_int=?, ability_spd=?,
+               ability_crt=?, ability_brv=?
+         WHERE id=?
+        """,
+        (
+            abilities["ability_str"],
+            abilities["ability_int"],
+            abilities["ability_spd"],
+            abilities["ability_crt"],
+            abilities["ability_brv"],
+            kid_id,
+        ),
+    )
+    db.execute("DELETE FROM buildings WHERE kid_id=?", (kid_id,))
+    for row in buildings:
+        db.execute(
+            """
+            INSERT INTO buildings
+                (kid_id, def_id, plot_idx, level, cell_x, cell_y, stored)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                kid_id,
+                row["def_id"],
+                row["plot_idx"],
+                row["level"],
+                row["cell_x"],
+                row["cell_y"],
+                row["stored"],
+            ),
+        )
+    db.execute(
+        "UPDATE expeditions SET status='completed' WHERE kid_id=? AND status='running'",
+        (kid_id,),
+    )
+    db.commit()
+    db.close()
+
+
+def _set_abilities(test_db_path, kid_id, values):
+    db = connect_db(test_db_path)
+    db.execute(
+        """
+        UPDATE kids
+           SET ability_str=?, ability_int=?, ability_spd=?,
+               ability_crt=?, ability_brv=?
+         WHERE id=?
+        """,
+        (
+            values.get("str", 0),
+            values.get("int", 0),
+            values.get("spd", 0),
+            values.get("crt", 0),
+            values.get("brv", 0),
+            kid_id,
+        ),
+    )
+    db.commit()
+    db.close()
+
+
+def _clear_running_battle(test_db_path, kid_id):
+    db = connect_db(test_db_path)
+    db.execute(
+        "UPDATE expeditions SET status='completed' WHERE kid_id=? AND status='running'",
+        (kid_id,),
+    )
+    db.commit()
+    db.close()
+
+
+def _battle_player_hud_text(page):
+    """Text of the battle HUD, without the monster row or the combat toast."""
+    return page.evaluate(
+        """() => {
+          const hud = document.getElementById('hudHp');
+          const scene = document.querySelector('.battle-scene');
+          const head = hud ? (hud.innerText || '') : '';
+          if (!scene) return head;
+          const clone = scene.cloneNode(true);
+          clone.querySelectorAll(
+            '.monster-zone, .kt-toast, .result-overlay, .vh, #hp-meter'
+          ).forEach((node) => node.remove());
+          return head + '\\n' + (clone.innerText || '');
+        }"""
+    )
+
+
+def _open_battle_hud(page):
+    _goto_battle_lobby(page)
+    page.locator("button.exp-btn.go").first.click()
+    page.locator(".battle-scene").first.wait_for(state="visible", timeout=8000)
+
+
+def _kid_battle_stats(test_db_path, kid_id):
+    import backend_v2 as backend
+
+    db = connect_db(test_db_path)
+    kid = dict(db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone())
+    buffs = dict(backend.calc_ability_buffs(db, kid_id))
+    db.close()
+    return dict(two_layer_battle_stats(kid, buffs))
+
+
+def _discover_battle_hud_labels(page, base_url, test_db_path, kid_id):
+    """Label next to each converted stat, read from the live battle HUD.
+
+    Bump one ability, restart the fight, and keep the word whose number moved
+    by the same amount as ``calc_battle_stats``. No word is filled in when the
+    HUD does not show that stat.
+    """
+    _seed_sheet_buff_placed(test_db_path, kid_id, "探險公會", 1)
+    keys = []
+    for name in TWO_LAYER_BUILDINGS:
+        for key in abilities_touched(name, 1):
+            if key not in keys:
+                keys.append(key)
+    labels = {}
+    notes = []
+    _set_abilities(test_db_path, kid_id, {})
+    _clear_running_battle(test_db_path, kid_id)
+    _open_town_home(page, base_url)
+    _open_battle_hud(page)
+    base_text = _battle_player_hud_text(page)
+    base_stats = _kid_battle_stats(test_db_path, kid_id)
+    for key in keys:
+        _set_abilities(test_db_path, kid_id, {key: 4})
+        _clear_running_battle(test_db_path, kid_id)
+        _open_town_home(page, base_url)
+        _open_battle_hud(page)
+        bumped_text = _battle_player_hud_text(page)
+        bumped_stats = _kid_battle_stats(test_db_path, kid_id)
+        field, _delta = bump_delta(key, base_stats, bumped_stats)
+        hits = label_tracking(
+            base_text, bumped_text, base_stats[field], bumped_stats[field]
+        )
+        if len(hits) == 1:
+            labels[field] = hits[0]
+        else:
+            notes.append(
+                f"{field}: battle HUD has no label whose number moves "
+                f"{base_stats[field]} -> {bumped_stats[field]} (saw {hits})."
+            )
+            if "sample" not in labels:
+                notes.append(f"battle HUD text: {bumped_text!r}.")
+                labels["sample"] = True
+        _set_abilities(test_db_path, kid_id, {})
+    labels.pop("sample", None)
+    return labels, notes
+
+
+@pytest.mark.case_id("TC-FE-SHEET-TWO-LAYER")
+def test_passive_sheet_shows_ability_and_battle_hud_stat(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-SHEET-TWO-LAYER 被動面板兩個數，括號標籤等於戰鬥 HUD。
+
+    圖書館、健身室、工坊、競技場、探險公會，Lv.1 同 Lv.3。
+    能力 +N 係 calc_ability_buffs 有座同冇座嘅差。括號 +M 係同一個人
+    calc_battle_stats 嘅差。stored=1 唔計。括號個字要同戰鬥 HUD 一樣。
+    """
+    case_id = "TC-FE-SHEET-TWO-LAYER"
+    kid_id = fe_ids["kid_id"]
+    abilities, buildings = _snapshot_kid_combat(test_db_path, kid_id)
+    problems = []
+    try:
+        for name in TWO_LAYER_BUILDINGS:
+            for level in (1, 3):
+                problems.extend(
+                    stored_building_counts(test_db_path, kid_id, name, level)
+                )
+        try:
+            labels, hud_notes = _discover_battle_hud_labels(
+                page, base_url, test_db_path, kid_id
+            )
+            problems.extend(hud_notes)
+        except Exception as exc:
+            labels = {}
+            problems.append(f"battle HUD label discovery failed: {exc}")
+        for name in TWO_LAYER_BUILDINGS:
+            for level in (1, 3):
+                _seed_sheet_buff_placed(test_db_path, kid_id, name, level)
+                _open_town_home(page, base_url)
+                _open_placed_building_sheet(
+                    page, case_id, name, fail_fn=_sheet_buff_truth_fail
+                )
+                reading = _read_sheet_buff(page)
+                if not reading["visible"]:
+                    problems.append(
+                        f"{name} Lv.{level}: #sheetBuff is not visible "
+                        f"({reading!r})."
+                    )
+                    continue
+                for item in line_problems(
+                    reading["text"], test_db_path, kid_id, name, hud_labels=labels
+                ):
+                    problems.append(f"{name} Lv.{level}: {item}")
+                if reading["aria"].strip() and reading["aria"].strip() != reading["text"].strip():
+                    for item in line_problems(
+                        reading["aria"], test_db_path, kid_id, name, hud_labels=labels
+                    ):
+                        problems.append(f"{name} Lv.{level} aria: {item}")
+    finally:
+        _restore_kid_combat(test_db_path, kid_id, abilities, buildings)
     if problems:
         _sheet_buff_truth_fail(case_id, " | ".join(problems))

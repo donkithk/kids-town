@@ -2,8 +2,10 @@
 
 Test harness only. Product code must not import this module.
 Shop discount and farm gold still come from buff_vals[level-1].
-Passives are +2 per level (arena speed +1). Hospital, lighthouse, and
-bank describe their skill. Any other buff_type is 「未開放」 with no number.
+Library, gym, workshop, arena, and the explorers guild use two numbers
+from calc_ability_buffs and calc_battle_stats (see tests/sheet_two_layer.py),
+not a handwritten +2×level line. Hospital, lighthouse, and bank describe
+their skill. Any other buff_type is 「未開放」 with no number.
 """
 from __future__ import annotations
 
@@ -95,28 +97,19 @@ def discount_fold(value) -> str | None:
     return None
 
 
-def passive_points(level: int) -> int:
-    """+2 of the building's ability per placed level."""
-    return 2 * int(level)
-
-
 def sheet_effect_label(name: str, level: int, buff_type: str, value) -> str:
     """#sheetBuff text that equals the locked effect.
 
-    Passives use level * 2 (arena speed is level * 1), not the old buff_vals curve.
     Shop and farm still use buff_vals[level-1]. Unknown types stay 「未開放」.
+    The five passive buildings are not formatted here: their line is
+    ``tests.sheet_two_layer.line_problems`` (ability diff and battle-stat diff).
     """
     level = int(level or 1)
-    if name == "圖書館":
-        return f"知識 +{passive_points(level)}"
-    if name == "健身室":
-        return f"臂力 +{passive_points(level)}"
-    if name == "工坊":
-        return f"創意 +{passive_points(level)}"
-    if name == "競技場":
-        return f"臂力 +{passive_points(level)}、速度 +{level}"
-    if name == "探險公會":
-        return f"勇氣 +{passive_points(level)}"
+    if name in ("圖書館", "健身室", "工坊", "競技場", "探險公會"):
+        raise AssertionError(
+            f"{name} sheet is two numbers from calc_ability_buffs and "
+            "calc_battle_stats, not a handwritten +2×level line"
+        )
     if name == "天文台":
         # Treasure weights are not locked yet. The confirmed effect is the skill.
         return "技能：流星雨（魔法攻擊全體敵人）"
@@ -147,14 +140,20 @@ def honest_buff_label(
 ) -> str:
     """Panel text for this placed building. `consumed` is ignored; kept for callers."""
     del consumed
+    if name in ("圖書館", "健身室", "工坊", "競技場", "探險公會"):
+        raise AssertionError(
+            f"{name} sheet is checked by tests.sheet_two_layer.line_problems"
+        )
     if name:
         return sheet_effect_label(name, level or 1, buff_type, value)
+    if buff_type == "task_bonus":
+        raise AssertionError(
+            "library sheet is checked by tests.sheet_two_layer.line_problems"
+        )
     if buff_type == "discount":
         return sheet_effect_label("商店", level or 1, buff_type, value)
     if buff_type == "daily_gold":
         return sheet_effect_label("農場", level or 1, buff_type, value)
-    if buff_type == "task_bonus":
-        return sheet_effect_label("圖書館", level or 1, buff_type, value)
     return UNAVAILABLE_LABEL
 
 

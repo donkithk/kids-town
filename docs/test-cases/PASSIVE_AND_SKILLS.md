@@ -89,18 +89,20 @@
 
 ## 面板
 
-文案鎖喺 `tests/sheet_buff_truth_spec.py` 嘅 `sheet_effect_label`。
+商店、農場、醫院、燈塔、銀行、天文台嘅句鎖喺 `tests/sheet_buff_truth_spec.py` 嘅 `sheet_effect_label`。圖書館、健身室、工坊、競技場、探險公會唔再寫死「+2×等級」，改由 `tests/sheet_two_layer.py` 用函數差計兩層數字。
 
 | ID | 描述 |
 |----|----|
-| TC-FE-TOWN-UX-SHEET-BUFF-01 | 圖書館 Lv.2「知識 +4」（+2×等級）。零 `.fn`。唔讀 `task_bonus` 種子行。 |
+| TC-FE-TOWN-UX-SHEET-BUFF-01 | 圖書館 Lv.2 係「知識 +N（戰鬥 HUD 標籤 +M）」。N、M 由函數差計。零 `.fn`。唔讀 `task_bonus` 種子行。 |
 | TC-FE-TOWN-UX-SHEET-BUFF-02 | 工坊零 `.fn`、唔好 stub toast。唔查數字。要綠。 |
-| TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 | 工坊 Lv.3「創意 +6」。 |
-| TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 | 健身室 Lv.1「臂力 +2」。 |
+| TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 | 工坊 Lv.3 兩層數字，唔好「建築速度 ×」或者「未開放」。 |
+| TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 | 健身室 Lv.1 兩層數字，唔好「漏打卡都唔斷」或者「未開放」。 |
 | TC-FE-SHEET-BUFFVAL-01 | 商店 Lv.2「起屋／升級金幣八五折」（`buff_vals[1]=0.85`，唔係九折）。要綠。 |
 | TC-FE-SHEET-UNWIRED-01 | 自訂 `zzz_unwired`、值 9：正好「未開放」，唔好出現 9。要綠。 |
 | TC-FE-SHEET-BANK-01 | 測試庫插入「銀行」：技能句「金錢砸」。而家係「未開放」，所以紅。 |
-| SHEET-BUFF-TRUTH-01 | 圖書館「知識 +2」。唔讀 `task_bonus` 種子行。API bonus 0。 |
+| SHEET-BUFF-TRUTH-01 | 圖書館兩層數字。唔讀 `task_bonus` 種子行。API bonus 0。 |
+| TC-FE-SHEET-TWO-LAYER | 五座被動、Lv.1 同 Lv.3：能力 +N 等於 `calc_ability_buffs` 有座同冇座嘅差；括號 +M 等於同一個人 `calc_battle_stats` 嘅差；括號個字等於戰鬥 HUD 顯示嗰個屬性嘅字。`stored=1` 唔計。競技場兩種能力都要。數字唔寫死。 |
+| TC-API-SHEET-TWO-LAYER | 同一五座、Lv.1 同 Lv.3：`stored=1` 唔改變 `calc_ability_buffs` 同 `calc_battle_stats`。擺出嚟先至有能力差。 |
 | SHEET-BUFF-TRUTH-02 | 商店「起屋／升級金幣九折」。要綠。 |
 | SHEET-BUFF-TRUTH-03 | 農場「每日金幣 +5」加可撳「領取」。要綠。 |
 | SHEET-BUFF-TRUTH-04 | 領完「今日已領」，同日只加一次。要綠。 |
@@ -108,6 +110,23 @@
 | SHEET-BUFF-TRUTH-06 | 十座面板都等於鎖定句。API：`get_building_buff` 只剩 `discount`、`daily_gold`。工坊唔改升級金、健身室唔加 XP 呢兩點要先過，然後集合斷言先紅。 |
 
 `#upgradeConfirm` 仍然係 `div.gsw.stage` 最後一個元素子節點。
+
+### TC-FE-SHEET-TWO-LAYER — 被動面板兩個數
+
+圖書館、健身室、工坊、競技場、探險公會。每座至少 Lv.1 同 Lv.3。空庫、合成小朋友。
+
+格式係「能力 +N（戰鬥 HUD 標籤 +M）」，例如能力名同括號標籤可以唔同，但括號個字必須同戰鬥畫面顯示嗰個屬性一樣。競技場兩段，用「、」接住，臂力同速度都要。
+
+- N：`calc_ability_buffs` 有呢座（`stored=0`）減冇呢座。`stored=1` 要同冇座一樣（`TC-API-SHEET-TWO-LAYER`）。
+- M：同一個人，`calc_battle_stats` 有呢座減冇呢座。轉換欄由函數邊個數會郁決定（臂力→atk、知識→matk、創意→crt、勇氣→def、速度→dodge）。
+- 能力個字讀 `index.html` 嘅 `TIP_NAMES`（臂力、知識、速度、創意、勇氣）。
+- 括號個字唔好估。測試開一場戰鬥，將對應能力加幾點，睇戰鬥 HUD（怪物列同戰鬥 toast 唔計）邊個字旁邊嘅數跟住 `calc_battle_stats` 郁。HUD 冇顯示，呢條就紅，唔好自己寫「魔攻」。
+
+而家呢條基線 `calc_battle_stats` 唔讀建築，所以 M 跟函數會係 0，直到函數開始計建築。面板而家亦未有兩層，所以紅。#52、#53 預期都係紅。
+
+### TC-API-SHEET-TWO-LAYER — 存倉唔計
+
+同一五座、Lv.1 同 Lv.3。`stored=1` 呼叫 `calc_ability_buffs` 同 `calc_battle_stats` 要等於冇座。擺出嚟嘅能力鍵要同函數一致。數字唔寫死。
 
 ---
 
