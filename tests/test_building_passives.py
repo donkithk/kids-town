@@ -20,13 +20,13 @@ from tests.battle_truth import (
 )
 from tests.factories import (
     connect_db,
+    force_expedition_claimable,
     get_kid_experience,
     get_kid_points,
     response_text,
 )
 from tests.phase1_helpers import (
     create_assigned_task,
-    force_expedition_claimable,
     json_or_text,
     login_kid,
     start_explore,
