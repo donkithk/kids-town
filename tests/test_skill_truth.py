@@ -73,6 +73,8 @@ def _tune(test_db, kid_id, **flags):
             monster["max_hp"] = flags["max_hp"]
         if spd is not None:
             monster["spd"] = spd
+        if flags.get("atk") is not None:
+            monster["atk"] = flags["atk"]
     if "player_def" in flags:
         data["player_def"] = flags["player_def"]
     if "player_hp" in flags:
@@ -91,6 +93,18 @@ def _use(client, kid_id, skill):
 
 def _hp_loss(before_hp, body):
     return before_hp - body["player_hp"]
+
+
+def _turn_log(body):
+    turns = body.get("turns") or []
+    if not turns:
+        return ""
+    return " ".join(str(line) for line in (turns[-1].get("log") or []))
+
+
+def _counter_miss(body):
+    """強光 writes the miss into the same action log as 「攻擊落空」."""
+    return "攻擊落空" in _turn_log(body)
 
 
 def _set_level_required(test_db, name, level_required):
@@ -148,17 +162,40 @@ def _counter_from_atk(monster_atk, player_def):
     return max(0, int(monster_atk) - int(player_def))
 
 
+def _fortify_bonus(skill, bldg_level):
+    """強化 defence bonus: max(1, int(base_value + per_level × building level))."""
+    base = skill.get("base_value") or 0
+    per = skill.get("per_level") or 0
+    return max(1, int(base + per * bldg_level))
+
+
+def _follow_counters(client, kid_id, start_hp, count):
+    """Plain attacks so each turn still draws a monster counter. Monster must live."""
+    losses = []
+    bodies = []
+    hp = start_hp
+    for _ in range(count):
+        step = _ok(act(client, kid_id, "attack"))
+        assert step.get("battle_result") == "fighting", step
+        assert monster_hp(step) > 0, step["monsters"]
+        losses.append(hp - step["player_hp"])
+        bodies.append(step)
+        hp = step["player_hp"]
+    return losses, bodies
+
+
 @pytest.mark.case_id("TC-API-SKILL-FREEZE")
 def test_freeze_magic_hit_weakens_attack_for_two_turns(
     client, family, test_db, monkeypatch
 ):
-    """冰凍係魔法攻擊，之後兩回合怪攻 ×0.7，第三回合恢復。
+    """冰凍係魔法攻擊。施放當回合反擊已經係怪攻 ×0.7，再維持一次，第三次恢復。
 
     預期跟開戰回報，唔好寫死「防 0／傷害 56」。
     魔法傷害 > 0，等於技能公式加開戰 `player_int`（方差 0）。
     若 JSON 有 `player_matk`，佢要等於 `int(5 + player_int×1.5)`，同一知識。
     對照普攻量到嘅反擊係基線。削弱先 `int(怪攻×0.7)` 再代入
-    `max(0, 攻−player_def)`。施放嗰下唔計入兩回合，反擊仍係基線。
+    `max(0, 攻−player_def)`。兩次受影響攻擊係施放當回合反擊加上下一記。
+    再下一記返基線。
     """
     kid_id = family.kid_a.id
     library_level = 4
@@ -193,16 +230,21 @@ def test_freeze_magic_hit_weakens_attack_for_two_turns(
     dealt = enemy_hp - monster_hp(cast)
     assert dealt > 0, cast["monsters"]
     assert dealt == magic, (dealt, magic, player_int, derived_matk)
-    assert _hp_loss(control["player_hp"], cast) == baseline, cast
+    cast_loss = _hp_loss(control["player_hp"], cast)
+    assert cast_loss == formula_reduced, (
+        f"actual {cast_loss}, expected {formula_reduced} (baseline {baseline})"
+    )
 
     hp = cast["player_hp"]
-    for turn in (1, 2):
-        step = _ok(act(client, kid_id, "attack"))
-        loss = hp - step["player_hp"]
-        assert loss == formula_reduced, (turn, loss, formula_reduced, baseline)
-        hp = step["player_hp"]
+    step = _ok(act(client, kid_id, "attack"))
+    loss = hp - step["player_hp"]
+    assert loss == formula_reduced, (
+        f"actual {loss}, expected {formula_reduced} (baseline {baseline})"
+    )
+    hp = step["player_hp"]
     expired = _ok(act(client, kid_id, "attack"))
-    assert hp - expired["player_hp"] == baseline, expired
+    restored = hp - expired["player_hp"]
+    assert restored == baseline, f"actual {restored}, expected {baseline}"
 
 
 @pytest.mark.case_id("TC-API-SKILL-EXECUTE")
@@ -637,9 +679,9 @@ def test_shop_coin_bag_adds_gold_only_when_the_battle_is_won(
 def test_lighthouse_flash_makes_the_next_two_monster_attacks_miss(
     client, family, test_db, monkeypatch
 ):
-    """燈塔強光：魔法傷害。之後 2 次怪物攻擊打唔中，第三次先至再扣血。
+    """燈塔強光：魔法傷害。施放當回合反擊係第 1 次打唔中，下一記係第 2 次，再下一記扣血。
 
-    怪物攻擊喺每次玩家行動之後先至發生，所以用連續三個玩家行動量反擊。
+    兩次打唔中包括施放嗰下反擊。第三次怪物攻擊先至按基線扣血。
     """
     kid_id = family.kid_a.id
     battle = _open(
@@ -651,21 +693,18 @@ def test_lighthouse_flash_makes_the_next_two_monster_attacks_miss(
     )
     skill = _require(battle, "強光")
     _tune(test_db, kid_id, hp=8000, spd=50)
+    full = _counter_from_atk(battle["monsters"][0]["atk"], battle["player_def"])
+    assert full > 0, (battle["monsters"][0]["atk"], battle["player_def"], full)
     cast = _use(client, kid_id, skill)
     assert cast.status_code == 200, response_text(cast)
     opened = cast.get_json()
     assert 8000 - monster_hp(opened) > 0, opened["monsters"]
-    hp = opened["player_hp"]
-    for turn in (1, 2):
-        step = act(client, kid_id, "attack")
-        assert step.status_code == 200, response_text(step)
-        body = step.get_json()
-        assert body.get("battle_result") == "fighting", body
-        assert body["player_hp"] == hp, f"turn {turn} still hurt the player: {body['player_hp']}"
-        hp = body["player_hp"]
-    third = act(client, kid_id, "attack")
-    assert third.status_code == 200, response_text(third)
-    assert third.get_json()["player_hp"] < hp, third.get_json()
+    cast_loss = _hp_loss(battle["player_hp"], opened)
+    assert cast_loss == 0, f"actual {cast_loss}, expected 0 (baseline {full})"
+    assert _counter_miss(opened), _turn_log(opened)
+    losses, _bodies = _follow_counters(client, kid_id, opened["player_hp"], 2)
+    assert losses[0] == 0, f"actual {losses[0]}, expected 0"
+    assert losses[1] == full, f"actual {losses[1]}, expected {full}"
 
 
 @pytest.mark.case_id("TC-API-SKILL-METEOR")
@@ -1019,29 +1058,183 @@ def test_skill_cast_damage_against_basic_attack(
 def test_fortify_defence_lasts_three_monster_turns(
     client, family, test_db, monkeypatch
 ):
-    """強化嘅防禦加乘維持三次怪物行動，第四次返對照。施放唔計入三次。"""
+    """強化計施放當回合做第 1 回合。三次反擊用加成防禦，第四次返基線。
+
+    怪攻設到高過加成後防禦，所以加成傷害 > 0，同基線分得開，亦唔好同打唔中撈亂。
+    """
+    kid_id = family.kid_a.id
+    workshop_level = 4
+    battle = _open(
+        client,
+        family,
+        test_db,
+        monkeypatch,
+        [{"key": "guild", "x": 6}, {"key": "workshop", "level": workshop_level, "x": 2}],
+    )
+    skill = _require(battle, "強化")
+    _tune(test_db, kid_id, hp=8000, spd=50, atk=20)
+    _exp, tuned = running_battle(test_db, kid_id)
+    monster_atk = tuned["monsters"][0]["atk"]
+    player_def = tuned["player_def"]
+    bonus = _fortify_bonus(skill, workshop_level)
+    full = _counter_from_atk(monster_atk, player_def)
+    boosted = _counter_from_atk(monster_atk, player_def + bonus)
+    assert boosted > 0 and boosted < full, (boosted, full, player_def, bonus, monster_atk)
+    control = _ok(act(client, kid_id, "attack"))
+    baseline = _hp_loss(battle["player_hp"], control)
+    assert baseline == full, f"actual {baseline}, expected {full}"
+    cast = _ok(_use(client, kid_id, skill))
+    cast_loss = _hp_loss(control["player_hp"], cast)
+    assert cast_loss == boosted, f"actual {cast_loss}, expected {boosted} (baseline {full})"
+    losses, _bodies = _follow_counters(client, kid_id, cast["player_hp"], 3)
+    assert losses[0] == boosted, f"actual {losses[0]}, expected {boosted} (baseline {full})"
+    assert losses[1] == boosted, f"actual {losses[1]}, expected {boosted} (baseline {full})"
+    assert losses[2] == full, f"actual {losses[2]}, expected {full}"
+
+
+def _open_timed(client, family, test_db, monkeypatch, building, level, skill_name, *, atk=None):
+    """Guild plus one skill building. Variance stays on the shared randint patch."""
     kid_id = family.kid_a.id
     battle = _open(
         client,
         family,
         test_db,
         monkeypatch,
-        [{"key": "guild", "x": 6}, {"key": "workshop", "level": 4, "x": 2}],
+        [{"key": "guild", "x": 6}, {"key": building, "level": level, "x": 2}],
     )
-    skill = _require(battle, "強化")
-    _tune(test_db, kid_id, hp=8000, spd=50)
-    control = _ok(act(client, kid_id, "attack"))
-    baseline = _hp_loss(battle["player_hp"], control)
-    assert baseline > 0, control
+    skill = _require(battle, skill_name)
+    flags = {"hp": 8000, "spd": 50}
+    if atk is not None:
+        flags["atk"] = atk
+    _tune(test_db, kid_id, **flags)
+    _exp, tuned = running_battle(test_db, kid_id)
+    return kid_id, battle, skill, tuned
+
+
+def _pair(tuned):
+    monster_atk = tuned["monsters"][0]["atk"]
+    player_def = tuned["player_def"]
+    return monster_atk, player_def, _counter_from_atk(monster_atk, player_def)
+
+
+@pytest.mark.case_id("TC-API-LIGHT-CAST-TURN")
+def test_flash_cast_turn_counter_is_a_miss(client, family, test_db, monkeypatch):
+    """強光：施放嗰一則回應嘅反擊已經打唔中，扣 0 血。"""
+    kid_id, battle, skill, tuned = _open_timed(
+        client, family, test_db, monkeypatch, "lighthouse", 1, "強光"
+    )
+    _atk, _defn, full = _pair(tuned)
+    assert full > 0, full
     cast = _ok(_use(client, kid_id, skill))
-    hp = cast["player_hp"]
-    for turn in (1, 2, 3):
-        step = _ok(act(client, kid_id, "attack"))
-        loss = hp - step["player_hp"]
-        assert loss < baseline, (turn, loss, baseline)
-        hp = step["player_hp"]
-    expired = _ok(act(client, kid_id, "attack"))
-    assert hp - expired["player_hp"] == baseline, (hp - expired["player_hp"], baseline)
+    assert cast.get("battle_result") == "fighting", cast
+    assert monster_hp(cast) > 0, cast["monsters"]
+    assert 8000 - monster_hp(cast) > 0, cast["monsters"]
+    loss = _hp_loss(battle["player_hp"], cast)
+    assert loss == 0, f"actual {loss}, expected 0 (baseline {full})"
+    assert _counter_miss(cast), _turn_log(cast)
+
+
+@pytest.mark.case_id("TC-API-LIGHT-BOUNDARY")
+def test_flash_second_attack_misses_and_third_hits(client, family, test_db, monkeypatch):
+    """強光：第 2 次怪物攻擊（施放後下一記）仍然打唔中，第 3 次恢復基線。"""
+    kid_id, _battle, skill, tuned = _open_timed(
+        client, family, test_db, monkeypatch, "lighthouse", 1, "強光"
+    )
+    _atk, _defn, full = _pair(tuned)
+    assert full > 0, full
+    cast = _ok(_use(client, kid_id, skill))
+    losses, bodies = _follow_counters(client, kid_id, cast["player_hp"], 2)
+    assert losses[0] == 0, f"actual {losses[0]}, expected 0"
+    assert _counter_miss(bodies[0]), _turn_log(bodies[0])
+    assert losses[1] == full, f"actual {losses[1]}, expected {full}"
+    assert not _counter_miss(bodies[1]), _turn_log(bodies[1])
+
+
+@pytest.mark.case_id("TC-API-FREEZE-CAST-TURN")
+def test_freeze_cast_turn_counter_uses_weakened_attack(
+    client, family, test_db, monkeypatch
+):
+    """冰凍：施放嗰一則回應嘅反擊已經係 int(怪攻×0.7) 再減防。"""
+    kid_id, battle, skill, tuned = _open_timed(
+        client, family, test_db, monkeypatch, "library", 4, "冰凍"
+    )
+    monster_atk, player_def, full = _pair(tuned)
+    weakened = _counter_from_atk(int(monster_atk * 0.7), player_def)
+    assert weakened > 0 and weakened < full, (monster_atk, player_def, weakened, full)
+    cast = _ok(_use(client, kid_id, skill))
+    assert cast.get("battle_result") == "fighting", cast
+    loss = _hp_loss(battle["player_hp"], cast)
+    assert loss == weakened, f"actual {loss}, expected {weakened} (baseline {full})"
+
+
+@pytest.mark.case_id("TC-API-FREEZE-BOUNDARY")
+def test_freeze_second_attack_stays_weak_and_third_is_full(
+    client, family, test_db, monkeypatch
+):
+    """冰凍：第 2 次仍然 ×0.7，第 3 次返全額。"""
+    kid_id, _battle, skill, tuned = _open_timed(
+        client, family, test_db, monkeypatch, "library", 4, "冰凍"
+    )
+    monster_atk, player_def, full = _pair(tuned)
+    weakened = _counter_from_atk(int(monster_atk * 0.7), player_def)
+    assert weakened > 0 and weakened < full, (monster_atk, player_def, weakened, full)
+    cast = _ok(_use(client, kid_id, skill))
+    losses, _bodies = _follow_counters(client, kid_id, cast["player_hp"], 2)
+    assert losses[0] == weakened, f"actual {losses[0]}, expected {weakened} (baseline {full})"
+    assert losses[1] == full, f"actual {losses[1]}, expected {full}"
+
+
+@pytest.mark.case_id("TC-API-FORTIFY-CAST-TURN")
+def test_fortify_cast_turn_counter_uses_boosted_defence(
+    client, family, test_db, monkeypatch
+):
+    """強化：施放嗰一則回應嘅反擊已經用加成後防禦。"""
+    workshop_level = 4
+    kid_id, battle, skill, tuned = _open_timed(
+        client,
+        family,
+        test_db,
+        monkeypatch,
+        "workshop",
+        workshop_level,
+        "強化",
+        atk=20,
+    )
+    monster_atk, player_def, full = _pair(tuned)
+    bonus = _fortify_bonus(skill, workshop_level)
+    boosted = _counter_from_atk(monster_atk, player_def + bonus)
+    assert boosted > 0 and boosted < full, (boosted, full, player_def, bonus, monster_atk)
+    cast = _ok(_use(client, kid_id, skill))
+    assert cast.get("battle_result") == "fighting", cast
+    loss = _hp_loss(battle["player_hp"], cast)
+    assert loss == boosted, f"actual {loss}, expected {boosted} (baseline {full})"
+
+
+@pytest.mark.case_id("TC-API-FORTIFY-BOUNDARY")
+def test_fortify_second_and_third_turns_stay_boosted_then_baseline(
+    client, family, test_db, monkeypatch
+):
+    """強化：第 2、第 3 回合仍然加成，第 4 次怪物攻擊返基線。施放當回合係第 1 回合。"""
+    workshop_level = 4
+    kid_id, _battle, skill, tuned = _open_timed(
+        client,
+        family,
+        test_db,
+        monkeypatch,
+        "workshop",
+        workshop_level,
+        "強化",
+        atk=20,
+    )
+    monster_atk, player_def, full = _pair(tuned)
+    bonus = _fortify_bonus(skill, workshop_level)
+    boosted = _counter_from_atk(monster_atk, player_def + bonus)
+    assert boosted > 0 and boosted < full, (boosted, full, player_def, bonus, monster_atk)
+    cast = _ok(_use(client, kid_id, skill))
+    losses, _bodies = _follow_counters(client, kid_id, cast["player_hp"], 3)
+    assert losses[0] == boosted, f"actual {losses[0]}, expected {boosted} (baseline {full})"
+    assert losses[1] == boosted, f"actual {losses[1]}, expected {boosted} (baseline {full})"
+    assert losses[2] == full, f"actual {losses[2]}, expected {full}"
 
 
 @pytest.mark.case_id("TC-API-SHIELD-PERSIST")
