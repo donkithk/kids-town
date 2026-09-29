@@ -240,7 +240,10 @@ def migrate_db():
         db.execute("ALTER TABLE kids ADD COLUMN ability_crt INTEGER DEFAULT 0")   # 創意 🎨
     if 'ability_brv' not in kid_cols:
         db.execute("ALTER TABLE kids ADD COLUMN ability_brv INTEGER DEFAULT 0")   # 勇氣 ⚔️
-    
+
+    _drop_library_task_bonus(db)
+    _sync_skill_catalog(db)
+
     db.commit()
     db.close()
 
@@ -529,7 +532,7 @@ def seed_building_defs():
         db.close()
         return
     defs = [
-        ("📚", "圖書館", 100, '{"wood":5}', "任務 +2⭐", "task_bonus", "[2,4,6,10,15]", 5, None),
+        ("📚", "圖書館", 100, '{"wood":5}', "知識被動", "", "[]", 5, None),
         ("🏋️", "健身室", 200, '{"wood":10,"brick":5}', "連續保護", "streak_protect", "[1,1,1,1,1]", 5, None),
         ("🌾", "農場", 300, '{"wood":15,"brick":10}', "每日 +5🪙", "daily_gold", "[5,10,15,25,40]", 5, None),
         ("🏪", "商店", 500, '{"wood":20,"brick":15,"gear":5}', "獎勵 -10%", "discount", "[0.9,0.85,0.8,0.75,0.7]", 5, None),
@@ -552,14 +555,123 @@ def seed_building_defs():
     db.commit()
     db.close()
 
+def _table_exists(db, name):
+    row = db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (name,),
+    ).fetchone()
+    return row is not None
+
+
+def _drop_library_task_bonus(db):
+    """Library no longer grants task XP. Keep the building row; clear the type."""
+    if not _table_exists(db, 'building_defs'):
+        return
+    db.execute(
+        """
+        UPDATE building_defs
+           SET buff_type='', effect='知識被動', buff_vals='[]'
+         WHERE buff_type='task_bonus'
+        """
+    )
+
+
+# In-place renames. Ids stay so a child's learned skills still resolve.
+_SKILL_RENAMES = (
+    ('挑釁', '盾擊'),
+    ('迴避', '疾風斬'),
+)
+
+# Fields refreshed on an existing row. Never deletes. Applied every migrate.
+_SKILL_PATCHES = {
+    '蓄力': {'description': '下次攻擊 2 倍'},
+    '盾擊': {
+        'description': '減半，直到下一次被打中',
+        'target': 'enemy',
+        'base_value': 0,
+        'per_level': 0,
+        'attr_scale': 'str',
+        'effect_type': 'utility',
+    },
+    '疾風斬': {
+        'description': '物理攻擊，施放嗰下唔受反擊',
+        'target': 'enemy',
+        'base_value': 0,
+        'per_level': 0,
+        'attr_scale': 'str',
+        'effect_type': 'utility',
+    },
+    '冰凍': {'description': '魔法攻擊，之後 2 回合怪物攻擊力下降'},
+    '修復': {'description': '物理攻擊，並回復 MP'},
+    '強化': {'description': '物理攻擊，防禦提升 3 回合'},
+    '知識的力量': {'description': '魔法攻擊，之後 3 回合知識 +3×等級'},
+    '鍛鍊的成果': {'description': '物理攻擊，之後 3 回合臂力 +3×等級'},
+    '營養餐': {'description': '物理攻擊，之後 3 回合持續回復 HP'},
+    '金幣袋': {'description': '物理攻擊，戰鬥勝利額外獲得 20 金幣'},
+    '強光': {'description': '魔法攻擊，之後 2 次怪物攻擊打唔中'},
+}
+
+# Inserted only when that name is absent. Building is looked up by name.
+_SKILL_INSERTS = (
+    ('盾擊', '🛡️', 4, '競技場', 4, 'enemy', '減半，直到下一次被打中', 0, 0, 'str', 'utility'),
+    ('疾風斬', '🏃', 3, '探險公會', 4, 'enemy', '物理攻擊，施放嗰下唔受反擊', 0, 0, 'str', 'utility'),
+    ('知識的力量', '📖', 2, '圖書館', 1, 'self', '魔法攻擊，之後 3 回合知識 +3×等級', 3, 0, 'none', 'buff'),
+    ('鍛鍊的成果', '🏋️', 2, '健身室', 1, 'self', '物理攻擊，之後 3 回合臂力 +3×等級', 3, 0, 'none', 'buff'),
+    ('營養餐', '🍱', 4, '農場', 1, 'self', '物理攻擊，之後 3 回合持續回復 HP', 0, 0, 'none', 'heal'),
+    ('金幣袋', '💰', 2, '商店', 1, 'self', '物理攻擊，戰鬥勝利額外獲得 20 金幣', 0, 0, 'none', 'utility'),
+    ('強光', '💡', 6, '燈塔', 1, 'enemy', '魔法攻擊，之後 2 次怪物攻擊打唔中', 20, 5, 'int', 'damage'),
+    ('流星雨', '☄️', 8, '天文台', 1, 'all_enemies', '魔法攻擊全體敵人', 20, 5, 'int', 'damage'),
+    ('金錢砸', '🪙', 0, '銀行', 1, 'enemy', '消耗 10 金幣，造成 3 倍普攻傷害', 0, 0, 'none', 'utility'),
+)
+
+
+def _sync_skill_catalog(db):
+    """Rename old skills in place and insert any the current catalog is missing.
+
+    An empty skill_defs is left for seed_skill_defs. Rows are never deleted.
+    """
+    if not _table_exists(db, 'skill_defs'):
+        return
+    if db.execute("SELECT COUNT(*) FROM skill_defs").fetchone()[0] == 0:
+        return
+    for old_name, new_name in _SKILL_RENAMES:
+        already = db.execute(
+            "SELECT id FROM skill_defs WHERE name=?", (new_name,)
+        ).fetchone()
+        if already:
+            continue
+        db.execute(
+            "UPDATE skill_defs SET name=? WHERE name=?",
+            (new_name, old_name),
+        )
+    for name, fields in _SKILL_PATCHES.items():
+        columns = list(fields.keys())
+        assignments = ", ".join(f"{column}=?" for column in columns)
+        db.execute(
+            f"UPDATE skill_defs SET {assignments} WHERE name=?",
+            tuple(fields[column] for column in columns) + (name,),
+        )
+    if not _table_exists(db, 'building_defs'):
+        return
+    for name, icon, mp, bldg_name, level_required, target, description, base, per, attr, effect in _SKILL_INSERTS:
+        if db.execute("SELECT id FROM skill_defs WHERE name=?", (name,)).fetchone():
+            continue
+        bldg = db.execute(
+            "SELECT id FROM building_defs WHERE name=?", (bldg_name,)
+        ).fetchone()
+        if not bldg:
+            continue
+        db.execute(
+            "INSERT INTO skill_defs (name, icon, mp_cost, bldg_def_id, level_required, target, description, base_value, per_level, attr_scale, effect_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (name, icon, mp, bldg[0], level_required, target, description, base, per, attr, effect),
+        )
+
+
 def seed_skill_defs():
     """Insert default skill definitions if empty."""
     db = sqlite3.connect(DB_PATH)
     if db.execute("SELECT COUNT(*) FROM skill_defs").fetchone()[0] > 0:
-        db.execute(
-            "UPDATE skill_defs SET description=? WHERE name=?",
-            ('之後 2 次怪物攻擊打唔中', '強光'),
-        )
+        _sync_skill_catalog(db)
         db.commit()
         db.close()
         return
@@ -575,17 +687,17 @@ def seed_skill_defs():
         ('全體治療', '🌿', 14, 5, 5, 'all_allies', '全體回復', 18, 5, 'int', 'heal'),
         # 競技場 (9)
         ('橫掃', '🗡️', 6, 9, 2, 'all_enemies', '全體物理攻擊', 15, 4, 'str', 'damage'),
-        ('盾擊', '🛡️', 4, 9, 4, 'enemy', '下一次怪物攻擊傷害減半', 20, 4, 'str', 'damage'),
+        ('盾擊', '🛡️', 4, 9, 4, 'enemy', '減半，直到下一次被打中', 0, 0, 'str', 'utility'),
         ('必殺', '💥', 10, 9, 5, 'enemy', '對低血量敵人特大傷害', 32, 8, 'str', 'damage'),
         # 圖書館 (1)
         ('火球', '🔥', 6, 1, 2, 'enemy', '魔法攻擊', 20, 5, 'int', 'damage'),
-        ('冰凍', '❄️', 8, 1, 4, 'enemy', '魔法攻擊 + 減速', 28, 7, 'int', 'damage'),
+        ('冰凍', '❄️', 8, 1, 4, 'enemy', '魔法攻擊，之後 2 回合怪物攻擊力下降', 28, 7, 'int', 'damage'),
         # 探險公會 (6)
         ('偵察', '👁️', 2, 6, 2, 'enemy', '查看怪物弱點', 0, 0, 'none', 'utility'),
-        ('疾風斬', '🏃', 3, 6, 4, 'enemy', '施放嗰下唔受反擊', 20, 4, 'str', 'damage'),
+        ('疾風斬', '🏃', 3, 6, 4, 'enemy', '物理攻擊，施放嗰下唔受反擊', 0, 0, 'str', 'utility'),
         # 工坊 (7)
-        ('修復', '🔧', 4, 7, 2, 'ally', '回復 MP', 10, 3, 'int', 'heal'),
-        ('強化', '🛡️', 5, 7, 4, 'ally', '提升防禦力', 3, 1, 'none', 'buff'),
+        ('修復', '🔧', 4, 7, 2, 'ally', '物理攻擊，並回復 MP', 10, 3, 'int', 'heal'),
+        ('強化', '🛡️', 5, 7, 4, 'ally', '物理攻擊，防禦提升 3 回合', 3, 1, 'none', 'buff'),
     ]
     for d in defs:
         db.execute(
@@ -595,11 +707,11 @@ def seed_skill_defs():
     # New skills are learned at building level 1. Ids follow the building name,
     # not the insert position, so 銀行 can sit after the original ten.
     extra = [
-        ('知識的力量', '📖', 2, '圖書館', 1, 'self', '施放後 3 回合知識 +3×等級', 3, 0, 'none', 'buff'),
-        ('鍛鍊的成果', '🏋️', 2, '健身室', 1, 'self', '施放後 3 回合臂力 +3×等級', 3, 0, 'none', 'buff'),
-        ('營養餐', '🍱', 4, '農場', 1, 'self', '之後 3 回合持續回復 HP', 0, 0, 'none', 'heal'),
-        ('金幣袋', '💰', 2, '商店', 1, 'self', '戰鬥勝利額外獲得 20 金幣', 0, 0, 'none', 'utility'),
-        ('強光', '💡', 6, '燈塔', 1, 'enemy', '之後 2 次怪物攻擊打唔中', 20, 5, 'int', 'damage'),
+        ('知識的力量', '📖', 2, '圖書館', 1, 'self', '魔法攻擊，之後 3 回合知識 +3×等級', 3, 0, 'none', 'buff'),
+        ('鍛鍊的成果', '🏋️', 2, '健身室', 1, 'self', '物理攻擊，之後 3 回合臂力 +3×等級', 3, 0, 'none', 'buff'),
+        ('營養餐', '🍱', 4, '農場', 1, 'self', '物理攻擊，之後 3 回合持續回復 HP', 0, 0, 'none', 'heal'),
+        ('金幣袋', '💰', 2, '商店', 1, 'self', '物理攻擊，戰鬥勝利額外獲得 20 金幣', 0, 0, 'none', 'utility'),
+        ('強光', '💡', 6, '燈塔', 1, 'enemy', '魔法攻擊，之後 2 次怪物攻擊打唔中', 20, 5, 'int', 'damage'),
         ('流星雨', '☄️', 8, '天文台', 1, 'all_enemies', '魔法攻擊全體敵人', 20, 5, 'int', 'damage'),
         ('金錢砸', '🪙', 0, '銀行', 1, 'enemy', '消耗 10 金幣，造成 3 倍普攻傷害', 0, 0, 'none', 'utility'),
     ]
@@ -4079,12 +4191,7 @@ def battle_action(kid_id):
         skill = next((s for s in bd.get('skills', []) if s['id'] == skill_id), None)
         if not skill:
             return jsonify({'error': 'Skill not found'}), 400
-        if skill.get('name') == '金錢砸':
-            kid_row = db.execute("SELECT points FROM kids WHERE id=?", (kid_id,)).fetchone()
-            held = int(kid_row['points']) if kid_row and kid_row['points'] is not None else 0
-            if held < 10:
-                return jsonify({'error': 'insufficient_gold'}), 400
-        # Check MP
+        # Check MP before any gold write. A shortfall must not spend coins.
         if bd['player_mp'] < skill['mp_cost']:
             log.append(f'❌ MP 不足！需要 {skill["mp_cost"]} MP')
             bd['turns'].append({'action': action, 'skill_id': skill_id, 'log': log, 'target_idx': target_idx, 'mp_used': 0})
@@ -4092,13 +4199,21 @@ def battle_action(kid_id):
             db.commit()
             bd['battle_result'] = 'fighting'
             return jsonify(bd)
-        bd['player_mp'] -= skill['mp_cost']
         if skill.get('name') == '金錢砸':
-            db.execute("UPDATE kids SET points=points-10 WHERE id=?", (kid_id,))
+            # Close the battle read so two casts can take the write lock in turn.
+            # The debit and the ledger row then share one transaction.
+            db.commit()
+            spent = db.execute(
+                "UPDATE kids SET points = points - 10 WHERE id=? AND points >= 10",
+                (kid_id,),
+            )
+            if spent.rowcount == 0:
+                return jsonify({'error': 'insufficient_gold'}), 400
             db.execute(
                 "INSERT INTO points_log (kid_id, amount, reason) VALUES (?,?,?)",
                 (kid_id, -10, '金錢砸'),
             )
+        bd['player_mp'] -= skill['mp_cost']
         _begin_turn_buffs(bd)
         player_atk = bd['player_atk']
 
@@ -4187,7 +4302,7 @@ def battle_action(kid_id):
         if dmg > 0:
             bd['player_hp'] -= dmg
     bd.pop('skip_counter', None)
-    bd.pop('halve_counter', None)
+    # A miss, a dodge, or no counter leaves the shield-bash halve armed.
     _promote_attack_weaken(monsters)
     _promote_flash_miss(bd)
     _promote_turn_buffs(bd)
@@ -4216,6 +4331,20 @@ REGION_WEAKNESS = {1: '火', 2: '冰', 3: '雷'}
 def _physical_hit(player_atk, monster_def):
     """Basic physical hit. Variance is randint(0, 2), same as a normal attack."""
     return max(1, int(player_atk) - int(monster_def or 0) + random.randint(0, 2))
+
+
+def _magic_basic(bd, monster_def):
+    """Basic magic hit: max(1, matk − def). Same variance as a normal attack."""
+    if bd.get('player_matk') is not None:
+        matk = int(bd['player_matk'])
+    else:
+        matk = int(5 + int(bd.get('player_int') or 0) * 1.5)
+    return max(1, matk - int(monster_def or 0) + random.randint(0, 2))
+
+
+def _hurt(monster, dmg):
+    monster['hp'] = max(0, int(monster.get('hp') or 0) - int(dmg))
+    return dmg
 
 
 def _arm_attack_weaken(monster, turns=2):
@@ -4250,7 +4379,19 @@ def _consume_flash_miss(bd):
 
 
 def _queue_turn_buff(bd, key, turns, **fields):
-    """Arm a buff for the next `turns` player actions. The cast action is excluded."""
+    """Arm a buff for the next `turns` player actions. The cast action is excluded.
+
+    A second cast only refreshes the timer. The first cast's base and amount stay,
+    so the bonus does not stack and expiry still restores the pre-first-cast value.
+    """
+    existing = (bd.get('turn_buffs') or {}).get(key) or (bd.get('pending_turn_buffs') or {}).get(key)
+    if existing:
+        if 'base' in existing:
+            fields['base'] = existing['base']
+        if 'amount' in existing and 'amount' in fields:
+            fields['amount'] = existing['amount']
+        if 'heal' in existing and 'heal' in fields:
+            fields['heal'] = existing['heal']
     pending = bd.setdefault('pending_turn_buffs', {})
     pending[key] = {'turns': int(turns), **fields}
 
@@ -4296,14 +4437,25 @@ def _begin_turn_buffs(bd):
         if heal > 0:
             cap = int(bd.get('player_max_hp') or bd.get('player_hp') or 0)
             bd['player_hp'] = min(cap, int(bd.get('player_hp') or 0) + heal)
+    guard = active.get('def')
+    if guard:
+        base = int(guard.get('base') or 0)
+        if int(guard.get('turns') or 0) > 0:
+            bd['player_def'] = base + int(guard.get('amount') or 0)
+        else:
+            bd['player_def'] = base
 
 
 def _finish_turn_buffs(bd):
     active = bd.get('turn_buffs') or {}
-    for spec in active.values():
+    for key, spec in active.items():
         left = int(spec.get('turns') or 0)
         if left > 0:
             spec['turns'] = left - 1
+        # The counter reads player_def before _begin_turn_buffs, so the
+        # restored value has to be written at the end of the last buffed turn.
+        if key == 'def' and int(spec.get('turns') or 0) <= 0:
+            bd['player_def'] = int(spec.get('base') or 0)
 
 
 def _consume_weakened_atk(attacker):
@@ -4325,8 +4477,10 @@ def _apply_named_skill(skill, bd, target_monster, bldg_level, base, per_lv, attr
     icon = skill.get('icon') or ''
 
     if name == '蓄力':
+        dmg = _hurt(target_monster, _physical_hit(player_atk, target_monster.get('def')))
         bd['charge_boost'] = True
-        log.append(f'🔥 蓄力！{skill.get("description") or "下次攻擊 2 倍"}')
+        text = skill.get('description') or '下次攻擊 2 倍'
+        log.append(f'🔥 蓄力！造成 {dmg} 點傷害！{text}')
         return True
 
     if name == '連擊':
@@ -4355,18 +4509,24 @@ def _apply_named_skill(skill, bd, target_monster, bldg_level, base, per_lv, attr
         return True
 
     if name == '修復':
+        dmg = _hurt(target_monster, _physical_hit(player_atk, target_monster.get('def')))
         gained = _calc_skill_heal(
             skill, base, per_lv, bldg_level, attr_scale, bd.get('player_int', 0),
         )
         cap = bd.get('player_max_mp', bd['player_mp'] + gained)
         bd['player_mp'] = min(int(cap), bd['player_mp'] + gained)
-        log.append(f'{icon} 修復！回復 {gained} MP')
+        log.append(f'{icon} 修復！造成 {dmg} 點傷害，回復 {gained} MP')
         return True
 
     if name == '強化':
+        dmg = _hurt(target_monster, _physical_hit(player_atk, target_monster.get('def')))
         bonus = max(1, int((base or 0) + (per_lv or 0) * bldg_level))
-        bd['player_def'] = int(bd.get('player_def') or 0) + bonus
-        log.append(f'{icon} 強化！防禦 +{bonus}')
+        _queue_turn_buff(
+            bd, 'def', 3, amount=bonus, base=int(bd.get('player_def') or 0),
+        )
+        spec = bd['pending_turn_buffs']['def']
+        bd['player_def'] = int(spec['base']) + int(spec['amount'])
+        log.append(f'{icon} 強化！造成 {dmg} 點傷害，防禦 +{spec["amount"]}（3 回合）')
         return True
 
     if name == '偵察':
@@ -4394,26 +4554,32 @@ def _apply_named_skill(skill, bd, target_monster, bldg_level, base, per_lv, attr
         return True
 
     if name == '知識的力量':
+        dmg = _hurt(target_monster, _magic_basic(bd, target_monster.get('def')))
         amount = 3 * int(bldg_level)
         _queue_turn_buff(bd, 'int', 3, amount=amount, base=int(bd.get('player_int') or 0))
-        log.append(f'{icon} 知識的力量！知識 +{amount}（3 回合）')
+        shown = bd['pending_turn_buffs']['int']['amount']
+        log.append(f'{icon} 知識的力量！造成 {dmg} 點傷害，知識 +{shown}（3 回合）')
         return True
 
     if name == '鍛鍊的成果':
+        dmg = _hurt(target_monster, _physical_hit(player_atk, target_monster.get('def')))
         amount = 3 * int(bldg_level)
         _queue_turn_buff(bd, 'str', 3, amount=amount, base=int(bd.get('player_str') or 0))
-        log.append(f'{icon} 鍛鍊的成果！臂力 +{amount}（3 回合）')
+        shown = bd['pending_turn_buffs']['str']['amount']
+        log.append(f'{icon} 鍛鍊的成果！造成 {dmg} 點傷害，臂力 +{shown}（3 回合）')
         return True
 
     if name == '營養餐':
+        dmg = _hurt(target_monster, _physical_hit(player_atk, target_monster.get('def')))
         heal = _meal_heal(bd.get('player_max_hp') or 0, bldg_level)
         _queue_turn_buff(bd, 'meal', 3, heal=heal)
-        log.append(f'{icon} 營養餐！之後 3 回合各回復 {heal} HP')
+        log.append(f'{icon} 營養餐！造成 {dmg} 點傷害，之後 3 回合各回復 {heal} HP')
         return True
 
     if name == '金幣袋':
+        dmg = _hurt(target_monster, _physical_hit(player_atk, target_monster.get('def')))
         bd['coin_bag'] = True
-        log.append(f'{icon} 金幣袋！勝利額外 20 金幣')
+        log.append(f'{icon} 金幣袋！造成 {dmg} 點傷害，勝利額外 20 金幣')
         return True
 
     if name == '強光':
@@ -4454,8 +4620,9 @@ def _monster_counterattack(bd, attacker, player_def):
         return (f'💡 強光！{attacker["name"]} 攻擊落空', 0)
     atk = _consume_weakened_atk(attacker)
     dmg = max(0, atk - player_def + random.randint(0, 2))
-    if bd.get('halve_counter'):
+    if dmg > 0 and bd.get('halve_counter'):
         dmg = dmg // 2
+        bd.pop('halve_counter', None)
     if dmg > 0:
         return (f'🐾 {attacker["name"]} 反擊 {dmg} 點傷害', dmg)
     return ('🛡️ 擋住攻擊！', 0)
