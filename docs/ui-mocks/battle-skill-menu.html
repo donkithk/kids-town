@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>戰鬥技能選單 · Kids Town 設計稿</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap">
+<style>
+  :root {
+    --wood: #8b5e3c;
+    --wood-mid: #a67c52;
+    --wood-deep: #5c3d28;
+    --wood-plank: #c4a06a;
+    --cream: #faf6ef;
+    --paper: #fff8e7;
+    --ink: #3b2a1a;
+    --ink-soft: #5c4632;
+    --muted: #7a6550;
+    --gold: #d4a017;
+    --gold-bright: #f0c14b;
+    --focus: #c45c26;
+    --letterbox: #2c1c10;
+    --stage-w: 1280px;
+    --stage-h: 720px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--letterbox);
+    overflow: hidden;
+    color: var(--ink);
+    font-family: "Nunito", "WenQuanYi Micro Hei", "Segoe UI", sans-serif;
+  }
+
+  button, a { font-family: inherit; }
+
+  button:focus { outline: none; }
+  button:focus-visible,
+  a:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px #fff6d0;
+  }
+
+  /* 1280×720 stage. Resize only scales and letterboxes. */
+  .stage {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--stage-w);
+    height: var(--stage-h);
+    transform: translate(-50%, -50%) scale(min(100vw / 1280px, 100dvh / 720px));
+    transform-origin: center center;
+    overflow: hidden;
+    background: #7cb342 url("../../mocks/ui-direction/kit/bg/bg-wilderness-grass.png") center / cover no-repeat;
+  }
+
+  .field-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+  }
+
+  .hero {
+    position: absolute;
+    left: 8px;
+    bottom: 76px;
+    height: 400px;
+    width: auto;
+    z-index: 2;
+    pointer-events: none;
+    filter: drop-shadow(0 14px 8px rgba(40, 28, 8, .28));
+  }
+
+  .enemy {
+    position: absolute;
+    right: 16px;
+    bottom: 96px;
+    width: 248px;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+  }
+  .enemy-meta {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .enemy-name {
+    margin: 0;
+    padding: 2px 12px;
+    border-radius: 999px;
+    background: #faf6ef;
+    color: #3a2616;
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+  .m-hp-bar {
+    width: 168px;
+    height: 10px;
+    background: #e7d3ae;
+    border-radius: 99px;
+    overflow: hidden;
+    border: 1px solid rgba(92, 61, 40, .18);
+  }
+  .m-hp-fill {
+    display: block;
+    height: 100%;
+    width: 73.3%;
+    background: #e85d4c;
+    border-radius: inherit;
+  }
+  .m-hp-text {
+    color: #3a2616;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.2;
+    background: #faf6ef;
+    border-radius: 999px;
+    padding: 0 8px;
+  }
+  .enemy img {
+    display: block;
+    height: 236px;
+    width: auto;
+    margin-top: 4px;
+    filter: drop-shadow(0 12px 6px rgba(40, 28, 8, .3));
+  }
+
+  .battle-log {
+    position: absolute;
+    z-index: 4;
+    left: 348px;
+    top: 16px;
+    width: 520px;
+    margin: 0;
+    padding: 8px 16px;
+    border-radius: 16px;
+    background: rgba(255, 249, 239, .96);
+    color: #3a2616;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.35;
+    text-align: left;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, .28);
+    pointer-events: none;
+  }
+  .battle-log p {
+    margin: 0;
+  }
+
+  /* Player HP/MP. Sits fully inside the stage, above the command bar. */
+  .vitals {
+    position: absolute;
+    z-index: 5;
+    left: 20px;
+    bottom: 100px;
+    width: 300px;
+    margin: 0;
+    padding: 10px 12px 11px;
+    background: #f7edd8;
+    border: 2px solid #c4a574;
+    border-radius: 12px;
+    box-shadow: 0 4px 0 rgba(92, 61, 40, .18);
+    color: #3a2616;
+  }
+  .vital-row + .vital-row { margin-top: 6px; }
+  .vital-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 20px;
+  }
+  .vital-k {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: .04em;
+  }
+  .vital-n {
+    font-size: 16px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  .vital-track {
+    height: 10px;
+    margin-top: 3px;
+    background: #e7d3ae;
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .vital-track > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+  }
+  .vital-track.hp > span { background: linear-gradient(90deg, #e85d4c, #f0a202); }
+  .vital-track.mp > span { background: linear-gradient(90deg, #1d4f91, #3b82c4); }
+
+  .command-bar {
+    position: absolute;
+    z-index: 6;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 84px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-top: 3px solid #e8c48c;
+    background-color: #6e452b;
+    background-image:
+      radial-gradient(ellipse 22px 12px at 12% 78%, rgba(36, 18, 8, .42), transparent 72%),
+      radial-gradient(ellipse 16px 9px at 86% 22%, rgba(36, 18, 8, .32), transparent 70%),
+      repeating-linear-gradient(90deg, rgba(255, 220, 176, .06) 0 1px, transparent 1px 4px),
+      repeating-linear-gradient(180deg, #8d6240 0 26px, #5c3a24 26px 29px, #7a5134 29px 54px, #4a2c1a 54px 57px);
+    box-shadow: inset 0 2px 0 rgba(232, 196, 140, .45);
+  }
+  .cmd {
+    flex: 1 1 0;
+    height: 64px;
+    min-height: 64px;
+    border-radius: 16px 16px 12px 12px;
+    border: 3px solid #3b2416;
+    background: linear-gradient(180deg, #c49262, #8b5e3c 46%, #6e452b);
+    color: #fff8ee;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    cursor: pointer;
+    text-shadow: 0 1px 0 rgba(42, 22, 10, .45);
+    box-shadow:
+      inset 0 2px 0 rgba(255, 224, 176, .55),
+      inset 0 -3px 0 rgba(42, 22, 10, .35),
+      0 3px 0 #2a180e;
+  }
+  .cmd:hover { filter: brightness(1.06); }
+  .cmd:active { transform: translateY(2px); box-shadow: inset 0 2px 0 rgba(42, 22, 10, .25); }
+  .cmd-primary {
+    background: linear-gradient(180deg, #ffe9a0, #f0c14b 42%, #e6a317);
+    color: #3b2a1a;
+    border-color: #6b3e12;
+    text-shadow: none;
+    box-shadow:
+      inset 0 2px 0 #fff6d2,
+      inset 0 -3px 0 rgba(107, 62, 18, .28),
+      0 3px 0 #8a5a12;
+  }
+  .cmd.is-open {
+    box-shadow:
+      inset 0 2px 0 rgba(255, 224, 176, .55),
+      inset 0 -3px 0 rgba(42, 22, 10, .35),
+      0 3px 0 #2a180e,
+      inset 0 -4px 0 var(--gold-bright);
+  }
+
+  .skill-panel {
+    position: absolute;
+    z-index: 5;
+    left: 332px;
+    right: 300px;
+    bottom: 92px;
+    height: 408px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px 8px;
+    border: 8px solid #3b2416;
+    border-radius: 22px;
+    color: var(--ink);
+    background-color: #f4e2c4;
+    background-image:
+      radial-gradient(circle at 12% 0, rgba(240, 193, 75, .32), transparent 34%),
+      repeating-linear-gradient(0deg, rgba(139, 94, 60, .055) 0 1px, transparent 1px 7px),
+      linear-gradient(180deg, #fffaf0, #f6e6c8);
+    box-shadow:
+      inset 0 0 0 3px #e7c48a,
+      inset 0 0 0 6px #6b4428,
+      0 10px 0 rgba(28, 16, 8, .28);
+  }
+  .skill-panel[hidden] { display: none !important; }
+
+  .skill-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    flex: none;
+  }
+  .skill-head h2 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 800;
+    color: #3a2616;
+    letter-spacing: .06em;
+  }
+  .mp-now {
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: #e7f0fb;
+    border: 2px solid #1d4f91;
+    color: #1d4f91;
+    font-size: 16px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  .skill-head-spacer { flex: 1; }
+  .btn-back, .btn-x {
+    min-height: 48px;
+    height: 48px;
+    border-radius: 12px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .btn-back {
+    min-width: 84px;
+    padding: 0 14px;
+    border: 3px solid #3b2416;
+    background: linear-gradient(180deg, #c49262, #8b5e3c);
+    color: #fff8ee;
+    font-size: 18px;
+    box-shadow: inset 0 1px 0 rgba(255, 224, 176, .5), 0 3px 0 #2a180e;
+  }
+  .btn-x {
+    min-width: 48px;
+    width: 48px;
+    padding: 0;
+    border: 3px solid #6e2416;
+    background: linear-gradient(180deg, #c4543c, #6e2416);
+    color: #fffaf6;
+    font-size: 22px;
+    line-height: 1;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 3px 0 #4a140c;
+  }
+
+  .skill-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: repeat(3, minmax(80px, 1fr));
+    gap: 8px;
+    align-content: stretch;
+  }
+  .skill-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-height: 80px;
+    margin: 0;
+    padding: 6px 10px 6px 8px;
+    border-radius: 14px;
+    border: 2px solid #c4a06a;
+    background: #fffaf3;
+    color: #3a2616;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: 0 2px 0 rgba(92, 61, 40, .12);
+  }
+  .skill-card:hover:not([aria-disabled="true"]) {
+    transform: translateY(-2px);
+    border-color: var(--gold);
+    box-shadow: 0 6px 0 rgba(92, 61, 40, .12);
+  }
+  .skill-card.is-picked {
+    transform: translateY(-2px);
+    background: #fff1c4;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(212, 160, 23, .65);
+  }
+  .skill-card[aria-disabled="true"] {
+    background: #e3d9cc;
+    border-color: #b3a394;
+    color: #4a3828;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  .skill-card[aria-disabled="true"]:hover,
+  .skill-card[aria-disabled="true"]:active {
+    transform: none;
+    border-color: #b3a394;
+    box-shadow: none;
+    filter: none;
+  }
+  .skill-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+  }
+  .skill-icon {
+    flex: none;
+    width: 36px;
+    font-size: 28px;
+    line-height: 1;
+    text-align: center;
+  }
+  .skill-card[aria-disabled="true"] .skill-icon { filter: grayscale(.75); }
+  .skill-name {
+    flex: 1 1 auto;
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1.15;
+    color: #3a2616;
+  }
+  .skill-card[aria-disabled="true"] .skill-name { color: #4a3828; }
+  .skill-cost {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+  }
+  .mp-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: #1d4f91;
+    color: #f4f8ff;
+    font-size: 14px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  .skill-card[aria-disabled="true"] .mp-pill {
+    background: #9a4545;
+    color: #fff7f6;
+  }
+  .broke {
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.1;
+    color: #7a2f2f;
+  }
+  .skill-desc {
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.25;
+    color: #5c3d28;
+    white-space: nowrap;
+  }
+  .skill-card[aria-disabled="true"] .skill-desc { color: #5e4936; }
+
+  .pager {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+  }
+  .pager-btn {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    border-radius: 12px;
+    border: 3px solid #3b2416;
+    background: linear-gradient(180deg, #ffe9a0, #e6a317);
+    color: #3b2a1a;
+    font-size: 22px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: inset 0 1px 0 #fff6d2, 0 3px 0 #8a5a12;
+  }
+  .pager-btn[aria-disabled="true"] {
+    background: #e6ddd2;
+    color: #4a3d32;
+    border-color: #a89888;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+  .pager-btn[aria-disabled="true"]:hover { transform: none; filter: none; }
+  .page-label {
+    min-width: 72px;
+    text-align: center;
+    font-size: 20px;
+    font-weight: 800;
+    color: #3a2616;
+    font-variant-numeric: tabular-nums;
+  }
+  .dots { display: flex; align-items: center; gap: 0; }
+  .dot {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+  }
+  .dot::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #c4a06a;
+    transform: translate(-50%, -50%);
+  }
+  .dot[aria-current="page"]::before {
+    width: 16px;
+    height: 16px;
+    background: var(--gold);
+    box-shadow: 0 0 0 3px #6b4428;
+  }
+
+  .mock-nav {
+    position: fixed;
+    z-index: 20;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    padding: 6px;
+    border-radius: 12px;
+    background: rgba(255, 248, 239, .94);
+    border: 2px solid #c4a06a;
+  }
+  body.is-shot .mock-nav { display: none; }
+  .mock-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    background: #8b5e3c;
+    color: #fff8ee;
+    font-size: 14px;
+    font-weight: 800;
+    text-decoration: none;
+  }
+</style>
+</head>
+<body>
+<nav class="mock-nav" aria-label="設計稿狀態">
+  <a href="?state=closed">指令列</a>
+  <a href="?state=open&amp;page=1">技能第 1 頁</a>
+  <a href="?state=open&amp;page=3">技能第 3 頁</a>
+</nav>
+
+<main class="stage" id="stage" aria-label="戰鬥">
+  <img class="field-bg" alt="" src="../../mocks/ui-direction/kit/bg/bg-wilderness-grass.png">
+  <img class="hero" alt="" src="../../mocks/ui-direction/kit/sprites/sprite-hero.png">
+
+  <div class="enemy" id="enemy">
+    <div class="enemy-meta">
+      <p class="enemy-name">🐺 野狼</p>
+      <div class="m-hp-bar" id="enemyHp" role="meter" aria-label="野狼生命" aria-valuemin="0" aria-valuemax="30" aria-valuenow="22" aria-valuetext="22 / 30">
+        <span class="m-hp-fill"></span>
+      </div>
+      <div class="m-hp-text">22 / 30</div>
+    </div>
+    <img alt="" src="../../mocks/ui-direction/kit/sprites/sprite-wolf.png">
+  </div>
+
+  <div class="battle-log" id="battleLog" aria-live="polite" aria-label="戰鬥紀錄"></div>
+
+  <section class="vitals" id="playerVitals" aria-label="玩家 HP 與 MP">
+    <div class="vital-row">
+      <div class="vital-head">
+        <span class="vital-k">HP</span>
+        <span class="vital-n" id="hpNums"></span>
+      </div>
+      <div class="vital-track hp" id="hpMeter" role="meter" aria-label="HP" aria-valuemin="0">
+        <span id="hpFill"></span>
+      </div>
+    </div>
+    <div class="vital-row">
+      <div class="vital-head">
+        <span class="vital-k">MP</span>
+        <span class="vital-n" id="mpNums"></span>
+      </div>
+      <div class="vital-track mp" id="mpMeter" role="meter" aria-label="MP" aria-valuemin="0">
+        <span id="mpFill"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="skill-panel" id="skillPanel" hidden aria-labelledby="skillTitle">
+    <div class="skill-head">
+      <h2 id="skillTitle">技能</h2>
+      <p class="mp-now" id="mpNow"></p>
+      <span class="skill-head-spacer"></span>
+      <button type="button" class="btn-back" id="btnBack">返回</button>
+      <button type="button" class="btn-x" id="btnClose" aria-label="關閉技能">✕</button>
+    </div>
+    <div class="skill-grid" id="skillGrid"></div>
+    <div class="pager">
+      <button type="button" class="pager-btn" id="btnPrev" aria-label="上一頁">◀</button>
+      <div class="dots" id="pageDots"></div>
+      <p class="page-label" id="pageLabel"></p>
+      <button type="button" class="pager-btn" id="btnNext" aria-label="下一頁">▶</button>
+    </div>
+  </section>
+
+  <div class="command-bar">
+    <button type="button" class="cmd cmd-primary" id="btnAttack">攻擊</button>
+    <button type="button" class="cmd" id="btnSkill" aria-expanded="false" aria-controls="skillPanel">技能</button>
+    <button type="button" class="cmd" id="btnFlee">逃走</button>
+  </div>
+</main>
+
+<script>
+(function () {
+  /* Seed copy from backend_v2.py skill_defs. Demo MP is low so page 1
+     shows unaffordable cards. Costs and descriptions are the seed text. */
+  var PLAYER = { hp: 36, maxHp: 48, mp: 3, maxMp: 20 };
+  var PAGE_SIZE = 6;
+  var SKILLS = [
+    { icon: "🔥", name: "火球", mp: 6, desc: "魔法攻擊" },
+    { icon: "📖", name: "知識的力量", mp: 2, desc: "魔法攻擊，之後 3 回合知識 +3×等級" },
+    { icon: "🍱", name: "營養餐", mp: 4, desc: "物理攻擊，之後 3 回合持續回復 HP" },
+    { icon: "🔥", name: "蓄力", mp: 3, desc: "下次攻擊 2 倍" },
+    { icon: "🏋️", name: "鍛鍊的成果", mp: 2, desc: "物理攻擊，之後 3 回合臂力 +3×等級" },
+    { icon: "🔧", name: "修復", mp: 4, desc: "物理攻擊，並回復 MP" },
+    { icon: "💪", name: "重擊", mp: 5, desc: "強力物理攻擊" },
+    { icon: "⚡", name: "連擊", mp: 7, desc: "連續攻擊 2 次" },
+    { icon: "🩹", name: "繃帶", mp: 3, desc: "小回復" },
+    { icon: "❄️", name: "冰凍", mp: 8, desc: "魔法攻擊，之後 2 回合怪物攻擊力下降" },
+    { icon: "🏃", name: "疾風斬", mp: 3, desc: "物理攻擊，施放嗰下唔受反擊" },
+    { icon: "💰", name: "金幣袋", mp: 2, desc: "物理攻擊，戰鬥勝利額外獲得 20 金幣" },
+    { icon: "💡", name: "強光", mp: 6, desc: "魔法攻擊，之後 2 次怪物攻擊打唔中" },
+    { icon: "☄️", name: "流星雨", mp: 8, desc: "魔法攻擊全體敵人" }
+  ];
+
+  var pageCount = Math.ceil(SKILLS.length / PAGE_SIZE);
+  var state = {
+    open: false,
+    page: 0,
+    log: ["⚔️ 進入戰鬥！vs 野狼", "選擇指令或技能"],
+    busy: false
+  };
+
+  var panel = document.getElementById("skillPanel");
+  var grid = document.getElementById("skillGrid");
+  var pageLabel = document.getElementById("pageLabel");
+  var pageDots = document.getElementById("pageDots");
+  var btnPrev = document.getElementById("btnPrev");
+  var btnNext = document.getElementById("btnNext");
+  var btnSkill = document.getElementById("btnSkill");
+  var battleLog = document.getElementById("battleLog");
+
+  function fmt(n) {
+    var rounded = Math.round(Number(n) * 10) / 10;
+    if (Object.is(rounded, -0)) rounded = 0;
+    if (Math.abs(rounded - Math.round(rounded)) < 1e-9) return String(Math.round(rounded));
+    return rounded.toFixed(1);
+  }
+
+  function esc(text) {
+    return String(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function readURL() {
+    var q = new URLSearchParams(location.search);
+    state.open = q.get("state") === "open";
+    var page = parseInt(q.get("page") || "1", 10);
+    if (!isFinite(page) || page < 1) page = 1;
+    if (page > pageCount) page = pageCount;
+    state.page = page - 1;
+    document.body.classList.toggle("is-shot", q.get("shot") === "1");
+  }
+
+  function writeURL() {
+    var q = new URLSearchParams();
+    q.set("state", state.open ? "open" : "closed");
+    if (state.open) q.set("page", String(state.page + 1));
+    if (document.body.classList.contains("is-shot")) q.set("shot", "1");
+    history.replaceState(null, "", "?" + q.toString());
+  }
+
+  function paintVitals() {
+    document.getElementById("hpNums").textContent = fmt(PLAYER.hp) + " / " + fmt(PLAYER.maxHp);
+    document.getElementById("mpNums").textContent = fmt(PLAYER.mp) + " / " + fmt(PLAYER.maxMp);
+    document.getElementById("mpNow").textContent = "MP " + fmt(PLAYER.mp) + " / " + fmt(PLAYER.maxMp);
+    var hpMeter = document.getElementById("hpMeter");
+    var mpMeter = document.getElementById("mpMeter");
+    hpMeter.setAttribute("aria-valuemax", String(PLAYER.maxHp));
+    hpMeter.setAttribute("aria-valuenow", String(PLAYER.hp));
+    hpMeter.setAttribute("aria-valuetext", fmt(PLAYER.hp) + " / " + fmt(PLAYER.maxHp));
+    mpMeter.setAttribute("aria-valuemax", String(PLAYER.maxMp));
+    mpMeter.setAttribute("aria-valuenow", String(PLAYER.mp));
+    mpMeter.setAttribute("aria-valuetext", fmt(PLAYER.mp) + " / " + fmt(PLAYER.maxMp));
+    document.getElementById("hpFill").style.width = Math.max(0, Math.min(100, PLAYER.hp / PLAYER.maxHp * 100)) + "%";
+    document.getElementById("mpFill").style.width = Math.max(0, Math.min(100, PLAYER.mp / PLAYER.maxMp * 100)) + "%";
+  }
+
+  function paintLog() {
+    battleLog.innerHTML = state.log.slice(-4).map(function (line) {
+      return "<p>" + esc(line) + "</p>";
+    }).join("");
+  }
+
+  function setDisabled(button, disabled) {
+    if (disabled) button.setAttribute("aria-disabled", "true");
+    else button.removeAttribute("aria-disabled");
+  }
+
+  function paintCards() {
+    var start = state.page * PAGE_SIZE;
+    var slice = SKILLS.slice(start, start + PAGE_SIZE);
+    grid.innerHTML = slice.map(function (skill, index) {
+      var broke = PLAYER.mp < skill.mp;
+      var label = skill.name + "，MP " + fmt(skill.mp) + "，" + skill.desc + (broke ? "，MP 不夠" : "");
+      return '<button type="button" class="skill-card" data-index="' + (start + index) + '"' +
+        (broke ? ' aria-disabled="true"' : "") +
+        ' aria-label="' + esc(label) + '">' +
+        '<span class="skill-top">' +
+          '<span class="skill-icon" aria-hidden="true">' + skill.icon + '</span>' +
+          '<span class="skill-name">' + esc(skill.name) + '</span>' +
+          '<span class="skill-cost">' +
+            '<span class="mp-pill">MP ' + fmt(skill.mp) + '</span>' +
+            (broke ? '<span class="broke">MP 不夠</span>' : '') +
+          '</span>' +
+        '</span>' +
+        '<span class="skill-desc">' + esc(skill.desc) + '</span>' +
+      '</button>';
+    }).join("");
+
+    Array.prototype.forEach.call(grid.querySelectorAll(".skill-card"), function (card) {
+      card.addEventListener("click", onCard);
+      card.addEventListener("keydown", function (event) {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        if (card.getAttribute("aria-disabled") === "true") {
+          event.preventDefault();
+        }
+      });
+    });
+  }
+
+  function paintPager() {
+    pageLabel.textContent = (state.page + 1) + " / " + pageCount;
+    setDisabled(btnPrev, state.page <= 0);
+    setDisabled(btnNext, state.page >= pageCount - 1);
+    var dots = "";
+    for (var i = 0; i < pageCount; i++) {
+      dots += '<button type="button" class="dot" data-page="' + i + '" aria-label="第 ' + (i + 1) + ' 頁"' +
+        (i === state.page ? ' aria-current="page"' : "") + '></button>';
+    }
+    pageDots.innerHTML = dots;
+    Array.prototype.forEach.call(pageDots.querySelectorAll(".dot"), function (dot) {
+      dot.addEventListener("click", function () {
+        state.page = Number(dot.getAttribute("data-page"));
+        writeURL();
+        render();
+      });
+    });
+  }
+
+  function render() {
+    panel.hidden = !state.open;
+    btnSkill.setAttribute("aria-expanded", state.open ? "true" : "false");
+    btnSkill.classList.toggle("is-open", state.open);
+    paintVitals();
+    paintLog();
+    if (state.open) {
+      paintCards();
+      paintPager();
+    }
+  }
+
+  function openPanel(page) {
+    state.open = true;
+    if (typeof page === "number") state.page = page;
+    writeURL();
+    render();
+    document.getElementById("btnClose").focus();
+  }
+
+  function closePanel() {
+    state.open = false;
+    state.busy = false;
+    writeURL();
+    render();
+    btnSkill.focus();
+  }
+
+  function onCard(event) {
+    var card = event.currentTarget;
+    if (card.getAttribute("aria-disabled") === "true") {
+      event.preventDefault();
+      return;
+    }
+    if (state.busy) return;
+    state.busy = true;
+    card.classList.add("is-picked");
+    var skill = SKILLS[Number(card.getAttribute("data-index"))];
+    window.setTimeout(function () {
+      state.log.push(skill.icon + " " + skill.name + "！");
+      closePanel();
+    }, 320);
+  }
+
+  function ignoreIfDisabled(event, button, action) {
+    if (button.getAttribute("aria-disabled") === "true") {
+      event.preventDefault();
+      return;
+    }
+    action();
+  }
+
+  document.getElementById("btnAttack").addEventListener("click", function () {
+    state.log.push("⚔️ 攻擊！");
+    render();
+  });
+  document.getElementById("btnFlee").addEventListener("click", function () {
+    state.log.push("🏃 逃走了！");
+    render();
+  });
+  btnSkill.addEventListener("click", function () {
+    if (state.open) closePanel();
+    else openPanel(state.page);
+  });
+  document.getElementById("btnBack").addEventListener("click", closePanel);
+  document.getElementById("btnClose").addEventListener("click", closePanel);
+  btnPrev.addEventListener("click", function (event) {
+    ignoreIfDisabled(event, btnPrev, function () {
+      state.page -= 1;
+      writeURL();
+      render();
+    });
+  });
+  btnNext.addEventListener("click", function (event) {
+    ignoreIfDisabled(event, btnNext, function () {
+      state.page += 1;
+      writeURL();
+      render();
+    });
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && state.open) closePanel();
+  });
+
+  readURL();
+  render();
+})();
+</script>
+</body>
+</html>
