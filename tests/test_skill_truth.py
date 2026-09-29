@@ -24,7 +24,7 @@ from tests.battle_truth import (
 )
 from tests.factories import connect_db, get_kid_points, response_text
 from tests.historical_seed import historical_catalogs, tracked_sha256, use_temp_database
-from tests.phase1_helpers import login_kid
+from tests.phase1_helpers import BUILDING_NAMES, login_kid
 
 # Region 1 weakness locked by TC-API-SKILL-SCOUT. Builder copies this onto the monster.
 REGION_WEAKNESS = {1: "火", 2: "冰", 3: "雷"}
@@ -83,6 +83,8 @@ def _tune(test_db, kid_id, **flags):
         data["player_mp"] = flags["player_mp"]
     if "player_dodge" in flags:
         data["player_dodge"] = flags["player_dodge"]
+    if "player_crt" in flags:
+        data["player_crt"] = flags["player_crt"]
     save_battle(test_db, exp_id, data)
     return data
 
@@ -1052,6 +1054,153 @@ def test_skill_cast_damage_against_basic_attack(
             drops,
             floors,
         )
+
+
+# Every row in skill_defs. The coverage test fails if the catalog gains a name.
+_FLOOR_SKILL_NAMES = (
+    "蓄力",
+    "重擊",
+    "連擊",
+    "繃帶",
+    "急救",
+    "全體治療",
+    "橫掃",
+    "盾擊",
+    "必殺",
+    "火球",
+    "冰凍",
+    "偵察",
+    "疾風斬",
+    "修復",
+    "強化",
+    "知識的力量",
+    "鍛鍊的成果",
+    "營養餐",
+    "金幣袋",
+    "強光",
+    "流星雨",
+    "金錢砸",
+)
+_FLOOR_PROFILES = (
+    {"key": "high-str", "ability_str": 20, "ability_int": 0},
+    {"key": "high-int", "ability_str": 0, "ability_int": 20},
+)
+_BUILDING_KEY = {name: key for key, name in BUILDING_NAMES.items()}
+_FLOOR_MONSTER_HP = 50000
+
+
+def _skill_catalog_row(test_db, name):
+    db = connect_db(test_db)
+    row = db.execute(
+        """
+        SELECT s.name, s.level_required, s.target, bd.name AS building
+          FROM skill_defs s
+          JOIN building_defs bd ON bd.id = s.bldg_def_id
+         WHERE s.name=?
+        """,
+        (name,),
+    ).fetchone()
+    db.close()
+    assert row, name
+    return dict(row)
+
+
+def _open_floor(client, family, test_db, monkeypatch, skill_name, profile):
+    """Fresh battle for one skewed kid. Crit is off. Monster HP cannot cap the hit."""
+    kid_id = family.kid_a.id
+    row = _skill_catalog_row(test_db, skill_name)
+    if row["building"] == "銀行":
+        _ensure_bank(test_db)
+    prepare_kid(
+        test_db,
+        kid_id,
+        level=20,
+        points=40,
+        ability_str=profile["ability_str"],
+        ability_int=profile["ability_int"],
+        ability_crt=0,
+    )
+    key = _BUILDING_KEY[row["building"]]
+    level = int(row["level_required"])
+    if key == "guild":
+        place(test_db, kid_id, "guild", level=level, cell_x=6)
+    else:
+        place(test_db, kid_id, "guild", level=1, cell_x=6)
+        place(test_db, kid_id, key, level=level, cell_x=2)
+    monsters = 3 if row["target"] == "all_enemies" else 1
+    started = login_and_start(client, family, kid_id, monkeypatch, monsters=monsters)
+    assert started.status_code == 201, response_text(started)
+    battle = started.get_json()
+    tuned = _tune(
+        test_db,
+        kid_id,
+        hp=_FLOOR_MONSTER_HP,
+        spd=50,
+        player_crt=0,
+        player_mp=99,
+    )
+    skill = _require(battle, skill_name)
+    return kid_id, skill, tuned
+
+
+def _dealt(client, kid_id, tuned, skill=None):
+    before = [monster["hp"] for monster in tuned["monsters"]]
+    if skill is None:
+        body = _ok(act(client, kid_id, "attack"))
+    else:
+        body = _ok(_use(client, kid_id, skill))
+        assert "MP 不足" not in _turn_log(body), _turn_log(body)
+    drops = [before[index] - monster_hp(body, index) for index in range(len(before))]
+    assert all(monster_hp(body, index) > 0 for index in range(len(before))), body["monsters"]
+    return sum(drops), body
+
+
+@pytest.mark.case_id("TC-API-SKILL-DMG-FLOOR-SKEWED")
+def test_damage_floor_matrix_covers_every_learnable_skill(test_db):
+    """斜向地板要包晒 skill_defs，包括火球。"""
+    db = connect_db(test_db)
+    names = [row["name"] for row in db.execute("SELECT name FROM skill_defs").fetchall()]
+    db.close()
+    assert len(names) == len(set(names))
+    assert set(names) == set(_FLOOR_SKILL_NAMES), sorted(set(names) ^ set(_FLOOR_SKILL_NAMES))
+    assert "火球" in names
+
+
+@pytest.mark.case_id("TC-API-SKILL-DMG-FLOOR-SKEWED")
+@pytest.mark.parametrize("profile", _FLOOR_PROFILES, ids=[row["key"] for row in _FLOOR_PROFILES])
+@pytest.mark.parametrize("skill_name", _FLOOR_SKILL_NAMES)
+def test_cast_damage_meets_basic_attack_on_skewed_stats(
+    client, family, test_db, monkeypatch, skill_name, profile
+):
+    """除偵察外，施放總傷害 ≥ 同一個小朋友嘅物理普攻。
+
+    高臂力／低知識同低臂力／高知識各一場。普攻同施放係兩場全新戰鬥，怪防相同。
+    爆擊關，方差 0。連擊、流星雨、橫掃用成次施放嘅總扣血，唔好逐下逐隻各自比。
+    偵察要 0。怪物血量高過任何一擊，所以唔好被剩餘 HP 封頂。
+    """
+    kid_id, _skill, probe = _open_floor(
+        client, family, test_db, monkeypatch, skill_name, profile
+    )
+    assert int(probe.get("player_crt") or 0) == 0, probe.get("player_crt")
+    basic, _body = _dealt(client, kid_id, probe)
+    formula = max(1, int(probe["player_atk"]) - int(probe["monsters"][0]["def"]))
+    assert basic == formula, f"actual {basic}, expected {formula}"
+    if profile["key"] == "high-str":
+        assert basic >= 30, basic
+
+    kid_id, skill, tuned = _open_floor(
+        client, family, test_db, monkeypatch, skill_name, profile
+    )
+    assert int(tuned["player_atk"]) == int(probe["player_atk"]), (
+        tuned["player_atk"],
+        probe["player_atk"],
+    )
+    assert int(tuned["monsters"][0]["def"]) == int(probe["monsters"][0]["def"])
+    cast_total, _cast = _dealt(client, kid_id, tuned, skill)
+    if skill_name == "偵察":
+        assert cast_total == 0, f"actual {cast_total}, expected 0"
+        return
+    assert cast_total >= basic, f"actual {cast_total}, expected >= {basic}"
 
 
 @pytest.mark.case_id("TC-API-FORTIFY-TURNS")
