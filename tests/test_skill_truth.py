@@ -1293,6 +1293,217 @@ def test_multihit_per_hit_unchanged_when_total_already_beats_basic(
             )
 
 
+# 414ffce seed text. The new description is this prefix plus that same remainder.
+_HEAL_PREFIX = "物理攻擊，"
+_HEAL_OLD_TEXT = {
+    "繃帶": "小回復",
+    "急救": "中回復",
+    "全體治療": "全體回復",
+}
+# 414ffce, ability_int 0, hospital at level_required, crit off, variance 0.
+# Counter damage is 0 (player_def 999), so the HP rise is the heal itself.
+_HEAL_TODAY = (
+    {"name": "繃帶", "heal": 16},
+    {"name": "急救", "heal": 46},
+    {"name": "全體治療", "heal": 43},
+)
+_HEAL_START_HP = 40
+_HEAL_PLAYER_DEF = 999
+
+
+def _logged_heal(body):
+    """The 「回復 N HP」 line. The action JSON has no heal field."""
+    if isinstance(body.get("heal"), int):
+        return body["heal"]
+    text = _turn_log(body)
+    marker = "回復 "
+    start = text.find(marker)
+    assert start >= 0, text
+    number = []
+    for ch in text[start + len(marker):]:
+        if ch.isdigit():
+            number.append(ch)
+        else:
+            break
+    assert number, text
+    return int("".join(number))
+
+
+def _measured_heal(before_hp, body):
+    """HP restored by the skill, with the monster counter dealing 0.
+
+    High DEF writes 「擋住攻擊」. The HP rise then equals the logged heal.
+    """
+    restored = _logged_heal(body)
+    delta = body["player_hp"] - before_hp
+    log = _turn_log(body)
+    assert "擋住攻擊" in log, log
+    assert delta == restored, f"HP delta {delta}, heal {restored}, log {log}"
+    return restored
+
+
+@pytest.mark.case_id("TC-API-HEAL-STILL-HEALS")
+@pytest.mark.parametrize("spec", _HEAL_TODAY, ids=[row["name"] for row in _HEAL_TODAY])
+def test_heal_amount_stays_at_today_baseline(
+    client, family, test_db, monkeypatch, spec
+):
+    """治療技能加咗物理傷害之後，回復量仍然係 414ffce 嘅數字。
+
+    能力 0、爆擊關、方差 0。醫院等級用該技能嘅 level_required。
+    HP 低過上限，而且剩餘空間夠晒呢下回復，所以唔好被上限封頂。
+    怪物防禦高到反擊係 0（擋住攻擊），HP 上升先等於回復本身。
+    """
+    kid_id = family.kid_a.id
+    row = _skill_catalog_row(test_db, spec["name"])
+    battle = _open(
+        client,
+        family,
+        test_db,
+        monkeypatch,
+        [
+            {"key": "guild", "x": 6},
+            {"key": "hospital", "level": int(row["level_required"]), "x": 2},
+        ],
+    )
+    skill = _require(battle, spec["name"])
+    tuned = _tune(
+        test_db,
+        kid_id,
+        hp=50000,
+        spd=50,
+        player_hp=_HEAL_START_HP,
+        player_def=_HEAL_PLAYER_DEF,
+        player_crt=0,
+        player_mp=99,
+    )
+    assert int(tuned.get("player_crt") or 0) == 0
+    assert int(tuned.get("player_int") or 0) == 0
+    room = int(tuned["player_max_hp"]) - _HEAL_START_HP
+    assert room >= spec["heal"], (room, spec)
+    body = _ok(_use(client, kid_id, skill))
+    assert body.get("battle_result") == "fighting", body
+    restored = _measured_heal(_HEAL_START_HP, body)
+    assert restored == spec["heal"], (
+        f"{spec['name']} actual {restored}, expected {spec['heal']}"
+    )
+
+
+@pytest.mark.case_id("TC-API-HEAL-DESC-PREFIX")
+def test_heal_descriptions_are_prefixed_with_physical_attack(test_db):
+    """三個治療技能嘅種子說明以「物理攻擊，」開頭，後面保留舊字，而且仍然有回復。"""
+    db = connect_db(test_db)
+    rows = {
+        row["name"]: row["description"] or ""
+        for row in db.execute("SELECT name, description FROM skill_defs").fetchall()
+    }
+    db.close()
+    problems = []
+    for name, old in _HEAL_OLD_TEXT.items():
+        text = rows.get(name)
+        expected = _HEAL_PREFIX + old
+        if text is None:
+            problems.append(f"{name} missing")
+            continue
+        if text != expected or not text.startswith(_HEAL_PREFIX) or "回復" not in text:
+            problems.append(f"{name} actual {text!r}, expected {expected!r}")
+    assert not problems, "; ".join(problems)
+
+
+@pytest.mark.case_id("TC-API-MIGRATE-HEAL-DESC")
+def test_migrate_prefixes_old_heal_descriptions_and_keeps_the_kid(
+    family, test_db, request
+):
+    """舊庫嘅三個治療說明就地加「物理攻擊，」。小朋友行同已學 skill id 唔變。
+
+    ``git show afbc1a6:backend_v2.py`` 嘅 ``seed_skill_defs`` 已經有醫院嘅
+    繃帶、急救、全體治療，說明係小回復／中回復／全體回復。用
+    ``_install_old_skill_seed`` 寫入 pytest 暫存庫，唔使再砌一份 414ffce
+    目錄，亦唔好打開版控嘅 ``kids_town.db``。migrate 之後原 id 嘅說明變成
+    前綴加舊字，再跑一次唔好變成「物理攻擊，物理攻擊，」。
+    """
+    play_digest = tracked_sha256()
+
+    def _play_db_unchanged():
+        assert tracked_sha256() == play_digest, "tracked kids_town.db changed"
+
+    request.addfinalizer(_play_db_unchanged)
+    kid_id = family.kid_a.id
+    before = _install_old_skill_seed(test_db)
+    learned = {}
+    for name, old in _HEAL_OLD_TEXT.items():
+        assert name in before, f"afbc1a6 catalog is missing {name}"
+        assert before[name]["description"] == old, before[name]["description"]
+        learned[before[name]["id"]] = name
+
+    db = connect_db(test_db)
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS kid_skills (kid_id INTEGER NOT NULL, skill_id INTEGER NOT NULL)"
+    )
+    db.execute("DELETE FROM kid_skills WHERE kid_id=?", (kid_id,))
+    for skill_id in learned:
+        db.execute(
+            "INSERT INTO kid_skills (kid_id, skill_id) VALUES (?, ?)",
+            (kid_id, skill_id),
+        )
+    db.commit()
+    kid_rows = [
+        tuple(row) for row in db.execute("SELECT * FROM kids ORDER BY id").fetchall()
+    ]
+    learned_rows = [
+        tuple(row)
+        for row in db.execute(
+            "SELECT kid_id, skill_id FROM kid_skills WHERE kid_id=? ORDER BY skill_id",
+            (kid_id,),
+        ).fetchall()
+    ]
+    db.close()
+    assert kid_rows, "synthetic kid row missing"
+    assert len(learned_rows) == 3
+
+    with use_temp_database(test_db):
+        b.migrate_db()
+
+    db = connect_db(test_db)
+    after_kids = [
+        tuple(row) for row in db.execute("SELECT * FROM kids ORDER BY id").fetchall()
+    ]
+    after_learned = [
+        tuple(row)
+        for row in db.execute(
+            "SELECT kid_id, skill_id FROM kid_skills WHERE kid_id=? ORDER BY skill_id",
+            (kid_id,),
+        ).fetchall()
+    ]
+    by_id = {
+        row["id"]: dict(row)
+        for row in db.execute("SELECT * FROM skill_defs").fetchall()
+    }
+    db.close()
+    assert after_kids == kid_rows
+    assert after_learned == learned_rows
+    problems = []
+    for skill_id, name in learned.items():
+        row = by_id.get(skill_id)
+        if not row or row["name"] != name:
+            problems.append(f"{name} id {skill_id} actual {row}")
+            continue
+        text = row["description"] or ""
+        expected = _HEAL_PREFIX + _HEAL_OLD_TEXT[name]
+        if (
+            text != expected
+            or not text.startswith(_HEAL_PREFIX)
+            or "回復" not in text
+            or text.count(_HEAL_PREFIX) != 1
+        ):
+            problems.append(f"{name} actual {text!r}, expected {expected!r}")
+    assert not problems, "; ".join(problems)
+
+    snapshot = _skill_snapshot(test_db)
+    with use_temp_database(test_db):
+        b.migrate_db()
+    assert _skill_snapshot(test_db) == snapshot
+
+
 @pytest.mark.case_id("TC-API-FORTIFY-TURNS")
 def test_fortify_defence_lasts_three_monster_turns(
     client, family, test_db, monkeypatch
