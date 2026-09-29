@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+import backend_v2 as b
 from tests.battle_truth import (
     act,
     login_and_start,
@@ -73,6 +74,8 @@ def _tune(test_db, kid_id, **flags):
         data["player_hp"] = flags["player_hp"]
     if "player_mp" in flags:
         data["player_mp"] = flags["player_mp"]
+    if "player_dodge" in flags:
+        data["player_dodge"] = flags["player_dodge"]
     save_battle(test_db, exp_id, data)
     return data
 
@@ -304,6 +307,7 @@ def test_charge_doubles_next_attack_and_says_so(client, family, test_db, monkeyp
     """蓄力下一擊係同一場對照普攻嘅 2 倍。說明要係「下次攻擊 2 倍」。
 
     對照傷害跟開戰 `player_atk` 同怪物防，唔好寫死 5 同 10。
+    施放嗰下亦要造成傷害，由 TC-API-SKILL-ALL-DAMAGE 量。
     """
     kid_id = family.kid_a.id
     battle = _open(
@@ -325,7 +329,7 @@ def test_charge_doubles_next_attack_and_says_so(client, family, test_db, monkeyp
     enemy_hp = monster_hp(control)
 
     cast = _ok(_use(client, kid_id, skill))
-    assert monster_hp(cast) == enemy_hp, "蓄力本身唔好造成傷害"
+    enemy_hp = monster_hp(cast)
     follow = _ok(act(client, kid_id, "attack"))
     dealt = enemy_hp - monster_hp(follow)
     assert dealt == normal * 2, f"dealt {dealt}, normal {normal}, want {normal * 2}"
@@ -414,7 +418,8 @@ def test_library_knowledge_power_boosts_magic_for_three_turns(
 ):
     """圖書館「知識的力量」：施放之後三回合知識 +3×建築等級，第 4 下返原值。
 
-    施放嗰下唔計入三回合，亦唔好造成傷害。魔法傷害用火球量：
+    施放嗰下唔計入三回合。施放本身亦要打中（見 TC-API-SKILL-ALL-DAMAGE）。
+    魔法傷害用火球量：
     而家公式把 player_int 一比一加落去，所以加成期間每下比對照多正好 3×等級
     （方差 0）。Lv1 多 3，Lv5 多 15。戰鬥 JSON 嘅 player_int 同步升降。
     測試庫先把火球 level_required 改成 1，Lv1 圖書館先能量到魔法傷害。
@@ -443,7 +448,7 @@ def test_library_knowledge_power_boosts_magic_for_three_turns(
         enemy_hp = monster_hp(opened)
 
         cast = _ok(_use(client, kid_id, power))
-        assert monster_hp(cast) == enemy_hp, "知識的力量 must not deal damage"
+        enemy_hp = monster_hp(cast)
 
         for turn in (1, 2, 3):
             hit = _ok(_use(client, kid_id, bolt))
@@ -468,7 +473,8 @@ def test_gym_training_result_boosts_physical_for_three_turns(
     """健身室「鍛鍊的成果」：施放之後三回合臂力 +3×等級，普攻上升，第 4 下返原值。
 
     普攻傷害係 max(1, int(5 + str×1.5) − 敵防)，方差 0。
-    施放唔造成傷害。player_str 同 player_atk 喺三回合入面要係加成後嘅值。
+    施放本身亦要打中（見 TC-API-SKILL-ALL-DAMAGE）。
+    player_str 同 player_atk 喺三回合入面要係加成後嘅值。
     Lv1 臂力 +3，Lv5 臂力 +15。
     """
     kid_id = family.kid_a.id
@@ -495,7 +501,7 @@ def test_gym_training_result_boosts_physical_for_three_turns(
         enemy_hp = monster_hp(control)
 
         cast = _ok(_use(client, kid_id, skill))
-        assert monster_hp(cast) == enemy_hp, "鍛鍊的成果 must not deal damage"
+        enemy_hp = monster_hp(cast)
 
         for turn in (1, 2, 3):
             hit = _ok(act(client, kid_id, "attack"))
@@ -725,3 +731,408 @@ def test_bank_gold_smash_costs_ten_and_deals_triple(client, family, test_db, mon
     assert get_kid_points(test_db, kid_id) == 9
     _exp, still = running_battle(test_db, kid_id)
     assert still["monsters"][0]["hp"] == 4000, still["monsters"]
+
+
+# Historical skill_defs from the base seed (afbc1a6). Building names, not raw ids.
+_OLD_SKILL_SEED = (
+    ("蓄力", "🔥", 3, "健身室", 1, "self", "下次攻擊 1.5 倍", 0, 0, "none", "buff"),
+    ("重擊", "💪", 5, "健身室", 2, "enemy", "強力物理攻擊", 20, 5, "str", "damage"),
+    ("連擊", "⚡", 7, "健身室", 4, "enemy", "連續攻擊 2 次", 16, 4, "str", "damage"),
+    ("繃帶", "🩹", 3, "醫院", 1, "ally", "小回復", 12, 4, "int", "heal"),
+    ("急救", "💚", 8, "醫院", 3, "ally", "中回復", 25, 7, "int", "heal"),
+    ("全體治療", "🌿", 14, "醫院", 5, "all_allies", "全體回復", 18, 5, "int", "heal"),
+    ("橫掃", "🗡️", 6, "競技場", 2, "all_enemies", "全體物理攻擊", 15, 4, "str", "damage"),
+    ("挑釁", "🛡️", 4, "競技場", 4, "self", "強制敵方攻擊自己", 0, 0, "none", "buff"),
+    ("必殺", "💥", 10, "競技場", 5, "enemy", "對低血量敵人特大傷害", 32, 8, "str", "damage"),
+    ("火球", "🔥", 6, "圖書館", 2, "enemy", "魔法攻擊", 20, 5, "int", "damage"),
+    ("冰凍", "❄️", 8, "圖書館", 4, "enemy", "魔法攻擊 + 減速", 28, 7, "int", "damage"),
+    ("偵察", "👁️", 2, "探險公會", 2, "enemy", "查看怪物弱點", 0, 0, "none", "utility"),
+    ("迴避", "🏃", 3, "探險公會", 4, "self", "完全回避下次攻擊", 0, 0, "none", "buff"),
+    ("修復", "🔧", 4, "工坊", 2, "ally", "回復 MP", 10, 3, "int", "heal"),
+    ("強化", "🛡️", 5, "工坊", 4, "ally", "提升防禦力", 3, 1, "none", "buff"),
+)
+_NEW_SKILL_NAMES = (
+    "知識的力量",
+    "鍛鍊的成果",
+    "營養餐",
+    "金幣袋",
+    "強光",
+    "流星雨",
+    "金錢砸",
+)
+_RENAMES = {"挑釁": "盾擊", "迴避": "疾風斬"}
+
+
+def _reported_matk(battle):
+    """Magic attack from the battle payload, or from the reported knowledge."""
+    knowledge = battle.get("player_int") or 0
+    derived = int(5 + knowledge * 1.5)
+    if "player_matk" in battle:
+        assert battle["player_matk"] == derived, (battle.get("player_matk"), derived)
+        return battle["player_matk"]
+    return derived
+
+
+def _basic_physical(battle, monster_def):
+    return max(1, int(battle["player_atk"]) - int(monster_def))
+
+
+def _basic_magic(battle, monster_def):
+    return max(1, int(_reported_matk(battle)) - int(monster_def))
+
+
+def _ensure_bank(test_db):
+    """Test DB only. 金錢砸 needs a 銀行 row before it can be placed."""
+    db = connect_db(test_db)
+    row = db.execute("SELECT id FROM building_defs WHERE name='銀行'").fetchone()
+    if not row:
+        db.execute(
+            """
+            INSERT INTO building_defs
+                (name, icon, cost_gold, materials, effect, buff_type, buff_vals, max_level)
+            VALUES ('銀行', '🏦', 600, '{}', '', 'skill', '[0]', 5)
+            """
+        )
+        db.commit()
+    db.close()
+
+
+def _install_old_skill_seed(test_db):
+    """Replace skill_defs with the historical catalog. Returns rows by name."""
+    db = connect_db(test_db)
+    db.execute("DELETE FROM skill_defs")
+    for name, icon, mp_cost, bldg_name, level_required, target, description, base_value, per_level, attr_scale, effect_type in _OLD_SKILL_SEED:
+        bldg = db.execute(
+            "SELECT id FROM building_defs WHERE name=?",
+            (bldg_name,),
+        ).fetchone()
+        assert bldg, bldg_name
+        db.execute(
+            """
+            INSERT INTO skill_defs (
+                name, icon, mp_cost, bldg_def_id, level_required, target,
+                description, base_value, per_level, attr_scale, effect_type
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                name,
+                icon,
+                mp_cost,
+                bldg["id"],
+                level_required,
+                target,
+                description,
+                base_value,
+                per_level,
+                attr_scale,
+                effect_type,
+            ),
+        )
+    db.commit()
+    rows = {
+        row["name"]: dict(row)
+        for row in db.execute("SELECT * FROM skill_defs").fetchall()
+    }
+    db.close()
+    return rows
+
+
+def _skill_snapshot(test_db):
+    db = connect_db(test_db)
+    rows = [
+        tuple(row)
+        for row in db.execute("SELECT * FROM skill_defs ORDER BY id").fetchall()
+    ]
+    db.close()
+    return rows
+
+
+@pytest.mark.case_id("TC-API-MIGRATE-SKILLS")
+def test_migrate_renames_skills_in_place_and_keeps_learned_ids(
+    client, family, test_db, monkeypatch
+):
+    """舊 skill_defs 就地改名，唔好刪行再插入。學咗嘅 id 仍然打得到。
+
+    舊目錄係基礎分支種子：挑釁、迴避、蓄力說明「1.5 倍」，冇七個新技能。
+    小朋友用 skill id 學咗呢三個。migrate_db() 之後原 id 叫盾擊／疾風斬，
+    蓄力說明有「2 倍」或「2倍」，七個新技能都在，舊 id 全部仲在，行數只增唔減。
+    用原 id 開戰打得到。再跑一次 migrate_db() 唔改變、唔重複。
+    """
+    kid_id = family.kid_a.id
+    prepare_kid(test_db, kid_id, points=200)
+    place(test_db, kid_id, "gym", level=1, cell_x=0)
+    place(test_db, kid_id, "arena", level=4, cell_x=2)
+    place(test_db, kid_id, "guild", level=4, cell_x=6)
+
+    before = _install_old_skill_seed(test_db)
+    assert "挑釁" in before and "迴避" in before
+    assert "1.5" in (before["蓄力"]["description"] or "")
+    for name in _NEW_SKILL_NAMES:
+        assert name not in before
+    old_ids = [row["id"] for row in before.values()]
+    learned = {
+        before["挑釁"]["id"]: "盾擊",
+        before["迴避"]["id"]: "疾風斬",
+        before["蓄力"]["id"]: "蓄力",
+    }
+    db = connect_db(test_db)
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS kid_skills (kid_id INTEGER NOT NULL, skill_id INTEGER NOT NULL)"
+    )
+    db.execute("DELETE FROM kid_skills WHERE kid_id=?", (kid_id,))
+    for skill_id in learned:
+        db.execute(
+            "INSERT INTO kid_skills (kid_id, skill_id) VALUES (?, ?)",
+            (kid_id, skill_id),
+        )
+    db.commit()
+    db.close()
+
+    b.migrate_db()
+
+    db = connect_db(test_db)
+    by_id = {
+        row["id"]: dict(row)
+        for row in db.execute("SELECT * FROM skill_defs").fetchall()
+    }
+    names = {row["name"] for row in by_id.values()}
+    db.close()
+    assert len(by_id) >= len(old_ids)
+    for skill_id in old_ids:
+        assert skill_id in by_id, skill_id
+    for skill_id, new_name in learned.items():
+        assert by_id[skill_id]["name"] == new_name, (skill_id, by_id.get(skill_id))
+    charge_desc = by_id[before["蓄力"]["id"]]["description"] or ""
+    assert ("2 倍" in charge_desc) or ("2倍" in charge_desc), charge_desc
+    for name in _NEW_SKILL_NAMES:
+        assert name in names, names
+    assert "挑釁" not in names and "迴避" not in names
+
+    started = login_and_start(client, family, kid_id, monkeypatch)
+    assert started.status_code == 201, response_text(started)
+    battle = started.get_json()
+    _tune(test_db, kid_id, hp=8000, spd=50)
+    for skill_id, new_name in learned.items():
+        found = next(
+            (row for row in battle.get("skills") or [] if row.get("id") == skill_id),
+            None,
+        )
+        assert found and found.get("name") == new_name, battle.get("skills")
+        cast = act(client, kid_id, "skill", skill_id=skill_id)
+        assert cast.status_code == 200, response_text(cast)
+        body = cast.get_json() or {}
+        assert body.get("error") != "Skill not found", body
+
+    snapshot = _skill_snapshot(test_db)
+    b.migrate_db()
+    assert _skill_snapshot(test_db) == snapshot
+    db = connect_db(test_db)
+    counts = dict(
+        db.execute(
+            "SELECT name, COUNT(*) FROM skill_defs GROUP BY name"
+        ).fetchall()
+    )
+    db.close()
+    assert all(count == 1 for count in counts.values()), counts
+
+
+_DAMAGE_CASES = (
+    {"name": "連擊", "building": "gym", "level": 4, "kind": "physical"},
+    {"name": "冰凍", "building": "library", "level": 4, "kind": "magic"},
+    {"name": "必殺", "building": "arena", "level": 5, "kind": "physical"},
+    {"name": "修復", "building": "workshop", "level": 2, "kind": "physical"},
+    {"name": "強化", "building": "workshop", "level": 4, "kind": "physical"},
+    {"name": "偵察", "building": "guild", "level": 2, "kind": "zero"},
+    {"name": "蓄力", "building": "gym", "level": 1, "kind": "physical"},
+    {"name": "盾擊", "building": "arena", "level": 4, "kind": "physical", "exact": True},
+    {"name": "疾風斬", "building": "guild", "level": 4, "kind": "physical", "exact": True},
+    {"name": "知識的力量", "building": "library", "level": 1, "kind": "magic"},
+    {"name": "鍛鍊的成果", "building": "gym", "level": 1, "kind": "physical"},
+    {"name": "營養餐", "building": "farm", "level": 1, "kind": "physical"},
+    {"name": "金幣袋", "building": "shop", "level": 1, "kind": "physical"},
+    {"name": "強光", "building": "lighthouse", "level": 1, "kind": "magic"},
+    {"name": "流星雨", "building": "observatory", "level": 1, "kind": "magic", "monsters": 3},
+    {"name": "金錢砸", "building": "bank", "level": 1, "kind": "physical", "points": 40},
+)
+
+
+@pytest.mark.case_id("TC-API-SKILL-ALL-DAMAGE")
+@pytest.mark.parametrize("spec", _DAMAGE_CASES, ids=[row["name"] for row in _DAMAGE_CASES])
+def test_skill_cast_damage_against_basic_attack(
+    client, family, test_db, monkeypatch, spec
+):
+    """除偵察外，施放嗰下怪物 HP 要跌，而且唔少過同一狀態嘅普攻。
+
+    知識的力量、冰凍、強光、流星雨對魔法普攻 max(1, matk − 怪防)。
+    matk 用開戰 player_matk；冇呢個欄就用 int(5 + player_int×1.5)。
+    其餘（偵察除外）對物理普攻 max(1, player_atk − 怪防)。
+    盾擊同疾風斬要剛好等於物理普攻。偵察要 0。流星雨每一隻都要達標。
+    """
+    if spec["building"] == "bank":
+        _ensure_bank(test_db)
+    specs = [{"key": "guild", "x": 6, "level": 1}]
+    if spec["building"] == "guild":
+        specs = [{"key": "guild", "x": 6, "level": spec["level"]}]
+    else:
+        specs.append({"key": spec["building"], "level": spec["level"], "x": 2})
+    battle = _open(
+        client,
+        family,
+        test_db,
+        monkeypatch,
+        specs,
+        monsters=spec.get("monsters", 1),
+        points=spec.get("points", 200),
+    )
+    skill = _require(battle, spec["name"])
+    _tune(test_db, family.kid_a.id, hp=8000, spd=50)
+    before = [8000 for _ in battle["monsters"]]
+    cast = _ok(_use(client, family.kid_a.id, skill))
+    drops = [old - monster_hp(cast, index) for index, old in enumerate(before)]
+    if spec["kind"] == "zero":
+        assert drops == [0] * len(drops), drops
+        return
+    floors = []
+    for monster in battle["monsters"]:
+        monster_def = monster.get("def") or 0
+        if spec["kind"] == "magic":
+            floors.append(_basic_magic(battle, monster_def))
+        else:
+            floors.append(_basic_physical(battle, monster_def))
+    assert all(drop > 0 for drop in drops), (spec["name"], drops)
+    if spec.get("exact"):
+        assert drops[0] == floors[0], (spec["name"], drops, floors)
+    else:
+        assert all(drop >= floor for drop, floor in zip(drops, floors)), (
+            spec["name"],
+            drops,
+            floors,
+        )
+
+
+@pytest.mark.case_id("TC-API-FORTIFY-TURNS")
+def test_fortify_defence_lasts_three_monster_turns(
+    client, family, test_db, monkeypatch
+):
+    """強化嘅防禦加乘維持三次怪物行動，第四次返對照。施放唔計入三次。"""
+    kid_id = family.kid_a.id
+    battle = _open(
+        client,
+        family,
+        test_db,
+        monkeypatch,
+        [{"key": "guild", "x": 6}, {"key": "workshop", "level": 4, "x": 2}],
+    )
+    skill = _require(battle, "強化")
+    _tune(test_db, kid_id, hp=8000, spd=50)
+    control = _ok(act(client, kid_id, "attack"))
+    baseline = _hp_loss(battle["player_hp"], control)
+    assert baseline > 0, control
+    cast = _ok(_use(client, kid_id, skill))
+    hp = cast["player_hp"]
+    for turn in (1, 2, 3):
+        step = _ok(act(client, kid_id, "attack"))
+        loss = hp - step["player_hp"]
+        assert loss < baseline, (turn, loss, baseline)
+        hp = step["player_hp"]
+    expired = _ok(act(client, kid_id, "attack"))
+    assert hp - expired["player_hp"] == baseline, (hp - expired["player_hp"], baseline)
+
+
+@pytest.mark.case_id("TC-API-SHIELD-PERSIST")
+def test_shield_halves_the_first_real_hit_not_a_miss(
+    client, family, test_db, monkeypatch
+):
+    """盾擊減半留到怪物真正打中。打唔中唔消耗。再下一擊恢復全額。
+
+    閃避用開戰 RNG：player_dodge 100 而且 (1,100) 擲 100 就打唔中。
+    減半係對照反擊嘅整數除法。對照同全額都跟呢一場嘅 player_def。
+    """
+    kid_id = family.kid_a.id
+    battle = _open(
+        client,
+        family,
+        test_db,
+        monkeypatch,
+        [{"key": "guild", "x": 6}, {"key": "arena", "level": 4, "x": 2}],
+    )
+    skill = _require(battle, "盾擊", absent=("挑釁",))
+    _tune(test_db, kid_id, hp=8000, spd=50, player_dodge=0)
+    control = _ok(act(client, kid_id, "attack"))
+    baseline = _hp_loss(battle["player_hp"], control)
+    assert baseline > 1, (baseline, battle.get("player_def"))
+    _tune(test_db, kid_id, player_dodge=100)
+    cast = _ok(_use(client, kid_id, skill))
+    assert _hp_loss(control["player_hp"], cast) == 0, cast
+    _tune(test_db, kid_id, player_dodge=0)
+    first = _ok(act(client, kid_id, "attack"))
+    first_loss = cast["player_hp"] - first["player_hp"]
+    assert first_loss == baseline // 2, (first_loss, baseline)
+    second = _ok(act(client, kid_id, "attack"))
+    assert first["player_hp"] - second["player_hp"] == baseline, second
+
+
+_DESC_FORBIDDEN = ("唔會打傷害", "不造成傷害", "無傷害", "0 傷害")
+
+
+@pytest.mark.case_id("TC-API-SKILL-DESC-05")
+def test_skill_descriptions_use_the_locked_keywords(test_db):
+    """說明只鎖關鍵字，唔好逐字。"""
+    db = connect_db(test_db)
+    rows = {
+        row["name"]: row["description"] or ""
+        for row in db.execute("SELECT name, description FROM skill_defs").fetchall()
+    }
+    db.close()
+    problems = []
+    fortify = rows.get("強化")
+    if fortify is None:
+        problems.append("強化 missing")
+    elif "3 回合" not in fortify:
+        problems.append(f"強化 description {fortify!r} missing 3 回合")
+    shield = rows.get("盾擊")
+    if shield is None:
+        problems.append("盾擊 missing")
+    elif "下一次被打中" not in shield and "下次被打中" not in shield:
+        problems.append(f"盾擊 description {shield!r} missing 下一次被打中/下次被打中")
+    flash = rows.get("強光")
+    if flash is None:
+        problems.append("強光 missing")
+    elif "2 次" not in flash or ("打唔中" not in flash and "打不中" not in flash):
+        problems.append(f"強光 description {flash!r} missing 2 次 and 打唔中/打不中")
+    for name in ("知識的力量", "鍛鍊的成果", "營養餐", "金幣袋", "修復", "強化"):
+        text = rows.get(name)
+        if text is None:
+            problems.append(f"{name} missing")
+            continue
+        for banned in _DESC_FORBIDDEN:
+            if banned in text:
+                problems.append(f"{name} description contains {banned!r}: {text!r}")
+    assert not problems, problems
+
+
+@pytest.mark.case_id("TC-API-SEED-NO-DEAD-CURVE")
+def test_shield_and_gale_have_no_unused_damage_curve(test_db):
+    """盾擊、疾風斬傷害等於普攻，種子唔好再留傷害曲線。
+
+    skill_defs 嘅曲線欄係 base_value、per_level（REAL，預設 0）。
+    兩者要係 NULL 或 0。冇呢兩欄先至跳過。
+    """
+    db = connect_db(test_db)
+    columns = [row[1] for row in db.execute("PRAGMA table_info(skill_defs)").fetchall()]
+    curve_fields = [name for name in ("base_value", "per_level") if name in columns]
+    if not curve_fields:
+        db.close()
+        pytest.skip("skill_defs has no base_value/per_level damage curve")
+    problems = []
+    for name in ("盾擊", "疾風斬"):
+        row = db.execute("SELECT * FROM skill_defs WHERE name=?", (name,)).fetchone()
+        if row is None:
+            problems.append(f"{name} missing")
+            continue
+        for field in curve_fields:
+            value = row[field]
+            if value not in (None, 0, 0.0):
+                problems.append(f"{name}.{field}={value!r}")
+    db.close()
+    assert not problems, problems
