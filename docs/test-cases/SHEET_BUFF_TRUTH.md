@@ -5,40 +5,43 @@
 > **Fixture**：空庫 SQLite、合成帳號（`test_fe_kid`／PIN `1357`，API 用 `test_kid_a`／PIN `1357`）。唔好抄 production DB，唔好用真密碼。  
 > **基線**：`main` `8ed2720`（#42–#45 已合併：場景 4 `#sheetBuff` 有繁體標籤、`#sheetFns .fn` 係 0、`#upgradeConfirm` 係 `div.gsw.stage` 最後一個元素子節點）。
 
-`#sheetBuff` 而家講大話：寫咗後端冇做、或者做得唔同嘅效果。面板文字要等於真實效果。
+`#sheetBuff` 要等於鎖定效果。圖書館唔再係任務經驗。詳細被動同技能見 [`PASSIVE_AND_SKILLS.md`](PASSIVE_AND_SKILLS.md)。
 
-後端核對（`backend_v2.py`，唔好只信假設）：
+| 建築 | 面板 |
+|----|----|
+| 圖書館 | `知識 +{2×等級}`。唔好「任務多經驗」。 |
+| 商店 | `起屋／升級金幣` + `buff_vals[level-1]` 嘅折。 |
+| 農場 | `每日金幣 +N`（尾後 🪙 可以留），另有「領取」／「今日已領」。 |
+| 健身室 | `臂力 +{2×等級}` |
+| 工坊 | `創意 +{2×等級}` |
+| 競技場 | `臂力 +{2×等級}、速度 +{等級}` |
+| 探險公會 | `勇氣 +{2×等級}` |
+| 天文台 | `尋寶機率 +{10×等級}%` |
+| 醫院 | `技能：繃帶（小回復）` |
+| 燈塔 | `技能：強光（魔法攻擊，敵人命中率下降 2 回合）` |
+| 銀行 | `技能：金錢砸（每次 10 金幣，傷害約普攻 3 倍）`（測試庫先插入定義） |
+| 未知 `buff_type` | 正好「未開放」，唔好帶 `buff_vals` 數字（`TC-FE-SHEET-UNWIRED-01`） |
 
-| `buff_type` | 建築 | 真實效果 |
-|----|----|----|
-| `task_bonus` | 圖書館 | `award_task_drops` 用 `get_building_buff(..., 'task_bonus')` 加 `experience_bonus`。基礎 XP 係 `max(5, points//2)`。金幣／`points_awarded` 唔加呢個數。唔係星星。 |
-| `discount` | 商店 | `discounted_gold_cost` 只俾 `place_building` 同 `upgrade_building` 嘅金幣。`floor(cost * buff_vals[level-1])`，材料數量唔打折。探險入場費、任務金幣獎勵都唔用呢個折扣。 |
-| `daily_gold` | 農場 | `POST /api/kids/<id>/farm/claim` 每個 `Asia/Hong_Kong` 日一次，金額係 `buff_vals[level-1]`。同日第二次 `400 already_claimed_today`，金幣唔再加。 |
-| `streak_protect`、`build_speed`、`expedition_recovery`、`unlock_explore`、`explore_range`、`expedition_gold`、`discovery_rate` | 其餘七座 | `get_building_buff` 冇人傳呢七個 type。`unlock_explore` 只喺 `has_active_guild` 當「有冇座公會」嘅閘，唔讀 `buff_vals`。面板唔好顯示效果數值，要寫「未開放」。 |
+仍然要守：
 
-`buff_vals[level-1]` 同 `get_building_buff` 同一個 index。
-
-仍然要守、呢輪唔改斷言：
-
-- `#sheetFns .fn` 數量係 0（`TC-FE-TOWN-UX-SHEET-BUFF-01`／`02`）。
-- `#upgradeConfirm` 係 `div.gsw.stage` 最後一個元素子節點（`TC-FE-TOWN-UX-UPGRADE-CONFIRM-01`）。
-- `SHEET-BUFF-01` 喺圖書館 `task_bonus` Lv.2 要求「任務多經驗 +4」（`buff_vals[1]`，唔係 Lv.1 嘅 2）。工坊唔再做數字合約。
+- `#sheetFns .fn` 數量係 0。
+- `#upgradeConfirm` 係 `div.gsw.stage` 最後一個元素子節點。
+- 商店／農場嘅數字仍然讀 `buff_vals[level-1]`（`TC-FE-SHEET-BUFFVAL-01`）。
 
 舊 ZH 鎖定文案已經改走，原因見下面「改過嘅舊斷言」。
 
 ---
 
-## SHEET-BUFF-TRUTH-01 — 圖書館係任務多經驗，唔係星
+## SHEET-BUFF-TRUTH-01 — 圖書館係知識被動，唔係任務經驗
 
 | 欄 | 內容 |
 |----|------|
 | **ID** | SHEET-BUFF-TRUTH-01 |
 | **優先級** | P0 |
 | **建議模組** | UI：`tests/test_frontend.py`（`-k sheet_buff_truth_library`）。API：`tests/test_sheet_buff_truth.py::test_sheet_buff_truth_api_library_bonus_is_experience_not_stars` |
-| **前置** | 空庫。只種圖書館 `(4,1)` Lv.1、`stored=0`。`buff_type=task_bonus`，`buff_vals=[2,4,6,10,15]`，所以而家係 **2**。 |
-| **真實效果** | 完成 10 分任務：`experience_gained=5`，`experience_bonus=2`，`experience_total=7`，`points_awarded=10`。金幣只加 10，唔加 2。 |
-| **預期面板** | `#sheetBuff` 文字同 `aria-label` 等於「任務多經驗 +2」。唔好有 ⭐、星、或者「任務多星」。撳 `#sheetBuff` 之後，如果 `#sheetNote` 重述加成，都要係呢句，唔好抄星。`#sheetFns .fn` 係 0。 |
-| **main 預期** | API **綠**（效果已經係經驗）。UI **紅**：而家係「任務多星 +2⭐」。 |
+| **前置** | 空庫。只種圖書館 `(4,1)` Lv.1、`stored=0`。 |
+| **真實效果** | 完成 10 分任務：`experience_gained=5`，`experience_bonus=0`，`experience_total=5`，`points_awarded=10`。知識被動走戰鬥 `player_matk`，見 `TC-API-BLD-PASSIVE-LIB`。 |
+| **預期面板** | `#sheetBuff` 文字同 `aria-label` 等於「知識 +2」。唔好「任務多經驗」、⭐、星、或者「任務多星」。`#sheetFns .fn` 係 0。 |
 
 ---
 
@@ -84,31 +87,28 @@
 
 ---
 
-## SHEET-BUFF-TRUTH-05 — 未接線嘅七種要寫「未開放」
+## SHEET-BUFF-TRUTH-05 — 七座顯示真正被動或技能
 
 | 欄 | 內容 |
 |----|------|
 | **ID** | SHEET-BUFF-TRUTH-05 |
 | **優先級** | P0 |
 | **建議模組** | UI：`tests/test_frontend.py`（`-k sheet_buff_truth_unwired`） |
-| **前置** | 每次只種一座、`stored=0`、`(4,1)`。工坊 Lv.3（`build_speed`，`buff_vals[2]=4`）。健身室 Lv.1（`streak_protect`，值 1）。其餘 Lv.1：醫院、探險公會、燈塔、競技場、天文台。 |
-| **真實效果** | 呢七個 type 冇 `get_building_buff` 呼叫。工坊唔改變升級金幣（冇商店時仍然係 `level×100`）。健身室唔加任務 XP。公會閘唔讀 `buff_vals`。 |
-| **預期面板** | 每座 `#sheetBuff` 文字同 `aria-label` 等於「未開放」，唔好帶 `buff_vals` 嘅效果數值（唔好 `×N`、`+N`、折、⭐）。`#sheetBuff` 同 `#sheetNote` 都唔好再出現「漏打卡都唔斷」或者「建築速度 ×」（`×`／`x`／`X`）。撳 `#sheetBuff` 之後，note 如果重述加成，都要係「未開放」。`#sheetFns .fn` 係 0。 |
-| **main 預期** | UI **紅**。健身室而家係「連續保護 ×1 漏打卡都唔斷」。工坊 Lv.3 而家係「建築速度 ×4」。其他座顯示各自嘅效果句（例如「解鎖探險」「探險回復 ×2」），唔係「未開放」。 |
+| **前置** | 每次只種一座、`stored=0`、`(4,1)`。工坊 Lv.3。其餘 Lv.1：健身室、醫院、探險公會、燈塔、競技場、天文台。 |
+| **預期面板** | 健身室「臂力 +2」。工坊「創意 +6」。醫院「技能：繃帶（小回復）」。探險公會「勇氣 +2」。燈塔「技能：強光（魔法攻擊，敵人命中率下降 2 回合）」。競技場「臂力 +2、速度 +1」。天文台「尋寶機率 +10%」。唔好「未開放」，亦唔好舊句（漏打卡、建築速度 ×、探險回復、探險範圍、探險金幣、發現新區域、知識）。`#sheetFns .fn` 係 0。 |
 
 ---
 
-## SHEET-BUFF-TRUTH-06 — 未消費嘅 buff 唔好宣稱效果
+## SHEET-BUFF-TRUTH-06 — 每座面板等於鎖定效果
 
 | 欄 | 內容 |
 |----|------|
 | **ID** | SHEET-BUFF-TRUTH-06 |
 | **優先級** | P0 |
 | **建議模組** | UI：`tests/test_frontend.py`（`-k sheet_buff_truth_guard`）。API：`tests/test_sheet_buff_truth.py::test_sheet_buff_truth_api_only_three_buff_types_are_consumed` |
-| **前置** | 十座建築逐座打開（同一張表，見本檔開頭）。消費集合由 `backend_v2.py` 入面 `get_building_buff(..., 'type')` 嘅字面量算出，唔好手寫死之後同後端脫節。 |
-| **真實效果** | 消費集合係 `task_bonus`、`discount`、`daily_gold`。其餘 type 唔傳入 `get_building_buff`。 |
-| **預期面板** | 消費集合入面：`#sheetBuff` 等於上面 01／02／03 嘅誠實句（農場仲要有「領取」）。集合外面：等於「未開放」，而且唔好出現效果數值、「漏打卡都唔斷」、「建築速度 ×」。 |
-| **main 預期** | API **綠**（集合的確係三個；工坊唔改升級金幣；健身室 `experience_bonus=0`）。UI **紅**：未消費嘅座仍然顯示效果句。 |
+| **前置** | 十座種子建築逐座打開。 |
+| **真實效果** | `get_building_buff` 只可以留 `discount` 同 `daily_gold`。`task_bonus` 要離開呢個集合。工坊仍然唔改升級金幣。健身室仍然唔加任務 XP。 |
+| **預期面板** | 每座等於本檔開頭嗰張表（農場仲要有「領取」）。 |
 
 ---
 
@@ -116,9 +116,9 @@
 
 | 舊 ID | 點改 | 點解 |
 |----|----|----|
-| `TC-FE-TOWN-UX-SHEET-BUFF-ZH-01` | 唔再要求「建築速度 ×4」。改為「未開放」，並且 `#sheetBuff`／`#sheetNote` 唔好有「建築速度 ×」。 | `build_speed` 冇後端消費。舊斷言鎖死咗假效果。 |
-| `TC-FE-TOWN-UX-SHEET-BUFF-ZH-02` | 唔再要求「連續保護 ×1」加「漏打卡都唔斷」。改為「未開放」，並且唔好再出現「漏打卡都唔斷」。 | `streak_protect` 冇後端消費。舊旁白描述咗一個未實作嘅保護。 |
-| `TC-FE-TOWN-UX-SHEET-BUFF-01` | 數字合約由工坊 `build_speed` Lv.3（要見到 4／`×4`）搬去圖書館 `task_bonus` Lv.2。`#sheetBuff` 文字同 `aria-label` 要等於「任務多經驗 +4」（`buff_vals[1]`，唔係 `buff_vals[0]=2`，亦唔係種子「任務 +2⭐」）。零 `.fn` 仍然要。 | 工坊未接線，要求「建築速度 ×4」同 ZH-01／TRUTH-05 嘅「未開放」打架。#48 只係因為呢條舊斷言紅。 |
+| `TC-FE-TOWN-UX-SHEET-BUFF-ZH-01` | 工坊 Lv.3 係「創意 +6」。唔好「建築速度 ×」，亦唔好「未開放」。 | 被動係創意。 |
+| `TC-FE-TOWN-UX-SHEET-BUFF-ZH-02` | 健身室 Lv.1 係「臂力 +2」。唔好「漏打卡都唔斷」，亦唔好「未開放」。 | 被動係臂力。 |
+| `TC-FE-TOWN-UX-SHEET-BUFF-01` | 圖書館 Lv.2 係「知識 +4」。零 `.fn` 仍然要。`buff_vals[level-1]` 搬去 `TC-FE-SHEET-BUFFVAL-01`。 | 「任務多經驗 +4」同新被動打架。 |
 | `TC-FE-TOWN-UX-SHEET-BUFF-02` | **冇改斷言**。仍然開工坊查零 `.fn` 同唔好 stub toast。唔再當佢同 01 共用「要見到數字 4」嘅前置。 | 02 從來唔查 buff 數值。 |
 | `upgrade_cost`／`upgrade_confirm`／`store_ux` | **冇改**。 | `#upgradeConfirm` 仍然係 `div.gsw.stage` 最後一個元素子節點。 |
 

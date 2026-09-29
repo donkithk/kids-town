@@ -1,8 +1,9 @@
-"""Honest #sheetBuff copy, anchored to backend_v2 consumers.
+"""#sheetBuff copy for the locked building effects.
 
 Test harness only. Product code must not import this module.
-The consumed set is whatever backend_v2.py actually passes to
-get_building_buff. Labels for every other buff_type are 「未開放」.
+Shop discount and farm gold still come from buff_vals[level-1].
+Passives are +2 per level (arena speed +1). Hospital, lighthouse, and
+bank describe their skill. Any other buff_type is 「未開放」 with no number.
 """
 from __future__ import annotations
 
@@ -14,7 +15,8 @@ BACKEND_PATH = REPO / "backend_v2.py"
 
 # Types whose buff_vals the backend applies. Kept in sync by
 # test_sheet_buff_truth_consumed_types_match_get_building_buff.
-CONSUMED_EFFECT_TYPES = frozenset({"task_bonus", "discount", "daily_gold"})
+# get_building_buff callers that must remain. task_bonus is no longer one of them.
+CONSUMED_EFFECT_TYPES = frozenset({"discount", "daily_gold"})
 
 UNWIRED_BUFF_TYPES = frozenset(
     {
@@ -93,48 +95,108 @@ def discount_fold(value) -> str | None:
     return None
 
 
-def honest_buff_label(buff_type: str, value, consumed: set[str] | None = None) -> str:
-    """Panel text that matches the real effect of this buff_type.
+def passive_points(level: int) -> int:
+    """+2 of the building's ability per placed level."""
+    return 2 * int(level)
 
-    Unconsumed types (no get_building_buff caller) are 「未開放」 with no magnitude.
+
+def sheet_effect_label(name: str, level: int, buff_type: str, value) -> str:
+    """#sheetBuff text that equals the locked effect.
+
+    Passives use level * 2 (arena speed is level * 1), not the old buff_vals curve.
+    Shop and farm still use buff_vals[level-1]. Unknown types stay 「未開放」.
     """
-    applied = CONSUMED_EFFECT_TYPES if consumed is None else consumed
-    if buff_type not in applied:
-        return UNAVAILABLE_LABEL
-    if buff_type == "task_bonus":
-        return f"任務多經驗 +{format_buff_number(value)}"
-    if buff_type == "daily_gold":
-        return f"每日金幣 +{format_buff_number(value)}"
-    if buff_type == "discount":
+    level = int(level or 1)
+    if name == "圖書館":
+        return f"知識 +{passive_points(level)}"
+    if name == "健身室":
+        return f"臂力 +{passive_points(level)}"
+    if name == "工坊":
+        return f"創意 +{passive_points(level)}"
+    if name == "競技場":
+        return f"臂力 +{passive_points(level)}、速度 +{level}"
+    if name == "探險公會":
+        return f"勇氣 +{passive_points(level)}"
+    if name == "天文台":
+        # 10 percentage points per level. Same numbers as explore_treasure_chance.
+        return f"尋寶機率 +{10 * level}%"
+    if name == "醫院":
+        return "技能：繃帶（小回復）"
+    if name == "燈塔":
+        return "技能：強光（魔法攻擊，敵人命中率下降 2 回合）"
+    if name == "銀行":
+        return "技能：金錢砸（每次 10 金幣，傷害約普攻 3 倍）"
+    if name == "商店" or buff_type == "discount":
         fold = discount_fold(value)
         if not fold:
             raise AssertionError(
                 f"discount buff_vals value {value!r} has no 起屋／升級 fold"
             )
         return f"起屋／升級金幣{fold}"
-    raise AssertionError(f"no honest label for consumed buff_type {buff_type!r}")
+    if name == "農場" or buff_type == "daily_gold":
+        return f"每日金幣 +{format_buff_number(value)}"
+    return UNAVAILABLE_LABEL
 
 
-def effect_line_matches(buff_type: str, value, text: str, consumed: set[str] | None = None) -> bool:
+def honest_buff_label(
+    buff_type: str,
+    value,
+    consumed: set[str] | None = None,
+    name: str | None = None,
+    level: int | None = None,
+) -> str:
+    """Panel text for this placed building. `consumed` is ignored; kept for callers."""
+    del consumed
+    if name:
+        return sheet_effect_label(name, level or 1, buff_type, value)
+    if buff_type == "discount":
+        return sheet_effect_label("商店", level or 1, buff_type, value)
+    if buff_type == "daily_gold":
+        return sheet_effect_label("農場", level or 1, buff_type, value)
+    if buff_type == "task_bonus":
+        return sheet_effect_label("圖書館", level or 1, buff_type, value)
+    return UNAVAILABLE_LABEL
+
+
+def effect_line_matches(
+    buff_type: str,
+    value,
+    text: str,
+    consumed: set[str] | None = None,
+    name: str | None = None,
+    level: int | None = None,
+) -> bool:
     """True when #sheetBuff equals the honest label.
 
     Farm gold may keep a trailing 🪙. The coin mark is the real currency.
     The claim control is a separate assert.
     """
-    expected = honest_buff_label(buff_type, value, consumed)
+    expected = honest_buff_label(buff_type, value, consumed, name=name, level=level)
     raw = (text or "").strip()
-    if buff_type == "daily_gold" and buff_type in (consumed or CONSUMED_EFFECT_TYPES):
+    if expected.startswith("每日金幣"):
         return raw in (expected, expected + "🪙")
     return raw == expected
 
 
-def dishonest_fragments(buff_type: str) -> tuple[str, ...]:
-    """Copy that describes an effect the backend does not implement."""
-    if buff_type == "task_bonus":
-        return ("⭐", "星", "任務多星")
+def dishonest_fragments(buff_type: str, name: str | None = None) -> tuple[str, ...]:
+    """Copy that describes an effect this building does not have."""
+    by_name = {
+        "圖書館": ("⭐", "星", "任務多星", "任務多經驗"),
+        "商店": ("購物折扣", "獎勵"),
+        "健身室": ("漏打卡都唔斷", "連續保護"),
+        "工坊": ("建築速度",),
+        "醫院": ("探險回復",),
+        "燈塔": ("探險範圍",),
+        "競技場": ("探險金幣",),
+        "天文台": ("發現新區域", "知識"),
+        "銀行": ("帳本", "帳簿"),
+    }
+    if name in by_name:
+        return by_name[name]
     if buff_type == "discount":
-        # 「購物折扣」 sounds like reward shopping. Seed effect is 「獎勵 -10%」.
-        return ("購物折扣", "獎勵")
-    if buff_type not in CONSUMED_EFFECT_TYPES:
-        return FORBIDDEN_UNWIRED_SNIPPETS
-    return ()
+        return by_name["商店"]
+    if buff_type == "daily_gold":
+        return ()
+    if name in ("農場",):
+        return ()
+    return FORBIDDEN_UNWIRED_SNIPPETS

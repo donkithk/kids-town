@@ -38,17 +38,19 @@ Requirements:
   TC-FE-TOWN-UX-UPGRADE-CONFIRM-01  第一撳 #btnUpgrade 只開確認；取消唔 POST；確定先至升級同扣 HUD。
   對齊設計稿 3b4671d：撳屋 → #actionSheet 顯示成本 → 確認 → 升級。唔係一撳升級。
   篩選 `-k 'upgrade_cost or upgrade_confirm'`。唔改 UX-05／store_ux 斷言。
-  TC-FE-TOWN-UX-SHEET-BUFF-01  已起屋面板：#sheetFns 冇 .fn；可見 #sheetBuff 顯示而家等級 buff。
-  數字合約搬去已接線嘅圖書館 task_bonus Lv.2：buff_vals=[2,4,6,10,15]，
-  index 1 係 4，同 Lv.1／種子「任務 +2⭐」唔同。#sheetBuff 要係「任務多經驗 +4」。
-  工坊 build_speed 未接線，唔再要求任何數字。
+  TC-FE-TOWN-UX-SHEET-BUFF-01  已起屋面板：#sheetFns 冇 .fn；可見 #sheetBuff 顯示而家等級效果。
+  圖書館 Lv.2 被動係知識 +4（每級 +2，唔係「任務多經驗」）。
+  buff_vals[level-1] 嘅數字合約搬去商店 Lv.2「起屋／升級金幣八五折」（TC-FE-SHEET-BUFFVAL-01）。
   TC-FE-TOWN-UX-SHEET-BUFF-02  唔好有 FN 假動作；打開或撳舊 stub 都唔好 toast「整好一件道具」。
   02 仍然開工坊，只查零 .fn 同 stub toast，唔查 buff 數字。篩選 `-k sheet_buff`。
-  TC-FE-TOWN-UX-SHEET-BUFF-ZH-01  工坊 Lv.3：#sheetBuff 要係「未開放」。
-  唔好再寫「建築速度 ×」（build_speed 冇後端消費）。舊「建築速度 ×4」係假效果。
-  TC-FE-TOWN-UX-SHEET-BUFF-ZH-02  健身室 Lv.1：#sheetBuff 要係「未開放」。
-  唔好再寫「漏打卡都唔斷」（streak_protect 冇後端消費）。
+  TC-FE-TOWN-UX-SHEET-BUFF-ZH-01  工坊 Lv.3：#sheetBuff 要係「創意 +6」。
+  唔好再寫「建築速度 ×」或者「未開放」。
+  TC-FE-TOWN-UX-SHEET-BUFF-ZH-02  健身室 Lv.1：#sheetBuff 要係「臂力 +2」。
+  唔好再寫「漏打卡都唔斷」或者「未開放」。
   篩選 `-k sheet_buff_zh`。函數名亦含 sheet_buff，所以 `-k sheet_buff` 會一齊跑到 ZH。
+  TC-FE-SHEET-BUFFVAL-01  商店 Lv.2：buff_vals[1]=0.85 →「起屋／升級金幣八五折」。
+  TC-FE-SHEET-UNWIRED-01  未知 buff_type：正好「未開放」，唔好出現 buff_vals 嘅數字。
+  TC-FE-SHEET-BANK-01  銀行：技能句「金錢砸」，唔好「未開放」或者「帳本」。
   SHEET-BUFF-TRUTH-01..06  面板文字要等於真實效果。見 docs/test-cases/SHEET_BUFF_TRUTH.md。
   篩選 `-k sheet_buff_truth`。`-k sheet_buff` 會一齊跑到。
   唔改 upgrade_cost／upgrade_confirm／UX-05／store_ux 斷言。
@@ -91,7 +93,6 @@ from tests.factories import (  # noqa: E402
 )
 from tests.sheet_buff_truth_spec import (  # noqa: E402
     BUILD_SPEED_LIE_RE,
-    CONSUMED_EFFECT_TYPES,
     FARM_CLAIM_LABEL,
     FARM_CLAIMED_LABEL,
     PANEL_BUILDINGS,
@@ -4437,11 +4438,9 @@ def test_town_ux_upgrade_confirm_cancel_then_post(
 # that only toast and rewrite #sheetNote. Show this building's current-level buff
 # from API buff_type + buff_vals[level-1] (same index as get_building_buff).
 # Dedicated visible node: #sheetBuff.
-# The current-level number lives on a wired buff. Library task_bonus
-# buff_vals=[2,4,6,10,15]; Lv.2 is index 1 → 4, which is not buff_vals[0]
-# and not the static seed effect 「任務 +2⭐」. Unwired 工坊 is 「未開放」
-# and is not a numeric contract. Do not weaken upgrade_cost, upgrade_confirm,
-# UX-05, or store_ux.
+# Library Lv.2 shows the knowledge passive 「知識 +4」 (2 per level), not
+# 「任務多經驗」. Shop and farm still read buff_vals[level-1]. Do not weaken
+# upgrade_cost, upgrade_confirm, UX-05, or store_ux.
 
 SHEET_BUFF_NAME = "圖書館"
 SHEET_BUFF_LEVEL = 2
@@ -4500,13 +4499,9 @@ SHEET_BUFF_RED = (
     "A placed building's #actionSheet must not render fake FN buttons "
     "(#sheetFns .fn, including 整道具／修理／接任務／出發) and must not toast "
     "FN_COPY lines such as 工坊：整好一件道具. "
-    "SHEET-BUFF-01 shows the current-level wired buff in a visible #sheetBuff. "
-    f"圖書館 Lv.{SHEET_BUFF_LEVEL} {SHEET_BUFF_TYPE} uses buff_vals[{SHEET_BUFF_INDEX}] "
-    f"from {SHEET_BUFF_VALS} → {SHEET_BUFF_VALUE} "
-    f"(not Lv.1 / seed value {SHEET_BUFF_LV1_VALUE}). "
-    "Text and aria-label must be 「任務多經驗 +4」. "
-    "「任務多星 +4⭐」 and the seed effect 「任務 +2⭐」 do not count. "
-    "工坊 build_speed is unwired: do not require a number there; the panel is 「未開放」. "
+    "SHEET-BUFF-01 shows the current-level effect in a visible #sheetBuff. "
+    f"圖書館 Lv.{SHEET_BUFF_LEVEL} is 「知識 +{2 * SHEET_BUFF_LEVEL}」 "
+    "(+2 knowledge per level, not 「任務多經驗」 and not the seed effect 「任務 +2⭐」). "
     "#sheetNote, the toast, and #sheetCost do not count as #sheetBuff. "
     "Leave #btnUpgrade, the upgrade cost chip, and #upgradeConfirm unchanged."
 )
@@ -4594,8 +4589,7 @@ def _seed_sheet_buff_library(test_db_path, kid_id):
 def _seed_sheet_buff_workshop(test_db_path, kid_id):
     """Placed 工坊 for the zero-.fn / no-stub check. Do not assert a buff number.
 
-    build_speed is unwired. The panel contract for this building is 「未開放」
-    (ZH-01 / SHEET-BUFF-TRUTH-05), not buff_vals[2].
+    The label contract is 「創意 +6」 (ZH-01 / SHEET-BUFF-TRUTH-05), not buff_vals[2].
     """
     return _seed_sheet_buff_placed(
         test_db_path, kid_id, SHEET_BUFF_WORKSHOP, SHEET_BUFF_WORKSHOP_LEVEL
@@ -4753,12 +4747,17 @@ def _click_stub_fn(page):
 def test_town_ux_sheet_buff_shows_level_buff_without_fn(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-UX-SHEET-BUFF-01 圖書館 Lv.2：零 .fn，#sheetBuff 係「任務多經驗 +4」。"""
+    """TC-FE-TOWN-UX-SHEET-BUFF-01 圖書館 Lv.2：零 .fn，#sheetBuff 係「知識 +4」。"""
     case_id = "TC-FE-TOWN-UX-SHEET-BUFF-01"
     buff = _seed_sheet_buff_library(test_db_path, fe_ids["kid_id"])
-    want = honest_buff_label(buff["buff_type"], buff["value"])
-    lv1 = honest_buff_label(buff["buff_type"], buff["vals"][0])
-    assert want == f"任務多經驗 +{_format_buff_number(SHEET_BUFF_VALUE)}", want
+    want = honest_buff_label(
+        buff["buff_type"], buff["value"], name=buff["name"], level=buff["level"]
+    )
+    lv1 = honest_buff_label(
+        buff["buff_type"], buff["value"], name=buff["name"], level=1
+    )
+    assert want == f"知識 +{2 * SHEET_BUFF_LEVEL}", want
+    assert lv1 == "知識 +2", lv1
     assert lv1 != want, (lv1, want)
     _open_town_home(page, base_url)
     _open_placed_building_sheet(page, case_id, SHEET_BUFF_NAME)
@@ -4799,7 +4798,7 @@ def test_town_ux_sheet_buff_shows_level_buff_without_fn(
                 f"not Lv.1 {lv1!r} and not seed effect {buff['effect']!r}). "
                 f"text={reading['text']!r} aria={reading['aria']!r}."
             )
-        for bad in ("⭐", "星", "任務多星"):
+        for bad in ("⭐", "星", "任務多星", "任務多經驗"):
             blob = f"{reading['text']}\n{reading['aria']}"
             if bad in blob:
                 problems.append(
@@ -4849,11 +4848,12 @@ def test_town_ux_sheet_buff_no_stub_toast(
 
 # ── TC-FE-TOWN-UX-SHEET-BUFF-ZH-*: kid-readable Traditional Chinese label ──
 #
-# SHEET-BUFF-01 now checks library Lv.2 「任務多經驗 +4」 (wired task_bonus).
-# ZH-01 / ZH-02 require 「未開放」: build_speed and streak_protect are not
-# consumed. The old 「建築速度 ×4」 / 「漏打卡都唔斷」 sentences were a lie.
-# Filter `-k sheet_buff_zh`. Names also contain `sheet_buff`, so `-k sheet_buff`
-# selects them too. Do not weaken upgrade_cost, upgrade_confirm, UX-05, or store_ux.
+# SHEET-BUFF-01 checks library Lv.2 「知識 +4」 (+2 knowledge per level).
+# ZH-01 / ZH-02 require the same real passives: 工坊 Lv.3 「創意 +6」,
+# 健身室 Lv.1 「臂力 +2」. The old 「建築速度 ×4」 / 「漏打卡都唔斷」 / 「未開放」
+# sentences are not the effect. Filter `-k sheet_buff_zh`. Names also contain
+# `sheet_buff`, so `-k sheet_buff` selects them too. Do not weaken
+# upgrade_cost, upgrade_confirm, UX-05, or store_ux.
 
 SHEET_BUFF_ZH_GYM = "健身室"
 SHEET_BUFF_ZH_GYM_LEVEL = 1
@@ -4911,11 +4911,10 @@ def _click_sheet_buff(page):
 
 
 SHEET_BUFF_ZH_RED = (
-    "Superseded dishonest copy. build_speed and streak_protect are not applied "
-    "by the backend (no get_building_buff caller). "
-    "#sheetBuff must be 「未開放」 with no effect value. "
-    "#sheetBuff and #sheetNote must not contain 「建築速度 ×」 or 「漏打卡都唔斷」. "
-    "Not 「建築速度 ×4」. Not 「連續保護 ×1 漏打卡都唔斷」. "
+    "Panel text must equal the real passive. "
+    "工坊 Lv.3 is 「創意 +6」 (+2 creativity per level), not 「未開放」 and not "
+    "「建築速度 ×4」. 健身室 Lv.1 is 「臂力 +2」, not 「未開放」 and not "
+    "「漏打卡都唔斷」. "
     "#sheetFns .fn stays zero. #upgradeConfirm stays the last element child of "
     "div.gsw.stage."
 )
@@ -4926,7 +4925,7 @@ def _sheet_buff_zh_fail(case_id, detail):
 
 
 def _assert_sheet_buff_zh(page, case_id, buff):
-    """Unwired buildings say 未開放. The old ×N / 漏打卡 copy is not the contract."""
+    """#sheetBuff equals the locked passive for this building."""
     _assert_truth_unwired_panel(page, case_id, buff, fail_fn=_sheet_buff_zh_fail)
 
 
@@ -4934,7 +4933,7 @@ def _assert_sheet_buff_zh(page, case_id, buff):
 def test_town_ux_sheet_buff_zh_workshop_shows_chinese_level_value(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 工坊 Lv.3：未開放。唔好再寫建築速度 ×。"""
+    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 工坊 Lv.3：創意 +6。唔好寫建築速度 ×或者未開放。"""
     case_id = "TC-FE-TOWN-UX-SHEET-BUFF-ZH-01"
     buff = _seed_sheet_buff_workshop(test_db_path, fe_ids["kid_id"])
     assert buff["name"] == SHEET_BUFF_WORKSHOP, buff
@@ -4950,7 +4949,7 @@ def test_town_ux_sheet_buff_zh_workshop_shows_chinese_level_value(
 def test_town_ux_sheet_buff_zh_gym_shows_chinese_not_streak_code(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 健身室 Lv.1：未開放。唔好再寫漏打卡都唔斷。"""
+    """TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 健身室 Lv.1：臂力 +2。唔好寫漏打卡都唔斷或者未開放。"""
     case_id = "TC-FE-TOWN-UX-SHEET-BUFF-ZH-02"
     buff = _seed_sheet_buff_placed(
         test_db_path, fe_ids["kid_id"], SHEET_BUFF_ZH_GYM, SHEET_BUFF_ZH_GYM_LEVEL
@@ -4975,12 +4974,13 @@ def test_town_ux_sheet_buff_zh_gym_shows_chinese_not_streak_code(
 
 SHEET_BUFF_TRUTH_RED = (
     " #sheetBuff must equal the real effect. "
-    "task_bonus is extra experience （任務多經驗 +N）, not stars. "
+    "圖書館 is 「知識 +N」（+2 per level）, not 「任務多經驗」 and not stars. "
     "discount is build/upgrade gold only （起屋／升級金幣 + the fold of buff_vals[level-1]）. "
     "daily_gold needs a visible 領取 control; after a successful claim the same day "
     "shows 今日已領 and a second claim does not add gold. "
-    "Buff types with no get_building_buff caller must say 未開放 and must not show "
-    "an effect value. 漏打卡都唔斷 and 建築速度 × must not appear. "
+    "健身室／工坊／醫院／探險公會／燈塔／競技場／天文台 describe the locked passive "
+    "or skill, not 「未開放」 and not the old lie （漏打卡、建築速度 ×、探險回復）. "
+    "A buff_type with no locked building still says 未開放 with no number. "
     "#sheetFns .fn stays 0. #upgradeConfirm stays the last element child of div.gsw.stage."
 )
 
@@ -5039,52 +5039,64 @@ def _shows_effect_magnitude(text, value):
     return False
 
 
+def _label_args(buff):
+    return buff.get("name"), buff.get("level")
+
+
 def _line_problems(surface, buff, text, consumed):
     kind = buff["buff_type"]
     value = buff["value"]
+    name, level = _label_args(buff)
     raw = (text or "").strip()
-    expected = honest_buff_label(kind, value, consumed)
+    expected = honest_buff_label(kind, value, consumed, name=name, level=level)
     problems = []
-    if not effect_line_matches(kind, value, raw, consumed):
+    if not effect_line_matches(kind, value, raw, consumed, name=name, level=level):
         problems.append(f"{surface} is {raw!r}, want {expected!r}.")
     lowered = raw.lower()
     for code in SHEET_BUFF_ZH_FORBIDDEN:
         if code in lowered:
             problems.append(f"{surface} shows English buff_type {code}.")
-    for frag in dishonest_fragments(kind):
+    for frag in dishonest_fragments(kind, name=name):
         if frag and frag in raw:
             problems.append(f"{surface} contains dishonest copy {frag!r}.")
     if BUILD_SPEED_LIE_RE.search(raw):
         problems.append(f"{surface} contains 「建築速度 ×」.")
-    if kind not in consumed and _shows_effect_magnitude(raw, value):
+    # A number is a lie only when the locked line is 「未開放」.
+    # Real passives and skill sentences may contain their own digits.
+    if expected == UNAVAILABLE_LABEL and _shows_effect_magnitude(raw, value):
         problems.append(
             f"{surface} shows effect value {_format_buff_number(value)} "
-            f"for unconsumed {kind}."
+            f"on an unwired {kind}."
         )
     return problems
 
 
 def _note_problems(buff, note, consumed):
     raw = note or ""
+    name, level = _label_args(buff)
     problems = []
-    for frag in dishonest_fragments(buff["buff_type"]):
+    for frag in dishonest_fragments(buff["buff_type"], name=name):
         if frag and frag in raw:
             problems.append(f"#sheetNote contains dishonest copy {frag!r}. note={raw!r}.")
     if BUILD_SPEED_LIE_RE.search(raw):
         problems.append(f"#sheetNote contains 「建築速度 ×」. note={raw!r}.")
     if "而家等級加成" in raw:
         rest = raw.split("而家等級加成", 1)[1].strip()
-        expected = honest_buff_label(buff["buff_type"], buff["value"], consumed)
-        if not effect_line_matches(buff["buff_type"], buff["value"], rest, consumed):
+        expected = honest_buff_label(
+            buff["buff_type"], buff["value"], consumed, name=name, level=level
+        )
+        if not effect_line_matches(
+            buff["buff_type"], buff["value"], rest, consumed, name=name, level=level
+        ):
             problems.append(f"#sheetNote restates {rest!r}, want {expected!r}.")
     return problems
 
 
 def _assert_truth_unwired_panel(page, case_id, buff, fail_fn=None):
-    """#sheetBuff equals 未開放 and the old lie strings are gone."""
+    """#sheetBuff equals the locked label. The buff_type is not a gold/XP caller."""
     fail = fail_fn or _sheet_buff_truth_fail
     consumed = consumed_buff_types_in_backend()
-    assert buff["buff_type"] not in consumed, buff
+    assert buff["buff_type"] not in ("discount", "daily_gold"), buff
     problems = _truth_panel_problems(page, buff, consumed)
     if problems:
         fail(case_id, " | ".join(problems))
@@ -5100,8 +5112,11 @@ def _truth_panel_problems(page, buff, consumed):
         )
     problems.extend(_sheet_contract_problems(page))
     reading = _read_sheet_buff(page)
+    name, level = _label_args(buff)
     if not reading["present"] or not reading["visible"]:
-        expected = honest_buff_label(buff["buff_type"], buff["value"], consumed)
+        expected = honest_buff_label(
+            buff["buff_type"], buff["value"], consumed, name=name, level=level
+        )
         problems.append(
             f"#sheetBuff is missing or hidden, so it cannot equal {expected!r}. "
             f"present={reading['present']} visible={reading['visible']} "
@@ -5114,7 +5129,12 @@ def _truth_panel_problems(page, buff, consumed):
                 _line_problems("#sheetBuff aria-label", buff, reading["aria"], consumed)
             )
         elif reading["aria"] and not effect_line_matches(
-            buff["buff_type"], buff["value"], reading["text"], consumed
+            buff["buff_type"],
+            buff["value"],
+            reading["text"],
+            consumed,
+            name=name,
+            level=level,
         ):
             problems.append("#sheetBuff aria-label repeats that label.")
     note_open = _sheet_note_text(page)
@@ -5167,7 +5187,7 @@ def _seed_farm_sheet(test_db_path, kid_id):
 def test_town_ux_sheet_buff_truth_library_experience_not_stars(
     page, base_url, test_db_path, fe_ids
 ):
-    """SHEET-BUFF-TRUTH-01 圖書館：任務多經驗 +2，唔好星。"""
+    """SHEET-BUFF-TRUTH-01 圖書館：知識 +2，唔好任務多經驗，亦唔好星。"""
     case_id = "SHEET-BUFF-TRUTH-01"
     buff = _open_truth_building(
         page, base_url, test_db_path, fe_ids["kid_id"], case_id, "圖書館", 1
@@ -5175,7 +5195,6 @@ def test_town_ux_sheet_buff_truth_library_experience_not_stars(
     assert buff["buff_type"] == "task_bonus", buff
     assert buff["value"] == 2, buff
     consumed = consumed_buff_types_in_backend()
-    assert "task_bonus" in consumed
     problems = _truth_panel_problems(page, buff, consumed)
     if problems:
         _sheet_buff_truth_fail(case_id, " | ".join(problems))
@@ -5343,8 +5362,9 @@ def test_town_ux_sheet_buff_truth_farm_claim_once(
 
 
 def _visit_truth_buildings(page, base_url, test_db_path, kid_id, case_id, rows):
+    # The consumed-set lock lives in the API case. Do not abort the panel
+    # walk when task_bonus is still passed to get_building_buff.
     consumed = consumed_buff_types_in_backend()
-    assert consumed == set(CONSUMED_EFFECT_TYPES), consumed
     problems = []
     for row in rows:
         buff = _seed_sheet_buff_placed(test_db_path, kid_id, row["name"], row["level"])
@@ -5372,9 +5392,12 @@ def _visit_truth_buildings(page, base_url, test_db_path, kid_id, case_id, rows):
 def test_town_ux_sheet_buff_truth_unwired_marked_closed(
     page, base_url, test_db_path, fe_ids
 ):
-    """SHEET-BUFF-TRUTH-05 七種未接線：未開放，唔好漏打卡／建築速度 ×。"""
+    """SHEET-BUFF-TRUTH-05 七座要顯示真正被動或技能，唔好未開放。"""
     case_id = "SHEET-BUFF-TRUTH-05"
-    rows = [row for row in PANEL_BUILDINGS if row["buff_type"] not in CONSUMED_EFFECT_TYPES]
+    rows = [
+        row for row in PANEL_BUILDINGS
+        if row["name"] not in ("圖書館", "商店", "農場")
+    ]
     assert {row["buff_type"] for row in rows} == {
         "streak_protect",
         "build_speed",
@@ -5395,10 +5418,101 @@ def test_town_ux_sheet_buff_truth_unwired_marked_closed(
 def test_town_ux_sheet_buff_truth_guard_no_unconsumed_effect(
     page, base_url, test_db_path, fe_ids
 ):
-    """SHEET-BUFF-TRUTH-06 未消費嘅 buff_type 唔好宣稱效果。"""
+    """SHEET-BUFF-TRUTH-06 每座已命名建築嘅面板等於鎖定效果。"""
     case_id = "SHEET-BUFF-TRUTH-06"
     problems = _visit_truth_buildings(
         page, base_url, test_db_path, fe_ids["kid_id"], case_id, PANEL_BUILDINGS
     )
+    if problems:
+        _sheet_buff_truth_fail(case_id, " | ".join(problems))
+
+
+def _insert_building_def(test_db_path, name, buff_type, buff_vals, effect=""):
+    """Test-only building_defs row. The product seed has no 銀行 and no unknown type."""
+    db = connect_db(test_db_path)
+    db.execute("DELETE FROM building_defs WHERE name=?", (name,))
+    db.execute(
+        """
+        INSERT INTO building_defs
+            (icon, name, cost_gold, materials, effect, buff_type, buff_vals, max_level)
+        VALUES (?, ?, 100, '{}', ?, ?, ?, 5)
+        """,
+        (name[:1], name, effect, buff_type, json.dumps(buff_vals)),
+    )
+    db.commit()
+    db.close()
+    return building_def_id(test_db_path, name)
+
+
+@pytest.mark.case_id("TC-FE-SHEET-BUFFVAL-01")
+def test_sheet_shop_level2_uses_buff_vals_index(page, base_url, test_db_path, fe_ids):
+    """TC-FE-SHEET-BUFFVAL-01 商店 Lv.2 讀 buff_vals[1]：起屋／升級金幣八五折，唔係九折。"""
+    case_id = "TC-FE-SHEET-BUFFVAL-01"
+    buff = _seed_sheet_buff_placed(test_db_path, fe_ids["kid_id"], "商店", 2)
+    assert buff["buff_type"] == "discount", buff
+    assert buff["index"] == 1, buff
+    assert float(buff["value"]) == 0.85, buff
+    want = honest_buff_label(
+        buff["buff_type"], buff["value"], name=buff["name"], level=buff["level"]
+    )
+    lv1 = honest_buff_label(
+        buff["buff_type"], buff["vals"][0], name=buff["name"], level=1
+    )
+    assert want == "起屋／升級金幣八五折", want
+    assert lv1 == "起屋／升級金幣九折", lv1
+    _open_town_home(page, base_url)
+    _open_placed_building_sheet(page, case_id, "商店", fail_fn=_sheet_buff_truth_fail)
+    problems = _truth_panel_problems(
+        page, buff, consumed_buff_types_in_backend()
+    )
+    reading = _read_sheet_buff(page)
+    if reading["text"] == lv1:
+        problems.append(
+            "#sheetBuff used buff_vals[0] （九折） instead of buff_vals[level-1] （八五折）."
+        )
+    if problems:
+        _sheet_buff_truth_fail(case_id, " | ".join(problems))
+
+
+@pytest.mark.case_id("TC-FE-SHEET-UNWIRED-01")
+def test_unknown_buff_type_shows_closed_without_number(
+    page, base_url, test_db_path, fe_ids
+):
+    """TC-FE-SHEET-UNWIRED-01 未知 buff_type 正好係「未開放」，唔好出現數值 9。"""
+    case_id = "TC-FE-SHEET-UNWIRED-01"
+    name = "測試未接線"
+    _insert_building_def(test_db_path, name, "zzz_unwired", [9], effect="")
+    buff = _seed_sheet_buff_placed(test_db_path, fe_ids["kid_id"], name, 1)
+    assert buff["buff_type"] == "zzz_unwired", buff
+    assert buff["value"] == 9, buff
+    want = honest_buff_label(
+        buff["buff_type"], buff["value"], name=buff["name"], level=buff["level"]
+    )
+    assert want == UNAVAILABLE_LABEL, want
+    _open_town_home(page, base_url)
+    _open_placed_building_sheet(page, case_id, name, fail_fn=_sheet_buff_truth_fail)
+    problems = _truth_panel_problems(page, buff, consumed_buff_types_in_backend())
+    reading = _read_sheet_buff(page)
+    blob = f"{reading['text']}\n{reading['aria']}\n{_sheet_note_text(page)}"
+    if "9" in blob:
+        problems.append(f"unwired panel must not show buff_vals 9. blob={blob!r}.")
+    if problems:
+        _sheet_buff_truth_fail(case_id, " | ".join(problems))
+
+
+@pytest.mark.case_id("TC-FE-SHEET-BANK-01")
+def test_bank_sheet_describes_gold_smash_skill(page, base_url, test_db_path, fe_ids):
+    """TC-FE-SHEET-BANK-01 銀行面板係金錢砸技能句，唔好未開放，亦唔好帳本。"""
+    case_id = "TC-FE-SHEET-BANK-01"
+    _insert_building_def(test_db_path, "銀行", "ledger", [1], effect="")
+    buff = _seed_sheet_buff_placed(test_db_path, fe_ids["kid_id"], "銀行", 1)
+    assert buff["name"] == "銀行", buff
+    want = honest_buff_label(
+        buff["buff_type"], buff["value"], name=buff["name"], level=buff["level"]
+    )
+    assert want == "技能：金錢砸（每次 10 金幣，傷害約普攻 3 倍）", want
+    _open_town_home(page, base_url)
+    _open_placed_building_sheet(page, case_id, "銀行", fail_fn=_sheet_buff_truth_fail)
+    problems = _truth_panel_problems(page, buff, consumed_buff_types_in_backend())
     if problems:
         _sheet_buff_truth_fail(case_id, " | ".join(problems))

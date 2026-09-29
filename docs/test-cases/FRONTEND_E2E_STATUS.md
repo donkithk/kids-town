@@ -4,8 +4,7 @@
 
 ## SHEET-BUFF-01 moved off the unwired workshop (follow-up on #47)
 
-> Recorded 2026-09-29. `TC-FE-TOWN-UX-SHEET-BUFF-01` no longer requires 工坊 Lv.3 to show `4` / `build_speed` / `×4`. `build_speed` is unwired; that panel is 「未開放」 (`SHEET-BUFF-ZH-01` / `SHEET-BUFF-TRUTH-05`).  
-> The current-level contract now uses 圖書館 `task_bonus` Lv.2. Seed `buff_vals=[2,4,6,10,15]`, so index 1 is **4**, which is not `buff_vals[0]` (2) and not the static effect 「任務 +2⭐」. `#sheetBuff` text and `aria-label` must equal 「任務多經驗 +4」. `#sheetFns .fn` stays 0.  
+> Recorded 2026-09-29 against an older sheet contract. That contract is superseded: 圖書館 is 「知識 +N」, not 「任務多經驗」. 工坊／健身室／醫院／燈塔／競技場／公會／天文台／銀行 嘅而家文案見 [`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md) 同 [`PASSIVE_AND_SKILLS.md`](PASSIVE_AND_SKILLS.md)。`buff_vals[level-1]` 數字合約搬去 `TC-FE-SHEET-BUFFVAL-01`。未知 type 先至「未開放」（`TC-FE-SHEET-UNWIRED-01`）。下面表格係改文案之前嘅紀錄。  
 > `SHEET-BUFF-02` still opens 工坊 and only checks zero `.fn` plus no stub toast. It does not read a buff number.  
 > Product files were not changed. The #48 check checked out `5b99ed2` product files locally, ran the test, then restored them. Nothing was pushed to `cursor/green-sheet-buff-truth-6a00`.
 

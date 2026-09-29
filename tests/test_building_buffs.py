@@ -37,7 +37,7 @@ def _complete(client, task_id, kid_id):
 
 @pytest.mark.case_id("P1-TC-BUFF-01")
 def test_library_level1_adds_task_bonus_xp(client, family, test_db):
-    """P1-TC-BUFF-01 圖書館 Lv.1 完成任務 XP = 基礎 + 2。"""
+    """P1-TC-BUFF-01 圖書館唔再加任務 XP。10 分任務 bonus==0，總 XP 得 5。"""
     kid_id = family.kid_a.id
     insert_building(test_db, kid_id, def_id(test_db, "library"), level=1, stored=0, cell_x=0, cell_y=0)
     task_id = create_assigned_task(client, family, "p1-buff-01", points=10)
@@ -48,10 +48,10 @@ def test_library_level1_adds_task_bonus_xp(client, family, test_db):
     assert r.status_code == 200, response_text(r)
     data = json_or_text(r)
     assert data.get("experience_gained") == 5, data
-    assert data.get("experience_bonus") == 2, data
-    assert data.get("experience_total") == 7, data
+    assert data.get("experience_bonus") == 0, data
+    assert data.get("experience_total") == 5, data
     assert data.get("points_awarded") == 10, data
-    assert get_kid_experience(test_db, kid_id) == before_xp + 7
+    assert get_kid_experience(test_db, kid_id) == before_xp + 5
     assert get_kid_points(test_db, kid_id) == before_gold + 10
 
 
@@ -71,14 +71,16 @@ def test_no_library_task_bonus_is_zero(client, family, test_db):
 
 @pytest.mark.case_id("P1-TC-BUFF-03")
 def test_library_level2_uses_updated_buff_table(client, family, test_db):
-    """P1-TC-BUFF-03 Lv.2 buff_vals[1]==4。"""
+    """P1-TC-BUFF-03 圖書館 Lv.2 都唔再加任務 XP。bonus==0，唔好再用 buff_vals[1]==4。"""
     kid_id = family.kid_a.id
     insert_building(test_db, kid_id, def_id(test_db, "library"), level=2, stored=0, cell_x=0, cell_y=0)
     task_id = create_assigned_task(client, family, "p1-buff-03", points=10)
     r = _complete(client, task_id, kid_id)
     assert r.status_code == 200, response_text(r)
     data = json_or_text(r)
-    assert data.get("experience_bonus") == 4, data
+    assert data.get("experience_gained") == 5, data
+    assert data.get("experience_bonus") == 0, data
+    assert data.get("experience_total") == 5, data
 
 
 @pytest.mark.case_id("P1-TC-BUFF-04")

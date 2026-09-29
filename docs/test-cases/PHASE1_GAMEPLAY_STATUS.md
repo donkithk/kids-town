@@ -1,6 +1,8 @@
 # Phase 1 gameplay test status (TDD GREEN)
 
-> Sheet-buff panel copy versus the real effect is **SHEET-BUFF-TRUTH**（[`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md)、[`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md)）。API 錨點喺 `tests/test_sheet_buff_truth.py`，唔改下面 P1-TC-BUFF 歷史結果。
+> Sheet-buff panel copy versus the real effect is **SHEET-BUFF-TRUTH**（[`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md)、[`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md)）。API 錨點喺 `tests/test_sheet_buff_truth.py`。
+>
+> 2026-09-29：`P1-TC-BUFF-01`／`03` 改為要求 `experience_bonus==0`（圖書館任務 XP 加成取消）。下面表格係改斷言之前嘅歷史綠燈，唔再代表呢兩條嘅而家預期。新被動同技能見 [`PASSIVE_AND_SKILLS.md`](PASSIVE_AND_SKILLS.md)。
 
 > Recorded against product implementation on branch `cursor/phase1-gameplay-tdd-green-9aed`.  
 > Base: latest `main` (PR #9 red tests merged, commit `72b873e`).  

@@ -45,6 +45,7 @@ BUILDING_NAMES = {
     "lighthouse": "燈塔",
     "arena": "競技場",
     "observatory": "天文台",
+    "bank": "銀行",
 }
 
 

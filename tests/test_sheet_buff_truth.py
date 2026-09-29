@@ -1,9 +1,9 @@
 """SHEET-BUFF-TRUTH API anchors.
 
 These lock the real effects that #sheetBuff must describe. They use an empty
-SQLite file and synthetic accounts only. Several pass on main because
-library XP, shop gold discount, and farm claim already exist. The matching
-Playwright cases in tests/test_frontend.py are the red panel asserts.
+SQLite file and synthetic accounts only. Shop gold discount and farm claim
+must stay green. The library task-XP bonus is gone: that anchor is red until
+award_task_drops stops adding task_bonus.
 
 Filter: python3 -m pytest tests/test_sheet_buff_truth.py -q --tb=short
 """
@@ -51,10 +51,10 @@ def _complete(client, task_id, kid_id):
 
 @pytest.mark.case_id("SHEET-BUFF-TRUTH-01")
 def test_sheet_buff_truth_api_library_bonus_is_experience_not_stars(client, family, test_db):
-    """Library task_bonus adds experience_bonus, not stars or extra gold.
+    """Library no longer adds task XP. Gold still moves by the task reward only.
 
-    Lv.1 buff_vals[0] is 2. Base XP for a 10-point task is max(5, 10//2)=5.
-    Points move by the task reward only (10), never by the buff.
+    A 10-point task is base XP max(5, 10//2)=5 and experience_bonus==0.
+    Points move by 10, never by the old buff_vals number.
     """
     kid_id = family.kid_a.id
     insert_building(
@@ -68,10 +68,10 @@ def test_sheet_buff_truth_api_library_bonus_is_experience_not_stars(client, fami
     assert r.status_code == 200, response_text(r)
     data = json_or_text(r)
     assert data.get("experience_gained") == 5, data
-    assert data.get("experience_bonus") == 2, data
-    assert data.get("experience_total") == 7, data
+    assert data.get("experience_bonus") == 0, data
+    assert data.get("experience_total") == 5, data
     assert data.get("points_awarded") == 10, data
-    assert get_kid_experience(test_db, kid_id) == before_xp + 7
+    assert get_kid_experience(test_db, kid_id) == before_xp + 5
     assert get_kid_points(test_db, kid_id) == 30, "buff must not add stars/gold"
     reasons = [row["reason"] or "" for row in points_log_rows(test_db, kid_id)]
     assert not any("star" in reason.lower() or "⭐" in reason for reason in reasons), reasons
@@ -163,17 +163,12 @@ def test_sheet_buff_truth_api_farm_claim_once_per_day(client, family, test_db):
 
 @pytest.mark.case_id("SHEET-BUFF-TRUTH-06")
 def test_sheet_buff_truth_api_only_three_buff_types_are_consumed(client, family, test_db):
-    """get_building_buff is only applied for task_bonus, discount, and daily_gold.
+    """get_building_buff stays for discount and daily_gold only.
 
-    The other seven types are not passed to that helper. A placed workshop
-    does not change upgrade gold, and a placed gym does not add task XP.
-    unlock_explore is a presence check in has_active_guild, not a buff_vals
-    effect, so it stays in the unwired set for the panel.
+    task_bonus must leave that set: the library XP bonus is gone. A placed
+    workshop still must not change upgrade gold, and a placed gym still must
+    not add task XP. unlock_explore stays a presence check in has_active_guild.
     """
-    found = consumed_buff_types_in_backend()
-    assert found == set(CONSUMED_EFFECT_TYPES), found
-    assert UNWIRED_BUFF_TYPES.isdisjoint(found)
-
     kid_id = family.kid_a.id
     insert_building(
         test_db, kid_id, def_id(test_db, "workshop"), level=3, stored=0, cell_x=4, cell_y=1
@@ -202,3 +197,8 @@ def test_sheet_buff_truth_api_only_three_buff_types_are_consumed(client, family,
     body = json_or_text(done)
     assert body.get("experience_bonus") == 0, body
     assert body.get("points_awarded") == 10, body
+
+    found = consumed_buff_types_in_backend()
+    assert "task_bonus" not in found, found
+    assert found == set(CONSUMED_EFFECT_TYPES), found
+    assert UNWIRED_BUFF_TYPES.isdisjoint(found)

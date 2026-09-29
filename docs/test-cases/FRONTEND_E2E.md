@@ -19,9 +19,9 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 場景 4 升級要跟設計稿 `3b4671d`（PR #27，唔好 merge）：撳已起嘅屋 → `#actionSheet` 顯示成本 → 確認 → 先至升級。唔好一撳就升級。Case：`TC-FE-TOWN-UX-UPGRADE-COST-01`、`TC-FE-TOWN-UX-UPGRADE-COST-02`、`TC-FE-TOWN-UX-UPGRADE-CONFIRM-01`。篩選 `-k 'upgrade_cost or upgrade_confirm'`（分開係 `-k upgrade_cost`、`-k upgrade_confirm`）。稿入面嘅 `#actionSheet`、`#sheetTitle`、`#sheetLevel`、`#sheetNote`、`#btnUpgrade` 係對齊用嘅名。示範籌碼 💰50 🪵2 只係個樣，產品數字跟後端：金幣 `floor(level×100×商店折扣)`（冇商店就係 `level×100`），材料 `base×(level+1)`。`UX-05` 仍然只要求撳升級之後等級上升同 HUD 再扣，呢三條唔改嗰個斷言。而家 `#btnUpgrade` 只係「升級」，第一撳就 POST，所以留紅。整道具／接任務唔喺升級成本呢三條範圍。
 
-已起屋嘅 `#actionSheet` 唔好再出假功能掣：`TC-FE-TOWN-UX-SHEET-BUFF-01`、`TC-FE-TOWN-UX-SHEET-BUFF-02`。篩選 `-k sheet_buff`。撳地圖上已經擺好嘅屋，打開場景 4 面板。`#sheetFns` 入面 `.fn` 要係 **零**（唔好再有整道具／修理／接任務／出發，亦唔好再行 `FN`／`onFn` 只改 `#sheetNote` 同 toast）。`SHEET-BUFF-01` 要顯示**而家等級**嘅已接線 buff，讀 `buff_vals[level-1]`（同 `get_building_buff` 同一個 index），唔好用種子靜態 `effect` 或者 Lv.1 嗰格。可見節點 id 係 `#sheetBuff`。數字合約喺圖書館 `task_bonus` Lv.2：種子 `buff_vals=[2,4,6,10,15]`，index 1 係 **4**，同 `buff_vals[0]=2` 同種子 `effect`「任務 +2⭐」唔同。文字同 `aria-label` 要等於「任務多經驗 +4」。工坊 `build_speed` 未接線，唔再要求任何數字；面板係「未開放」（見 ZH-01）。`SHEET-BUFF-02` 仍然開工坊，只查零 `.fn` 同唔好 stub toast（例如 `工坊：整好一件道具`），唔查 buff 數字。`#sheetNote`、toast、升級成本 chip 唔算 `#sheetBuff`。升級成本 chip、`#btnUpgrade`、`#upgradeConfirm`（`.stage` 最後一個子節點）、取消唔扣，仍然由 `upgrade_cost`／`upgrade_confirm` 守。`UX-05` 同 `store_ux` 嘅斷言唔改。唔改產品。
+已起屋嘅 `#actionSheet` 唔好再出假功能掣：`TC-FE-TOWN-UX-SHEET-BUFF-01`、`TC-FE-TOWN-UX-SHEET-BUFF-02`。篩選 `-k sheet_buff`。撳地圖上已經擺好嘅屋，打開場景 4 面板。`#sheetFns` 入面 `.fn` 要係 **零**（唔好再有整道具／修理／接任務／出發，亦唔好再行 `FN`／`onFn` 只改 `#sheetNote` 同 toast）。可見節點 id 係 `#sheetBuff`。圖書館 Lv.2 被動係「知識 +4」（每級 +2，唔係「任務多經驗」，亦唔係種子「任務 +2⭐」）。`buff_vals[level-1]` 嘅數字合約搬去商店 Lv.2「起屋／升級金幣八五折」（`TC-FE-SHEET-BUFFVAL-01`）。工坊 Lv.3 係「創意 +6」（ZH-01）。`SHEET-BUFF-02` 仍然開工坊，只查零 `.fn` 同唔好 stub toast（例如 `工坊：整好一件道具`），唔查 buff 數字。`#sheetNote`、toast、升級成本 chip 唔算 `#sheetBuff`。升級成本 chip、`#btnUpgrade`、`#upgradeConfirm`（`.stage` 最後一個子節點）、取消唔扣，仍然由 `upgrade_cost`／`upgrade_confirm` 守。`UX-05` 同 `store_ux` 嘅斷言唔改。唔改產品。
 
-`#sheetBuff` 要講真話，見 [`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md)（`SHEET-BUFF-TRUTH-01`…`06`，篩選 `-k sheet_buff_truth`）。圖書館係「任務多經驗 +N」，唔好 ⭐／星。商店係「起屋／升級金幣」加 `buff_vals[level-1]` 嘅折，唔好講購物或者獎勵。農場要有可見「領取」；領完當日顯示「今日已領」，同日唔好再加金幣。`streak_protect`、`build_speed`、`expedition_recovery`、`unlock_explore`、`explore_range`、`expedition_gold`、`discovery_rate` 冇 `get_building_buff` 消費，面板寫「未開放」，`#sheetBuff`／`#sheetNote` 唔好再出現「漏打卡都唔斷」或者「建築速度 ×」。`TC-FE-TOWN-UX-SHEET-BUFF-ZH-01`／`02` 已經改走舊鎖定句，因為嗰兩句描述未實作嘅效果。`SHEET-BUFF-01` 而家用圖書館 Lv.2「任務多經驗 +4」守而家等級數字同零 `.fn`。工坊唔再做數字合約。`#upgradeConfirm` 仍然係 `div.gsw.stage` 最後一個元素子節點。唔改產品。
+`#sheetBuff` 要等於真實效果，見 [`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md) 同 [`PASSIVE_AND_SKILLS.md`](PASSIVE_AND_SKILLS.md)。圖書館係「知識 +N」。商店係「起屋／升級金幣」加 `buff_vals[level-1]` 嘅折。農場要有可見「領取」；領完當日顯示「今日已領」。健身室、工坊、競技場、探險公會、天文台顯示被動；醫院、燈塔、銀行顯示技能。未知 `buff_type` 先至「未開放」，而且唔好帶數字（`TC-FE-SHEET-UNWIRED-01`）。`#upgradeConfirm` 仍然係 `div.gsw.stage` 最後一個元素子節點。唔改產品。
 
 共用前置（除另註）：
 
@@ -392,8 +392,8 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **建議模組** | `tests/test_frontend.py`（`-k sheet_buff_shows_level_buff`；同 02 一齊用 `-k 'sheet_buff and not sheet_buff_zh and not sheet_buff_truth'`） |
 | **前置** | 空庫合成 `test_fe_kid`，PIN `1357`。清走建築物。只種圖書館 `(4,1)` Lv.2、`stored=0`（8×8 之內）。金幣同材料夠多，以免面板被資源擋住。唔用真 PIN／production DB。種子 `building_defs`：圖書館 `buff_type=task_bonus`，`buff_vals=[2,4,6,10,15]`，`effect=任務 +2⭐`。Lv.2 讀 index 1，值係 **4**。`buff_vals[0]` 係 2，同而家等級唔同。 |
 | **步驟** | 1. 登入城鎮，停喺場景 1 2. 撳已起嘅圖書館，打開 `#actionSheet` 3. 數 `#sheetFns .fn`，並睇面板入面有冇整道具／修理／接任務／出發 4. 讀可見嘅 `#sheetBuff`（文字同 `aria-label`）同 `#sheetLevel` |
-| **預期** | `#sheetFns` 入面 `.fn` 係 0。面板唔好有整道具、修理、接任務、出發（以及其他 `FN` stub）掣。`#sheetLevel` 係 Lv.2。`#sheetBuff` 可見，文字同 `aria-label` 都等於「任務多經驗 +4」（`buff_vals[2-1]`，即 index 1 嘅 **4**）。唔好係 Lv.1／種子嗰格「任務多經驗 +2」，亦唔好係種子 `effect`「任務 +2⭐」。唔好有 ⭐、星、或者「任務多星」。真實效果：`award_task_drops` 把 `task_bonus` 加落經驗，唔係星星。`#sheetNote` 同 `#sheetCost` 唔算 `#sheetBuff`。 |
-| **備註** | 舊數字合約喺工坊 Lv.3 `build_speed`（`buff_vals[2]=4`、「建築速度 ×4」／`build_speed ×4`）。`build_speed` 未接線，工坊面板要「未開放」，唔再要求任何數字。見 `TC-FE-TOWN-UX-SHEET-BUFF-ZH-01` 同 [`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md)。唔好放寬升級成本 chip、`#btnUpgrade`、`#upgradeConfirm`。`TC-FE-TOWN-UX-05` 仍然會搵一個功能掣睇可見結果，本 case 唔改嗰個斷言。 |
+| **預期** | `#sheetFns` 入面 `.fn` 係 0。面板唔好有整道具、修理、接任務、出發（以及其他 `FN` stub）掣。`#sheetLevel` 係 Lv.2。`#sheetBuff` 可見，文字同 `aria-label` 都等於「知識 +4」（每級 +2 知識）。唔好係「任務多經驗 +4」或者「知識 +2」。唔好有 ⭐、星、「任務多星」、或者「任務多經驗」。`#sheetNote` 同 `#sheetCost` 唔算 `#sheetBuff`。 |
+| **備註** | `buff_vals[level-1]` 嘅 index 合約改喺 `TC-FE-SHEET-BUFFVAL-01`（商店 Lv.2 八五折）。工坊標籤見 ZH-01「創意 +6」。唔好放寬升級成本 chip、`#btnUpgrade`、`#upgradeConfirm`。 |
 
 ---
 
@@ -404,14 +404,14 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **ID** | TC-FE-TOWN-UX-SHEET-BUFF-02 |
 | **優先級** | P0（場景 4 已起屋 buff；零 `.fn` 同唔好 stub toast。唔檢查中文標籤） |
 | **建議模組** | `tests/test_frontend.py`（`-k sheet_buff_no_stub_toast`） |
-| **前置** | 空庫合成 `test_fe_kid`，PIN `1357`。只種工坊 `(4,1)` Lv.3、`stored=0`。本條只查零 `.fn` 同 stub toast。唔要求工坊 buff 數字。工坊標籤係「未開放」，見 ZH-01。 |
+| **前置** | 空庫合成 `test_fe_kid`，PIN `1357`。只種工坊 `(4,1)` Lv.3、`stored=0`。本條只查零 `.fn` 同 stub toast。唔要求工坊 buff 數字。工坊標籤係「創意 +6」，見 ZH-01。 |
 | **步驟** | 1. 場景 1 撳工坊，打開 `#actionSheet` 2. 讀 toast 同 `#sheetNote` 3. 如果 `#sheetFns` 仲有 `.fn`，撳「整道具」（冇呢個字就撳第一個 `.fn`）4. 再讀 toast 同 `#sheetNote` |
 | **預期** | 打開面板之後，toast 同 `#sheetNote` 都唔好有假功能文案（例如 `整好一件道具`、`修理好咗`、`接咗一個任務`、`準備出發`，以及 `FN_COPY` 其餘句）。`#sheetFns .fn` 要係 0，即係冇可撳嘅假動作。如果仲有 `.fn`，撳完都唔好出現 `工坊：整好一件道具`。本條唔查 `#sheetBuff` 數字。 |
 | **備註** | 中文標籤同「撳 `#sheetBuff` 之後 note 唔好再抄英文 code」係 `SHEET-BUFF-ZH-01`／`02`。唔好為咗呢條去改 `upgrade_cost`、`upgrade_confirm`、`TC-FE-TOWN-UX-05`、`store_ux`。取消升級仍然唔好扣資源；`#upgradeConfirm` 仍然係 `.stage` 最後一個子節點。 |
 
 ---
 
-## TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 — 工坊 Lv.3 要顯示「未開放」
+## TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 — 工坊 Lv.3 要顯示「創意 +6」
 
 | 欄 | 內容 |
 |----|------|
@@ -420,12 +420,12 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **建議模組** | `tests/test_frontend.py`（`-k sheet_buff_zh`） |
 | **前置** | 空庫合成 `test_fe_kid`，PIN `1357`。只種工坊 `(4,1)` Lv.3、`stored=0`。種子 `buff_type=build_speed`，`buff_vals=[2,3,4,5,6]`，`effect=建築速度 x2`。唔用真 PIN／production DB。同 `SHEET-BUFF-01` 唔再用同一座屋：01 係圖書館。 |
 | **步驟** | 1. 場景 1 撳工坊，打開 `#actionSheet` 2. 數 `#sheetFns .fn` 3. 讀可見 `#sheetBuff` 嘅文字同 `aria-label`，以及 `#sheetLevel` 4. 撳 `#sheetBuff` 5. 再讀 `#sheetNote` |
-| **預期** | `#sheetLevel` 係 Lv.3。`#sheetFns .fn` 係 0。`#sheetBuff` 文字同 `aria-label` 等於「未開放」。`#sheetBuff` 同 `#sheetNote` 都唔好有「建築速度 ×」（`×`／`x`／`X`）。唔好顯示 `buff_vals[2]=4` 做效果。真實效果：`build_speed` 冇 `get_building_buff` 呼叫，升級金幣唔會因為工坊而變。main `8ed2720` 顯示「建築速度 ×4」，撳完 note 係「而家等級加成 建築速度 ×4」，所以留紅。 |
-| **備註** | 舊鎖定「建築速度 ×4」已經廢除，因為佢描述未實作嘅建造加速。誠實文案見 [`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md) `SHEET-BUFF-TRUTH-05`。`SHEET-BUFF-01` 唔再喺工坊要求數字 4；而家等級數字改喺圖書館「任務多經驗 +4」。唔改 `upgrade_cost`、`upgrade_confirm`、`UX-05`、`store_ux`。 |
+| **預期** | `#sheetLevel` 係 Lv.3。`#sheetFns .fn` 係 0。`#sheetBuff` 文字同 `aria-label` 等於「創意 +6」（每級 +2 創意，唔係 `buff_vals[2]=4`）。唔好「未開放」。`#sheetBuff` 同 `#sheetNote` 都唔好有「建築速度 ×」。真實效果：工坊被動加創意，唔加速建造。 |
+| **備註** | 舊鎖定「建築速度 ×4」同後嚟嘅「未開放」都已經廢除。見 [`PASSIVE_AND_SKILLS.md`](PASSIVE_AND_SKILLS.md)。唔改 `upgrade_cost`、`upgrade_confirm`、`UX-05`、`store_ux`。 |
 
 ---
 
-## TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 — 健身室要顯示「未開放」
+## TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 — 健身室要顯示「臂力 +2」
 
 | 欄 | 內容 |
 |----|------|
@@ -434,8 +434,45 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | **建議模組** | `tests/test_frontend.py`（`-k sheet_buff_zh`） |
 | **前置** | 空庫合成 `test_fe_kid`，PIN `1357`。清走建築物。只種健身室 `(4,1)` Lv.1、`stored=0`。種子 `buff_type=streak_protect`，`buff_vals=[1,1,1,1,1]`，`effect=連續保護`。金幣同材料夠多。唔用真 PIN／production DB。 |
 | **步驟** | 1. 場景 1 撳健身室，打開 `#actionSheet` 2. 數 `#sheetFns .fn` 3. 讀可見 `#sheetBuff` 嘅文字同 `aria-label`，以及 `#sheetLevel` 4. 撳 `#sheetBuff` 5. 再讀 `#sheetNote` |
-| **預期** | `#sheetLevel` 係 Lv.1。`#sheetFns .fn` 係 0。`#sheetBuff` 文字同 `aria-label` 等於「未開放」。`#sheetBuff` 同 `#sheetNote` 都唔好有「漏打卡都唔斷」。唔好顯示 `×1` 做連續保護效果。真實效果：`streak_protect` 冇 `get_building_buff` 呼叫，完成任務唔會因為健身室而加 XP 或者保住連續。main `8ed2720` 顯示「連續保護 ×1 漏打卡都唔斷」，所以留紅。 |
-| **備註** | 舊鎖定「連續保護 ×1」加「漏打卡都唔斷」已經廢除，因為後端冇呢個保護。誠實文案見 [`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md) `SHEET-BUFF-TRUTH-05`。 |
+| **預期** | `#sheetLevel` 係 Lv.1。`#sheetFns .fn` 係 0。`#sheetBuff` 文字同 `aria-label` 等於「臂力 +2」（每級 +2 臂力）。唔好「未開放」。`#sheetBuff` 同 `#sheetNote` 都唔好有「漏打卡都唔斷」。真實效果：健身室被動加臂力，唔保護連續打卡。 |
+| **備註** | 舊鎖定「連續保護 ×1」加「漏打卡都唔斷」，同後嚟嘅「未開放」，都已經廢除。見 [`PASSIVE_AND_SKILLS.md`](PASSIVE_AND_SKILLS.md)。 |
+
+---
+
+## TC-FE-SHEET-BUFFVAL-01 — 商店 Lv.2 用 buff_vals[level-1]
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-SHEET-BUFFVAL-01 |
+| **優先級** | P0 |
+| **建議模組** | `tests/test_frontend.py`（`-k sheet_shop_level2`） |
+| **前置** | 只種商店 `(4,1)` Lv.2。`buff_vals=[0.9,0.85,0.8,0.75,0.7]`，index 1 係 **0.85**。 |
+| **預期** | `#sheetBuff` 文字同 `aria-label` 等於「起屋／升級金幣八五折」。唔好係 Lv.1 嘅「起屋／升級金幣九折」。`#sheetFns .fn` 係 0。`#upgradeConfirm` 仍然係 `div.gsw.stage` 最後一個元素子節點。 |
+| **備註** | 呢條接走圖書館舊嘅 `buff_vals[level-1]` 數字合約。圖書館幅度改為每級 +2 知識。 |
+
+---
+
+## TC-FE-SHEET-UNWIRED-01 — 未知 buff 寫「未開放」
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-SHEET-UNWIRED-01 |
+| **優先級** | P0 |
+| **建議模組** | `tests/test_frontend.py`（`-k unknown_buff_type`） |
+| **前置** | 測試庫先插入 `building_defs` 名「測試未接線」、`buff_type=zzz_unwired`、`buff_vals=[9]`，再種喺 `(4,1)` Lv.1。產品種子冇呢行。 |
+| **預期** | `#sheetBuff` 文字同 `aria-label` 正好係「未開放」。面板同 note 都唔好出現 9。`#sheetFns .fn` 係 0。 |
+
+---
+
+## TC-FE-SHEET-BANK-01 — 銀行描述金錢砸
+
+| 欄 | 內容 |
+|----|------|
+| **ID** | TC-FE-SHEET-BANK-01 |
+| **優先級** | P0 |
+| **建議模組** | `tests/test_frontend.py`（`-k bank_sheet`） |
+| **前置** | 測試庫插入 `building_defs` 名「銀行」、`buff_type=ledger`、`buff_vals=[1]`、`effect` 空白，再種喺 `(4,1)` Lv.1。產品種子冇銀行。 |
+| **預期** | `#sheetBuff` 等於「技能：金錢砸（每次 10 金幣，傷害約普攻 3 倍）」。唔好「未開放」，亦唔好「帳本」或者「帳簿」。 |
 
 ### 舊鎖定文案（已廢除）
 
@@ -456,7 +493,7 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 | `expedition_gold` | 探險金幣 ×N | 探險金幣 x2 |
 | `discovery_rate` | 發現新區域 ×N | 新區域發現率 |
 
-上面折數同「漏打卡」旁白係舊文案，pytest 唔再要求。而家工坊同健身室要「未開放」。升級確認流程唔改。
+上面折數同「漏打卡」旁白係舊文案，pytest 唔再要求。而家工坊係「創意 +N」，健身室係「臂力 +N」。未知 `buff_type` 先至「未開放」。升級確認流程唔改。
 
 ---
 
@@ -684,6 +721,6 @@ python -m pytest tests/test_frontend.py -q -k 'not town_grid and not store_legac
 python -m pytest tests/test_frontend.py -q -k town_ux --tb=short
 ```
 
-`town_grid`／`store_legacy` 係 8×8 地圖同格外收倉（`TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`）。`store_list`／`store_place`／`store_confirm` 係已經入倉嘅屋唔好當新建築賣（`TC-FE-TOWN-STORE-LIST-01`、`TC-FE-TOWN-STORE-PLACE-01`、`TC-FE-TOWN-STORE-CONFIRM-01`）。`store_ux` 係清單放返存倉要留喺四場景 8×8（`TC-FE-TOWN-STORE-UX-01`）。`upgrade_cost`／`upgrade_confirm` 係場景 4 升級成本同確認（`TC-FE-TOWN-UX-UPGRADE-COST-01`、`COST-02`、`CONFIRM-01`）。`sheet_buff` 係已起屋面板唔好出假 `.fn`，改為顯示而家等級 buff（`TC-FE-TOWN-UX-SHEET-BUFF-01`、`SHEET-BUFF-02`）。01 嘅數字合約係圖書館 Lv.2 `task_bonus` `buff_vals[1]=4`，`#sheetBuff` 等於「任務多經驗 +4」。工坊唔再要求數字。`sheet_buff_zh`（`TC-FE-TOWN-UX-SHEET-BUFF-ZH-01`、`ZH-02`）而家要求工坊同健身室寫「未開放」，唔好再有「建築速度 ×」或者「漏打卡都唔斷」。`sheet_buff_truth` 係 [`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md)。函數名同時含 `sheet_buff`，所以 `-k sheet_buff` 會一齊跑到 ZH 同 TRUTH；淨係舊數字合約用 `-k 'sheet_buff and not sheet_buff_zh and not sheet_buff_truth'`。升級三條同 sheet buff 嘅函數名都含 `town_ux`，所以 `-k town_ux` 會一齊跑；UX-01..05 同升級／存倉嘅斷言冇收窄。中文兩條喺 tip `10ef239` 留紅。`-k 'not town_grid and not store_legacy'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`，以及存倉紅測。接受尺寸係 8×8。收倉喺每次城鎮載入同建築物讀取時做。已經 `stored=1` 嘅屋要用 unstored 放返，而且清單呢條路徑要留喺四場景等角格，唔好打開 legacy `#placementBar`。
+`town_grid`／`store_legacy` 係 8×8 地圖同格外收倉（`TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`）。`store_list`／`store_place`／`store_confirm` 係已經入倉嘅屋唔好當新建築賣（`TC-FE-TOWN-STORE-LIST-01`、`TC-FE-TOWN-STORE-PLACE-01`、`TC-FE-TOWN-STORE-CONFIRM-01`）。`store_ux` 係清單放返存倉要留喺四場景 8×8（`TC-FE-TOWN-STORE-UX-01`）。`upgrade_cost`／`upgrade_confirm` 係場景 4 升級成本同確認（`TC-FE-TOWN-UX-UPGRADE-COST-01`、`COST-02`、`CONFIRM-01`）。`sheet_buff` 係已起屋面板唔好出假 `.fn`，改為顯示而家等級 buff（`TC-FE-TOWN-UX-SHEET-BUFF-01`、`SHEET-BUFF-02`）。01 嘅圖書館 Lv.2 係「知識 +4」。`buff_vals[level-1]` 數字合約係 `TC-FE-SHEET-BUFFVAL-01` 商店 Lv.2「起屋／升級金幣八五折」。`sheet_buff_zh`（`TC-FE-TOWN-UX-SHEET-BUFF-ZH-01`、`ZH-02`）要求工坊「創意 +6」、健身室「臂力 +2」，唔好再有「建築速度 ×」、「漏打卡都唔斷」或者「未開放」。`sheet_buff_truth` 係 [`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md)。函數名同時含 `sheet_buff`，所以 `-k sheet_buff` 會一齊跑到 ZH 同 TRUTH；淨係舊數字合約用 `-k 'sheet_buff and not sheet_buff_zh and not sheet_buff_truth'`。升級三條同 sheet buff 嘅函數名都含 `town_ux`，所以 `-k town_ux` 會一齊跑；UX-01..05 同升級／存倉嘅斷言冇收窄。中文兩條喺 tip `10ef239` 留紅。`-k 'not town_grid and not store_legacy'` 係其餘前端套件，包括已經落地嘅四場景 `town_ux`，以及存倉紅測。接受尺寸係 8×8。收倉喺每次城鎮載入同建築物讀取時做。已經 `stored=1` 嘅屋要用 unstored 放返，而且清單呢條路徑要留喺四場景等角格，唔好打開 legacy `#placementBar`。
 
 雙重驗證 (B) 人手步驟：[`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md)。跑完結果寫 [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md)。
