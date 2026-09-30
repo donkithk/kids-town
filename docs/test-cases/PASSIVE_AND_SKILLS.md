@@ -154,7 +154,7 @@
 | TC-API-SKILL-GALE | 疾風斬 | 舊名「迴避」唔好再出現。有物理傷害，呢一回合玩家 HP 唔跌。 |
 | TC-API-SKILL-KNOWLEDGE | 知識的力量 | 圖書館。施放之後 3 回合 `player_int` +3×等級（Lv1 +3、Lv5 +15）。火球傷害比對照多正好呢個數。第 4 下同 `player_int` 返原值。施放嗰下亦要打中（`TC-API-SKILL-ALL-DAMAGE`，對魔法普攻）。 |
 | TC-API-SKILL-TRAINING | 鍛鍊的成果 | 健身室。施放之後 3 回合臂力 +3×等級。普攻等於 `max(1, int(5+(str+3×等級)×1.5)−敵防)`，`player_str`／`player_atk` 同步。第 4 下返原值。施放嗰下亦要打中（`TC-API-SKILL-ALL-DAMAGE`，對物理普攻）。 |
-| TC-API-SKILL-MEAL | 營養餐 | 農場。持續回血，唔係即時治療。施放當下 HP 不變，MP 只扣消耗。之後 3 回合每回合回大約最大 HP 嘅 8%（允許大約 6%–14% 嘅取整同少量等級加成）。Lv5 每回合回血 ≥ Lv1。第 4 回合停止。唔好順便回 MP。 |
+| TC-API-SKILL-MEAL | 營養餐 | 農場。持續回血，唔係即時治療。施放當下 HP 不變。MP 跟 `docs/test-cases/SKILL_MENU_AND_TEXT.md`：施放後 `min(max_mp, mp_before - cost + NUTRITION_MEAL_MP_REGEN)`，`NUTRITION_MEAL_MP_REGEN = 5`。之後 3 回合每回合回大約最大 HP 嘅 8%（允許大約 6%–14% 嘅取整同少量等級加成）。Lv5 每回合回血 ≥ Lv1。第 4 回合停止。之後回合唔好再加 MP。 |
 | TC-API-SKILL-COIN | 金幣袋 | 商店。打贏先至多 20 金幣。逃跑唔加。冇用技能嘅勝場係對照。 |
 | TC-API-SKILL-FLASH | 強光 | 燈塔。有魔法傷害。施放當回合反擊係第 1 次打唔中（扣血 0，log 有「攻擊落空」）。下一記怪物攻擊係第 2 次，仍然打唔中。再下一記（第 3 次）按基線 `max(0, 怪攻−player_def)` 扣血。唔係命中率下降。 |
 | TC-API-SKILL-METEOR | 流星雨 | 天文台。三隻敵人每一隻 HP 都跌。 |

@@ -675,7 +675,8 @@ def test_battle_win_shows_rarity(page, base_url):
     page.locator(".m-name").first.wait_for(state="visible", timeout=8000)
     won = False
     for _ in range(30):
-        page.get_by_text("⚔️ 攻擊", exact=False).first.click()
+        # Attack control is 「攻擊」. The sword emoji is not part of the skill-menu spec.
+        page.locator(".battle-scene").get_by_role("button", name=re.compile(r"攻擊")).first.click()
         page.wait_for_timeout(200)
         alive = page.locator(".monster-card:not(.dead)")
         if alive.count() > 0:

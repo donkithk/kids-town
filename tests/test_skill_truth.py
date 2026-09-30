@@ -25,6 +25,7 @@ from tests.battle_truth import (
 from tests.factories import connect_db, get_kid_points, response_text
 from tests.historical_seed import historical_catalogs, tracked_sha256, use_temp_database
 from tests.phase1_helpers import BUILDING_NAMES, login_kid
+from tests.skill_menu_spec import NUTRITION_MEAL_MP_REGEN, mp_after_nutrition_meal
 
 # Region 1 weakness locked by TC-API-SKILL-SCOUT. Builder copies this onto the monster.
 REGION_WEAKNESS = {1: "火", 2: "冰", 3: "雷"}
@@ -573,8 +574,9 @@ def test_gym_training_result_boosts_physical_for_three_turns(
 def test_farm_meal_heals_over_three_turns(client, family, test_db, monkeypatch):
     """農場「營養餐」係三回合持續回血，大約最大 HP 嘅 8%，等級高唔少過等級低。
 
-    施放當下 HP、MP 都唔好即時回復（MP 只可以扣技能消耗）。
-    之後三個玩家回合每回合 HP 上升，第四回合停止。反擊被 999 防禦擋走。
+    施放當下 HP 唔好即時回復。MP 扣消耗之後再加 NUTRITION_MEAL_MP_REGEN（5），
+    上限係 max_mp。之後三個玩家回合每回合 HP 上升，第四回合停止，呢幾回合
+    唔好再加 MP。反擊被 999 防禦擋走。
     """
     kid_id = family.kid_a.id
     per_level = {}
@@ -601,7 +603,19 @@ def test_farm_meal_heals_over_three_turns(client, family, test_db, monkeypatch):
         )
         cast = _ok(_use(client, kid_id, skill))
         assert cast["player_hp"] == hp_before, cast
-        assert cast["player_mp"] == mp_before - int(skill.get("mp_cost") or 0), cast
+        # Updated for the 營養餐 MP regen spec (docs/test-cases/SKILL_MENU_AND_TEXT.md).
+        # HoT assertions below are unchanged. Later turns must keep this MP.
+        expected_mp = mp_after_nutrition_meal(
+            mp_before,
+            skill.get("mp_cost") or 0,
+            battle["player_max_mp"],
+            NUTRITION_MEAL_MP_REGEN,
+        )
+        assert cast["player_mp"] == expected_mp, (
+            f"營養餐 MP: actual {cast['player_mp']}, "
+            f"want min(max_mp={battle['player_max_mp']}, "
+            f"{mp_before} - cost + {NUTRITION_MEAL_MP_REGEN})"
+        )
         low, high = _meal_band(max_hp)
         hp = cast["player_hp"]
         mp = cast["player_mp"]
