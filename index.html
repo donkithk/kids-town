@@ -1475,7 +1475,14 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 .battle-scene.kt-wild .kt-command-bar{
   position:relative;z-index:2;flex:none;display:flex;flex-wrap:nowrap;gap:8px;
   height:88px;box-sizing:border-box;align-items:center;
-  padding:10px;background:#f7edd8;border-top:3px solid #c4a574;
+  padding:10px 16px;border-top:3px solid #e8c48c;
+  background-color:#6e452b;
+  background-image:
+    radial-gradient(ellipse 22px 12px at 12% 78%, rgba(36, 18, 8, .42), transparent 72%),
+    radial-gradient(ellipse 16px 9px at 86% 22%, rgba(36, 18, 8, .32), transparent 70%),
+    repeating-linear-gradient(90deg, rgba(255, 220, 176, .06) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(180deg, #8d6240 0 26px, #5c3a24 26px 29px, #7a5134 29px 54px, #4a2c1a 54px 57px);
+  box-shadow:inset 0 2px 0 rgba(232, 196, 140, .45);
 }
 .battle-scene.kt-wild .cmd-menu{position:static;inset:auto;display:contents;pointer-events:auto}
 .battle-scene.kt-wild .cmd-btn,
@@ -1535,48 +1542,57 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 }
 .battle-scene.kt-wild .command-bar .cmd.is-open{box-shadow:inset 0 2px 0 rgba(255,224,176,.55), inset 0 -3px 0 rgba(42,22,10,.35), 0 3px 0 #2a180e, inset 0 -4px 0 #f0c14b}
 .battle-scene.kt-wild .skill-panel{
-  position:absolute;z-index:5;left:332px;right:280px;bottom:188px;height:400px;
-  display:flex;flex-direction:column;gap:6px;padding:12px 14px 8px;box-sizing:border-box;
+  position:absolute;z-index:5;left:332px;right:300px;bottom:259px;height:320px;
+  display:flex;flex-direction:column;gap:8px;padding:8px 12px;box-sizing:border-box;
   border:8px solid #3b2416;border-radius:22px;color:#3b2a1a;background-color:#f4e2c4;
   background-image:radial-gradient(circle at 12% 0, rgba(240,193,75,.32), transparent 34%),
     repeating-linear-gradient(0deg, rgba(139,94,60,.055) 0 1px, transparent 1px 7px),
     linear-gradient(180deg,#fffaf0,#f6e6c8);
   box-shadow:inset 0 0 0 3px #e7c48a, inset 0 0 0 6px #6b4428, 0 10px 0 rgba(28,16,8,.28);
+  overflow:hidden;
 }
 .battle-scene.kt-wild .skill-panel[hidden]{display:none !important}
-.battle-scene.kt-wild .skill-head{display:flex;align-items:center;gap:10px;min-height:48px;flex:none}
-.battle-scene.kt-wild .skill-head h2{margin:0;font-size:26px;font-weight:800;color:#3a2616;letter-spacing:.06em}
-.battle-scene.kt-wild .mp-now{
-  margin:0;padding:4px 12px;border-radius:999px;background:#e7f0fb;border:2px solid #1d4f91;
-  color:#1d4f91;font-size:16px;font-weight:800;
+.battle-scene.kt-wild .skill-head{
+  display:flex;align-items:center;gap:6px;height:48px;min-height:48px;flex:none;flex-wrap:nowrap;
 }
-.battle-scene.kt-wild .skill-head-spacer{flex:1}
+.battle-scene.kt-wild .skill-head h2{
+  margin:0;font-size:22px;font-weight:800;color:#3a2616;letter-spacing:.04em;white-space:nowrap;flex:none;
+}
+.battle-scene.kt-wild .mp-now{
+  margin:0;padding:2px 8px;border-radius:999px;background:#e7f0fb;border:2px solid #1d4f91;
+  color:#1d4f91;font-size:14px;font-weight:800;white-space:nowrap;flex:none;
+}
 .battle-scene.kt-wild .btn-back,.battle-scene.kt-wild .btn-x{
-  min-height:48px;height:48px;border-radius:12px;font-weight:800;cursor:pointer;font-family:inherit;
+  min-height:44px;height:44px;border-radius:12px;font-weight:800;cursor:pointer;font-family:inherit;flex:none;
 }
 .battle-scene.kt-wild .btn-back{
-  min-width:84px;padding:0 14px;border:3px solid #3b2416;
-  background:linear-gradient(180deg,#c49262,#8b5e3c);color:#fff8ee;font-size:18px;
+  min-width:64px;padding:0 10px;border:3px solid #3b2416;
+  background:linear-gradient(180deg,#c49262,#8b5e3c);color:#fff8ee;font-size:16px;
 }
 .battle-scene.kt-wild .btn-x{
-  min-width:48px;width:48px;padding:0;border:3px solid #6e2416;
-  background:linear-gradient(180deg,#c4543c,#6e2416);color:#fffaf6;font-size:22px;
+  min-width:44px;width:44px;padding:0;border:3px solid #6e2416;
+  background:linear-gradient(180deg,#c4543c,#6e2416);color:#fffaf6;font-size:20px;
 }
 .battle-scene.kt-wild .skill-grid{
-  flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 1fr;
-  grid-template-rows:repeat(3, minmax(72px, 1fr));gap:8px;align-content:stretch;
+  flex:none;height:232px;min-height:232px;display:grid;grid-template-columns:1fr 1fr;
+  grid-template-rows:repeat(3, 72px);gap:8px;align-content:start;
 }
 .battle-scene.kt-wild .skill-card{
-  display:flex;flex-direction:column;justify-content:center;gap:2px;min-height:72px;margin:0;
-  padding:6px 10px 6px 8px;border-radius:14px;border:2px solid #c4a06a;background:#fffaf3;
+  display:flex;flex-direction:column;justify-content:center;gap:2px;height:72px;min-height:72px;margin:0;
+  padding:3px 4px;border-radius:14px;border:2px solid #c4a06a;background:#fffaf3;
   color:#3a2616;text-align:left;cursor:pointer;font-family:inherit;
+  box-sizing:border-box;min-width:0;overflow:hidden;
 }
 .battle-scene.kt-wild .skill-card[aria-disabled="true"]{
   background:#e3d9cc;border-color:#b3a394;color:#4a3828;cursor:not-allowed;
 }
-.battle-scene.kt-wild .skill-top{display:flex;align-items:center;gap:8px;min-height:36px}
-.battle-scene.kt-wild .skill-icon{flex:none;width:36px;font-size:28px;line-height:1;text-align:center}
-.battle-scene.kt-wild .skill-name{flex:1 1 auto;font-size:22px;font-weight:800;line-height:1.15;color:#3a2616}
+.battle-scene.kt-wild .skill-card[aria-disabled="true"] .skill-icon{filter:grayscale(.75)}
+.battle-scene.kt-wild .skill-top{display:flex;align-items:center;gap:6px;min-height:28px}
+.battle-scene.kt-wild .skill-icon{flex:none;width:28px;font-size:24px;line-height:1;text-align:center}
+.battle-scene.kt-wild .skill-name{
+  flex:1 1 auto;min-width:0;font-size:20px;font-weight:800;line-height:1.1;color:#3a2616;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 .battle-scene.kt-wild .skill-card[aria-disabled="true"] .skill-name{color:#4a3828}
 .battle-scene.kt-wild .skill-cost{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:1px}
 .battle-scene.kt-wild .mp-pill{
@@ -1585,20 +1601,25 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 }
 .battle-scene.kt-wild .skill-card[aria-disabled="true"] .mp-pill{background:#9a4545;color:#fff7f6}
 .battle-scene.kt-wild .broke{font-size:12px;font-weight:800;line-height:1.1;color:#7a2f2f}
-.battle-scene.kt-wild .skill-desc{font-size:15px;font-weight:700;line-height:1.25;color:#5c3d28}
+.battle-scene.kt-wild .skill-desc{
+  font-size:13px;font-weight:700;line-height:1.15;color:#5c3d28;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 .battle-scene.kt-wild .skill-card[aria-disabled="true"] .skill-desc{color:#5e4936}
 .battle-scene.kt-wild .skill-pager{
-  flex:none;display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;
+  flex:1 1 auto;min-width:0;display:flex;align-items:center;justify-content:flex-start;gap:4px;height:44px;
 }
 .battle-scene.kt-wild .pager-btn{
-  width:48px;height:48px;min-width:48px;min-height:48px;border-radius:12px;border:3px solid #3b2416;
-  background:linear-gradient(180deg,#ffe9a0,#e6a317);color:#3b2a1a;font-size:22px;font-weight:800;
-  cursor:pointer;font-family:inherit;
+  width:44px;height:44px;min-width:44px;min-height:44px;border-radius:12px;border:3px solid #3b2416;
+  background:linear-gradient(180deg,#ffe9a0,#e6a317);color:#3b2a1a;font-size:20px;font-weight:800;
+  cursor:pointer;font-family:inherit;flex:none;
 }
 .battle-scene.kt-wild .pager-btn[aria-disabled="true"]{
   background:#e6ddd2;color:#4a3d32;border-color:#a89888;cursor:not-allowed;
 }
-.battle-scene.kt-wild .page-label{min-width:72px;margin:0;text-align:center;font-size:20px;font-weight:800;color:#3a2616}
+.battle-scene.kt-wild .page-label{
+  min-width:52px;margin:0;text-align:center;font-size:16px;font-weight:800;color:#3a2616;white-space:nowrap;
+}
 .battle-scene.kt-wild .dots{display:flex;align-items:center}
 .battle-scene.kt-wild .dot{
   width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:0;border-radius:10px;
@@ -5263,17 +5284,16 @@ function renderSkillMenu(skills, pMp, maxMp, result) {
     <div class="skill-head">
       <h2 id="skillTitle">技能</h2>
       <p class="mp-now" id="mpNow">MP ${pMp} / ${maxMp}</p>
-      <span class="skill-head-spacer"></span>
+      <div class="skill-pager">
+        <button type="button" class="pager-btn" id="btnPrev" aria-label="上一頁"${prevOff} onclick="skillMenuStep(-1)">◀</button>
+        <div class="dots" id="pageDots">${dots}</div>
+        <p class="page-label" id="pageLabel">${bag.page + 1} / ${pages}</p>
+        <button type="button" class="pager-btn" id="btnNext" aria-label="下一頁"${nextOff} onclick="skillMenuStep(1)">▶</button>
+      </div>
       <button type="button" class="btn-back" id="btnBack" onclick="closeSkillMenu()">返回</button>
       <button type="button" class="btn-x" id="btnClose" aria-label="關閉技能" onclick="closeSkillMenu()">✕</button>
     </div>
     <div class="skill-grid" id="skillGrid">${cards}</div>
-    <div class="skill-pager">
-      <button type="button" class="pager-btn" id="btnPrev" aria-label="上一頁"${prevOff} onclick="skillMenuStep(-1)">◀</button>
-      <div class="dots" id="pageDots">${dots}</div>
-      <p class="page-label" id="pageLabel">${bag.page + 1} / ${pages}</p>
-      <button type="button" class="pager-btn" id="btnNext" aria-label="下一頁"${nextOff} onclick="skillMenuStep(1)">▶</button>
-    </div>
     <div class="skill-name-index" aria-hidden="true">${names}</div>
   </section>
   <div class="kt-command-bar">
