@@ -130,6 +130,66 @@ MP 夠嘅卡：一撳就施放（自身目標技能唔使再揀怪），MP 減�
 
 `TC-API-SKILL-MEAL` 的 MP 斷言已改成上面公式。回血幅度、Lv5 ≥ Lv1、第 4 回合停止，維持原案。
 
+## 字級、標題列、戰鬥訊息
+
+選擇器跟 `ee8a3eb` 的 `index.html`，常數喺 `tests/skill_menu_spec.py`。斷言係尺寸同行為。`#ktFooter` 唔另加新斷言，沿用現有套件。`TC-FE-SKILLMENU-ENEMY-VISIBLE` 唔改。
+
+`#wildToast` 由 `renderBattleMode` 用上一回合 `log` 砌出嚟，冇一個可以傳字串就寫入嘅函式。`townData` 係頂層 `let`，Playwright 改唔到。測試喺戰鬥畫面直接設 `#wildToast` 的 `textContent`。撳返回／✕ 會 `renderExpedition()`，節點換咗，所以關閉之後再設同一次長句，先量收起選單之後嘅版面。
+
+長句係 `野狼從草叢撲過來` 重複 12 次（96 字）。先用 1100px 寬、`white-space:normal`、抄 `#wildToast` 字級嘅探針確認會摺成 2 行或以上。短句係「準備」，用來量單行高度。
+
+### TC-FE-SKILLMENU-TYPE
+
+6 個技能的小朋友、8 個技能的小朋友第 2 頁，以及一個學齊 22 個技能的合成小朋友（逐頁）。選單打開：
+
+- `.skill-name` 字級 ≥ 22px
+- `.skill-desc` 字級 ≥ 15px
+- `.skill-icon` 字級 ≥ 28px，而且盒子 ≥ 28×28
+- `.skill-card` 的 padding-top／bottom ≥ 6px，padding-left／right ≥ 8px
+- 說明仍然單行：`white-space:nowrap`，高度 ≤ 1.3×字級，`scrollWidth` ≤ `clientWidth`（22 個技能都係）
+- 卡高度 ≥ 72px，成張卡喺 `#skillPanel` 裡面
+- 圖示離卡 border box 每邊 ≥ 4px
+
+`ee8a3eb` 量到：卡名 20px、說明 13px、圖示字 24px、盒子 28×24、padding 3px 4px。所以紅。
+
+### TC-FE-SKILLMENU-TITLE
+
+選單打開（6 技能的 `1 / 1`，同 8 技能第 2 頁的 `2 / 2`）：
+
+- `#skillTitle`「技能」字級 ≥ 26px
+- `#pageLabel`「N / M」字級 ≥ 20px
+- `#btnBack`「返回」寬 ≥ 80px、高 ≥ 44px
+- `#btnPrev` ◀、`#btnNext` ▶、`#btnClose` ✕ 都 ≥ 44×44
+- 標題列控件（標題、頁碼、返回、◀ ▶ ✕、`#mpNow`、頁點）全部喺面板內，兩兩交集 0 px²
+
+`ee8a3eb`：標題 22px、頁碼 16px、返回 `min-width` 64px（全域 `border-box`）。所以紅。
+
+### TC-FE-TOAST-MENU-ONELINE
+
+區 1 真正開戰，重開到 3 隻野狼，再重開到 1 隻。選單打開時，長句：
+
+- `#wildToast` 高度 ≤ 短句單行高度 + 1px
+- `text-overflow` 係 `ellipsis` 而且 `white-space` 係 `nowrap`（或者等同截斷：`scrollWidth` > `clientWidth`）
+- 同 `#skillPanel` 交集 0 px²
+
+收起選單（返回，冇返回就 ✕）之後：全文可見（`scrollWidth` ≤ `clientWidth` 而且 `scrollHeight` ≤ `clientHeight`），同每隻 `.m-name`、`.m-hp-bar`、`.m-hp-text` 交集 0 px²。
+
+`ee8a3eb`：選單打開時，兩行訊息同 `#skillPanel` 交集 9963 px²。訊息唔係單行省略。所以紅。
+
+### TC-FE-TOAST-NO-SHIFT
+
+3 隻同 1 隻野狼，選單收住。先記短句時每張 `.monster-card` 的 top／left，再換成長句：
+
+- 每張卡 top／left 移動 ≤ 1px
+- 短句同長句兩種狀態，每隻 `.m-hp-text` 同 `.battle-scene .command-bar` 交集都係 0 px²
+- `#playerVitals` 的位置同尺寸唔變
+
+`ee8a3eb`：長句將怪物卡推低 14.375px，每張卡的 `.m-hp-text` 同指令列交集 712 px²。main 係推低 24px、交集 2127 px²。所以紅。
+
+### TC-FE-SKILLMENU-PANEL-RECT
+
+守衛。選單打開時 `#skillPanel` 維持 `ee8a3eb` 的盒子：left 332±2、top 141±2、right 980±2、bottom 461±2。呢條喺 `ee8a3eb` 應該過。`TC-FE-SKILLMENU-ENEMY-VISIBLE` 維持原案。
+
 ## Case id
 
 | id | 期望（未改產品時） |
@@ -145,6 +205,11 @@ MP 夠嘅卡：一撳就施放（自身目標技能唔使再揀怪），MP 減�
 | TC-FE-SKILLMENU-LAYOUT | 紅。冇選單可以量度 |
 | TC-FE-SKILLMENU-ENEMY-VISIBLE | 紅。未有 `#skillPanel` 可以同敵人名牌比。3 隻同 1 隻野狼各一條。選單出現之後，每隻 `.m-name`／`.m-hp-bar`／`.m-hp-text` 同選單交集要係 0 px²，選單底邊高過最高名牌或血條至少 8px。精靈可以遮。 |
 | TC-FE-SKILLMENU-CLOSE | 紅。冇返回／關閉 |
+| TC-FE-SKILLMENU-TYPE | 紅。卡名 20px（要 ≥ 22）、說明 13px（要 ≥ 15）、圖示 24px 喺 28×24（要字級 ≥ 28 同盒子 ≥ 28×28）、padding 3px 4px（要上下 ≥ 6、左右 ≥ 8）。6 技能、8 技能第 2 頁、22 技能逐頁。 |
+| TC-FE-SKILLMENU-TITLE | 紅。標題 22px（要 ≥ 26）、頁碼 16px（要 ≥ 20）、返回寬度未到 80px。◀ ▶ ✕ 已係 44×44。 |
+| TC-FE-TOAST-MENU-ONELINE | 紅。3 隻同 1 隻野狼。選單打開時兩行訊息同 `#skillPanel` 交集 9963 px²，而且唔係單行省略。 |
+| TC-FE-TOAST-NO-SHIFT | 紅。選單收住時長句將卡推低 14.375px（main 24px），`.m-hp-text` 同指令列交集 712 px²（main 2127 px²）。 |
+| TC-FE-SKILLMENU-PANEL-RECT | 守衛。`ee8a3eb` 應過：面板 left 332、top 141、right 980、bottom 461，各 ±2。main 未有面板，所以紅。 |
 | TC-API-SKILL-FORMAL | 疾風斬、強光紅（含「唔」）；其餘書面語過 |
 | TC-API-SKILL-FORMAL-API | 同上，兩個 API |
 | TC-API-SKILL-FORMAL-MIGRATE | 遷移後疾風斬、強光仍然含「唔」。金錢砸整行唔見：afbc1a6 冇「銀行」，`seed_building_defs` 見目錄非空就返回，`seed_skill_defs` 就跳過金錢砸 |

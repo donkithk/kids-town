@@ -26,13 +26,57 @@ from tests.factories import (  # noqa: E402
     insert_kid,
 )
 from tests.skill_menu_spec import (  # noqa: E402
+    BTN_BACK_MIN_HEIGHT_PX,
+    BTN_BACK_MIN_WIDTH_PX,
+    PAGE_LABEL_MIN_PX,
+    SEL_BTN_BACK,
+    SEL_BTN_CLOSE,
+    SEL_BTN_NEXT,
+    SEL_BTN_PREV,
+    SEL_BTN_SKILL,
+    SEL_COMMAND_BAR,
+    SEL_M_HP_BAR,
+    SEL_M_HP_TEXT,
+    SEL_M_NAME,
+    SEL_MONSTER_CARD,
+    SEL_MP_NOW,
+    SEL_PAGE_DOTS,
+    SEL_PAGE_LABEL,
+    SEL_PLAYER_VITALS,
+    SEL_SKILL_CARD,
+    SEL_SKILL_DESC,
+    SEL_SKILL_ICON,
+    SEL_SKILL_NAME,
+    SEL_SKILL_PANEL,
+    SEL_SKILL_TITLE,
+    SEL_WILD_TOAST,
+    SEEDED_SKILL_NAMES,
+    SKILL_CARD_MIN_HEIGHT_PX,
+    SKILL_CARD_PAD_BLOCK_MIN_PX,
+    SKILL_CARD_PAD_INLINE_MIN_PX,
+    SKILL_DESC_LINE_RATIO,
+    SKILL_DESC_MIN_PX,
+    SKILL_ICON_BOX_MIN_PX,
+    SKILL_ICON_FONT_MIN_PX,
+    SKILL_ICON_INSET_MIN_PX,
     SKILL_MENU_PAGE_SIZE,
+    SKILL_NAME_MIN_PX,
+    SKILL_PANEL_RECT,
+    SKILL_PANEL_RECT_TOLERANCE_PX,
+    SKILL_TITLE_MIN_PX,
+    TITLE_CONTROL_MIN_PX,
+    TOAST_LINE_TOLERANCE_PX,
+    TOAST_LONG_MESSAGE,
+    TOAST_SHIFT_TOLERANCE_PX,
+    TOAST_SHORT_MESSAGE,
+    TOAST_WRAP_WIDTH_PX,
     colloquial_hits,
 )
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MENU_KID6 = "test_menu_kid6"
 MENU_KID8 = "test_menu_kid8"
+MENU_KID22 = "test_menu_kid22"
 STAGE_W = 1280
 STAGE_H = 720
 # Known page error on current main. Recorded, not asserted.
@@ -47,6 +91,20 @@ _SIX = (
     ("商店", 1),  # 金幣袋
 )
 _EIGHT = _SIX + (("圖書館", 2),)  # 火球 知識的力量
+# Every seeded skill. Levels are the skill_defs.level_required ceilings.
+_ALL22 = (
+    ("探險公會", 4),  # 偵察 疾風斬
+    ("健身室", 4),  # 蓄力 重擊 連擊 鍛鍊的成果
+    ("醫院", 5),  # 繃帶 急救 全體治療
+    ("競技場", 5),  # 橫掃 盾擊 必殺
+    ("圖書館", 4),  # 火球 冰凍 知識的力量
+    ("工坊", 4),  # 修復 強化
+    ("農場", 1),  # 營養餐
+    ("商店", 1),  # 金幣袋
+    ("燈塔", 1),  # 強光
+    ("天文台", 1),  # 流星雨
+    ("銀行", 1),  # 金錢砸
+)
 
 
 def _playwright_unavailable_reason():
@@ -116,6 +174,7 @@ def _seed(dst):
     for username, name, plan in (
         (MENU_KID6, "Menu Kid 6", _SIX),
         (MENU_KID8, "Menu Kid 8", _EIGHT),
+        (MENU_KID22, "Menu Kid 22", _ALL22),
     ):
         kid = insert_kid(dst, name=name, username=username, pin=TEST_KID_PIN, level=20, points=80)
         for index, (building, level) in enumerate(plan):
@@ -133,8 +192,11 @@ def _seed(dst):
     assert guild == 6, guild
     learned6 = _learned_names(dst, ids[MENU_KID6])
     learned8 = _learned_names(dst, ids[MENU_KID8])
+    learned22 = _learned_names(dst, ids[MENU_KID22])
     assert len(learned6) == 6, [row["name"] for row in learned6]
     assert len(learned8) == 8, [row["name"] for row in learned8]
+    assert len(learned22) == len(SEEDED_SKILL_NAMES), [row["name"] for row in learned22]
+    assert {row["name"] for row in learned22} == set(SEEDED_SKILL_NAMES)
     backend.DB_PATH = old
     return ids
 
@@ -1055,3 +1117,857 @@ def test_skill_menu_leaves_enemy_name_and_hp_visible(
     elif panel and not panel["hidden"]:
         problems.append("no visible enemy name plate or HP bar to measure the 8px clearance")
     _fail(f"{case_id} [{enemy_count}]", problems)
+
+
+def _px(value):
+    if value is None:
+        return "missing"
+    text = f"{float(value):.3f}".rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _px_set(values):
+    cleaned = sorted({None if value is None else round(float(value), 3) for value in values})
+    return ", ".join(_px(value) for value in cleaned)
+
+
+def _wait_fonts(page):
+    page.evaluate("() => (document.fonts && document.fonts.ready) || null")
+
+
+def _selectors():
+    return {
+        "panel": SEL_SKILL_PANEL,
+        "card": SEL_SKILL_CARD,
+        "name": SEL_SKILL_NAME,
+        "desc": SEL_SKILL_DESC,
+        "icon": SEL_SKILL_ICON,
+        "title": SEL_SKILL_TITLE,
+        "page": SEL_PAGE_LABEL,
+        "back": SEL_BTN_BACK,
+        "prev": SEL_BTN_PREV,
+        "next": SEL_BTN_NEXT,
+        "close": SEL_BTN_CLOSE,
+        "mp": SEL_MP_NOW,
+        "dots": SEL_PAGE_DOTS,
+        "toast": SEL_WILD_TOAST,
+        "bar": SEL_COMMAND_BAR,
+        "monster": SEL_MONSTER_CARD,
+        "mName": SEL_M_NAME,
+        "mHp": SEL_M_HP_BAR,
+        "mHpText": SEL_M_HP_TEXT,
+        "vitals": SEL_PLAYER_VITALS,
+    }
+
+
+def _measure_cards(page):
+    """Font, padding, and boxes for the visible skill cards. Index names are excluded."""
+    _wait_fonts(page)
+    return page.evaluate(
+        """(sels) => {
+          const rect = (el) => {
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            const cs = getComputedStyle(el);
+            return {
+              hidden: el.hasAttribute('hidden') || cs.display === 'none' || cs.visibility === 'hidden',
+              w: r.width, h: r.height, left: r.left, top: r.top, right: r.right, bottom: r.bottom
+            };
+          };
+          const panelEl = document.querySelector(sels.panel);
+          const panel = rect(panelEl);
+          const cards = [...document.querySelectorAll(sels.card)].map((card) => {
+            const nameEl = card.querySelector(sels.name);
+            const descEl = card.querySelector(sels.desc);
+            const iconEl = card.querySelector(sels.icon);
+            const cardCs = getComputedStyle(card);
+            const nameCs = nameEl ? getComputedStyle(nameEl) : null;
+            const descCs = descEl ? getComputedStyle(descEl) : null;
+            const iconCs = iconEl ? getComputedStyle(iconEl) : null;
+            const descBox = rect(descEl);
+            return {
+              name: nameEl ? (nameEl.textContent || '').trim() : '',
+              desc: descEl ? (descEl.textContent || '').trim() : '',
+              namePx: nameCs ? parseFloat(nameCs.fontSize) : null,
+              descPx: descCs ? parseFloat(descCs.fontSize) : null,
+              iconPx: iconCs ? parseFloat(iconCs.fontSize) : null,
+              iconBox: rect(iconEl),
+              cardBox: rect(card),
+              padTop: parseFloat(cardCs.paddingTop),
+              padRight: parseFloat(cardCs.paddingRight),
+              padBottom: parseFloat(cardCs.paddingBottom),
+              padLeft: parseFloat(cardCs.paddingLeft),
+              descWhite: descCs ? descCs.whiteSpace : '',
+              descH: descBox ? descBox.h : null,
+              descScrollW: descEl ? descEl.scrollWidth : null,
+              descClientW: descEl ? descEl.clientWidth : null
+            };
+          });
+          const label = document.querySelector(sels.page);
+          return {
+            panel,
+            open: !!(panel && !panel.hidden),
+            label: label ? (label.textContent || '').trim() : '',
+            cards
+          };
+        }""",
+        _selectors(),
+    )
+
+
+def _measure_title(page):
+    _wait_fonts(page)
+    return page.evaluate(
+        """(sels) => {
+          const rect = (el) => {
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            const cs = getComputedStyle(el);
+            return {
+              hidden: el.hasAttribute('hidden') || cs.display === 'none' || cs.visibility === 'hidden',
+              w: r.width, h: r.height, left: r.left, top: r.top, right: r.right, bottom: r.bottom,
+              fontPx: parseFloat(cs.fontSize),
+              text: (el.textContent || '').trim()
+            };
+          };
+          const panelEl = document.querySelector(sels.panel);
+          const dots = [...document.querySelectorAll(sels.dots)].map((el, index) => {
+            const box = rect(el);
+            if (box) box.key = 'dot' + index;
+            return box;
+          });
+          return {
+            panel: rect(panelEl),
+            title: rect(document.querySelector(sels.title)),
+            page: rect(document.querySelector(sels.page)),
+            back: rect(document.querySelector(sels.back)),
+            prev: rect(document.querySelector(sels.prev)),
+            next: rect(document.querySelector(sels.next)),
+            close: rect(document.querySelector(sels.close)),
+            mp: rect(document.querySelector(sels.mp)),
+            dots
+          };
+        }""",
+        _selectors(),
+    )
+
+
+def _open_menu_or_problem(page, problems, where):
+    if not _open_skill_menu(page):
+        problems.append(f"{where}: no {SEL_BTN_SKILL}; bar is {_bar_labels(page)}")
+        return False
+    try:
+        page.locator(SEL_SKILL_PANEL).wait_for(state="visible", timeout=3000)
+    except Exception:
+        problems.append(f"{where}: {SEL_SKILL_PANEL} did not become visible")
+        return False
+    return True
+
+
+def _go_next_skill_page(page):
+    nxt = page.locator(SEL_BTN_NEXT)
+    if nxt.count() == 0 or nxt.get_attribute("aria-disabled") == "true":
+        return False
+    nxt.click()
+    return True
+
+
+def _visible(box):
+    return bool(box) and not box.get("hidden") and box.get("w", 0) > 2 and box.get("h", 0) > 2
+
+
+def _insets(inner, outer):
+    return {
+        "left": inner["left"] - outer["left"],
+        "top": inner["top"] - outer["top"],
+        "right": outer["right"] - inner["right"],
+        "bottom": outer["bottom"] - inner["bottom"],
+    }
+
+
+def _append_card_type_problems(problems, groups):
+    """groups is a list of (where, measure-payload)."""
+    cards = []
+    for where, payload in groups:
+        panel = payload.get("panel")
+        if not payload.get("open"):
+            problems.append(f"{where}: skill menu is not open")
+            continue
+        if not payload.get("cards"):
+            problems.append(f"{where}: no {SEL_SKILL_CARD}")
+            continue
+        for card in payload["cards"]:
+            item = dict(card)
+            item["where"] = where
+            item["panel"] = panel
+            cards.append(item)
+    if not cards:
+        return
+
+    def _below(key, floor):
+        bad = [card for card in cards if card.get(key) is None or card[key] < floor]
+        return bad
+
+    name_bad = _below("namePx", SKILL_NAME_MIN_PX)
+    if name_bad:
+        problems.append(
+            f".skill-name font-size {_px_set(card['namePx'] for card in name_bad)}px "
+            f"on {len(name_bad)} card(s); want >= {SKILL_NAME_MIN_PX}px"
+        )
+    desc_bad = _below("descPx", SKILL_DESC_MIN_PX)
+    if desc_bad:
+        problems.append(
+            f".skill-desc font-size {_px_set(card['descPx'] for card in desc_bad)}px "
+            f"on {len(desc_bad)} card(s); want >= {SKILL_DESC_MIN_PX}px"
+        )
+    icon_font_bad = _below("iconPx", SKILL_ICON_FONT_MIN_PX)
+    if icon_font_bad:
+        problems.append(
+            f".skill-icon font-size {_px_set(card['iconPx'] for card in icon_font_bad)}px "
+            f"on {len(icon_font_bad)} card(s); want >= {SKILL_ICON_FONT_MIN_PX}px"
+        )
+    icon_box_bad = []
+    for card in cards:
+        box = card.get("iconBox")
+        if not _visible(box) or box["w"] < SKILL_ICON_BOX_MIN_PX or box["h"] < SKILL_ICON_BOX_MIN_PX:
+            icon_box_bad.append(card)
+    if icon_box_bad:
+        sizes = sorted({
+            (
+                None if not card.get("iconBox") else round(card["iconBox"]["w"], 3),
+                None if not card.get("iconBox") else round(card["iconBox"]["h"], 3),
+            )
+            for card in icon_box_bad
+        })
+        shown = ", ".join(
+            "missing" if pair[0] is None else f"{_px(pair[0])}×{_px(pair[1])}" for pair in sizes
+        )
+        problems.append(
+            f".skill-icon box {shown} on {len(icon_box_bad)} card(s); "
+            f"want >= {SKILL_ICON_BOX_MIN_PX}×{SKILL_ICON_BOX_MIN_PX}"
+        )
+    pad_bad = [
+        card
+        for card in cards
+        if card["padTop"] < SKILL_CARD_PAD_BLOCK_MIN_PX
+        or card["padBottom"] < SKILL_CARD_PAD_BLOCK_MIN_PX
+        or card["padLeft"] < SKILL_CARD_PAD_INLINE_MIN_PX
+        or card["padRight"] < SKILL_CARD_PAD_INLINE_MIN_PX
+    ]
+    if pad_bad:
+        pads = sorted({
+            (
+                round(card["padTop"], 3),
+                round(card["padRight"], 3),
+                round(card["padBottom"], 3),
+                round(card["padLeft"], 3),
+            )
+            for card in pad_bad
+        })
+        shown = ", ".join(
+            f"{_px(top)}px {_px(right)}px {_px(bottom)}px {_px(left)}px" for top, right, bottom, left in pads
+        )
+        problems.append(
+            f".skill-card padding (top right bottom left) {shown}; "
+            f"want block >= {SKILL_CARD_PAD_BLOCK_MIN_PX}px and inline >= {SKILL_CARD_PAD_INLINE_MIN_PX}px"
+        )
+    short_cards = [
+        card
+        for card in cards
+        if not _visible(card.get("cardBox")) or card["cardBox"]["h"] < SKILL_CARD_MIN_HEIGHT_PX
+    ]
+    if short_cards:
+        problems.append(
+            f".skill-card height {_px_set((card.get('cardBox') or {}).get('h') for card in short_cards)}px; "
+            f"want >= {SKILL_CARD_MIN_HEIGHT_PX}px"
+        )
+    outside = []
+    for card in cards:
+        if not _visible(card.get("cardBox")) or not _visible(card.get("panel")):
+            outside.append(f"{card['where']} {card['name'] or '?'} missing box")
+        elif not _inside(card["cardBox"], card["panel"]):
+            box = card["cardBox"]
+            panel = card["panel"]
+            outside.append(
+                f"{card['where']} {card['name']} card "
+                f"L{_px(box['left'])} T{_px(box['top'])} R{_px(box['right'])} B{_px(box['bottom'])} "
+                f"outside panel L{_px(panel['left'])} T{_px(panel['top'])} "
+                f"R{_px(panel['right'])} B{_px(panel['bottom'])}"
+            )
+    if outside:
+        problems.append("cards outside the panel: " + " | ".join(outside))
+    inset_bad = []
+    for card in cards:
+        icon = card.get("iconBox")
+        box = card.get("cardBox")
+        if not _visible(icon) or not _visible(box):
+            inset_bad.append(f"{card['name'] or '?'} icon missing")
+            continue
+        insets = _insets(icon, box)
+        if any(value < SKILL_ICON_INSET_MIN_PX for value in insets.values()):
+            inset_bad.append(
+                f"{card['name']} inset L{_px(insets['left'])} T{_px(insets['top'])} "
+                f"R{_px(insets['right'])} B{_px(insets['bottom'])}"
+            )
+    if inset_bad:
+        shown = inset_bad[:6]
+        extra = f" (+{len(inset_bad) - len(shown)} more)" if len(inset_bad) > len(shown) else ""
+        problems.append(
+            f"icon inset < {SKILL_ICON_INSET_MIN_PX}px from the card border box: "
+            + " | ".join(shown)
+            + extra
+        )
+    wrap_bad = []
+    overflow_by_name = {}
+    for card in cards:
+        label = card["name"] or "?"
+        font_px = card.get("descPx") or 0
+        height = card.get("descH")
+        white = card.get("descWhite")
+        if white != "nowrap" or height is None or font_px <= 0 or height > font_px * SKILL_DESC_LINE_RATIO + 0.5:
+            wrap_bad.append(
+                f"{card['where']} {label} white-space {white!r} height {_px(height)}px "
+                f"font {_px(font_px)}px"
+            )
+        scroll_w = card.get("descScrollW")
+        client_w = card.get("descClientW")
+        if client_w is None or client_w <= 0 or scroll_w is None or scroll_w > client_w + 1:
+            delta = -1 if scroll_w is None or client_w is None else scroll_w - client_w
+            previous = overflow_by_name.get(label)
+            if previous is None or delta > previous[0]:
+                overflow_by_name[label] = (
+                    delta,
+                    f"{label} {card.get('desc')!r} scrollWidth {_px(scroll_w)} clientWidth {_px(client_w)}",
+                )
+    if wrap_bad:
+        shown = wrap_bad[:8]
+        extra = f" (+{len(wrap_bad) - len(shown)} more)" if len(wrap_bad) > len(shown) else ""
+        problems.append("description is not a single nowrap line: " + " | ".join(shown) + extra)
+    if overflow_by_name:
+        shown = [item[1] for item in overflow_by_name.values()]
+        problems.append(
+            f"description overflows on {len(shown)} skill(s): " + " | ".join(shown)
+        )
+
+
+def _collect_skill_pages(page, where):
+    """Open the menu and return one payload per page. Empty list if it cannot open."""
+    problems_open = []
+    if not _open_menu_or_problem(page, problems_open, where):
+        return problems_open, []
+    pages = []
+    for index in range(6):
+        payload = _measure_cards(page)
+        payload["pageIndex"] = index
+        pages.append(payload)
+        if not _go_next_skill_page(page):
+            break
+    return [], pages
+
+
+@pytest.mark.case_id("TC-FE-SKILLMENU-TYPE")
+def test_tc_fe_skillmenu_type_card_text_is_larger(page, base_url, menu_ids):
+    """Card name, description, icon, and padding are large enough, and every description fits.
+
+    Covers the 6-skill kid, page 2 of the 8-skill kid, and all 22 seeded skills.
+    """
+    case_id = "TC-FE-SKILLMENU-TYPE"
+    problems = []
+    groups = []
+
+    _login(page, base_url, MENU_KID6)
+    _start_and_show_battle(page, menu_ids[MENU_KID6])
+    open_problems, pages = _collect_skill_pages(page, "6-skill")
+    problems.extend(open_problems)
+    if pages:
+        groups.append(("6-skill", pages[0]))
+        if len(pages[0]["cards"]) != 6:
+            problems.append(f"6-skill page shows {len(pages[0]['cards'])} cards; want 6")
+
+    _login(page, base_url, MENU_KID8)
+    _start_and_show_battle(page, menu_ids[MENU_KID8])
+    open_problems, pages = _collect_skill_pages(page, "8-skill")
+    problems.extend(open_problems)
+    page2 = next((item for item in pages if item.get("pageIndex") == 1), None)
+    if page2 is None:
+        problems.append("8-skill kid has no page 2 to measure")
+    else:
+        groups.append(("8-skill page 2", page2))
+        if page2.get("label") != "2 / 2":
+            problems.append(f"8-skill page 2 label {page2.get('label')!r}; want '2 / 2'")
+        if len(page2["cards"]) != 2:
+            problems.append(f"8-skill page 2 shows {len(page2['cards'])} cards; want 2")
+
+    _login(page, base_url, MENU_KID22)
+    started = _start_and_show_battle(page, menu_ids[MENU_KID22])
+    open_problems, pages = _collect_skill_pages(page, "22-skill")
+    problems.extend(open_problems)
+    seen = []
+    for item in pages:
+        groups.append((f"22-skill page {item['pageIndex'] + 1}", item))
+        seen.extend(card["name"] for card in item["cards"] if card["name"])
+    missing = [name for name in SEEDED_SKILL_NAMES if name not in seen]
+    if missing:
+        problems.append(
+            f"22-skill kid battle skills {[row['name'] for row in started['skills']]}; "
+            f"menu never showed {missing}"
+        )
+    _append_card_type_problems(problems, groups)
+    _fail(case_id, problems)
+
+
+def _append_title_problems(problems, payload, where):
+    panel = payload.get("panel")
+    if not _visible(panel):
+        problems.append(f"{where}: {SEL_SKILL_PANEL} is not visible")
+        return
+    title = payload.get("title")
+    label = payload.get("page")
+    back = payload.get("back")
+    if not _visible(title):
+        problems.append(f"{where}: {SEL_SKILL_TITLE} missing")
+    else:
+        if title["text"] != "技能":
+            problems.append(f"{where}: title text {title['text']!r}; want '技能'")
+        if title["fontPx"] < SKILL_TITLE_MIN_PX:
+            problems.append(
+                f"{where}: title font-size {_px(title['fontPx'])}px; want >= {SKILL_TITLE_MIN_PX}px"
+            )
+    if not _visible(label):
+        problems.append(f"{where}: {SEL_PAGE_LABEL} missing")
+    else:
+        if not re.fullmatch(r"\d+ / \d+", label["text"] or ""):
+            problems.append(f"{where}: page label {label['text']!r}; want 'N / M'")
+        if label["fontPx"] < PAGE_LABEL_MIN_PX:
+            problems.append(
+                f"{where}: page label font-size {_px(label['fontPx'])}px; want >= {PAGE_LABEL_MIN_PX}px"
+            )
+    if not _visible(back):
+        problems.append(f"{where}: {SEL_BTN_BACK} missing")
+    elif back["w"] < BTN_BACK_MIN_WIDTH_PX or back["h"] < BTN_BACK_MIN_HEIGHT_PX:
+        problems.append(
+            f"{where}: 返回 { _px(back['w']) }×{ _px(back['h']) }px; "
+            f"want >= {BTN_BACK_MIN_WIDTH_PX}×{BTN_BACK_MIN_HEIGHT_PX}"
+        )
+    for key, node_id, glyph in (
+        ("prev", SEL_BTN_PREV, "◀"),
+        ("next", SEL_BTN_NEXT, "▶"),
+        ("close", SEL_BTN_CLOSE, "✕"),
+    ):
+        box = payload.get(key)
+        if not _visible(box):
+            problems.append(f"{where}: {glyph} {node_id} missing")
+        elif box["w"] < TITLE_CONTROL_MIN_PX or box["h"] < TITLE_CONTROL_MIN_PX:
+            problems.append(
+                f"{where}: {glyph} {node_id} {_px(box['w'])}×{_px(box['h'])}px; "
+                f"want >= {TITLE_CONTROL_MIN_PX}×{TITLE_CONTROL_MIN_PX}"
+            )
+    named = [
+        ("title", title),
+        ("page", label),
+        ("back", back),
+        ("prev", payload.get("prev")),
+        ("next", payload.get("next")),
+        ("close", payload.get("close")),
+        ("mp", payload.get("mp")),
+    ]
+    for index, dot in enumerate(payload.get("dots") or []):
+        named.append((f"dot{index}", dot))
+    visible = [(name, box) for name, box in named if _visible(box)]
+    missing_inside = [name for name, box in named if box is None or not _visible(box)]
+    if missing_inside:
+        problems.append(f"{where}: title-row control missing or not visible: {', '.join(missing_inside)}")
+    outside = []
+    for name, box in visible:
+        if not _inside(box, panel):
+            outside.append(
+                f"{name} L{_px(box['left'])} T{_px(box['top'])} R{_px(box['right'])} B{_px(box['bottom'])}"
+            )
+    if outside:
+        problems.append(f"{where}: title-row controls outside the panel: " + " | ".join(outside))
+    overlaps = []
+    for index, (left_name, left_box) in enumerate(visible):
+        for right_name, right_box in visible[index + 1 :]:
+            area = _intersection_area(left_box, right_box)
+            if area and area > 0:
+                overlaps.append(f"{left_name}∩{right_name} {_px(area)} px²")
+    if overlaps:
+        problems.append(f"{where}: title-row controls overlap: " + " | ".join(overlaps))
+
+
+@pytest.mark.case_id("TC-FE-SKILLMENU-TITLE")
+def test_tc_fe_skillmenu_title_row_is_larger(page, base_url, menu_ids):
+    """Title, page label, 返回, and the pager buttons are large, inside the panel, and do not overlap."""
+    case_id = "TC-FE-SKILLMENU-TITLE"
+    problems = []
+
+    _login(page, base_url, MENU_KID6)
+    _start_and_show_battle(page, menu_ids[MENU_KID6])
+    if _open_menu_or_problem(page, problems, "6-skill"):
+        _append_title_problems(problems, _measure_title(page), "6-skill")
+
+    _login(page, base_url, MENU_KID8)
+    _start_and_show_battle(page, menu_ids[MENU_KID8])
+    if _open_menu_or_problem(page, problems, "8-skill"):
+        if not _go_next_skill_page(page):
+            problems.append("8-skill: cannot open page 2 for the title row")
+        else:
+            payload = _measure_title(page)
+            label = (payload.get("page") or {}).get("text")
+            if label != "2 / 2":
+                problems.append(f"8-skill title row is on label {label!r}; want '2 / 2'")
+            _append_title_problems(problems, payload, "8-skill page 2")
+    _fail(case_id, problems)
+
+
+def _set_wild_toast(page, message):
+    """Paint #wildToast.
+
+    renderBattleMode writes the node from the last turn log while rebuilding the
+    battle DOM. townData is a top-level let, so a Playwright script cannot push
+    a turn into it, and no function accepts a message and paints #wildToast.
+    textContent is applied to the live node. closeSkillMenu calls renderExpedition,
+    which replaces the node, so the caller sets the text again after 返回 / ✕.
+    """
+    _wait_fonts(page)
+    return page.evaluate(
+        """({message, toastId}) => {
+          const toast = document.getElementById(toastId);
+          if (!toast) return {ok: false, why: 'missing #wildToast', path: 'textContent'};
+          const writer = typeof renderBattleMode === 'function' ? 'renderBattleMode' : '';
+          toast.textContent = message;
+          return {
+            ok: toast.textContent === message,
+            path: 'textContent',
+            writer,
+            why: writer
+              ? 'renderBattleMode rebuilds #wildToast from lastTurn.log; townData is not reachable from page JS'
+              : 'renderBattleMode is not defined'
+          };
+        }""",
+        {"message": message, "toastId": SEL_WILD_TOAST},
+    )
+
+
+def _probe_toast_height(page, message):
+    """Height of message at TOAST_WRAP_WIDTH_PX with the live toast font and normal wrapping."""
+    return page.evaluate(
+        """({message, width, toastId}) => {
+          const toast = document.getElementById(toastId);
+          const cs = toast ? getComputedStyle(toast) : null;
+          const probe = document.createElement('div');
+          probe.style.position = 'absolute';
+          probe.style.left = '-12000px';
+          probe.style.top = '0';
+          probe.style.width = width + 'px';
+          probe.style.boxSizing = 'border-box';
+          probe.style.whiteSpace = 'normal';
+          probe.style.fontSize = cs ? cs.fontSize : '16px';
+          probe.style.fontWeight = cs ? cs.fontWeight : '800';
+          probe.style.fontFamily = cs ? cs.fontFamily : 'sans-serif';
+          probe.style.lineHeight = cs ? cs.lineHeight : 'normal';
+          probe.style.letterSpacing = cs ? cs.letterSpacing : 'normal';
+          probe.style.padding = cs ? cs.padding : '0';
+          probe.textContent = message;
+          document.body.appendChild(probe);
+          const height = probe.getBoundingClientRect().height;
+          probe.remove();
+          return height;
+        }""",
+        {"message": message, "width": TOAST_WRAP_WIDTH_PX, "toastId": SEL_WILD_TOAST},
+    )
+
+
+def _toast_layout(page):
+    return page.evaluate(
+        """(sels) => {
+          const rect = (el) => {
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            const cs = getComputedStyle(el);
+            return {
+              hidden: el.hasAttribute('hidden') || cs.display === 'none' || cs.visibility === 'hidden',
+              w: r.width, h: r.height, left: r.left, top: r.top, right: r.right, bottom: r.bottom
+            };
+          };
+          const toast = document.querySelector(sels.toast);
+          const cs = toast ? getComputedStyle(toast) : null;
+          const panel = document.querySelector(sels.panel);
+          const bar = document.querySelector(sels.bar);
+          const vitals = document.querySelector(sels.vitals);
+          const enemies = [...document.querySelectorAll(sels.monster)].map((card) => ({
+            idx: card.getAttribute('data-idx') || '',
+            card: rect(card),
+            name: rect(card.querySelector(sels.mName)),
+            hpbar: rect(card.querySelector(sels.mHp)),
+            hptext: rect(card.querySelector(sels.mHpText))
+          }));
+          return {
+            toast: toast ? {
+              text: toast.textContent || '',
+              textOverflow: cs.textOverflow,
+              whiteSpace: cs.whiteSpace,
+              scrollWidth: toast.scrollWidth,
+              clientWidth: toast.clientWidth,
+              scrollHeight: toast.scrollHeight,
+              clientHeight: toast.clientHeight,
+              box: rect(toast)
+            } : null,
+            panel: rect(panel),
+            bar: rect(bar),
+            vitals: rect(vitals),
+            enemies
+          };
+        }""",
+        _selectors(),
+    )
+
+
+def _close_skill_menu(page):
+    """Click 返回, or ✕ if 返回 is not there. Returns which control was used."""
+    back = page.locator(SEL_BTN_BACK)
+    if back.count() and back.is_visible():
+        back.click()
+        return "back"
+    close = page.locator(SEL_BTN_CLOSE)
+    if close.count() and close.is_visible():
+        close.click()
+        return "close"
+    return ""
+
+
+def _nowrap(value):
+    return value in ("nowrap", "pre")
+
+
+@pytest.mark.case_id("TC-FE-TOAST-MENU-ONELINE")
+@pytest.mark.parametrize("enemy_count", [3, 1], ids=["3-wolves", "1-wolf"])
+def test_tc_fe_toast_menu_oneline(page, base_url, menu_ids, enemy_count):
+    """With the skill menu open, a wrapping battle message stays one ellipsized line and misses the panel.
+
+    After 返回 or ✕, the same message is fully visible and misses every enemy name and HP node.
+    """
+    case_id = "TC-FE-TOAST-MENU-ONELINE"
+    _login(page, base_url, MENU_KID6)
+    started = _start_battle_with_enemy_count(page, menu_ids[MENU_KID6], enemy_count)
+    problems = []
+    if not _open_menu_or_problem(page, problems, f"{enemy_count} wolves"):
+        _fail(f"{case_id} [{enemy_count}]", problems)
+        return
+
+    painted = _set_wild_toast(page, TOAST_SHORT_MESSAGE)
+    if not painted.get("ok"):
+        problems.append(f"could not paint the short message ({painted})")
+        _fail(f"{case_id} [{enemy_count}]", problems)
+        return
+    short_live = _toast_layout(page)
+    short_box = (short_live.get("toast") or {}).get("box")
+    if not _visible(short_box):
+        problems.append(f"short message did not produce a visible {SEL_WILD_TOAST}")
+        _fail(f"{case_id} [{enemy_count}]", problems)
+        return
+    single_h = short_box["h"]
+    probe_short = _probe_toast_height(page, TOAST_SHORT_MESSAGE)
+    probe_long = _probe_toast_height(page, TOAST_LONG_MESSAGE)
+    if not (probe_long > probe_short + TOAST_LINE_TOLERANCE_PX):
+        problems.append(
+            f"long message does not wrap to 2+ lines at {TOAST_WRAP_WIDTH_PX}px "
+            f"(probe short {_px(probe_short)}px, long {_px(probe_long)}px)"
+        )
+
+    painted = _set_wild_toast(page, TOAST_LONG_MESSAGE)
+    if not painted.get("ok"):
+        problems.append(f"could not paint the long message ({painted})")
+    long_live = _toast_layout(page)
+    toast = long_live.get("toast") or {}
+    box = toast.get("box")
+    if not _visible(box):
+        problems.append(f"long message did not produce a visible {SEL_WILD_TOAST}; rolled {started['names']}")
+    else:
+        if box["h"] > single_h + TOAST_LINE_TOLERANCE_PX:
+            problems.append(
+                f"menu open: {SEL_WILD_TOAST} height {_px(box['h'])}px > single-line "
+                f"{_px(single_h)}px + {TOAST_LINE_TOLERANCE_PX}px "
+                f"(1100px probe short {_px(probe_short)} long {_px(probe_long)}; "
+                f"path {painted.get('path')}: {painted.get('why')})"
+            )
+        ellipsis = toast.get("textOverflow") == "ellipsis"
+        clipped = (toast.get("scrollWidth") or 0) > (toast.get("clientWidth") or 0) + 1
+        if not ((ellipsis and _nowrap(toast.get("whiteSpace"))) or clipped):
+            problems.append(
+                f"menu open: text-overflow {toast.get('textOverflow')!r} "
+                f"white-space {toast.get('whiteSpace')!r} "
+                f"scrollWidth {_px(toast.get('scrollWidth'))} clientWidth {_px(toast.get('clientWidth'))}; "
+                "want ellipsis+nowrap or scrollWidth > clientWidth"
+            )
+        panel = long_live.get("panel")
+        if not _visible(panel):
+            problems.append(f"menu open: {SEL_SKILL_PANEL} is not visible")
+        else:
+            area = _intersection_area(box, panel)
+            if area is None or area > 0:
+                problems.append(
+                    f"menu open: {SEL_WILD_TOAST} intersects {SEL_SKILL_PANEL} by {_px(area)} px² "
+                    f"(toast T{_px(box['top'])} B{_px(box['bottom'])} L{_px(box['left'])} R{_px(box['right'])}; "
+                    f"panel T{_px(panel['top'])} B{_px(panel['bottom'])} "
+                    f"L{_px(panel['left'])} R{_px(panel['right'])})"
+                )
+
+    how = _close_skill_menu(page)
+    if not how:
+        problems.append(f"no {SEL_BTN_BACK} or {SEL_BTN_CLOSE} to close the menu")
+    else:
+        try:
+            page.locator(SEL_SKILL_PANEL).wait_for(state="hidden", timeout=3000)
+        except Exception:
+            problems.append(f"{how} left {SEL_SKILL_PANEL} visible")
+        # The close path re-renders the battle and drops the injected text node.
+        painted = _set_wild_toast(page, TOAST_LONG_MESSAGE)
+        closed = _toast_layout(page)
+        toast = closed.get("toast") or {}
+        box = toast.get("box")
+        if toast.get("text") != TOAST_LONG_MESSAGE:
+            problems.append(
+                f"menu closed via {how}: toast text {toast.get('text')!r} "
+                f"(paint path {painted.get('path')})"
+            )
+        if not _visible(box):
+            problems.append(f"menu closed: {SEL_WILD_TOAST} is not visible")
+        else:
+            scroll_w = toast.get("scrollWidth") or 0
+            client_w = toast.get("clientWidth") or 0
+            scroll_h = toast.get("scrollHeight") or 0
+            client_h = toast.get("clientHeight") or 0
+            if scroll_w > client_w + 1 or scroll_h > client_h + 1:
+                problems.append(
+                    f"menu closed: message is truncated scroll {_px(scroll_w)}×{_px(scroll_h)} "
+                    f"client {_px(client_w)}×{_px(client_h)}"
+                )
+            for enemy in closed.get("enemies") or []:
+                for key, what in (("name", SEL_M_NAME), ("hpbar", SEL_M_HP_BAR), ("hptext", SEL_M_HP_TEXT)):
+                    part = enemy.get(key)
+                    if not _visible(part):
+                        problems.append(f"menu closed: enemy {enemy.get('idx')} {what} is not visible")
+                        continue
+                    area = _intersection_area(box, part)
+                    if area is None or area > 0:
+                        problems.append(
+                            f"menu closed: {SEL_WILD_TOAST} intersects enemy {enemy.get('idx')} "
+                            f"{what} by {_px(area)} px²"
+                        )
+    _fail(f"{case_id} [{enemy_count}]", problems)
+
+
+def _shift_amount(before, after, keys):
+    deltas = {}
+    for key in keys:
+        deltas[key] = abs(after[key] - before[key])
+    return deltas
+
+
+@pytest.mark.case_id("TC-FE-TOAST-NO-SHIFT")
+@pytest.mark.parametrize("enemy_count", [3, 1], ids=["3-wolves", "1-wolf"])
+def test_tc_fe_toast_no_shift(page, base_url, menu_ids, enemy_count):
+    """A 2-line battle message must not move monster cards or cover HP text with the command bar.
+
+    #playerVitals stays where it was. The skill menu stays closed.
+    """
+    case_id = "TC-FE-TOAST-NO-SHIFT"
+    _login(page, base_url, MENU_KID6)
+    started = _start_battle_with_enemy_count(page, menu_ids[MENU_KID6], enemy_count)
+    problems = []
+    if _menu_snapshot(page)["open"]:
+        problems.append("skill menu started open; this case measures the closed menu")
+
+    probe_short = _probe_toast_height(page, TOAST_SHORT_MESSAGE)
+    probe_long = _probe_toast_height(page, TOAST_LONG_MESSAGE)
+    if not (probe_long > probe_short + TOAST_LINE_TOLERANCE_PX):
+        problems.append(
+            f"long message does not wrap to 2+ lines at {TOAST_WRAP_WIDTH_PX}px "
+            f"(probe short {_px(probe_short)}px, long {_px(probe_long)}px)"
+        )
+
+    painted = _set_wild_toast(page, TOAST_SHORT_MESSAGE)
+    if not painted.get("ok"):
+        problems.append(f"could not paint the short message ({painted})")
+        _fail(f"{case_id} [{enemy_count}]", problems)
+        return
+    short_layout = _toast_layout(page)
+    painted = _set_wild_toast(page, TOAST_LONG_MESSAGE)
+    if not painted.get("ok"):
+        problems.append(f"could not paint the long message ({painted}); path note {painted}")
+    long_layout = _toast_layout(page)
+
+    short_cards = {enemy["idx"]: enemy for enemy in short_layout.get("enemies") or []}
+    long_cards = {enemy["idx"]: enemy for enemy in long_layout.get("enemies") or []}
+    if len(short_cards) != enemy_count or len(long_cards) != enemy_count:
+        problems.append(
+            f"monster cards short {list(short_cards)} long {list(long_cards)}; "
+            f"want {enemy_count}; rolled {started['names']}"
+        )
+    for idx, before in short_cards.items():
+        after = long_cards.get(idx)
+        if not after or not _visible(before.get("card")) or not _visible(after.get("card")):
+            problems.append(f"card {idx} missing between the short and long message")
+            continue
+        deltas = _shift_amount(before["card"], after["card"], ("top", "left"))
+        if deltas["top"] > TOAST_SHIFT_TOLERANCE_PX or deltas["left"] > TOAST_SHIFT_TOLERANCE_PX:
+            problems.append(
+                f"card {idx} moved top {_px(before['card']['top'])} -> {_px(after['card']['top'])} "
+                f"(Δ{_px(deltas['top'])}px) left {_px(before['card']['left'])} -> {_px(after['card']['left'])} "
+                f"(Δ{_px(deltas['left'])}px); want <= {TOAST_SHIFT_TOLERANCE_PX}px"
+            )
+    for state, layout in (("short", short_layout), ("long", long_layout)):
+        bar = layout.get("bar")
+        if not _visible(bar):
+            problems.append(f"{state} message: no visible {SEL_COMMAND_BAR}")
+            continue
+        for enemy in layout.get("enemies") or []:
+            hp_text = enemy.get("hptext")
+            if not _visible(hp_text):
+                problems.append(f"{state} message: card {enemy.get('idx')} {SEL_M_HP_TEXT} is not visible")
+                continue
+            area = _intersection_area(hp_text, bar)
+            if area is None or area > 0:
+                problems.append(
+                    f"{state} message: card {enemy.get('idx')} {SEL_M_HP_TEXT} intersects "
+                    f"{SEL_COMMAND_BAR} by {_px(area)} px²"
+                )
+    before_vitals = short_layout.get("vitals")
+    after_vitals = long_layout.get("vitals")
+    if not _visible(before_vitals) or not _visible(after_vitals):
+        problems.append(f"{SEL_PLAYER_VITALS} missing or hidden, so it is not unaffected")
+    else:
+        deltas = _shift_amount(before_vitals, after_vitals, ("top", "left", "w", "h"))
+        moved = {key: value for key, value in deltas.items() if value > TOAST_SHIFT_TOLERANCE_PX}
+        if moved:
+            problems.append(
+                f"{SEL_PLAYER_VITALS} moved { {key: _px(value) for key, value in moved.items()} }px "
+                f"between the short and long message"
+            )
+    _fail(f"{case_id} [{enemy_count}]", problems)
+
+
+@pytest.mark.case_id("TC-FE-SKILLMENU-PANEL-RECT")
+def test_tc_fe_skillmenu_panel_rect_guard(page, base_url, menu_ids):
+    """#skillPanel keeps the ee8a3eb box. TC-FE-SKILLMENU-ENEMY-VISIBLE is unchanged."""
+    case_id = "TC-FE-SKILLMENU-PANEL-RECT"
+    _login(page, base_url, MENU_KID6)
+    _start_and_show_battle(page, menu_ids[MENU_KID6])
+    problems = []
+    if not _open_menu_or_problem(page, problems, "panel rect"):
+        _fail(case_id, problems)
+        return
+    layout = page.evaluate(_LAYOUT_JS)
+    panel = layout.get("panel")
+    if not panel or panel.get("hidden"):
+        problems.append(f"{SEL_SKILL_PANEL} is not visible")
+    else:
+        for edge, expected in SKILL_PANEL_RECT.items():
+            actual = panel[{"left": "left", "top": "top", "right": "right", "bottom": "bottom"}[edge]]
+            if abs(actual - expected) > SKILL_PANEL_RECT_TOLERANCE_PX:
+                problems.append(
+                    f"{SEL_SKILL_PANEL} {edge} {_px(actual)}px; "
+                    f"want { _px(expected) }±{SKILL_PANEL_RECT_TOLERANCE_PX}"
+                )
+    _fail(case_id, problems)
