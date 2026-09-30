@@ -215,6 +215,68 @@ main 未有選單，所以紅。`7e00b66` 的說明係 -0.14em，字寬低過 0.
 
 守衛。選單打開時 `#skillPanel` 維持 `ee8a3eb` 的盒子：left 332±2、top 141±2、right 980±2、bottom 461±2。呢條喺 `ee8a3eb` 應該過。`TC-FE-SKILLMENU-ENEMY-VISIBLE` 維持原案。
 
+## 木框內線、圖示、頁點
+
+`8ac7b0d` 的 `#skillPanel`（`.battle-scene.kt-wild .skill-panel`）冇 `::before`／`::after`（computed `content: none`）。木框唔係背景圖，係元素自己畫的：
+
+- `border: 8px solid #3b2416`（外圈深木）
+- `box-shadow: inset 0 0 0 3px #e7c48a, inset 0 0 0 6px #6b4428, 0 10px 0 rgba(28,16,8,.28)`
+- `background-color` 加三層 `background-image`（徑向高光、橫向木紋、直向漸層）只填面板裡面
+
+**內線**：border box 向內收「該邊 `border-width` + inset box-shadow 喺嗰一邊的最大內伸」。內伸 = `max(0, spread + 向內 offset)`：左 `spread + offsetX`、右 `spread - offsetX`、上 `spread + offsetY`、下 `spread - offsetY`。模糊唔計入內線。冇 `inset` 的外陰影唔計。如果 `::before`／`::after` 真係生成一個 absolute 盒，而且四邊 inset 都係長度，內線再收緊到該偽元素的邊框加 inset 陰影。
+
+`8ac7b0d` 兩層 inset 的 offset 都係 0、blur 都係 0，最大 spread 係 6px，所以內線離 border box 14px。面板 `332 / 141 / 980 / 461` 時，內線係 left **346**、top **155**、right **966**、bottom **447**。
+
+### TC-FE-SKILLMENU-INSET
+
+原因：左右 padding 由 12px 跌到 4px，卡由大約 300 闊到 309。「技能」、卡的左右邊同 ✕ 踩入木框深色內線大約 2px。第三行卡底離內線只剩 2px。
+
+步驟：1280×720。6 個技能的一頁、8 個技能的第 1 同第 2 頁、學齊 22 個技能的每一頁。打開 `#btnSkill`。
+
+預期：
+
+- `#skillPanel` computed `padding-left` 同 `padding-right` ≥ 12px
+- 每張 `.skill-card`、`#skillTitle`、`#mpNow`、`#btnPrev`、每一粒 `#pageDots .dot`、`#pageLabel`、`#btnBack`、`#btnClose` 的 bounding rect，離內線每一邊 ≥ 4px
+- `#skillGrid` 仍然係 2 欄 × 3 行（最後一頁可以有空格）。卡兩兩交集 ≤ 0.5 px²。卡高 ≥ 72px
+- 卡闊 ≤ 304px。12px 側 padding 喺鎖定的 648px 面板上，扣 6px 欄距，自然係 301px。唔鎖死 300
+
+`8ac7b0d` 量到：padding `4px 8px`（左右 4、上下 8）。卡闊 **309**、高 72。網格 `309px 309px` / `72px 72px 72px`。「技能」左 **-2px**。✕ 右 **-2px**。左欄卡左 -2px，右欄卡右 -2px。第三行卡底 **2px**（內線 bottom 447，卡底 445）。◀ ▶ 同頁點的頂部剛好 4px。所以紅。
+
+### TC-FE-SKILLMENU-ICON
+
+原因：emoji 墨水大約 35×38，溢出 28px 圖示盒。盒到技能名的 flex gap 係 6px，但字形右緣越過個盒 7px，所以字形到名的間距係 **-1px**。繃帶、急救、盾擊、必殺都係咁，其餘技能一樣。
+
+步驟：1280×720。學齊 22 個技能，逐頁量每一個 `.skill-icon`。字形用 DOM Range 包住圖示文字節點的 client rect。
+
+預期：
+
+- 盒闊 ≥ 36px。computed `font-size` ≥ 28px（維持 28，唔放大字）
+- 字形橫向喺盒裡面，容差 0.5px
+- 字形四邊都喺卡裡面，容差 0.5px
+- 字形同 `.skill-name`、`.skill-desc` 唔重疊（相交寬同高都要 ≤ 0.5px）
+- 圖示盒右緣到 `.skill-name` 左緣 ≥ 6px，而且字形右緣到 `.skill-name` 左緣都 ≥ 6px
+- 字形因為字體度量高過個盒（38 > 28）唔要求垂直收進個盒。只要仍然喺卡裡面、又唔撞到名同說明
+
+`8ac7b0d` 量到（22/22）：盒 **28×28**，字級 28px，字形 **35×38**。盒內橫向 inset 左 0、右 **-7**。盒到名 **6px**，字形到名 **-1px**。字形同名重疊 x **1px**、y 24.188px；同說明重疊 x 35px、y **3px**。字形仍然喺卡內（上 7.375、下 26.625、左 10）。所以紅。
+
+### TC-FE-SKILLMENU-DOTS
+
+原因：3 頁或以上（`:has(.dot:nth-child(3))`）每點闊 26px。決定：點只做指示，`pointer-events: none`。翻頁只靠 ◀ ▶（≥ 44×44）。唔要求點變大。
+
+13 個技能的合成小朋友：探險公會 Lv1、健身室 Lv4、農場 Lv1、商店 Lv1、圖書館 Lv2、醫院 Lv5、燈塔 Lv1、天文台 Lv1。學到 13 招，`ceil(13/6) = 3` 頁。22 招係 4 頁。
+
+步驟：1280×720。兩個小朋友都打開選單。
+
+預期：
+
+- 點數 = 頁數。`aria-current="page"` 的點對應 `#pageLabel` 的頁碼
+- 每一粒 `.dot`，以及唔包含 `#btnPrev`／`#btnNext` 的容器（`#pageDots`），computed `pointer-events` 係 `none`。`.skill-pager` 含 ◀ ▶，唔要求 `none`
+- `document.elementFromPoint` 打中點中心時，目標唔係 `.dot`
+- 用真實滑鼠撳點中心（唔好用 locator click，嗰個會無視 `pointer-events`），`#pageLabel` 唔變。第 1 頁同最後一頁都試
+- ◀ ▶ 仍然 ≥ 44×44，而且可以由 1 去到 N 再返到 1
+
+`8ac7b0d` 量到：13 技能 3 點、22 技能 4 點，3 頁或以上每點 **26×44**。點同 `#pageDots` 都係 `pointer-events: auto`。`elementFromPoint` 打中 `BUTTON.dot`。第 1 頁撳第 2 點：13 技能 `1 / 3` → `2 / 3`，22 技能 `1 / 4` → `2 / 4`。◀ ▶ 仍然 44×44，而且 1→N→1 仍然得。所以紅。
+
 ## Case id
 
 | id | 期望（未改產品時） |
@@ -236,6 +298,9 @@ main 未有選單，所以紅。`7e00b66` 的說明係 -0.14em，字寬低過 0.
 | TC-FE-TOAST-MENU-ONELINE | 紅。3 隻同 1 隻野狼。選單打開時兩行訊息同 `#skillPanel` 交集 9963 px²，而且唔係單行省略。 |
 | TC-FE-TOAST-NO-SHIFT | 紅。選單收住時長句將卡推低 14.375px（main 24px），`.m-hp-text` 同 `.kt-command-bar` 交集 711.984 px²（main 2127 px²）。 |
 | TC-FE-SKILLMENU-PANEL-RECT | 守衛。`ee8a3eb` 應過：面板 left 332、top 141、right 980、bottom 461，各 ±2。main 未有面板，所以紅。 |
+| TC-FE-SKILLMENU-INSET | 紅。`8ac7b0d` 左右 padding 4px（要 ≥ 12）。內線 = border 8px + inset spread 6px（冇偽元素），離邊 14px。技能左 -2、✕ 右 -2、卡左右 -2、第三行卡底 2px（要每邊 ≥ 4）。卡闊 309（要 ≤ 304） |
+| TC-FE-SKILLMENU-ICON | 紅。`8ac7b0d` 盒 28×28、字形 35×38、字形到名 -1px（盒到名 6px）。要盒闊 ≥ 36、字級 ≥ 28、字形橫向喺盒內、到名 ≥ 6px、唔撞名同說明。垂直溢出個盒可以，但要喺卡內 |
+| TC-FE-SKILLMENU-DOTS | 紅。13 技能 3 頁、22 技能 4 頁。點同 `#pageDots` 係 `pointer-events: auto`，撳點會翻頁。要 `none`，而且 `elementFromPoint` 唔打中點。◀ ▶ 維持 ≥ 44×44。唔要求點變大 |
 | TC-API-SKILL-FORMAL | 疾風斬、強光紅（含「唔」）。盾擊紅：要正好「物理攻擊，下一次受到的傷害減半」。其餘書面語過 |
 | TC-API-SKILL-FORMAL-API | 同上，兩個 API。盾擊兩個 payload 都要正好嗰句 |
 | TC-API-SKILL-FORMAL-MIGRATE | afbc1a6：疾風斬、強光仍然含「唔」；金錢砸整行唔見（冇「銀行」）；挑釁 id 8 改名盾擊後說明仍係舊句。main `3b0a48a`：舊盾擊句遷移後未變新句；疾風斬、強光仍然含「唔」 |

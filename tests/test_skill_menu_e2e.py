@@ -59,11 +59,17 @@ from tests.skill_menu_spec import (  # noqa: E402
     SKILL_CARD_MIN_HEIGHT_PX,
     SKILL_CARD_PAD_BLOCK_MIN_PX,
     SKILL_CARD_PAD_INLINE_MIN_PX,
+    SKILL_CARD_WIDTH_MAX_PX,
     SKILL_DESC_LINE_RATIO,
     SKILL_DESC_MIN_PX,
+    SKILL_FRAME_CLEARANCE_MIN_PX,
+    SKILL_GLYPH_EDGE_TOLERANCE_PX,
     SKILL_ICON_BOX_MIN_PX,
+    SKILL_ICON_BOX_WIDTH_MIN_PX,
     SKILL_ICON_FONT_MIN_PX,
     SKILL_ICON_INSET_MIN_PX,
+    SKILL_ICON_NAME_GAP_MIN_PX,
+    SKILL_PANEL_PAD_INLINE_MIN_PX,
     SKILL_MENU_PAGE_SIZE,
     SKILL_NAME_MIN_PX,
     SKILL_PANEL_RECT,
@@ -81,6 +87,7 @@ from tests.skill_menu_spec import (  # noqa: E402
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MENU_KID6 = "test_menu_kid6"
 MENU_KID8 = "test_menu_kid8"
+MENU_KID13 = "test_menu_kid13"
 MENU_KID22 = "test_menu_kid22"
 STAGE_W = 1280
 STAGE_H = 720
@@ -96,6 +103,12 @@ _SIX = (
     ("商店", 1),  # 金幣袋
 )
 _EIGHT = _SIX + (("圖書館", 2),)  # 火球 知識的力量
+# 8 + 醫院三招 + 強光 + 流星雨 = 13 learned skills, which is 3 menu pages.
+_THIRTEEN = _EIGHT + (
+    ("醫院", 5),  # 繃帶 急救 全體治療
+    ("燈塔", 1),  # 強光
+    ("天文台", 1),  # 流星雨
+)
 # Every seeded skill. Levels are the skill_defs.level_required ceilings.
 _ALL22 = (
     ("探險公會", 4),  # 偵察 疾風斬
@@ -179,6 +192,7 @@ def _seed(dst):
     for username, name, plan in (
         (MENU_KID6, "Menu Kid 6", _SIX),
         (MENU_KID8, "Menu Kid 8", _EIGHT),
+        (MENU_KID13, "Menu Kid 13", _THIRTEEN),
         (MENU_KID22, "Menu Kid 22", _ALL22),
     ):
         kid = insert_kid(dst, name=name, username=username, pin=TEST_KID_PIN, level=20, points=80)
@@ -197,9 +211,11 @@ def _seed(dst):
     assert guild == 6, guild
     learned6 = _learned_names(dst, ids[MENU_KID6])
     learned8 = _learned_names(dst, ids[MENU_KID8])
+    learned13 = _learned_names(dst, ids[MENU_KID13])
     learned22 = _learned_names(dst, ids[MENU_KID22])
     assert len(learned6) == 6, [row["name"] for row in learned6]
     assert len(learned8) == 8, [row["name"] for row in learned8]
+    assert len(learned13) == 13, [row["name"] for row in learned13]
     assert len(learned22) == len(SEEDED_SKILL_NAMES), [row["name"] for row in learned22]
     assert {row["name"] for row in learned22} == set(SEEDED_SKILL_NAMES)
     backend.DB_PATH = old
@@ -2335,4 +2351,763 @@ def test_tc_fe_skillmenu_panel_rect_guard(page, base_url, menu_ids):
                     f"{SEL_SKILL_PANEL} {edge} {_px(actual)}px; "
                     f"want { _px(expected) }±{SKILL_PANEL_RECT_TOLERANCE_PX}"
                 )
+    _fail(case_id, problems)
+
+
+# Inner line of the wooden #skillPanel. See the comment on
+# SKILL_FRAME_CLEARANCE_MIN_PX: border-width plus the furthest inset
+# box-shadow reach on each side. A generated ::before/::after tightens it.
+_INSET_JS = r"""
+() => {
+  function splitShadows(css) {
+    const text = css || 'none';
+    if (!text || text === 'none') return [];
+    const parts = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '(') depth++;
+      else if (ch === ')') depth--;
+      else if (ch === ',' && depth === 0) {
+        parts.push(text.slice(start, i).trim());
+        start = i + 1;
+      }
+    }
+    parts.push(text.slice(start).trim());
+    return parts.filter(Boolean);
+  }
+  function parseShadow(part) {
+    const inset = /\binset\b/.test(part);
+    const stripped = part.replace(/\([^)]*\)/g, ' ').replace(/\binset\b/g, ' ');
+    const nums = [...stripped.matchAll(/(-?[\d.]+)px/g)].map((m) => parseFloat(m[1]));
+    const [ox = 0, oy = 0, blur = 0, spread = 0] = nums;
+    return { inset, ox, oy, blur, spread };
+  }
+  function insetReach(cssText) {
+    const reach = { left: 0, right: 0, top: 0, bottom: 0 };
+    const shadows = [];
+    for (const part of splitShadows(cssText)) {
+      const sh = parseShadow(part);
+      shadows.push(sh);
+      if (!sh.inset) continue;
+      reach.left = Math.max(reach.left, sh.spread + sh.ox);
+      reach.right = Math.max(reach.right, sh.spread - sh.ox);
+      reach.top = Math.max(reach.top, sh.spread + sh.oy);
+      reach.bottom = Math.max(reach.bottom, sh.spread - sh.oy);
+    }
+    return { reach, shadows };
+  }
+  function px(value) {
+    if (value == null || value === 'auto') return null;
+    const n = parseFloat(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  function tracks(value) {
+    if (!value || value === 'none') return [];
+    return value.trim().split(/\s+/).filter(Boolean);
+  }
+  function boxOf(el) {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, w: r.width, h: r.height };
+  }
+  function clearance(box, inner) {
+    if (!box) return null;
+    return {
+      left: box.left - inner.left,
+      top: box.top - inner.top,
+      right: inner.right - box.right,
+      bottom: inner.bottom - box.bottom
+    };
+  }
+  const panel = document.getElementById('skillPanel');
+  if (!panel) return { open: false, why: 'missing #skillPanel' };
+  const cs = getComputedStyle(panel);
+  const open = !panel.hidden && cs.display !== 'none' && cs.visibility !== 'hidden';
+  const pr = panel.getBoundingClientRect();
+  const border = {
+    left: parseFloat(cs.borderLeftWidth) || 0,
+    right: parseFloat(cs.borderRightWidth) || 0,
+    top: parseFloat(cs.borderTopWidth) || 0,
+    bottom: parseFloat(cs.borderBottomWidth) || 0
+  };
+  const parsed = insetReach(cs.boxShadow);
+  const reach = parsed.reach;
+  const inner = {
+    left: pr.left + border.left + reach.left,
+    right: pr.right - border.right - reach.right,
+    top: pr.top + border.top + reach.top,
+    bottom: pr.bottom - border.bottom - reach.bottom
+  };
+  const pseudos = [];
+  for (const name of ['::before', '::after']) {
+    const pcs = getComputedStyle(panel, name);
+    const content = pcs.content || 'none';
+    const generated = content !== 'none' && content !== 'normal';
+    const positioned = pcs.position === 'absolute' || pcs.position === 'fixed';
+    const info = { name, content, position: pcs.position, generated, positioned, tightened: false };
+    if (generated && positioned) {
+      const top = px(pcs.top);
+      const right = px(pcs.right);
+      const bottom = px(pcs.bottom);
+      const left = px(pcs.left);
+      if (top != null && right != null && bottom != null && left != null) {
+        const pre = insetReach(pcs.boxShadow).reach;
+        const pb = {
+          left: parseFloat(pcs.borderLeftWidth) || 0,
+          right: parseFloat(pcs.borderRightWidth) || 0,
+          top: parseFloat(pcs.borderTopWidth) || 0,
+          bottom: parseFloat(pcs.borderBottomWidth) || 0
+        };
+        const pseudoInner = {
+          left: pr.left + left + pb.left + pre.left,
+          right: pr.right - right - pb.right - pre.right,
+          top: pr.top + top + pb.top + pre.top,
+          bottom: pr.bottom - bottom - pb.bottom - pre.bottom
+        };
+        inner.left = Math.max(inner.left, pseudoInner.left);
+        inner.right = Math.min(inner.right, pseudoInner.right);
+        inner.top = Math.max(inner.top, pseudoInner.top);
+        inner.bottom = Math.min(inner.bottom, pseudoInner.bottom);
+        info.tightened = true;
+      }
+    }
+    pseudos.push(info);
+  }
+  const named = [
+    ['#skillTitle', document.getElementById('skillTitle')],
+    ['#mpNow', document.getElementById('mpNow')],
+    ['#btnPrev', document.getElementById('btnPrev')],
+    ['#pageLabel', document.getElementById('pageLabel')],
+    ['#btnBack', document.getElementById('btnBack')],
+    ['#btnClose', document.getElementById('btnClose')]
+  ];
+  const chrome = named.map(([name, el]) => {
+    const box = boxOf(el);
+    return { name, text: el ? (el.textContent || '').trim() : '', box, clearance: clearance(box, inner) };
+  });
+  const dots = [...document.querySelectorAll('#pageDots .dot')].map((el, index) => {
+    const box = boxOf(el);
+    return { name: '#pageDots .dot[' + index + ']', box, clearance: clearance(box, inner) };
+  });
+  const grid = document.getElementById('skillGrid');
+  const gcs = grid ? getComputedStyle(grid) : null;
+  const cards = [...document.querySelectorAll('#skillGrid .skill-card')].map((el) => {
+    const box = boxOf(el);
+    const nameEl = el.querySelector('.skill-name');
+    return {
+      name: nameEl ? (nameEl.textContent || '').trim() : '?',
+      box,
+      clearance: clearance(box, inner)
+    };
+  });
+  return {
+    open,
+    paddingLeft: parseFloat(cs.paddingLeft) || 0,
+    paddingRight: parseFloat(cs.paddingRight) || 0,
+    paddingTop: parseFloat(cs.paddingTop) || 0,
+    paddingBottom: parseFloat(cs.paddingBottom) || 0,
+    border,
+    reach,
+    inner,
+    panel: { left: pr.left, top: pr.top, right: pr.right, bottom: pr.bottom, w: pr.width, h: pr.height },
+    pseudos,
+    chrome,
+    dots,
+    cards,
+    columns: gcs ? tracks(gcs.gridTemplateColumns) : [],
+    rows: gcs ? tracks(gcs.gridTemplateRows) : []
+  };
+}
+"""
+
+_ICON_JS = r"""
+() => {
+  function boxOf(el) {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, w: r.width, h: r.height };
+  }
+  function glyphOf(icon) {
+    const node = [...icon.childNodes].find((n) => n.nodeType === Node.TEXT_NODE && (n.textContent || '').trim());
+    if (!node) return null;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    const list = [...range.getClientRects()];
+    if (!list.length) return null;
+    const left = Math.min(...list.map((r) => r.left));
+    const top = Math.min(...list.map((r) => r.top));
+    const right = Math.max(...list.map((r) => r.right));
+    const bottom = Math.max(...list.map((r) => r.bottom));
+    return { left, top, right, bottom, w: right - left, h: bottom - top };
+  }
+  const label = document.getElementById('pageLabel');
+  const cards = [...document.querySelectorAll('#skillGrid .skill-card')].map((card) => {
+    const icon = card.querySelector('.skill-icon');
+    const name = card.querySelector('.skill-name');
+    const desc = card.querySelector('.skill-desc');
+    const iconCs = icon ? getComputedStyle(icon) : null;
+    return {
+      name: name ? (name.textContent || '').trim() : '',
+      icon: boxOf(icon),
+      glyph: icon ? glyphOf(icon) : null,
+      nameBox: boxOf(name),
+      descBox: boxOf(desc),
+      fontPx: iconCs ? parseFloat(iconCs.fontSize) : null,
+      card: boxOf(card)
+    };
+  });
+  return { label: label ? (label.textContent || '').trim() : '', cards };
+}
+"""
+
+_DOTS_JS = r"""
+() => {
+  function boxOf(el) {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, w: r.width, h: r.height };
+  }
+  function holdsPager(el) {
+    return !!(el && el.querySelector && (el.querySelector('#btnPrev') || el.querySelector('#btnNext')));
+  }
+  const labelEl = document.getElementById('pageLabel');
+  const prev = document.getElementById('btnPrev');
+  const next = document.getElementById('btnNext');
+  const dots = [...document.querySelectorAll('#pageDots .dot')].map((el, index) => {
+    const box = boxOf(el);
+    const chain = [];
+    let node = el;
+    while (node && node.id !== 'skillPanel') {
+      const holds = holdsPager(node);
+      chain.push({
+        id: node.id || '',
+        cls: String(node.className || ''),
+        pe: getComputedStyle(node).pointerEvents,
+        holds
+      });
+      if (holds) break;
+      node = node.parentElement;
+    }
+    const center = box ? { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 } : null;
+    let hit = null;
+    if (center) {
+      const target = document.elementFromPoint(center.x, center.y);
+      hit = {
+        tag: target ? target.tagName : '',
+        id: target && target.id ? target.id : '',
+        cls: target && target.className ? String(target.className) : '',
+        isDot: !!(target && target.closest && target.closest('.dot'))
+      };
+    }
+    return { index, current: el.getAttribute('aria-current'), box, chain, center, hit };
+  });
+  return {
+    label: labelEl ? (labelEl.textContent || '').trim() : '',
+    prev: boxOf(prev),
+    next: boxOf(next),
+    nextDisabled: next ? next.getAttribute('aria-disabled') : null,
+    prevDisabled: prev ? prev.getAttribute('aria-disabled') : null,
+    dots
+  };
+}
+"""
+
+
+def _pseudo_summary(pseudos):
+    generated = [item for item in pseudos or [] if item.get("generated")]
+    if not generated:
+        return "no ::before/::after"
+    parts = []
+    for item in generated:
+        flag = "tightened the inner line" if item.get("tightened") else "not tightened"
+        parts.append(f"{item['name']} content {item.get('content')!r} {item.get('position')} {flag}")
+    return "; ".join(parts)
+
+
+def _bad_clearance(clearance, floor):
+    if not clearance:
+        return (("missing", None),)
+    return tuple(
+        (side, clearance[side])
+        for side in ("left", "top", "right", "bottom")
+        if clearance[side] + 1e-3 < floor
+    )
+
+
+def _group_clearance(items, floor):
+    """Group controls that miss the frame by the same sides."""
+    groups = []
+    index = {}
+    for item in items:
+        bad = _bad_clearance(item.get("clearance"), floor)
+        if not bad:
+            continue
+        if bad not in index:
+            index[bad] = []
+            groups.append((bad, index[bad]))
+        index[bad].append(item.get("name") or "?")
+    lines = []
+    for bad, names in groups:
+        if bad == (("missing", None),):
+            lines.append(", ".join(names) + ": missing box")
+            continue
+        shown = ", ".join(f"{side} {_px(value)}" for side, value in bad)
+        lines.append(", ".join(names) + ": " + shown)
+    return lines
+
+
+def _frame_line(payload):
+    border = payload.get("border") or {}
+    reach = payload.get("reach") or {}
+    inner = payload.get("inner") or {}
+    panel = payload.get("panel") or {}
+    return (
+        "frame inner line = border box "
+        f"L{_px(panel.get('left'))} T{_px(panel.get('top'))} "
+        f"R{_px(panel.get('right'))} B{_px(panel.get('bottom'))} "
+        "inset by border "
+        f"L{_px(border.get('left'))} R{_px(border.get('right'))} "
+        f"T{_px(border.get('top'))} B{_px(border.get('bottom'))} "
+        "+ inset-shadow reach "
+        f"L{_px(reach.get('left'))} R{_px(reach.get('right'))} "
+        f"T{_px(reach.get('top'))} B{_px(reach.get('bottom'))} "
+        f"({_pseudo_summary(payload.get('pseudos'))}): "
+        f"L{_px(inner.get('left'))} T{_px(inner.get('top'))} "
+        f"R{_px(inner.get('right'))} B{_px(inner.get('bottom'))}"
+    )
+
+
+def _read_skill_pages(page, problems, where, expected_pages, measure):
+    if not _open_menu_or_problem(page, problems, where):
+        return []
+    pages = []
+    for _ in range(8):
+        pages.append(measure(page))
+        if len(pages) >= expected_pages:
+            break
+        if not _go_next_skill_page(page):
+            break
+    if len(pages) != expected_pages:
+        label = pages[-1].get("label") if pages else ""
+        problems.append(
+            f"{where}: measured {len(pages)} skill page(s) {label!r}; want {expected_pages}"
+        )
+    return pages
+
+
+def _append_inset_problems(problems, screens):
+    """screens is (where, payload). The frame sentence is included only on failure."""
+    start = len(problems)
+    live = []
+    for where, payload in screens:
+        if not payload or not payload.get("open"):
+            problems.append(f"{where}: {SEL_SKILL_PANEL} is not open ({(payload or {}).get('why')})")
+            continue
+        live.append((where, payload))
+    if not live:
+        return
+    pad_bad = [
+        (where, payload["paddingLeft"], payload["paddingRight"])
+        for where, payload in live
+        if payload["paddingLeft"] + 1e-3 < SKILL_PANEL_PAD_INLINE_MIN_PX
+        or payload["paddingRight"] + 1e-3 < SKILL_PANEL_PAD_INLINE_MIN_PX
+    ]
+    if pad_bad:
+        shown = "; ".join(
+            f"{where} padding-left {_px(left)}px padding-right {_px(right)}px"
+            for where, left, right in pad_bad
+        )
+        problems.append(f"{shown}; want >= {SKILL_PANEL_PAD_INLINE_MIN_PX}px")
+    frame_notes = []
+    seen_frames = set()
+    widths = []
+    for where, payload in live:
+        inner = payload.get("inner") or {}
+        key = tuple(round(inner.get(side) or 0, 3) for side in ("left", "top", "right", "bottom"))
+        if key not in seen_frames:
+            seen_frames.add(key)
+            frame_notes.append(f"{where}: {_frame_line(payload)}")
+        columns = payload.get("columns") or []
+        rows = payload.get("rows") or []
+        if len(columns) != 2 or len(rows) != 3:
+            problems.append(
+                f"{where}: grid columns {columns or 'none'} rows {rows or 'none'}; want 2 columns x 3 rows"
+            )
+        cards = payload.get("cards") or []
+        for index, card in enumerate(cards):
+            box = card.get("box")
+            if not box or box["h"] + 1e-3 < SKILL_CARD_MIN_HEIGHT_PX:
+                problems.append(
+                    f"{where}: {card.get('name') or '?'} height {_px((box or {}).get('h'))}px; "
+                    f"want >= {SKILL_CARD_MIN_HEIGHT_PX}px"
+                )
+            if box:
+                widths.append(box["w"])
+            for later in cards[index + 1 :]:
+                area = _intersection_area(box, later.get("box"))
+                if area and area > 0.5:
+                    problems.append(
+                        f"{where}: {card.get('name')} overlaps {later.get('name')} by {_px(area)} px²"
+                    )
+        items = list(payload.get("chrome") or []) + list(payload.get("dots") or []) + [
+            {"name": card.get("name") or "card", "clearance": card.get("clearance")} for card in cards
+        ]
+        grouped = _group_clearance(items, SKILL_FRAME_CLEARANCE_MIN_PX)
+        if grouped:
+            problems.append(
+                f"{where}: closer than {SKILL_FRAME_CLEARANCE_MIN_PX}px to the frame inner line: "
+                + " | ".join(grouped)
+            )
+    if widths and any(value > SKILL_CARD_WIDTH_MAX_PX + 0.01 for value in widths):
+        problems.append(
+            f"card width {_px_set(widths)}px; want <= {SKILL_CARD_WIDTH_MAX_PX}"
+        )
+    elif widths and len(problems) > start:
+        problems.append(f"card width {_px_set(widths)}px (informational)")
+    if frame_notes and len(problems) > start:
+        for offset, note in enumerate(frame_notes):
+            problems.insert(start + offset, note)
+
+
+def _measure_inset(page):
+    _wait_fonts(page)
+    return page.evaluate(_INSET_JS)
+
+
+@pytest.mark.case_id("TC-FE-SKILLMENU-INSET")
+def test_tc_fe_skillmenu_inset(page, base_url, menu_ids):
+    """Panel side padding stays at least 12px, and content stays 4px inside the wood.
+
+    The inner line is the border box inset by border-width plus the furthest
+    inset box-shadow reach. At 8ac7b0d that is an 8px border plus a 6px spread,
+    and the panel has no ::before or ::after.
+    """
+    case_id = "TC-FE-SKILLMENU-INSET"
+    problems = []
+    screens = []
+
+    _login(page, base_url, MENU_KID6)
+    _start_and_show_battle(page, menu_ids[MENU_KID6])
+    for index, payload in enumerate(_read_skill_pages(page, problems, "6-skill", 1, _measure_inset)):
+        screens.append(("6-skill" if index == 0 else f"6-skill page {index + 1}", payload))
+
+    _login(page, base_url, MENU_KID8)
+    _start_and_show_battle(page, menu_ids[MENU_KID8])
+    for index, payload in enumerate(_read_skill_pages(page, problems, "8-skill", 2, _measure_inset)):
+        screens.append((f"8-skill page {index + 1}", payload))
+
+    _login(page, base_url, MENU_KID22)
+    _start_and_show_battle(page, menu_ids[MENU_KID22])
+    for index, payload in enumerate(_read_skill_pages(page, problems, "22-skill", 4, _measure_inset)):
+        screens.append((f"22-skill page {index + 1}", payload))
+
+    _append_inset_problems(problems, screens)
+    _fail(case_id, problems)
+
+
+def _rects_overlap(left, right, tol):
+    if not left or not right:
+        return None
+    overlap_x = min(left["right"], right["right"]) - max(left["left"], right["left"])
+    overlap_y = min(left["bottom"], right["bottom"]) - max(left["top"], right["top"])
+    if overlap_x > tol and overlap_y > tol:
+        return overlap_x, overlap_y
+    return None
+
+
+def _append_icon_problems(problems, pages):
+    cards = []
+    for where, payload in pages:
+        for card in (payload or {}).get("cards") or []:
+            item = dict(card)
+            item["where"] = where
+            cards.append(item)
+    if not cards:
+        problems.append(f"no {SEL_SKILL_ICON} to measure")
+        return
+    seen = [card["name"] for card in cards if card.get("name")]
+    missing = [name for name in SEEDED_SKILL_NAMES if name not in seen]
+    if missing:
+        problems.append(f"menu never showed {missing}")
+
+    font_bad = [
+        card for card in cards
+        if card.get("fontPx") is None or card["fontPx"] + 1e-3 < SKILL_ICON_FONT_MIN_PX
+    ]
+    if font_bad:
+        problems.append(
+            f".skill-icon font-size {_px_set(card.get('fontPx') for card in font_bad)}px "
+            f"on {len(font_bad)}/{len(cards)}; want >= {SKILL_ICON_FONT_MIN_PX}px"
+        )
+    width_bad = [
+        card for card in cards
+        if not card.get("icon") or card["icon"]["w"] + 1e-3 < SKILL_ICON_BOX_WIDTH_MIN_PX
+    ]
+    if width_bad:
+        problems.append(
+            f".skill-icon box width {_px_set((card.get('icon') or {}).get('w') for card in width_bad)}px "
+            f"height {_px_set((card.get('icon') or {}).get('h') for card in width_bad)}px "
+            f"on {len(width_bad)}/{len(cards)}; want width >= {SKILL_ICON_BOX_WIDTH_MIN_PX}px"
+        )
+
+    outside_box = []
+    outside_card = []
+    gap_bad = []
+    overlap_bad = []
+    missing_glyph = []
+    for card in cards:
+        label = card.get("name") or "?"
+        glyph = card.get("glyph")
+        icon = card.get("icon")
+        name_box = card.get("nameBox")
+        desc_box = card.get("descBox")
+        card_box = card.get("card")
+        if not glyph or not icon:
+            missing_glyph.append(label)
+            continue
+        # Horizontal containment only. Emoji ink taller than the box is a font
+        # metric and is not a failure by itself.
+        if (
+            glyph["left"] < icon["left"] - SKILL_GLYPH_EDGE_TOLERANCE_PX
+            or glyph["right"] > icon["right"] + SKILL_GLYPH_EDGE_TOLERANCE_PX
+        ):
+            outside_box.append(
+                f"{label} glyph {_px(glyph['w'])}×{_px(glyph['h'])} "
+                f"box {_px(icon['w'])}×{_px(icon['h'])} "
+                f"inset L{_px(glyph['left'] - icon['left'])} R{_px(icon['right'] - glyph['right'])}"
+            )
+        if card_box and (
+            glyph["left"] < card_box["left"] - SKILL_GLYPH_EDGE_TOLERANCE_PX
+            or glyph["top"] < card_box["top"] - SKILL_GLYPH_EDGE_TOLERANCE_PX
+            or glyph["right"] > card_box["right"] + SKILL_GLYPH_EDGE_TOLERANCE_PX
+            or glyph["bottom"] > card_box["bottom"] + SKILL_GLYPH_EDGE_TOLERANCE_PX
+        ):
+            outside_card.append(
+                f"{label} L{_px(glyph['left'] - card_box['left'])} T{_px(glyph['top'] - card_box['top'])} "
+                f"R{_px(card_box['right'] - glyph['right'])} B{_px(card_box['bottom'] - glyph['bottom'])}"
+            )
+        if name_box:
+            gap_box = name_box["left"] - icon["right"]
+            gap_glyph = name_box["left"] - glyph["right"]
+            if (
+                gap_box + 1e-3 < SKILL_ICON_NAME_GAP_MIN_PX
+                or gap_glyph + 1e-3 < SKILL_ICON_NAME_GAP_MIN_PX
+            ):
+                gap_bad.append(f"{label} box-gap {_px(gap_box)} glyph-gap {_px(gap_glyph)}")
+        else:
+            gap_bad.append(f"{label} missing .skill-name")
+        for other, what in ((name_box, SEL_SKILL_NAME), (desc_box, SEL_SKILL_DESC)):
+            hit = _rects_overlap(glyph, other, SKILL_GLYPH_EDGE_TOLERANCE_PX)
+            if hit:
+                overlap_bad.append(f"{label} ∩ {what} x {_px(hit[0])} y {_px(hit[1])}")
+    if missing_glyph:
+        problems.append("icon glyph missing: " + ", ".join(missing_glyph))
+
+    def _show(rows):
+        shown = rows[:4]
+        extra = f" (+{len(rows) - len(shown)} more)" if len(rows) > len(shown) else ""
+        return " | ".join(shown) + extra
+
+    if outside_box:
+        problems.append(
+            "glyph not horizontally inside .skill-icon "
+            f"(tolerance {SKILL_GLYPH_EDGE_TOLERANCE_PX}px; vertical overflow of the box is allowed): "
+            + _show(outside_box)
+        )
+    if outside_card:
+        problems.append("glyph outside the card: " + _show(outside_card))
+    if gap_bad:
+        problems.append(
+            f"gap from icon box/glyph to .skill-name < {SKILL_ICON_NAME_GAP_MIN_PX}px: " + _show(gap_bad)
+        )
+    if overlap_bad:
+        problems.append("glyph overlaps skill text: " + _show(overlap_bad))
+
+
+def _measure_icons(page):
+    _wait_fonts(page)
+    return page.evaluate(_ICON_JS)
+
+
+@pytest.mark.case_id("TC-FE-SKILLMENU-ICON")
+def test_tc_fe_skillmenu_icon(page, base_url, menu_ids):
+    """Emoji ink stays in the 36px icon box horizontally, 6px from the skill name.
+
+    The glyph may be taller than the box because of font metrics. It still has
+    to stay inside the card and clear of .skill-name and .skill-desc.
+    """
+    case_id = "TC-FE-SKILLMENU-ICON"
+    problems = []
+    _login(page, base_url, MENU_KID22)
+    _start_and_show_battle(page, menu_ids[MENU_KID22])
+    pages = []
+    for index, payload in enumerate(_read_skill_pages(page, problems, "22-skill", 4, _measure_icons)):
+        pages.append((f"22-skill page {index + 1}", payload))
+    _append_icon_problems(problems, pages)
+    _fail(case_id, problems)
+
+
+def _page_fraction(label):
+    match = re.fullmatch(r"(\d+) / (\d+)", label or "")
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def _measure_dots(page):
+    _wait_fonts(page)
+    return page.evaluate(_DOTS_JS)
+
+
+def _append_dot_chrome_problems(problems, state, where, expected_pages):
+    label = state.get("label") or ""
+    fraction = _page_fraction(label)
+    if fraction is None:
+        problems.append(f"{where}: #pageLabel {label!r}; want 'N / {expected_pages}'")
+        page_no = None
+        total = None
+    else:
+        page_no, total = fraction
+        if total != expected_pages:
+            problems.append(f"{where}: #pageLabel {label!r}; want {expected_pages} pages")
+    dots = state.get("dots") or []
+    if total is not None and len(dots) != total:
+        problems.append(f"{where} {label}: {len(dots)} dots; want {total}")
+    if page_no is not None:
+        currents = [dot["index"] for dot in dots if dot.get("current") == "page"]
+        if currents != [page_no - 1]:
+            problems.append(f"{where} {label}: active dot {currents}; want [{page_no - 1}]")
+    offenders = []
+    hits = []
+    for dot in dots:
+        for entry in dot.get("chain") or []:
+            if entry.get("holds"):
+                continue
+            if entry.get("pe") != "none":
+                who = entry.get("id") or entry.get("cls") or "dot"
+                offenders.append((who, entry.get("pe")))
+        hit = dot.get("hit") or {}
+        if hit.get("isDot"):
+            hits.append(f"dot{dot['index']} -> {hit.get('tag')}.{hit.get('cls')}")
+    if offenders:
+        shown = ", ".join(f"{name} {value!r}" for name, value in sorted(set(offenders)))
+        problems.append(
+            f"{where} {label}: pointer-events {shown}; want 'none' on each dot "
+            "and on a container that does not hold ◀ ▶"
+        )
+    if hits:
+        problems.append(f"{where} {label}: elementFromPoint hit a dot: " + ", ".join(hits))
+    for key, glyph in (("prev", "◀"), ("next", "▶")):
+        box = state.get(key)
+        if not box or box["w"] + 1e-3 < TITLE_CONTROL_MIN_PX or box["h"] + 1e-3 < TITLE_CONTROL_MIN_PX:
+            problems.append(
+                f"{where} {label}: {glyph} {_px((box or {}).get('w'))}×{_px((box or {}).get('h'))}px; "
+                f"want >= {TITLE_CONTROL_MIN_PX}×{TITLE_CONTROL_MIN_PX}"
+            )
+
+
+def _return_to_label(page, label):
+    for _ in range(6):
+        current = page.locator(SEL_PAGE_LABEL).inner_text().strip()
+        if current == label:
+            return
+        now = _page_fraction(current)
+        want = _page_fraction(label)
+        if now and want and now[0] > want[0]:
+            prev = page.locator(SEL_BTN_PREV)
+            if prev.count() and prev.get_attribute("aria-disabled") != "true":
+                prev.click()
+                continue
+        nxt = page.locator(SEL_BTN_NEXT)
+        if nxt.count() and nxt.get_attribute("aria-disabled") != "true":
+            nxt.click()
+            continue
+        return
+
+
+def _dot_clicks_do_not_turn(page, problems, where):
+    """Real mouse clicks at dot centers. A locator click would ignore pointer-events."""
+    state = _measure_dots(page)
+    label = state.get("label") or ""
+    clicks = []
+    for dot in state.get("dots") or []:
+        center = dot.get("center")
+        if not center:
+            problems.append(f"{where} {label}: dot{dot['index']} has no center to click")
+            continue
+        page.mouse.click(center["x"], center["y"])
+        after = page.locator(SEL_PAGE_LABEL).inner_text().strip()
+        if after != label:
+            clicks.append(
+                f"dot{dot['index']} ({_px(center['x'])},{_px(center['y'])}) {label!r} -> {after!r}"
+            )
+            _return_to_label(page, label)
+    if clicks:
+        problems.append(f"{where}: mouse click at a dot center changed #pageLabel: " + "; ".join(clicks))
+
+
+def _walk_skill_pages(page, problems, where, expected_pages):
+    forward = []
+    for _ in range(expected_pages + 2):
+        state = _measure_dots(page)
+        forward.append(state.get("label") or "")
+        _append_dot_chrome_problems(problems, state, where, expected_pages)
+        if state.get("nextDisabled") == "true":
+            break
+        nxt = page.locator(SEL_BTN_NEXT)
+        if nxt.count() == 0:
+            problems.append(f"{where}: no {SEL_BTN_NEXT}")
+            break
+        nxt.click()
+    want_forward = [f"{index} / {expected_pages}" for index in range(1, expected_pages + 1)]
+    if forward != want_forward:
+        problems.append(f"{where}: ▶ walk {forward}; want {want_forward}")
+    back = []
+    for _ in range(expected_pages):
+        prev = page.locator(SEL_BTN_PREV)
+        if prev.count() == 0 or prev.get_attribute("aria-disabled") == "true":
+            break
+        prev.click()
+        back.append(page.locator(SEL_PAGE_LABEL).inner_text().strip())
+    want_back = [f"{index} / {expected_pages}" for index in range(expected_pages - 1, 0, -1)]
+    if back != want_back:
+        problems.append(f"{where}: ◀ walk {back}; want {want_back}")
+
+
+def _go_last_skill_page(page):
+    for _ in range(6):
+        nxt = page.locator(SEL_BTN_NEXT)
+        if nxt.count() == 0 or nxt.get_attribute("aria-disabled") == "true":
+            return
+        nxt.click()
+
+
+@pytest.mark.case_id("TC-FE-SKILLMENU-DOTS")
+def test_tc_fe_skillmenu_dots_are_indicator_only(page, base_url, menu_ids):
+    """Page dots do not receive clicks. ◀ and ▶ still turn every page.
+
+    13 learned skills are 3 pages. 22 learned skills are 4 pages. Dot size is
+    not asserted: three or more dots may stay 26px wide.
+    """
+    case_id = "TC-FE-SKILLMENU-DOTS"
+    problems = []
+
+    _login(page, base_url, MENU_KID13)
+    _start_and_show_battle(page, menu_ids[MENU_KID13])
+    if _open_menu_or_problem(page, problems, "13-skill"):
+        _walk_skill_pages(page, problems, "13-skill", 3)
+        _dot_clicks_do_not_turn(page, problems, "13-skill page 1")
+        _go_last_skill_page(page)
+        _dot_clicks_do_not_turn(page, problems, "13-skill last page")
+
+    _login(page, base_url, MENU_KID22)
+    _start_and_show_battle(page, menu_ids[MENU_KID22])
+    if _open_menu_or_problem(page, problems, "22-skill"):
+        _walk_skill_pages(page, problems, "22-skill", 4)
+        _dot_clicks_do_not_turn(page, problems, "22-skill page 1")
+        _go_last_skill_page(page)
+        _dot_clicks_do_not_turn(page, problems, "22-skill last page")
+
     _fail(case_id, problems)

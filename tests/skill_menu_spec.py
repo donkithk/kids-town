@@ -80,6 +80,37 @@ SKILL_CARD_MIN_HEIGHT_PX = 72
 SKILL_ICON_INSET_MIN_PX = 4
 SKILL_DESC_LINE_RATIO = 1.3
 
+# TC-FE-SKILLMENU-INSET. Wooden frame of #skillPanel at 8ac7b0d.
+# The panel has no ::before/::after (computed content is none). The wood is
+# the element's own border plus inset box-shadows. The background-image is
+# fill, not the frame.
+#   border: 8px solid #3b2416
+#   box-shadow: inset 0 0 0 3px #e7c48a, inset 0 0 0 6px #6b4428,
+#               0 10px 0 rgba(28,16,8,.28)
+# The inner line is the border box moved inward by border-width plus the
+# furthest inset-shadow reach on that side. Reach is max(0, spread + toward):
+#   left toward = +offsetX, right = -offsetX, top = +offsetY, bottom = -offsetY.
+# Blur is not part of the line. A shadow without `inset` is ignored.
+# At 8ac7b0d both inset offsets are 0, so the reach is the larger spread (6px)
+# and the line sits 14px inside the border box. On the locked panel
+# (left 332, top 141, right 980, bottom 461) the line is
+# left 346, top 155, right 966, bottom 447.
+SKILL_PANEL_PAD_INLINE_MIN_PX = 12
+SKILL_FRAME_CLEARANCE_MIN_PX = 4
+# 12px of side padding on that 648px panel leaves a 608px content box.
+# Two columns and the 6px column gap make each card 301px. 304 still rejects
+# the 309px cards painted with 4px of side padding.
+SKILL_CARD_WIDTH_MAX_PX = 304
+
+# TC-FE-SKILLMENU-ICON. The emoji ink is about 35×38 while the box is 28×28,
+# so the glyph crosses the 6px flex gap and meets the name (gap -1px).
+# Vertical ink taller than the box is a font metric: the glyph must stay
+# inside the card and must not meet the name or the description, but it does
+# not have to fit inside the box vertically.
+SKILL_ICON_BOX_WIDTH_MIN_PX = 36
+SKILL_ICON_NAME_GAP_MIN_PX = 6
+SKILL_GLYPH_EDGE_TOLERANCE_PX = 0.5
+
 # Title row. ee8a3eb paints the title at 22px and the page label at 16px.
 # 返回 is min-width 64px under the global border-box rule.
 SKILL_TITLE_MIN_PX = 26
