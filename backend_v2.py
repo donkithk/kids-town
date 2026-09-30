@@ -240,7 +240,10 @@ def migrate_db():
         db.execute("ALTER TABLE kids ADD COLUMN ability_crt INTEGER DEFAULT 0")   # 創意 🎨
     if 'ability_brv' not in kid_cols:
         db.execute("ALTER TABLE kids ADD COLUMN ability_brv INTEGER DEFAULT 0")   # 勇氣 ⚔️
-    
+
+    _drop_library_task_bonus(db)
+    _sync_skill_catalog(db)
+
     db.commit()
     db.close()
 
@@ -529,7 +532,7 @@ def seed_building_defs():
         db.close()
         return
     defs = [
-        ("📚", "圖書館", 100, '{"wood":5}', "任務 +2⭐", "task_bonus", "[2,4,6,10,15]", 5, None),
+        ("📚", "圖書館", 100, '{"wood":5}', "知識被動", "", "[]", 5, None),
         ("🏋️", "健身室", 200, '{"wood":10,"brick":5}', "連續保護", "streak_protect", "[1,1,1,1,1]", 5, None),
         ("🌾", "農場", 300, '{"wood":15,"brick":10}', "每日 +5🪙", "daily_gold", "[5,10,15,25,40]", 5, None),
         ("🏪", "商店", 500, '{"wood":20,"brick":15,"gear":5}', "獎勵 -10%", "discount", "[0.9,0.85,0.8,0.75,0.7]", 5, None),
@@ -539,6 +542,8 @@ def seed_building_defs():
         ("🗼", "燈塔", 800, '{"wood":30,"brick":25,"gear":15,"gem":3}', "探險範圍 +1", "explore_range", "[1,2,2,3,3]", 5, "r3"),
         ("⚔️", "競技場", 1000, '{"wood":40,"brick":30,"gear":20,"gem":5}', "探險金幣 x2", "expedition_gold", "[2,3,4,5,6]", 5, "r4"),
         ("🔭", "天文台", 1500, '{"wood":50,"brick":40,"gear":25,"gem":10,"glass":3}', "新區域發現率", "discovery_rate", "[1.5,2,2.5,3,4]", 5, "r5"),
+        # Skill building only. Not a ledger passive.
+        ("🏦", "銀行", 600, '{"wood":10,"brick":5}', "技能：金錢砸", "skill", "[0]", 5, None),
     ]
     for d in defs:
         db.execute(
@@ -550,40 +555,176 @@ def seed_building_defs():
     db.commit()
     db.close()
 
+def _table_exists(db, name):
+    row = db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (name,),
+    ).fetchone()
+    return row is not None
+
+
+def _drop_library_task_bonus(db):
+    """Library no longer grants task XP. Keep the building row; clear the type."""
+    if not _table_exists(db, 'building_defs'):
+        return
+    db.execute(
+        """
+        UPDATE building_defs
+           SET buff_type='', effect='知識被動', buff_vals='[]'
+         WHERE buff_type='task_bonus'
+        """
+    )
+
+
+# In-place renames. Ids stay so a child's learned skills still resolve.
+_SKILL_RENAMES = (
+    ('挑釁', '盾擊'),
+    ('迴避', '疾風斬'),
+)
+
+# Fields refreshed on an existing row. Never deletes. Applied every migrate.
+_SKILL_PATCHES = {
+    '蓄力': {'description': '下次攻擊 2 倍'},
+    '盾擊': {
+        'description': '物理攻擊，怪物攻擊傷害減半，直到下一次被打中',
+        'target': 'enemy',
+        'base_value': 0,
+        'per_level': 0,
+        'attr_scale': 'str',
+        'effect_type': 'utility',
+    },
+    '疾風斬': {
+        'description': '物理攻擊，施放嗰下唔受反擊',
+        'target': 'enemy',
+        'base_value': 0,
+        'per_level': 0,
+        'attr_scale': 'str',
+        'effect_type': 'utility',
+    },
+    '冰凍': {'description': '魔法攻擊，之後 2 回合怪物攻擊力下降'},
+    '繃帶': {'description': '物理攻擊，並小回復 HP'},
+    '急救': {'description': '物理攻擊，並中回復 HP'},
+    '全體治療': {'description': '物理攻擊，並全體回復 HP'},
+    '修復': {'description': '物理攻擊，並回復 MP'},
+    '強化': {'description': '物理攻擊，防禦提升 3 回合'},
+    '知識的力量': {'description': '魔法攻擊，之後 3 回合知識 +3×等級'},
+    '鍛鍊的成果': {'description': '物理攻擊，之後 3 回合臂力 +3×等級'},
+    '營養餐': {'description': '物理攻擊，之後 3 回合持續回復 HP'},
+    '金幣袋': {'description': '物理攻擊，戰鬥勝利額外獲得 20 金幣'},
+    '強光': {'description': '魔法攻擊，之後 2 次怪物攻擊打唔中'},
+}
+
+# Inserted only when that name is absent. Building is looked up by name.
+_SKILL_INSERTS = (
+    ('盾擊', '🛡️', 4, '競技場', 4, 'enemy', '物理攻擊，怪物攻擊傷害減半，直到下一次被打中', 0, 0, 'str', 'utility'),
+    ('疾風斬', '🏃', 3, '探險公會', 4, 'enemy', '物理攻擊，施放嗰下唔受反擊', 0, 0, 'str', 'utility'),
+    ('知識的力量', '📖', 2, '圖書館', 1, 'self', '魔法攻擊，之後 3 回合知識 +3×等級', 3, 0, 'none', 'buff'),
+    ('鍛鍊的成果', '🏋️', 2, '健身室', 1, 'self', '物理攻擊，之後 3 回合臂力 +3×等級', 3, 0, 'none', 'buff'),
+    ('營養餐', '🍱', 4, '農場', 1, 'self', '物理攻擊，之後 3 回合持續回復 HP', 0, 0, 'none', 'heal'),
+    ('金幣袋', '💰', 2, '商店', 1, 'self', '物理攻擊，戰鬥勝利額外獲得 20 金幣', 0, 0, 'none', 'utility'),
+    ('強光', '💡', 6, '燈塔', 1, 'enemy', '魔法攻擊，之後 2 次怪物攻擊打唔中', 20, 5, 'int', 'damage'),
+    ('流星雨', '☄️', 8, '天文台', 1, 'all_enemies', '魔法攻擊全體敵人', 20, 5, 'int', 'damage'),
+    ('金錢砸', '🪙', 0, '銀行', 1, 'enemy', '消耗 10 金幣，造成 3 倍普攻傷害', 0, 0, 'none', 'utility'),
+)
+
+
+def _sync_skill_catalog(db):
+    """Rename old skills in place and insert any the current catalog is missing.
+
+    An empty skill_defs is left for seed_skill_defs. Rows are never deleted.
+    """
+    if not _table_exists(db, 'skill_defs'):
+        return
+    if db.execute("SELECT COUNT(*) FROM skill_defs").fetchone()[0] == 0:
+        return
+    for old_name, new_name in _SKILL_RENAMES:
+        already = db.execute(
+            "SELECT id FROM skill_defs WHERE name=?", (new_name,)
+        ).fetchone()
+        if already:
+            continue
+        db.execute(
+            "UPDATE skill_defs SET name=? WHERE name=?",
+            (new_name, old_name),
+        )
+    for name, fields in _SKILL_PATCHES.items():
+        columns = list(fields.keys())
+        assignments = ", ".join(f"{column}=?" for column in columns)
+        db.execute(
+            f"UPDATE skill_defs SET {assignments} WHERE name=?",
+            tuple(fields[column] for column in columns) + (name,),
+        )
+    if not _table_exists(db, 'building_defs'):
+        return
+    for name, icon, mp, bldg_name, level_required, target, description, base, per, attr, effect in _SKILL_INSERTS:
+        if db.execute("SELECT id FROM skill_defs WHERE name=?", (name,)).fetchone():
+            continue
+        bldg = db.execute(
+            "SELECT id FROM building_defs WHERE name=?", (bldg_name,)
+        ).fetchone()
+        if not bldg:
+            continue
+        db.execute(
+            "INSERT INTO skill_defs (name, icon, mp_cost, bldg_def_id, level_required, target, description, base_value, per_level, attr_scale, effect_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (name, icon, mp, bldg[0], level_required, target, description, base, per, attr, effect),
+        )
+
+
 def seed_skill_defs():
     """Insert default skill definitions if empty."""
     db = sqlite3.connect(DB_PATH)
     if db.execute("SELECT COUNT(*) FROM skill_defs").fetchone()[0] > 0:
+        _sync_skill_catalog(db)
+        db.commit()
         db.close()
         return
     # bldg_def_id: 1=圖書館,2=健身室,3=農場,4=商店,5=醫院,6=探險公會,7=工坊,8=燈塔,9=競技場,10=天文台
     defs = [
         # 健身室 (2)
-        ('蓄力', '🔥', 3, 2, 1, 'self', '下次攻擊 1.5 倍', 0, 0, 'none', 'buff'),
+        ('蓄力', '🔥', 3, 2, 1, 'self', '下次攻擊 2 倍', 0, 0, 'none', 'buff'),
         ('重擊', '💪', 5, 2, 2, 'enemy', '強力物理攻擊', 20, 5, 'str', 'damage'),
         ('連擊', '⚡', 7, 2, 4, 'enemy', '連續攻擊 2 次', 16, 4, 'str', 'damage'),
         # 醫院 (5)
-        ('繃帶', '🩹', 3, 5, 1, 'ally', '小回復', 12, 4, 'int', 'heal'),
-        ('急救', '💚', 8, 5, 3, 'ally', '中回復', 25, 7, 'int', 'heal'),
-        ('全體治療', '🌿', 14, 5, 5, 'all_allies', '全體回復', 18, 5, 'int', 'heal'),
+        ('繃帶', '🩹', 3, 5, 1, 'ally', '物理攻擊，並小回復 HP', 12, 4, 'int', 'heal'),
+        ('急救', '💚', 8, 5, 3, 'ally', '物理攻擊，並中回復 HP', 25, 7, 'int', 'heal'),
+        ('全體治療', '🌿', 14, 5, 5, 'all_allies', '物理攻擊，並全體回復 HP', 18, 5, 'int', 'heal'),
         # 競技場 (9)
         ('橫掃', '🗡️', 6, 9, 2, 'all_enemies', '全體物理攻擊', 15, 4, 'str', 'damage'),
-        ('挑釁', '🛡️', 4, 9, 4, 'self', '強制敵方攻擊自己', 0, 0, 'none', 'buff'),
+        ('盾擊', '🛡️', 4, 9, 4, 'enemy', '物理攻擊，怪物攻擊傷害減半，直到下一次被打中', 0, 0, 'str', 'utility'),
         ('必殺', '💥', 10, 9, 5, 'enemy', '對低血量敵人特大傷害', 32, 8, 'str', 'damage'),
         # 圖書館 (1)
         ('火球', '🔥', 6, 1, 2, 'enemy', '魔法攻擊', 20, 5, 'int', 'damage'),
-        ('冰凍', '❄️', 8, 1, 4, 'enemy', '魔法攻擊 + 減速', 28, 7, 'int', 'damage'),
+        ('冰凍', '❄️', 8, 1, 4, 'enemy', '魔法攻擊，之後 2 回合怪物攻擊力下降', 28, 7, 'int', 'damage'),
         # 探險公會 (6)
         ('偵察', '👁️', 2, 6, 2, 'enemy', '查看怪物弱點', 0, 0, 'none', 'utility'),
-        ('迴避', '🏃', 3, 6, 4, 'self', '完全回避下次攻擊', 0, 0, 'none', 'buff'),
+        ('疾風斬', '🏃', 3, 6, 4, 'enemy', '物理攻擊，施放嗰下唔受反擊', 0, 0, 'str', 'utility'),
         # 工坊 (7)
-        ('修復', '🔧', 4, 7, 2, 'ally', '回復 MP', 10, 3, 'int', 'heal'),
-        ('強化', '🛡️', 5, 7, 4, 'ally', '提升防禦力', 3, 1, 'none', 'buff'),
+        ('修復', '🔧', 4, 7, 2, 'ally', '物理攻擊，並回復 MP', 10, 3, 'int', 'heal'),
+        ('強化', '🛡️', 5, 7, 4, 'ally', '物理攻擊，防禦提升 3 回合', 3, 1, 'none', 'buff'),
     ]
     for d in defs:
         db.execute(
             "INSERT INTO skill_defs (name, icon, mp_cost, bldg_def_id, level_required, target, description, base_value, per_level, attr_scale, effect_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             d
+        )
+    # New skills are learned at building level 1. Ids follow the building name,
+    # not the insert position, so 銀行 can sit after the original ten.
+    extra = [
+        ('知識的力量', '📖', 2, '圖書館', 1, 'self', '魔法攻擊，之後 3 回合知識 +3×等級', 3, 0, 'none', 'buff'),
+        ('鍛鍊的成果', '🏋️', 2, '健身室', 1, 'self', '物理攻擊，之後 3 回合臂力 +3×等級', 3, 0, 'none', 'buff'),
+        ('營養餐', '🍱', 4, '農場', 1, 'self', '物理攻擊，之後 3 回合持續回復 HP', 0, 0, 'none', 'heal'),
+        ('金幣袋', '💰', 2, '商店', 1, 'self', '物理攻擊，戰鬥勝利額外獲得 20 金幣', 0, 0, 'none', 'utility'),
+        ('強光', '💡', 6, '燈塔', 1, 'enemy', '魔法攻擊，之後 2 次怪物攻擊打唔中', 20, 5, 'int', 'damage'),
+        ('流星雨', '☄️', 8, '天文台', 1, 'all_enemies', '魔法攻擊全體敵人', 20, 5, 'int', 'damage'),
+        ('金錢砸', '🪙', 0, '銀行', 1, 'enemy', '消耗 10 金幣，造成 3 倍普攻傷害', 0, 0, 'none', 'utility'),
+    ]
+    for name, icon, mp, bldg_name, level_required, target, description, base, per, attr, effect in extra:
+        bldg = db.execute("SELECT id FROM building_defs WHERE name=?", (bldg_name,)).fetchone()
+        if not bldg:
+            raise RuntimeError(f'seed_skill_defs missing building {bldg_name}')
+        db.execute(
+            "INSERT INTO skill_defs (name, icon, mp_cost, bldg_def_id, level_required, target, description, base_value, per_level, attr_scale, effect_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (name, icon, mp, bldg[0], level_required, target, description, base, per, attr, effect),
         )
     db.commit()
     db.close()
@@ -1891,21 +2032,21 @@ def assign_ability(kid_id):
 # -- Ability Buffs from Buildings --
 
 BUILDING_ABILITY_MAP = {
-    '健身室': 'str',    # Gym → +臂力 💪
-    '競技場': 'str',    # Arena → +臂力 💪
-    '圖書館': 'int',    # Library → +知識 📖
-    '天文台': 'int',    # Observatory → +知識 📖
-    '工坊':   'crt',    # Workshop → +創意 🎨
-    '探險公會': 'brv',  # Expedition Guild → +勇氣 ⚔️
+    '健身室': 'str',    # Gym → +2 臂力 per level
+    '競技場': 'str',    # Arena → +2 臂力 per level (speed is separate)
+    '圖書館': 'int',    # Library → +2 知識 per level
+    '工坊':   'crt',    # Workshop → +2 創意 per level
+    '探險公會': 'brv',  # Expedition Guild → +2 勇氣 per level
+    # Observatory no longer grants 知識. Treasure weights are deferred.
 }
 
 def calc_ability_buffs(db, kid_id):
-    """Calculate bonus ability points from owned buildings."""
+    """Bonus ability points from placed buildings. stored=1 adds nothing."""
     buffs = {'str': 0, 'int': 0, 'spd': 0, 'crt': 0, 'brv': 0}
     rows = db.execute("""
         SELECT bd.name, b.level FROM buildings b
         JOIN building_defs bd ON b.def_id = bd.id
-        WHERE b.kid_id = ?
+        WHERE b.kid_id = ? AND COALESCE(b.stored, 0)=0
     """, (kid_id,)).fetchall()
     for row in rows:
         ability = BUILDING_ABILITY_MAP.get(row['name'])
@@ -1955,20 +2096,16 @@ MATERIAL_POOLS = {
 def award_task_drops(kid_id, task_points, db, source='task', apply=True):
     """Award random materials and experience when completing a task or expedition.
 
-    Base XP is max(5, points//2). Library task_bonus is added on top and
-    reported separately (GAMEPLAY_REDESIGN §6.1 / §6.4).
+    Base XP is max(5, points//2). The library no longer adds task XP;
+    experience_bonus stays 0. Knowledge is a battle passive instead.
     When apply=False, roll and report amounts without mutating gold/XP/inventory
     (parent-approval foreshadow, GAMEPLAY_REDESIGN §6.7).
     """
     drops = {'materials': [], 'experience': 0, 'experience_bonus': 0, 'experience_total': 0}
 
     exp_amount = max(5, int(task_points or 0) // 2)
-    bonus_raw = get_building_buff(kid_id, 'task_bonus', db)
-    try:
-        bonus = int(bonus_raw or 0)
-    except (TypeError, ValueError):
-        bonus = 0
-    total = exp_amount + bonus
+    bonus = 0
+    total = exp_amount
 
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
     if kid:
@@ -3558,13 +3695,18 @@ def answer_quiz(kid_id):
 # -- Battle --
 
 
-def calc_battle_stats(kid):
-    """v2: HP from level, ATK from 臂力(str), DEF from 勇氣(brv)."""
-    str_v = kid['ability_str'] or 0
-    int_v = kid['ability_int'] or 0
-    spd_v = kid['ability_spd'] or 0
-    crt_v = kid['ability_crt'] or 0
-    brv_v = kid['ability_brv'] or 0
+def calc_battle_stats(kid, buffs=None):
+    """v2: HP from level, ATK from 臂力(str), DEF from 勇氣(brv).
+
+    buffs is calc_ability_buffs output (placed buildings only). Omit it to
+    score the kid's own points.
+    """
+    extra = buffs or {}
+    str_v = (kid['ability_str'] or 0) + (extra.get('str') or 0)
+    int_v = (kid['ability_int'] or 0) + (extra.get('int') or 0)
+    spd_v = (kid['ability_spd'] or 0) + (extra.get('spd') or 0)
+    crt_v = (kid['ability_crt'] or 0) + (extra.get('crt') or 0)
+    brv_v = (kid['ability_brv'] or 0) + (extra.get('brv') or 0)
     lvl = kid['level'] or 1
     return {
         'hp': 20 + lvl * 8,
@@ -3579,6 +3721,77 @@ def calc_battle_stats(kid):
         'brv': brv_v,
         'str': str_v,
     }
+
+
+# Bracket words for the five passive sheets. Same glossary as
+# docs/ui-mocks/STAT_GLOSSARY.md: ability, battle-stat key, Chinese, percent.
+# Order matches calc_ability_buffs so 競技場 prints 臂力 then 速度.
+_PASSIVE_SHEET = (
+    ('str', '臂力', 'atk', '攻擊力', False),
+    ('int', '知識', 'matk', '魔法力', False),
+    ('spd', '速度', 'dodge', '閃避率', True),
+    ('crt', '創意', 'crt', '爆擊率', True),
+    ('brv', '勇氣', 'def', '防禦力', False),
+)
+_PASSIVE_SHEET_NAMES = frozenset(('圖書館', '健身室', '工坊', '競技場', '探險公會'))
+
+
+def _format_passive_number(value):
+    """At most one decimal place, and no trailing .0."""
+    rounded = round(float(value), 1)
+    if abs(rounded - round(rounded)) < 1e-9:
+        return str(int(round(rounded)))
+    return f'{rounded:.1f}'
+
+
+def _format_passive_line(with_buffs, without_buffs, with_stats, without_stats):
+    """Ability +N and the converted battle stat +M for one placed building."""
+    parts = []
+    for key, ability, stat_key, word, percent in _PASSIVE_SHEET:
+        n = float(with_buffs.get(key) or 0) - float(without_buffs.get(key) or 0)
+        if abs(n) < 1e-9:
+            continue
+        piece = f'{ability} +{_format_passive_number(n)}'
+        m = float(with_stats.get(stat_key) or 0) - float(without_stats.get(stat_key) or 0)
+        if abs(m) >= 1e-9:
+            suffix = '%' if percent else ''
+            piece += f'（{word} +{_format_passive_number(m)}{suffix}）'
+        parts.append(piece)
+    return '、'.join(parts)
+
+
+def _passive_lines_for(kid_id, kid, buildings):
+    """Live diffs from calc_ability_buffs and calc_battle_stats.
+
+    Each building is removed inside a transaction that is always rolled back,
+    so stored rows and the play database are left unchanged.
+    """
+    targets = [row for row in buildings if row.get('name') in _PASSIVE_SHEET_NAMES]
+    lines = {}
+    if not targets:
+        return lines
+    scratch = sqlite3.connect(DB_PATH, isolation_level=None)
+    scratch.row_factory = sqlite3.Row
+    scratch.execute('BEGIN')
+    try:
+        for building in targets:
+            scratch.execute('SAVEPOINT passive_sheet')
+            try:
+                with_buffs = calc_ability_buffs(scratch, kid_id)
+                with_stats = calc_battle_stats(kid, with_buffs)
+                scratch.execute('DELETE FROM buildings WHERE id=?', (building['id'],))
+                without_buffs = calc_ability_buffs(scratch, kid_id)
+                without_stats = calc_battle_stats(kid, without_buffs)
+                lines[building['id']] = _format_passive_line(
+                    with_buffs, without_buffs, with_stats, without_stats,
+                )
+            finally:
+                scratch.execute('ROLLBACK TO passive_sheet')
+                scratch.execute('RELEASE passive_sheet')
+    finally:
+        scratch.execute('ROLLBACK')
+        scratch.close()
+    return lines
 
 
 def calc_monster_stats(tier):
@@ -3813,7 +4026,7 @@ def boss_summon(kid_id):
         for s in bldg_skills:
             skills.append(dict(s))
 
-    p_stats = calc_battle_stats(kid)
+    p_stats = calc_battle_stats(kid, calc_ability_buffs(db, kid_id))
     p_hp = p_stats['hp']
     p_mp = 10 + kid['level'] * 3
 
@@ -3823,6 +4036,7 @@ def boss_summon(kid_id):
         'player_max_hp': p_hp, 'player_hp': p_hp,
         'player_max_mp': p_mp, 'player_mp': p_mp,
         'player_atk': p_stats['atk'],
+        'player_matk': p_stats['matk'],
         'player_def': p_stats.get('def', p_stats['atk'] // 2),
         'player_crt': p_stats['crt'],
         'player_crit_dmg': p_stats.get('crit_dmg', 1.5),
@@ -3931,7 +4145,7 @@ def battle_start(kid_id):
         for s in bldg_skills:
             skills.append(dict(s))
 
-    p_stats = calc_battle_stats(kid)
+    p_stats = calc_battle_stats(kid, calc_ability_buffs(db, kid_id))
     p_hp = p_stats['hp']
     p_mp = 10 + kid['level'] * 3  # Base MP: 10 + 3/level
     # Multiple monsters (1-3), stats from tier formula. Preview forces 1 so the body sprite is clear.
@@ -3960,6 +4174,7 @@ def battle_start(kid_id):
         'player_max_mp': p_mp,
         'player_mp': p_mp,
         'player_atk': p_stats['atk'],
+        'player_matk': p_stats['matk'],
         'player_def': p_stats.get('def', p_stats['atk'] // 2),
         'player_crt': p_stats['crt'],
         'player_crit_dmg': p_stats.get('crit_dmg', 1.5),
@@ -4011,6 +4226,7 @@ def battle_action(kid_id):
     player_def = bd.get('player_def', 5)
     log = []
     defending = False
+    resolved_turn = False
 
     # Find a valid target
     alive_targets = [m for m in monsters if m['hp'] > 0]
@@ -4028,6 +4244,8 @@ def battle_action(kid_id):
 
     # --- Player action ---
     if action == 'attack':
+        _begin_turn_buffs(bd)
+        player_atk = bd['player_atk']
         dmg = max(1, player_atk - target_monster['def'] + random.randint(0, 2))
         # Charge boost: 2x damage
         if bd.get('charge_boost'):
@@ -4041,12 +4259,13 @@ def battle_action(kid_id):
             log.append('💥 爆擊！')
         target_monster['hp'] = max(0, target_monster['hp'] - dmg)
         log.append(f'⚔️ 對 {target_monster["name"]} 造成 {dmg} 點傷害')
+        resolved_turn = True
 
     elif action == 'skill' and skill_id:
         skill = next((s for s in bd.get('skills', []) if s['id'] == skill_id), None)
         if not skill:
             return jsonify({'error': 'Skill not found'}), 400
-        # Check MP
+        # Check MP before any gold write. A shortfall must not spend coins.
         if bd['player_mp'] < skill['mp_cost']:
             log.append(f'❌ MP 不足！需要 {skill["mp_cost"]} MP')
             bd['turns'].append({'action': action, 'skill_id': skill_id, 'log': log, 'target_idx': target_idx, 'mp_used': 0})
@@ -4054,7 +4273,23 @@ def battle_action(kid_id):
             db.commit()
             bd['battle_result'] = 'fighting'
             return jsonify(bd)
+        if skill.get('name') == '金錢砸':
+            # Close the battle read so two casts can take the write lock in turn.
+            # The debit and the ledger row then share one transaction.
+            db.commit()
+            spent = db.execute(
+                "UPDATE kids SET points = points - 10 WHERE id=? AND points >= 10",
+                (kid_id,),
+            )
+            if spent.rowcount == 0:
+                return jsonify({'error': 'insufficient_gold'}), 400
+            db.execute(
+                "INSERT INTO points_log (kid_id, amount, reason) VALUES (?,?,?)",
+                (kid_id, -10, '金錢砸'),
+            )
         bd['player_mp'] -= skill['mp_cost']
+        _begin_turn_buffs(bd)
+        player_atk = bd['player_atk']
 
         target = skill.get('target', 'enemy')
         base = skill.get('base_value', 0)
@@ -4070,45 +4305,59 @@ def battle_action(kid_id):
         if bldg_skills:
             bldg_level = bldg_skills['level']
 
-        if target == 'self':
-            # Handle buffs
-            if skill['name'] == '蓄力' or skill['effect_type'] == 'buff':
-                bd['charge_boost'] = True
-                log.append(f'🔥 {skill["name"]}！{skill.get("description","")}')
-            else:
+        if not _apply_named_skill(
+            skill, bd, target_monster, bldg_level, base, per_lv, attr_scale, player_atk, log,
+        ):
+            if target == 'self':
                 log.append(f'🔥 {skill["name"]}！')
 
-        elif target == 'enemy':
-            dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
-            if bd.get('charge_boost'):
-                dmg *= 2
-                bd['charge_boost'] = False
-                log.append('⚡ 蓄力爆發！')
-            target_monster['hp'] = max(0, target_monster['hp'] - dmg)
-            log.append(f'{skill["icon"]} {skill["name"]}！造成 {dmg} 點傷害！')
+            elif target == 'enemy':
+                dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+                dmg = _at_least_basic_attack(dmg, player_atk, target_monster.get('def'))
+                if bd.get('charge_boost'):
+                    dmg *= 2
+                    bd['charge_boost'] = False
+                    log.append('⚡ 蓄力爆發！')
+                target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+                log.append(f'{skill["icon"]} {skill["name"]}！造成 {dmg} 點傷害！')
 
-        elif target == 'all_enemies':
-            for m in monsters:
-                if m['hp'] <= 0: continue
-                dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd, 0.7)
-                m['hp'] = max(0, m['hp'] - dmg)
-            log.append(f'{skill["icon"]} {skill["name"]}！全體 {len([m for m in monsters if m["hp"]>0])} 隻受到傷害！')
+            elif target == 'all_enemies':
+                pairs = []
+                for m in monsters:
+                    if m['hp'] <= 0:
+                        continue
+                    dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd, 0.7)
+                    pairs.append([m, dmg])
+                _top_up_last_hit(pairs, player_atk, target_monster.get('def'))
+                for m, dmg in pairs:
+                    m['hp'] = max(0, m['hp'] - dmg)
+                log.append(f'{skill["icon"]} {skill["name"]}！全體 {len([m for m in monsters if m["hp"]>0])} 隻受到傷害！')
 
-        elif target == 'ally' or target == 'all_allies':
-            heal = _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale, bd.get('player_int', 0))
-            if target == 'ally':
-                # Heal player
+            elif target == 'ally' or target == 'all_allies':
+                # One physical hit, then the same heal as before. 全體治療
+                # heals the party amount but strikes only the chosen monster.
+                dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+                dmg = _at_least_basic_attack(dmg, player_atk, target_monster.get('def'))
+                if bd.get('charge_boost'):
+                    dmg *= 2
+                    bd['charge_boost'] = False
+                    log.append('⚡ 蓄力爆發！')
+                target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+                heal = _calc_skill_heal(skill, base, per_lv, bldg_level, attr_scale, bd.get('player_int', 0))
                 bd['player_hp'] = min(bd['player_max_hp'], bd['player_hp'] + heal)
-                log.append(f'{skill["icon"]} {skill["name"]}！回復 {heal} HP')
-            else:
-                bd['player_hp'] = min(bd['player_max_hp'], bd['player_hp'] + heal)
-                log.append(f'{skill["icon"]} {skill["name"]}！回復 {heal} HP')
+                log.append(f'{skill["icon"]} {skill["name"]}！造成 {dmg} 點傷害，回復 {heal} HP')
+        # Fortify writes player_def during the cast. The counter below reads
+        # this local, which was captured before the skill.
+        player_def = bd.get('player_def', player_def)
+        resolved_turn = True
 
     elif action == 'defend':
+        _begin_turn_buffs(bd)
         defending = True
         bd['charge_boost'] = True
         # 防禦時暫減 30% 傷害
         log.append('🛡️ 蓄力！下一擊傷害 x2')
+        resolved_turn = True
 
     elif action == 'flee':
         bd['status'] = 'fled'
@@ -4118,6 +4367,8 @@ def battle_action(kid_id):
         db.commit()
         bd['battle_result'] = 'fled'
         return jsonify(bd)
+    if resolved_turn:
+        _finish_turn_buffs(bd)
     # Check all monsters defeated
     if all(m['hp'] <= 0 for m in monsters):
         bd['status'] = 'won'
@@ -4136,12 +4387,17 @@ def battle_action(kid_id):
 
     # --- Monster counter-attack (recompute alive targets after player action) ---
     alive_after = [m for m in monsters if m['hp'] > 0]
-    if not defending and alive_after:
+    if not defending and not bd.get('skip_counter') and alive_after:
         attacker = alive_after[0]
         log_line, dmg = _monster_counterattack(bd, attacker, player_def)
         log.append(log_line)
         if dmg > 0:
             bd['player_hp'] -= dmg
+    bd.pop('skip_counter', None)
+    # A miss, a dodge, or no counter leaves the shield-bash halve armed.
+    _promote_attack_weaken(monsters)
+    _promote_flash_miss(bd)
+    _promote_turn_buffs(bd)
 
     # Check player defeated
     if bd['player_hp'] <= 0:
@@ -4161,13 +4417,357 @@ def battle_action(kid_id):
     return jsonify(bd)
 
 
+REGION_WEAKNESS = {1: '火', 2: '冰', 3: '雷'}
+
+
+def _physical_hit(player_atk, monster_def):
+    """Basic physical hit. Variance is randint(0, 2), same as a normal attack."""
+    return max(1, int(player_atk) - int(monster_def or 0) + random.randint(0, 2))
+
+
+def _magic_basic(bd, monster_def):
+    """Basic magic hit: max(1, matk − def). Same variance as a normal attack."""
+    if bd.get('player_matk') is not None:
+        matk = int(bd['player_matk'])
+    else:
+        matk = int(5 + int(bd.get('player_int') or 0) * 1.5)
+    return max(1, matk - int(monster_def or 0) + random.randint(0, 2))
+
+
+def _hurt(monster, dmg):
+    monster['hp'] = max(0, int(monster.get('hp') or 0) - int(dmg))
+    return dmg
+
+
+def _arm_attack_weaken(monster, turns=2):
+    """Weaken includes the counter on the cast turn."""
+    monster['atk_weaken_turns'] = int(turns)
+    monster.pop('atk_weaken_pending', None)
+
+
+def _promote_attack_weaken(monsters):
+    for monster in monsters:
+        pending = monster.pop('atk_weaken_pending', None)
+        if pending:
+            monster['atk_weaken_turns'] = int(pending)
+
+
+def _arm_flash_miss(bd, turns=2):
+    """Enemy misses include the counter on the cast turn."""
+    bd['flash_miss_turns'] = int(turns)
+    bd.pop('flash_miss_pending', None)
+
+
+def _promote_flash_miss(bd):
+    pending = bd.pop('flash_miss_pending', None)
+    if pending:
+        bd['flash_miss_turns'] = int(pending)
+
+
+def _consume_flash_miss(bd):
+    left = int(bd.get('flash_miss_turns') or 0)
+    if left <= 0:
+        return False
+    bd['flash_miss_turns'] = left - 1
+    return True
+
+
+def _queue_turn_buff(bd, key, turns, **fields):
+    """Arm a buff for the next `turns` player actions. The cast action is excluded.
+
+    A second cast only refreshes the timer. The first cast's base and amount stay,
+    so the bonus does not stack and expiry still restores the pre-first-cast value.
+    """
+    existing = (bd.get('turn_buffs') or {}).get(key) or (bd.get('pending_turn_buffs') or {}).get(key)
+    if existing:
+        if 'base' in existing:
+            fields['base'] = existing['base']
+        if 'amount' in existing and 'amount' in fields:
+            fields['amount'] = existing['amount']
+        if 'heal' in existing and 'heal' in fields:
+            fields['heal'] = existing['heal']
+    pending = bd.setdefault('pending_turn_buffs', {})
+    pending[key] = {'turns': int(turns), **fields}
+
+
+def _promote_turn_buffs(bd):
+    pending = bd.pop('pending_turn_buffs', None) or {}
+    if not pending:
+        return
+    active = bd.setdefault('turn_buffs', {})
+    for key, spec in pending.items():
+        active[key] = spec
+
+
+def _activate_fortify_now(bd):
+    """Fortify's cast-turn counter is turn 1. Other buffs stay pending."""
+    pending = bd.get('pending_turn_buffs') or {}
+    spec = pending.pop('def', None)
+    if not pending:
+        bd.pop('pending_turn_buffs', None)
+    if not spec:
+        return
+    bd.setdefault('turn_buffs', {})['def'] = spec
+    bd['player_def'] = int(spec.get('base') or 0) + int(spec.get('amount') or 0)
+
+
+def _at_least_basic_attack(dmg, player_atk, monster_def):
+    """max(skill formula, this kid's normal attack) against the same monster.
+
+    Multipliers belong on the caller, after this max. Healing skills never
+    call it. A second variance roll is the attack formula's own roll.
+    """
+    floor = _physical_hit(player_atk, monster_def)
+    return max(int(dmg), floor)
+
+
+def _top_up_last_hit(pairs, player_atk, monster_def):
+    """If the whole skill is short of one normal attack, add the gap to the last hit.
+
+    Earlier hits stay at the skill formula. No change when the total already clears.
+    """
+    if not pairs:
+        return 0
+    total = sum(dmg for _monster, dmg in pairs)
+    floor = _physical_hit(player_atk, monster_def)
+    if total < floor:
+        pairs[-1][1] += floor - total
+        total = floor
+    return total
+
+
+def _meal_heal(max_hp, bldg_level):
+    """About 8% of max HP, plus 1 HP per level above 1."""
+    base = max(1, int(int(max_hp) * 0.08))
+    bonus = max(0, int(bldg_level) - 1)
+    cap = int(int(max_hp) * 0.14) + 1
+    return min(cap, base + bonus)
+
+
+def _begin_turn_buffs(bd):
+    """Apply buffs already active. A turn count of 0 restores the saved base."""
+    active = bd.get('turn_buffs') or {}
+    intel = active.get('int')
+    if intel:
+        base = int(intel.get('base') or 0)
+        if int(intel.get('turns') or 0) > 0:
+            bd['player_int'] = base + int(intel.get('amount') or 0)
+        else:
+            bd['player_int'] = base
+    trained = active.get('str')
+    if trained:
+        base = int(trained.get('base') or 0)
+        if int(trained.get('turns') or 0) > 0:
+            bd['player_str'] = base + int(trained.get('amount') or 0)
+        else:
+            bd['player_str'] = base
+        bd['player_atk'] = int(5 + bd['player_str'] * 1.5)
+    meal = active.get('meal')
+    if meal and int(meal.get('turns') or 0) > 0:
+        heal = int(meal.get('heal') or 0)
+        if heal > 0:
+            cap = int(bd.get('player_max_hp') or bd.get('player_hp') or 0)
+            bd['player_hp'] = min(cap, int(bd.get('player_hp') or 0) + heal)
+    guard = active.get('def')
+    if guard:
+        base = int(guard.get('base') or 0)
+        if int(guard.get('turns') or 0) > 0:
+            bd['player_def'] = base + int(guard.get('amount') or 0)
+        else:
+            bd['player_def'] = base
+
+
+def _finish_turn_buffs(bd):
+    active = bd.get('turn_buffs') or {}
+    for key, spec in active.items():
+        left = int(spec.get('turns') or 0)
+        if left > 0:
+            spec['turns'] = left - 1
+        # The counter reads player_def before _begin_turn_buffs, so the
+        # restored value has to be written at the end of the last buffed turn.
+        if key == 'def' and int(spec.get('turns') or 0) <= 0:
+            bd['player_def'] = int(spec.get('base') or 0)
+
+
+def _consume_weakened_atk(attacker):
+    """int(atk × 0.7) while weaken turns remain. Original atk is kept."""
+    atk = attacker.get('atk', 0)
+    left = int(attacker.get('atk_weaken_turns') or 0)
+    if left > 0:
+        atk = int(atk * 0.7)
+        attacker['atk_weaken_turns'] = left - 1
+    return atk
+
+
+def _apply_named_skill(skill, bd, target_monster, bldg_level, base, per_lv, attr_scale, player_atk, log):
+    """Old skills whose battle effect is not the generic target switch.
+
+    Returns True when this skill was handled.
+    """
+    name = skill.get('name')
+    icon = skill.get('icon') or ''
+
+    if name == '蓄力':
+        dmg = _hurt(target_monster, _physical_hit(player_atk, target_monster.get('def')))
+        bd['charge_boost'] = True
+        text = skill.get('description') or '下次攻擊 2 倍'
+        log.append(f'🔥 蓄力！造成 {dmg} 點傷害！{text}')
+        return True
+
+    if name == '連擊':
+        pairs = []
+        for _ in range(2):
+            dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+            pairs.append([target_monster, dmg])
+        _top_up_last_hit(pairs, player_atk, target_monster.get('def'))
+        total = 0
+        for monster, dmg in pairs:
+            total += dmg
+            monster['hp'] = max(0, monster['hp'] - dmg)
+        log.append(f'{icon} 連擊！造成 {total} 點傷害！')
+        return True
+
+    if name == '冰凍':
+        dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+        dmg = _at_least_basic_attack(dmg, player_atk, target_monster.get('def'))
+        target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        _arm_attack_weaken(target_monster, 2)
+        log.append(f'{icon} 冰凍！造成 {dmg} 點傷害！')
+        return True
+
+    if name == '必殺':
+        dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+        dmg = _at_least_basic_attack(dmg, player_atk, target_monster.get('def'))
+        max_hp = target_monster.get('max_hp') or target_monster.get('hp') or 0
+        if max_hp and target_monster['hp'] * 4 <= max_hp:
+            dmg = int(dmg * 1.5)
+        target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        log.append(f'{icon} 必殺！造成 {dmg} 點傷害！')
+        return True
+
+    if name == '修復':
+        dmg = _hurt(target_monster, _physical_hit(player_atk, target_monster.get('def')))
+        gained = _calc_skill_heal(
+            skill, base, per_lv, bldg_level, attr_scale, bd.get('player_int', 0),
+        )
+        cap = bd.get('player_max_mp', bd['player_mp'] + gained)
+        bd['player_mp'] = min(int(cap), bd['player_mp'] + gained)
+        log.append(f'{icon} 修復！造成 {dmg} 點傷害，回復 {gained} MP')
+        return True
+
+    if name == '強化':
+        dmg = _hurt(target_monster, _physical_hit(player_atk, target_monster.get('def')))
+        bonus = max(1, int((base or 0) + (per_lv or 0) * bldg_level))
+        _queue_turn_buff(
+            bd, 'def', 3, amount=bonus, base=int(bd.get('player_def') or 0),
+        )
+        _activate_fortify_now(bd)
+        spec = bd['turn_buffs']['def']
+        log.append(f'{icon} 強化！造成 {dmg} 點傷害，防禦 +{spec["amount"]}（3 回合）')
+        return True
+
+    if name == '偵察':
+        try:
+            region_id = int(bd.get('region_id') or 1)
+        except (TypeError, ValueError):
+            region_id = 1
+        weakness = REGION_WEAKNESS.get(region_id, '火')
+        target_monster['weakness'] = weakness
+        log.append(f'{icon} 偵察！弱點 {weakness}')
+        return True
+
+    if name == '盾擊':
+        dmg = _physical_hit(player_atk, target_monster.get('def'))
+        target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        bd['halve_counter'] = True
+        log.append(f'{icon} 盾擊！造成 {dmg} 點傷害！')
+        return True
+
+    if name == '疾風斬':
+        dmg = _physical_hit(player_atk, target_monster.get('def'))
+        target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        bd['skip_counter'] = True
+        log.append(f'{icon} 疾風斬！造成 {dmg} 點傷害！')
+        return True
+
+    if name == '知識的力量':
+        dmg = _magic_basic(bd, target_monster.get('def'))
+        dmg = _hurt(
+            target_monster,
+            _at_least_basic_attack(dmg, player_atk, target_monster.get('def')),
+        )
+        amount = 3 * int(bldg_level)
+        _queue_turn_buff(bd, 'int', 3, amount=amount, base=int(bd.get('player_int') or 0))
+        shown = bd['pending_turn_buffs']['int']['amount']
+        log.append(f'{icon} 知識的力量！造成 {dmg} 點傷害，知識 +{shown}（3 回合）')
+        return True
+
+    if name == '鍛鍊的成果':
+        dmg = _hurt(target_monster, _physical_hit(player_atk, target_monster.get('def')))
+        amount = 3 * int(bldg_level)
+        _queue_turn_buff(bd, 'str', 3, amount=amount, base=int(bd.get('player_str') or 0))
+        shown = bd['pending_turn_buffs']['str']['amount']
+        log.append(f'{icon} 鍛鍊的成果！造成 {dmg} 點傷害，臂力 +{shown}（3 回合）')
+        return True
+
+    if name == '營養餐':
+        dmg = _hurt(target_monster, _physical_hit(player_atk, target_monster.get('def')))
+        heal = _meal_heal(bd.get('player_max_hp') or 0, bldg_level)
+        _queue_turn_buff(bd, 'meal', 3, heal=heal)
+        log.append(f'{icon} 營養餐！造成 {dmg} 點傷害，之後 3 回合各回復 {heal} HP')
+        return True
+
+    if name == '金幣袋':
+        dmg = _hurt(target_monster, _physical_hit(player_atk, target_monster.get('def')))
+        bd['coin_bag'] = True
+        log.append(f'{icon} 金幣袋！造成 {dmg} 點傷害，勝利額外 20 金幣')
+        return True
+
+    if name == '強光':
+        dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+        dmg = _at_least_basic_attack(dmg, player_atk, target_monster.get('def'))
+        target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        _arm_flash_miss(bd, 2)
+        log.append(f'{icon} 強光！造成 {dmg} 點傷害！')
+        return True
+
+    if name == '流星雨':
+        pairs = []
+        for monster in bd.get('monsters') or []:
+            if monster.get('hp', 0) <= 0:
+                continue
+            dmg = _calc_skill_damage(skill, base, per_lv, bldg_level, attr_scale, bd)
+            pairs.append([monster, dmg])
+        floor_def = pairs[0][0].get('def') if pairs else target_monster.get('def')
+        _top_up_last_hit(pairs, player_atk, floor_def)
+        for monster, dmg in pairs:
+            monster['hp'] = max(0, monster['hp'] - dmg)
+        log.append(f'{icon} 流星雨！{len(pairs)} 隻受到魔法傷害！')
+        return True
+
+    if name == '金錢砸':
+        struck = max(1, int(player_atk) - int(target_monster.get('def') or 0) + random.randint(0, 2))
+        dmg = struck * 3
+        target_monster['hp'] = max(0, target_monster['hp'] - dmg)
+        log.append(f'{icon} 金錢砸！造成 {dmg} 點傷害！')
+        return True
+
+    return False
+
+
 def _monster_counterattack(bd, attacker, player_def):
     """Monster counter-attack with 先手 (spd) + 回避 (dodge). Returns (log, damage)."""
     if bd.get('player_spd', 0) > attacker.get('spd', 0):
         return (f'💨 先手！{attacker["name"]} 未及反擊', 0)
     if bd.get('player_dodge', 0) > 0 and random.randint(1, 100) <= bd['player_dodge']:
         return (f'💨 回避！{attacker["name"]} 攻擊落空', 0)
-    dmg = max(0, attacker['atk'] - player_def + random.randint(0, 2))
+    if _consume_flash_miss(bd):
+        return (f'💡 強光！{attacker["name"]} 攻擊落空', 0)
+    atk = _consume_weakened_atk(attacker)
+    dmg = max(0, atk - player_def + random.randint(0, 2))
+    if dmg > 0 and bd.get('halve_counter'):
+        dmg = dmg // 2
+        bd.pop('halve_counter', None)
     if dmg > 0:
         return (f'🐾 {attacker["name"]} 反擊 {dmg} 點傷害', dmg)
     return ('🛡️ 擋住攻擊！', 0)
@@ -4239,6 +4839,8 @@ def _award_battle_rewards(db, kid_id, bd, monsters=None):
     # Gold (scale with number of monsters)
     num_monsters = len(monsters) if monsters else 1
     gold = gold * num_monsters
+    if bd.get('coin_bag'):
+        gold += 20
 
     # Gold
     kid = db.execute("SELECT * FROM kids WHERE id=?", (kid_id,)).fetchone()
@@ -4305,6 +4907,53 @@ def get_explored(kid_id):
     rows = db.execute("SELECT * FROM explored_regions WHERE kid_id=?", (kid_id,)).fetchall()
     return jsonify(rows_to_list(rows))
 
+def _stamp_prefix(value):
+    """Normalize SQLite / ISO timestamps for ordering. Empty if missing."""
+    if not value:
+        return ""
+    return str(value).replace("T", " ")[:19]
+
+
+def farm_claimed_today_for_placed(db, kid_id):
+    """Read-only. True when today's HK farm claim belongs to the farm on the map.
+
+    The sheet shows 「今日已領」 from this flag on load and reopen. It does not
+    grant gold. A farm placed after today's payout does not inherit the badge;
+    POST /farm/claim still returns already_claimed_today and the sheet then
+    switches to 「今日已領」 without adding gold.
+    """
+    claim = db.execute(
+        "SELECT claim_date FROM farm_claims WHERE kid_id=?", (kid_id,)
+    ).fetchone()
+    if not claim or claim["claim_date"] != hk_today_str():
+        return False
+    farm = db.execute(
+        """
+        SELECT b.built_at AS built_at
+        FROM buildings b
+        JOIN building_defs bd ON bd.id = b.def_id
+        WHERE b.kid_id=? AND COALESCE(b.stored, 0)=0 AND bd.buff_type='daily_gold'
+        ORDER BY b.id DESC LIMIT 1
+        """,
+        (kid_id,),
+    ).fetchone()
+    if not farm:
+        return False
+    log = db.execute(
+        """
+        SELECT created_at FROM points_log
+        WHERE kid_id=? AND reason='daily_gold'
+        ORDER BY id DESC LIMIT 1
+        """,
+        (kid_id,),
+    ).fetchone()
+    built_at = _stamp_prefix(farm["built_at"])
+    claimed_at = _stamp_prefix(log["created_at"]) if log else ""
+    if not built_at or not claimed_at:
+        return True
+    return built_at <= claimed_at
+
+
 @app.route('/api/kids/<int:kid_id>/town', methods=['GET'])
 def get_town_state(kid_id):
     db = get_db()
@@ -4316,6 +4965,13 @@ def get_town_state(kid_id):
         SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect, bd.materials, bd.max_level
         FROM buildings b JOIN building_defs bd ON b.def_id=bd.id WHERE b.kid_id=? AND b.stored=0
     ''', (kid_id,)).fetchall()
+    building_rows = rows_to_list(buildings)
+    for row in building_rows:
+        row['passive_line'] = ''
+    for building_id, line in _passive_lines_for(kid_id, dict(kid), building_rows).items():
+        for row in building_rows:
+            if row.get('id') == building_id:
+                row['passive_line'] = line
     stored_buildings = db.execute('''
         SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect, bd.materials, bd.max_level
         FROM buildings b JOIN building_defs bd ON b.def_id=bd.id WHERE b.kid_id=? AND b.stored=1
@@ -4328,9 +4984,10 @@ def get_town_state(kid_id):
     achievements = db.execute("SELECT * FROM achievements WHERE kid_id=? ORDER BY earned_at DESC", (kid_id,)).fetchall()
     streak = db.execute("SELECT * FROM streaks WHERE kid_id=?", (kid_id,)).fetchone()
     tiles = db.execute("SELECT cell_x, cell_y, tile_type FROM town_tiles WHERE kid_id=?", (kid_id,)).fetchall()
+    farm_claimed_today = farm_claimed_today_for_placed(db, kid_id)
     return jsonify({
         'kid': kid_hud(kid),
-        'buildings': rows_to_list(buildings),
+        'buildings': building_rows,
         'stored_buildings': rows_to_list(stored_buildings),
         'inventory': rows_to_list(inventory),
         'explored': rows_to_list(explored),
@@ -4338,6 +4995,7 @@ def get_town_state(kid_id):
         'achievements': rows_to_list(achievements),
         'streak': row_to_dict(streak) if streak else None,
         'tiles': [dict(t) for t in tiles],
+        'farm_claimed_today': farm_claimed_today,
     })
 
 # -- Town Tiles API --

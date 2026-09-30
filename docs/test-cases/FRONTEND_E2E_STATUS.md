@@ -2,6 +2,78 @@
 
 > Synthetic fixture users only (`test_fe_*`, PIN `1357`, parent `TestParent!pass1`). Production `kids_town.db` is never copied.
 
+## SHEET-BUFF-01 moved off the unwired workshop (follow-up on #47)
+
+> Recorded 2026-09-29 against an older sheet contract. That contract is superseded: 圖書館 is 「知識 +N」, not 「任務多經驗」. 工坊／健身室／醫院／燈塔／競技場／公會／天文台／銀行 嘅而家文案見 [`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md) 同 [`PASSIVE_AND_SKILLS.md`](PASSIVE_AND_SKILLS.md)。`buff_vals[level-1]` 數字合約搬去 `TC-FE-SHEET-BUFFVAL-01`。未知 type 先至「未開放」（`TC-FE-SHEET-UNWIRED-01`）。下面表格係改文案之前嘅紀錄。  
+> `SHEET-BUFF-02` still opens 工坊 and only checks zero `.fn` plus no stub toast. It does not read a buff number.  
+> Product files were not changed. The #48 check checked out `5b99ed2` product files locally, ran the test, then restored them. Nothing was pushed to `cursor/green-sheet-buff-truth-6a00`.
+
+### Commands
+
+| Suite | Product | Result |
+|-------|---------|--------|
+| `python3 -m pytest tests/test_frontend.py -q -k 'test_town_ux_sheet_buff_shows_level_buff_without_fn or test_town_ux_sheet_buff_no_stub_toast' --tb=short` | this branch (main `8ed2720` product) | **1 failed, 1 passed** in 2.92s |
+| same command | #48 tip `5b99ed2` product files, tests from this branch | **2 passed** in 2.46s |
+
+| Case ID | On main product (`8ed2720`) | On #48 product (`5b99ed2`) |
+|---------|-----------------------------|----------------------------|
+| TC-FE-TOWN-UX-SHEET-BUFF-01 | **FAIL** | **PASS** |
+| TC-FE-TOWN-UX-SHEET-BUFF-02 | **PASS** | **PASS** |
+
+SHEET-BUFF-01 fails on main because `#sheetBuff` text and aria-label are `任務多星 +4⭐`. The wanted string is `任務多經驗 +4`. The number **4** is `buff_vals[1]` (Lv.2), not the seed / Lv.1 value 2, so this is dishonest star copy, not a missing sheet or a wrong level. Zero `.fn` did not fail. On `5b99ed2` the same sheet is `任務多經驗 +4`, so the test passes.
+
+The section below is the earlier #47 run, when SHEET-BUFF-01 still accepted `建築速度 ×4`. That row is historical.
+
+---
+
+## Honest `#sheetBuff` labels — red on main `8ed2720` (tests only)
+
+> Recorded 2026-09-29 against **main** `8ed2720a8ac8a593bc6868d5d32b2de6a49e7b14` (`8ed2720`, PRs #42–#45 merged). Cases live in [`SHEET_BUFF_TRUTH.md`](SHEET_BUFF_TRUTH.md). Tests only; no product code.  
+> Python 3.12.3 / pytest 9.1.1 / Playwright Chromium on Linux. Empty DB, synthetic `test_fe_kid` PIN `1357`.  
+> API anchors in `tests/test_sheet_buff_truth.py` already match `backend_v2.py` and **pass**. UI cases fail because `#sheetBuff` still describes effects the backend does not implement that way, or because the farm sheet has no 「領取」 control. Failures are assertion text / missing button, not setup or login.  
+> `#sheetFns .fn` count stayed 0 and `#upgradeConfirm` stayed the last element child of `div.gsw.stage` (those checks were not in the failure messages).  
+> Older sections below are historical. ZH-01 / ZH-02 expected copy was superseded by this round (see the case file 「改過嘅舊斷言」). The tables under those older headings were not rewritten.
+
+### Commands
+
+| Suite | Command | Result |
+|-------|---------|--------|
+| API anchors | `python3 -m pytest tests/test_sheet_buff_truth.py -q --tb=short` | **4 passed**, 7 warnings in 1.22s |
+| Honest labels + superseded ZH | `python3 -m pytest tests/test_frontend.py -q -k 'sheet_buff_truth or sheet_buff_zh' --tb=line` | **8 failed**, 50 deselected in 19.58s |
+| Legacy sheet buff only | `python3 -m pytest tests/test_frontend.py -q -k 'sheet_buff and not sheet_buff_zh and not sheet_buff_truth' --tb=line` | **2 passed**, 56 deselected in 2.54s |
+| Upgrade + UX-05 + store_ux | `python3 -m pytest tests/test_frontend.py -q -k 'upgrade_cost or upgrade_confirm or scene4_upgrade_feature_and_hud or store_ux' --tb=line` | **5 passed**, 53 deselected in 10.55s |
+
+### Case ID → result on main `8ed2720`
+
+| Case ID | Layer | Pytest | Result | Reason |
+|---------|-------|--------|--------|--------|
+| SHEET-BUFF-TRUTH-01 | API | `test_sheet_buff_truth_api_library_bonus_is_experience_not_stars` | **PASS** | Library Lv.1, 10-point task: XP 5+2=7. Gold +10, not +2. No star in `points_log`. |
+| SHEET-BUFF-TRUTH-01 | UI | `test_town_ux_sheet_buff_truth_library_experience_not_stars` | **FAIL** | `#sheetBuff` is `任務多星 +2⭐`. Want `任務多經驗 +2`. `#sheetNote` is `而家等級加成 任務多星 +2⭐`. |
+| SHEET-BUFF-TRUTH-02 | API | `test_sheet_buff_truth_api_discount_is_build_and_upgrade_gold_only` | **PASS** | Gym place gold 180, mats full. Upgrade gold 90. Explore fee still 10. Task gold full. `discounted_gold_cost(` count is 3. |
+| SHEET-BUFF-TRUTH-02 | UI | `test_town_ux_sheet_buff_truth_shop_build_upgrade_gold` | **FAIL** | `#sheetBuff` is `購物折扣 九折`. Want `起屋／升級金幣九折`. Note restates the shop-discount line. |
+| SHEET-BUFF-TRUTH-03 | UI | `test_town_ux_sheet_buff_truth_farm_claim_control` | **FAIL** | No enabled 「領取」 in `#actionSheet`. Effect line `每日金幣 +5🪙` is accepted. |
+| SHEET-BUFF-TRUTH-04 | API | `test_sheet_buff_truth_api_farm_claim_once_per_day` | **PASS** | First claim +5. Same day second claim 400 `already_claimed_today`. Gold stays 5. |
+| SHEET-BUFF-TRUTH-04 | UI | `test_town_ux_sheet_buff_truth_farm_claim_once` | **FAIL** | No 「領取」, so 「今日已領」 and the single-grant check were not reached. |
+| SHEET-BUFF-TRUTH-05 | UI | `test_town_ux_sheet_buff_truth_unwired_marked_closed` | **FAIL** | All 7 opened and showed an effect, not `未開放`. Gym `連續保護 ×1 漏打卡都唔斷`. Workshop `建築速度 ×4` in `#sheetBuff` and `#sheetNote`. Also 醫院 `探險回復 ×2`, 公會 `解鎖探險`, 燈塔 `探險範圍 +1`, 競技場 `探險金幣 ×2`, 天文台 `發現新區域 ×1.5`. |
+| SHEET-BUFF-TRUTH-06 | API | `test_sheet_buff_truth_api_only_three_buff_types_are_consumed` | **PASS** | Consumed set is exactly `task_bonus`, `discount`, `daily_gold`. Workshop does not change upgrade gold. Gym `experience_bonus` is 0. |
+| SHEET-BUFF-TRUTH-06 | UI | `test_town_ux_sheet_buff_truth_guard_no_unconsumed_effect` | **FAIL** | Same dishonest lines as 01–05, plus farm missing 「領取」. |
+| TC-FE-TOWN-UX-SHEET-BUFF-ZH-01 | UI | `test_town_ux_sheet_buff_zh_workshop_shows_chinese_level_value` | **FAIL** | Assert now wants `未開放`. Got `建築速度 ×4`. Old 「建築速度 ×4」 requirement was superseded. |
+| TC-FE-TOWN-UX-SHEET-BUFF-ZH-02 | UI | `test_town_ux_sheet_buff_zh_gym_shows_chinese_not_streak_code` | **FAIL** | Assert now wants `未開放`. Got `連續保護 ×1 漏打卡都唔斷`. Old aside requirement was superseded. |
+| TC-FE-TOWN-UX-SHEET-BUFF-01 | UI | `test_town_ux_sheet_buff_shows_level_buff_without_fn` | **PASS** | Numeric 4 and zero `.fn` still satisfied by `建築速度 ×4`. Assert not edited. |
+| TC-FE-TOWN-UX-SHEET-BUFF-02 | UI | `test_town_ux_sheet_buff_no_stub_toast` | **PASS** | Zero `.fn`, no stub toast. Assert not edited. |
+
+### Regression (unchanged asserts) on the same tip
+
+| Case ID | Pytest | Result |
+|---------|--------|--------|
+| TC-FE-TOWN-UX-UPGRADE-COST-01 | `test_town_ux_upgrade_cost_sheet_shows_gold_and_mats` | **PASS** |
+| TC-FE-TOWN-UX-UPGRADE-COST-02 | `test_town_ux_upgrade_cost_insufficient_does_not_post` | **PASS** |
+| TC-FE-TOWN-UX-UPGRADE-CONFIRM-01 | `test_town_ux_upgrade_confirm_cancel_then_post` | **PASS** |
+| TC-FE-TOWN-UX-05 | `test_town_ux_scene4_upgrade_feature_and_hud` | **PASS** |
+| TC-FE-TOWN-STORE-UX-01 | `test_town_store_ux_place_stays_on_four_scene` | **PASS** |
+
+---
+
 ## Kid-readable Traditional Chinese sheet buff — red on #43 tip (tests only)
 
 > Recorded 2026-09-28 against **#43 green tip** `10ef23961139e7013dc0cf9736d9861c9b3a3cbc` (`10ef239`, branch `cursor/green-sheet-buff-d676`). Locked copy is KT designer + Grok Bot. Tests live on `cursor/red-sheet-buff-zh-5760`. This follow-up records the run after that lock.  

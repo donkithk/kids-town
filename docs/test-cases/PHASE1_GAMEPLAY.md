@@ -13,17 +13,17 @@ Session helper 同 Phase 0。金幣／建築操作一律 kid 或該家長。
 
 ## A. 建築 buff
 
-### P1-TC-BUFF-01 — 圖書館 task_bonus 加 XP
+### P1-TC-BUFF-01 — 圖書館唔再加任務 XP
 
 | 欄 | 內容 |
 |----|------|
 | **ID** | P1-TC-BUFF-01 |
-| **標題** | 有 Lv.1 圖書館時，完成任務 XP = 基礎 + 2 |
+| **標題** | 有 Lv.1 圖書館時，完成任務都唔加任務 XP |
 | **優先級** | P0 |
 | **建議模組** | `tests/test_building_buffs.py` |
 | **前置** | login `kid_a`；起咗圖書館 level=1 `stored=0`；任務 points=10（基礎 XP=`max(5,10//2)=5`）；無其他 buff 建築 |
 | **步驟** | 1. `POST /api/tasks/{id}/complete` 2. 讀 JSON 同 `kids.experience` |
-| **預期** | `experience_gained==5`；`experience_bonus==2`；`experience_total==7`；DB experience +7；`points_awarded==10`（金幣**唔**加 2） |
+| **預期** | `experience_gained==5`；`experience_bonus==0`；`experience_total==5`；DB experience +5；`points_awarded==10`。圖書館被動改為知識，見 [`PASSIVE_AND_SKILLS.md`](PASSIVE_AND_SKILLS.md)。 |
 
 ---
 
@@ -41,17 +41,17 @@ Session helper 同 Phase 0。金幣／建築操作一律 kid 或該家長。
 
 ---
 
-### P1-TC-BUFF-03 — 圖書館升級後用新表
+### P1-TC-BUFF-03 — 圖書館 Lv.2 都唔加任務 XP
 
 | 欄 | 內容 |
 |----|------|
 | **ID** | P1-TC-BUFF-03 |
-| **標題** | Lv.2 `buff_vals[1]==4` |
+| **標題** | Lv.2 都唔再用 `buff_vals[1]` 加任務 XP |
 | **優先級** | P0 |
 | **建議模組** | `tests/test_building_buffs.py` |
 | **前置** | 圖書館 level=2；任務 points=10 |
 | **步驟** | complete |
-| **預期** | `experience_bonus==4` |
+| **預期** | `experience_bonus==0`；`experience_total==5`。唔好再係 4。 |
 
 ---
 

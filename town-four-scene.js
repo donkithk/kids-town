@@ -36,7 +36,9 @@
     note: "",
     confirming: false,
     instantUpgrade: false,
-    upgrading: false
+    upgrading: false,
+    claiming: false,
+    farmClaimed: false
   };
 
   function $(id) { return document.getElementById(id); }
@@ -97,20 +99,11 @@
     return String(n);
   }
 
-  /* Kid-readable Traditional Chinese. The English buff_type code is never shown.
-     N is buff_vals[level-1], same index as get_building_buff. */
-  var BUFF_LABEL = {
-    task_bonus: "任務多星",
-    streak_protect: "連續保護",
-    daily_gold: "每日金幣",
-    discount: "購物折扣",
-    expedition_recovery: "探險回復",
-    unlock_explore: "解鎖探險",
-    build_speed: "建築速度",
-    explore_range: "探險範圍",
-    expedition_gold: "探險金幣",
-    discovery_rate: "發現新區域"
-  };
+  /* Shop and farm still read buff_vals. Other sheets name the passive or
+     skill the backend applies. Anything else is 「未開放」 with no number. */
+  var UNAVAILABLE_LABEL = "未開放";
+  var FARM_CLAIM_LABEL = "領取";
+  var FARM_CLAIMED_LABEL = "✓ 今日已領";
   var DISCOUNT_FOLD = [
     [0.9, "九折"],
     [0.85, "八五折"],
@@ -128,36 +121,48 @@
     return "";
   }
 
-  function kidBuffLabel(buffType, valueText, rawValue) {
-    var stem = BUFF_LABEL[buffType];
-    if (!stem) return "";
-    if (buffType === "unlock_explore") return stem;
-    if (buffType === "discount") {
-      var fold = discountFold(rawValue);
-      return fold ? (stem + " " + fold) : stem;
+  /* Name wins over the stored buff_type. The library has no task_bonus row.
+     Passive sheets use passive_line from the town payload (live ability and
+     battle-stat diffs). The bracket words live with that formatter. */
+  function sheetEffectLabel(name, level, buffType, rawValue, valueText, placed) {
+    if (name === "圖書館" || name === "健身室" || name === "工坊" || name === "競技場" || name === "探險公會") {
+      return (placed && placed.passive_line) || "";
     }
-    if (buffType === "task_bonus") return stem + " +" + valueText + "⭐";
-    if (buffType === "daily_gold") return stem + " +" + valueText + "🪙";
-    if (buffType === "explore_range") return stem + " +" + valueText;
-    if (buffType === "streak_protect") return stem + " ×" + valueText + " 漏打卡都唔斷";
-    return stem + " ×" + valueText;
+    if (name === "天文台") return "技能：流星雨（魔法攻擊全體敵人）";
+    if (name === "醫院") return "技能：繃帶（小回復）";
+    if (name === "燈塔") return "技能：強光（魔法攻擊，之後 2 次怪物攻擊打唔中）";
+    if (name === "銀行") return "技能：金錢砸（每次 10 金幣，傷害約普攻 3 倍）";
+    if (name === "商店" || buffType === "discount") {
+      var fold = discountFold(rawValue);
+      return fold ? ("起屋／升級金幣" + fold) : "起屋／升級金幣";
+    }
+    if (name === "農場" || buffType === "daily_gold") {
+      return "每日金幣 +" + valueText + "🪙";
+    }
+    return UNAVAILABLE_LABEL;
   }
 
-  /* buff_vals[level-1], clamped like get_building_buff. Prefer the placed row. */
+  /* buff_vals[level-1] for shop and farm. Prefer the placed row. */
   function levelBuff(placed) {
     if (!placed) return null;
     var def = defById(placed.def_id) || {};
-    var buffType = placed.buff_type || def.buff_type || "";
+    var buffType = String(placed.buff_type || def.buff_type || "");
+    var name = placed.name || def.name || "";
     var vals = parseVals(placed.buff_vals);
     if (!vals.length) vals = parseVals(def.buff_vals);
-    if (!buffType || !vals.length) return null;
+    if (!buffType && !name) return null;
     var level = parseInt(placed.level, 10);
     if (!isFinite(level) || level < 1) level = 1;
-    var idx = Math.max(0, Math.min(level - 1, vals.length - 1));
-    var text = formatBuffValue(vals[idx]);
-    var label = kidBuffLabel(String(buffType), text, vals[idx]);
+    var rawValue = null;
+    var text = "";
+    if (vals.length) {
+      var idx = Math.max(0, Math.min(level - 1, vals.length - 1));
+      rawValue = vals[idx];
+      text = formatBuffValue(rawValue);
+    }
+    var label = sheetEffectLabel(name, level, buffType, rawValue, text, placed);
     if (!label) return null;
-    return { type: String(buffType), text: text, label: label };
+    return { type: buffType, text: text, label: label };
   }
 
   function inventoryQty(key) {
@@ -293,12 +298,78 @@
     if (!buff) {
       node.textContent = "";
       node.removeAttribute("aria-label");
+      node.classList.remove("is-unwired");
       show(node, false);
       return;
     }
     node.textContent = buff.label;
     node.setAttribute("aria-label", buff.label);
+    node.classList.toggle("is-unwired", buff.label === UNAVAILABLE_LABEL);
     show(node, true);
+  }
+
+  function farmClaimedNow() {
+    return !!(state.farmClaimed || readTown().farmClaimedToday);
+  }
+
+  function paintFarmClaim(placed) {
+    var btn = $("btnFarmClaim");
+    if (!btn) return;
+    var buff = levelBuff(placed);
+    var isFarm = !!(buff && buff.type === "daily_gold");
+    show(btn, isFarm);
+    if (!isFarm) return;
+    var claimed = farmClaimedNow();
+    btn.classList.toggle("is-claimed", claimed);
+    if (claimed) {
+      btn.textContent = FARM_CLAIMED_LABEL;
+      btn.setAttribute("aria-label", FARM_CLAIMED_LABEL);
+      btn.disabled = true;
+    } else {
+      btn.textContent = FARM_CLAIM_LABEL;
+      btn.setAttribute("aria-label", FARM_CLAIM_LABEL);
+      btn.disabled = !!state.claiming;
+    }
+    btn.setAttribute("aria-disabled", btn.disabled ? "true" : "false");
+  }
+
+  function markFarmClaimed(points) {
+    state.farmClaimed = true;
+    state.claiming = false;
+    state.note = "今日已領";
+    if (typeof townData !== "undefined" && townData) {
+      townData.farm_claimed_today = true;
+      if (points != null && townData.kid) townData.kid.points = points;
+    }
+    render();
+    if (typeof updateHeader === "function") updateHeader();
+  }
+
+  async function onFarmClaim() {
+    if (state.claiming || farmClaimedNow()) return;
+    var buff = levelBuff(placedDef(state.sheetDef));
+    if (!buff || buff.type !== "daily_gold") return;
+    var town = readTown();
+    if (!town.kidId || typeof fetchAPI !== "function") return;
+    state.claiming = true;
+    render();
+    try {
+      var data = await fetchAPI("/api/kids/" + town.kidId + "/farm/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      });
+      markFarmClaimed(data && data.points);
+    } catch (e) {
+      if (e && e.message === "already_claimed_today") {
+        markFarmClaimed(null);
+        return;
+      }
+      if (typeof showToast === "function") showToast("領唔到", "error");
+    } finally {
+      state.claiming = false;
+      render();
+    }
   }
 
   function sameCell(a, b) {
@@ -678,6 +749,7 @@
       state.confirming = false;
       paintUpgrade(null);
       paintSheetBuff(null);
+      paintFarmClaim(null);
       return;
     }
     var def = defById(state.sheetDef) || {};
@@ -696,6 +768,7 @@
       else note.textContent = "可以升級。";
     }
     paintSheetBuff(placed);
+    paintFarmClaim(placed);
     var art = $("sheetArt");
     if (art && def.name) {
       var src = assetSrc(def.name);
@@ -1044,6 +1117,8 @@
     }
     var sheetBuff = $("sheetBuff");
     if (sheetBuff) sheetBuff.addEventListener("click", function () { onSheetBuff(); });
+    var farmClaim = $("btnFarmClaim");
+    if (farmClaim) farmClaim.addEventListener("click", function () { onFarmClaim(); });
     $("btnCloseSheet").addEventListener("click", closeSheet);
     $("btnMotion").addEventListener("click", function () {
       motionOn = !motionOn;
