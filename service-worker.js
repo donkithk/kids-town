@@ -4,8 +4,8 @@
    Scope: /kids/
    ============================================ */
 
-const CACHE_NAME = 'kids-town-v15';
-const STATIC_CACHE = 'kids-town-static-v15';
+const CACHE_NAME = 'kids-town-v16';
+const STATIC_CACHE = 'kids-town-static-v16';
 
 // Files to precache on install
 const PRECACHE_URLS = [

@@ -1415,7 +1415,16 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 .battle-scene.kt-wild .kt-grass-img{
   display:block;object-fit:cover;object-position:center;
 }
-.battle-scene.kt-wild .kt-toast{position:relative;left:auto;top:auto;transform:none;z-index:2;margin:10px auto 0}
+/* Out of flow so a 2-line message cannot push monsters into the command bar.
+   Open menu forces one ellipsized line in CSS; closing the panel restores wrapping. */
+.battle-scene.kt-wild .kt-toast{
+  position:absolute;left:50%;top:96px;transform:translateX(-50%);z-index:4;margin:0;
+  width:max-content;max-width:min(1040px,86%);
+  white-space:normal;overflow:visible;text-overflow:clip;text-align:center;
+}
+.battle-scene.kt-wild:has(#skillPanel:not([hidden])) .kt-toast{
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(720px,70%);
+}
 .battle-scene.kt-wild .kt-field-stage{
   position:relative;z-index:2;flex:1;min-height:0;overflow:hidden;display:grid;
   grid-template-columns:300px 1fr auto;
@@ -1543,7 +1552,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 .battle-scene.kt-wild .command-bar .cmd.is-open{box-shadow:inset 0 2px 0 rgba(255,224,176,.55), inset 0 -3px 0 rgba(42,22,10,.35), 0 3px 0 #2a180e, inset 0 -4px 0 #f0c14b}
 .battle-scene.kt-wild .skill-panel{
   position:absolute;z-index:5;left:332px;right:300px;bottom:259px;height:320px;
-  display:flex;flex-direction:column;gap:8px;padding:8px 12px;box-sizing:border-box;
+  display:flex;flex-direction:column;gap:8px;padding:8px 4px;box-sizing:border-box;
   border:8px solid #3b2416;border-radius:22px;color:#3b2a1a;background-color:#f4e2c4;
   background-image:radial-gradient(circle at 12% 0, rgba(240,193,75,.32), transparent 34%),
     repeating-linear-gradient(0deg, rgba(139,94,60,.055) 0 1px, transparent 1px 7px),
@@ -1556,7 +1565,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
   display:flex;align-items:center;gap:6px;height:48px;min-height:48px;flex:none;flex-wrap:nowrap;
 }
 .battle-scene.kt-wild .skill-head h2{
-  margin:0;font-size:22px;font-weight:800;color:#3a2616;letter-spacing:.04em;white-space:nowrap;flex:none;
+  margin:0;font-size:26px;font-weight:800;color:#3a2616;letter-spacing:.04em;white-space:nowrap;flex:none;
 }
 .battle-scene.kt-wild .mp-now{
   margin:0;padding:2px 8px;border-radius:999px;background:#e7f0fb;border:2px solid #1d4f91;
@@ -1566,8 +1575,8 @@ body.kt-pane-shop .kt-backpack-block{display:none}
   min-height:44px;height:44px;border-radius:12px;font-weight:800;cursor:pointer;font-family:inherit;flex:none;
 }
 .battle-scene.kt-wild .btn-back{
-  min-width:64px;padding:0 10px;border:3px solid #3b2416;
-  background:linear-gradient(180deg,#c49262,#8b5e3c);color:#fff8ee;font-size:16px;
+  min-width:84px;width:84px;padding:0 8px;border:3px solid #3b2416;
+  background:linear-gradient(180deg,#c49262,#8b5e3c);color:#fff8ee;font-size:18px;
 }
 .battle-scene.kt-wild .btn-x{
   min-width:44px;width:44px;padding:0;border:3px solid #6e2416;
@@ -1575,11 +1584,11 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 }
 .battle-scene.kt-wild .skill-grid{
   flex:none;height:232px;min-height:232px;display:grid;grid-template-columns:1fr 1fr;
-  grid-template-rows:repeat(3, 72px);gap:8px;align-content:start;
+  grid-template-rows:repeat(3, 72px);gap:8px 6px;align-content:start;
 }
 .battle-scene.kt-wild .skill-card{
   display:flex;flex-direction:column;justify-content:center;gap:2px;height:72px;min-height:72px;margin:0;
-  padding:3px 4px;border-radius:14px;border:2px solid #c4a06a;background:#fffaf3;
+  padding:6px 8px;border-radius:14px;border:2px solid #c4a06a;background:#fffaf3;
   color:#3a2616;text-align:left;cursor:pointer;font-family:inherit;
   box-sizing:border-box;min-width:0;overflow:hidden;
 }
@@ -1588,9 +1597,11 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 }
 .battle-scene.kt-wild .skill-card[aria-disabled="true"] .skill-icon{filter:grayscale(.75)}
 .battle-scene.kt-wild .skill-top{display:flex;align-items:center;gap:6px;min-height:28px}
-.battle-scene.kt-wild .skill-icon{flex:none;width:28px;font-size:24px;line-height:1;text-align:center}
+.battle-scene.kt-wild .skill-icon{
+  flex:none;width:28px;height:28px;font-size:28px;line-height:28px;text-align:center;
+}
 .battle-scene.kt-wild .skill-name{
-  flex:1 1 auto;min-width:0;font-size:20px;font-weight:800;line-height:1.1;color:#3a2616;
+  flex:1 1 auto;min-width:0;font-size:22px;font-weight:800;line-height:1.1;color:#3a2616;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .battle-scene.kt-wild .skill-card[aria-disabled="true"] .skill-name{color:#4a3828}
@@ -1602,7 +1613,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 .battle-scene.kt-wild .skill-card[aria-disabled="true"] .mp-pill{background:#9a4545;color:#fff7f6}
 .battle-scene.kt-wild .broke{font-size:12px;font-weight:800;line-height:1.1;color:#7a2f2f}
 .battle-scene.kt-wild .skill-desc{
-  font-size:13px;font-weight:700;line-height:1.15;color:#5c3d28;
+  min-width:0;font-size:15px;font-weight:700;line-height:1.15;letter-spacing:-0.14em;color:#5c3d28;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .battle-scene.kt-wild .skill-card[aria-disabled="true"] .skill-desc{color:#5e4936}
@@ -1618,13 +1629,14 @@ body.kt-pane-shop .kt-backpack-block{display:none}
   background:#e6ddd2;color:#4a3d32;border-color:#a89888;cursor:not-allowed;
 }
 .battle-scene.kt-wild .page-label{
-  min-width:52px;margin:0;text-align:center;font-size:16px;font-weight:800;color:#3a2616;white-space:nowrap;
+  min-width:64px;margin:0;text-align:center;font-size:20px;font-weight:800;color:#3a2616;white-space:nowrap;
 }
 .battle-scene.kt-wild .dots{display:flex;align-items:center}
 .battle-scene.kt-wild .dot{
   width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:0;border-radius:10px;
-  background:transparent;cursor:pointer;position:relative;
+  background:transparent;cursor:pointer;position:relative;flex:none;
 }
+.battle-scene.kt-wild .dots:has(.dot:nth-child(3)) .dot{width:26px;min-width:26px}
 .battle-scene.kt-wild .dot::before{
   content:"";position:absolute;left:50%;top:50%;width:12px;height:12px;border-radius:50%;
   background:#c4a06a;transform:translate(-50%,-50%);
