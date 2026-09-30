@@ -572,7 +572,7 @@ _SKILL_RENAMES = (
 _SKILL_PATCHES = {
     '蓄力': {'description': '下次攻擊 2 倍'},
     '盾擊': {
-        'description': '物理攻擊，怪物攻擊傷害減半，直到下一次被打中',
+        'description': '物理攻擊，下一次受到的傷害減半',
         'target': 'enemy',
         'base_value': 0,
         'per_level': 0,
@@ -605,7 +605,7 @@ NUTRITION_MEAL_MP_REGEN = 5
 
 # Inserted only when that name is absent. Building is looked up by name.
 _SKILL_INSERTS = (
-    ('盾擊', '🛡️', 4, '競技場', 4, 'enemy', '物理攻擊，怪物攻擊傷害減半，直到下一次被打中', 0, 0, 'str', 'utility'),
+    ('盾擊', '🛡️', 4, '競技場', 4, 'enemy', '物理攻擊，下一次受到的傷害減半', 0, 0, 'str', 'utility'),
     ('疾風斬', '🏃', 3, '探險公會', 4, 'enemy', '物理攻擊，施放時不受反擊', 0, 0, 'str', 'utility'),
     ('知識的力量', '📖', 2, '圖書館', 1, 'self', '魔法攻擊，之後 3 回合知識 +3×等級', 3, 0, 'none', 'buff'),
     ('鍛鍊的成果', '🏋️', 2, '健身室', 1, 'self', '物理攻擊，之後 3 回合臂力 +3×等級', 3, 0, 'none', 'buff'),
@@ -677,7 +677,7 @@ def seed_skill_defs():
         ('全體治療', '🌿', 14, 5, 5, 'all_allies', '物理攻擊，並全體回復 HP', 18, 5, 'int', 'heal'),
         # 競技場 (9)
         ('橫掃', '🗡️', 6, 9, 2, 'all_enemies', '全體物理攻擊', 15, 4, 'str', 'damage'),
-        ('盾擊', '🛡️', 4, 9, 4, 'enemy', '物理攻擊，怪物攻擊傷害減半，直到下一次被打中', 0, 0, 'str', 'utility'),
+        ('盾擊', '🛡️', 4, 9, 4, 'enemy', '物理攻擊，下一次受到的傷害減半', 0, 0, 'str', 'utility'),
         ('必殺', '💥', 10, 9, 5, 'enemy', '對低血量敵人特大傷害', 32, 8, 'str', 'damage'),
         # 圖書館 (1)
         ('火球', '🔥', 6, 1, 2, 'enemy', '魔法攻擊', 20, 5, 'int', 'damage'),
