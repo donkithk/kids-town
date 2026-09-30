@@ -1504,6 +1504,115 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 .battle-scene.kt-wild .result-overlay .r-item{
   background:#fff;color:#3a2616;border:1px solid rgba(58,38,22,0.15);
 }
+/* Battle skill menu. Sits above the command bar and the 88px footer. */
+.battle-scene.kt-wild .player-vitals{
+  position:absolute;z-index:4;left:20px;bottom:200px;width:300px;margin:0;
+  padding:10px 12px 11px;background:#f7edd8;border:2px solid #c4a574;border-radius:12px;
+  box-shadow:0 4px 0 rgba(92,61,40,.18);color:#3a2616;box-sizing:border-box;
+}
+.battle-scene.kt-wild .player-vitals .vital-row + .vital-row{margin-top:6px}
+.battle-scene.kt-wild .vital-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-height:20px}
+.battle-scene.kt-wild .vital-k,.battle-scene.kt-wild .vital-n{font-size:16px;font-weight:800}
+.battle-scene.kt-wild .vital-track{height:10px;margin-top:3px;background:#e7d3ae;border-radius:99px;overflow:hidden}
+.battle-scene.kt-wild .vital-track > span{display:block;height:100%;border-radius:inherit}
+.battle-scene.kt-wild .vital-track.hp > span{background:linear-gradient(90deg,#e85d4c,#f0a202)}
+.battle-scene.kt-wild .vital-track.mp > span{background:linear-gradient(90deg,#1d4f91,#3b82c4)}
+.battle-scene.kt-wild .command-bar{
+  display:flex;align-items:center;gap:12px;width:100%;height:100%;margin:0;padding:0;
+  background:transparent;border:0;box-sizing:border-box;
+}
+.battle-scene.kt-wild .command-bar .cmd{
+  flex:1 1 0;height:64px;min-height:64px;border-radius:16px 16px 12px 12px;
+  border:3px solid #3b2416;background:linear-gradient(180deg,#c49262,#8b5e3c 46%,#6e452b);
+  color:#fff8ee;font-size:26px;font-weight:800;letter-spacing:.04em;cursor:pointer;
+  font-family:inherit;text-shadow:0 1px 0 rgba(42,22,10,.45);
+  box-shadow:inset 0 2px 0 rgba(255,224,176,.55), inset 0 -3px 0 rgba(42,22,10,.35), 0 3px 0 #2a180e;
+}
+.battle-scene.kt-wild .command-bar .cmd-primary{
+  background:linear-gradient(180deg,#ffe9a0,#f0c14b 42%,#e6a317);color:#3b2a1a;
+  border-color:#6b3e12;text-shadow:none;
+  box-shadow:inset 0 2px 0 #fff6d2, inset 0 -3px 0 rgba(107,62,18,.28), 0 3px 0 #8a5a12;
+}
+.battle-scene.kt-wild .command-bar .cmd.is-open{box-shadow:inset 0 2px 0 rgba(255,224,176,.55), inset 0 -3px 0 rgba(42,22,10,.35), 0 3px 0 #2a180e, inset 0 -4px 0 #f0c14b}
+.battle-scene.kt-wild .skill-panel{
+  position:absolute;z-index:5;left:332px;right:280px;bottom:188px;height:400px;
+  display:flex;flex-direction:column;gap:6px;padding:12px 14px 8px;box-sizing:border-box;
+  border:8px solid #3b2416;border-radius:22px;color:#3b2a1a;background-color:#f4e2c4;
+  background-image:radial-gradient(circle at 12% 0, rgba(240,193,75,.32), transparent 34%),
+    repeating-linear-gradient(0deg, rgba(139,94,60,.055) 0 1px, transparent 1px 7px),
+    linear-gradient(180deg,#fffaf0,#f6e6c8);
+  box-shadow:inset 0 0 0 3px #e7c48a, inset 0 0 0 6px #6b4428, 0 10px 0 rgba(28,16,8,.28);
+}
+.battle-scene.kt-wild .skill-panel[hidden]{display:none !important}
+.battle-scene.kt-wild .skill-head{display:flex;align-items:center;gap:10px;min-height:48px;flex:none}
+.battle-scene.kt-wild .skill-head h2{margin:0;font-size:26px;font-weight:800;color:#3a2616;letter-spacing:.06em}
+.battle-scene.kt-wild .mp-now{
+  margin:0;padding:4px 12px;border-radius:999px;background:#e7f0fb;border:2px solid #1d4f91;
+  color:#1d4f91;font-size:16px;font-weight:800;
+}
+.battle-scene.kt-wild .skill-head-spacer{flex:1}
+.battle-scene.kt-wild .btn-back,.battle-scene.kt-wild .btn-x{
+  min-height:48px;height:48px;border-radius:12px;font-weight:800;cursor:pointer;font-family:inherit;
+}
+.battle-scene.kt-wild .btn-back{
+  min-width:84px;padding:0 14px;border:3px solid #3b2416;
+  background:linear-gradient(180deg,#c49262,#8b5e3c);color:#fff8ee;font-size:18px;
+}
+.battle-scene.kt-wild .btn-x{
+  min-width:48px;width:48px;padding:0;border:3px solid #6e2416;
+  background:linear-gradient(180deg,#c4543c,#6e2416);color:#fffaf6;font-size:22px;
+}
+.battle-scene.kt-wild .skill-grid{
+  flex:1 1 auto;min-height:0;display:grid;grid-template-columns:1fr 1fr;
+  grid-template-rows:repeat(3, minmax(72px, 1fr));gap:8px;align-content:stretch;
+}
+.battle-scene.kt-wild .skill-card{
+  display:flex;flex-direction:column;justify-content:center;gap:2px;min-height:72px;margin:0;
+  padding:6px 10px 6px 8px;border-radius:14px;border:2px solid #c4a06a;background:#fffaf3;
+  color:#3a2616;text-align:left;cursor:pointer;font-family:inherit;
+}
+.battle-scene.kt-wild .skill-card[aria-disabled="true"]{
+  background:#e3d9cc;border-color:#b3a394;color:#4a3828;cursor:not-allowed;
+}
+.battle-scene.kt-wild .skill-top{display:flex;align-items:center;gap:8px;min-height:36px}
+.battle-scene.kt-wild .skill-icon{flex:none;width:36px;font-size:28px;line-height:1;text-align:center}
+.battle-scene.kt-wild .skill-name{flex:1 1 auto;font-size:22px;font-weight:800;line-height:1.15;color:#3a2616}
+.battle-scene.kt-wild .skill-card[aria-disabled="true"] .skill-name{color:#4a3828}
+.battle-scene.kt-wild .skill-cost{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.battle-scene.kt-wild .mp-pill{
+  display:inline-flex;align-items:center;justify-content:center;min-height:24px;padding:1px 8px;
+  border-radius:999px;background:#1d4f91;color:#f4f8ff;font-size:14px;font-weight:800;
+}
+.battle-scene.kt-wild .skill-card[aria-disabled="true"] .mp-pill{background:#9a4545;color:#fff7f6}
+.battle-scene.kt-wild .broke{font-size:12px;font-weight:800;line-height:1.1;color:#7a2f2f}
+.battle-scene.kt-wild .skill-desc{font-size:15px;font-weight:700;line-height:1.25;color:#5c3d28}
+.battle-scene.kt-wild .skill-card[aria-disabled="true"] .skill-desc{color:#5e4936}
+.battle-scene.kt-wild .skill-pager{
+  flex:none;display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;
+}
+.battle-scene.kt-wild .pager-btn{
+  width:48px;height:48px;min-width:48px;min-height:48px;border-radius:12px;border:3px solid #3b2416;
+  background:linear-gradient(180deg,#ffe9a0,#e6a317);color:#3b2a1a;font-size:22px;font-weight:800;
+  cursor:pointer;font-family:inherit;
+}
+.battle-scene.kt-wild .pager-btn[aria-disabled="true"]{
+  background:#e6ddd2;color:#4a3d32;border-color:#a89888;cursor:not-allowed;
+}
+.battle-scene.kt-wild .page-label{min-width:72px;margin:0;text-align:center;font-size:20px;font-weight:800;color:#3a2616}
+.battle-scene.kt-wild .dots{display:flex;align-items:center}
+.battle-scene.kt-wild .dot{
+  width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:0;border-radius:10px;
+  background:transparent;cursor:pointer;position:relative;
+}
+.battle-scene.kt-wild .dot::before{
+  content:"";position:absolute;left:50%;top:50%;width:12px;height:12px;border-radius:50%;
+  background:#c4a06a;transform:translate(-50%,-50%);
+}
+.battle-scene.kt-wild .dot[aria-current="page"]::before{width:16px;height:16px;background:#d4a017;box-shadow:0 0 0 3px #6b4428}
+.battle-scene.kt-wild .skill-name-index{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
 
 </style>
 <link rel="stylesheet" href="/kids/town-four-scene.css">
@@ -1751,7 +1860,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 
 <!-- ═══════════════ MAIN APP ═══════════ -->
 <div id="app" style="display:none">
-  <div class="gsw stage">
+  <div class="gsw stage" id="stage">
     <div class="gs">
       <div class="gh">
         <div class="av" id="hudAv">🐱</div>
@@ -5032,17 +5141,7 @@ function renderBattleMode(exp) {
   else if (result === 'lost') toastMsg = '戰敗...';
   else if (result === 'fled') toastMsg = '逃走了！';
 
-  const skillHotspots = [0, 1, 2].map((i) => {
-    const sk = skills[i];
-    if (!sk) return `<button class="kt-skill" type="button" disabled aria-label="未解鎖技能">未解鎖</button>`;
-    const enough = pMp >= sk.mp_cost;
-    return `<button class="kt-skill" type="button" ${enough && result==='fighting' ? '' : 'disabled '}aria-label="${escapeHtml(sk.name)}" onclick="selectSkill('${sk.id}')">${escapeHtml(sk.name)}</button>`;
-  }).join('');
-
-  const cmdHtml = result === 'fighting' ? `<div class="cmd-menu">
-    <button type="button" class="cmd-btn${window._battleTargetMode==='attack'?' active':''}" onclick="startTarget('attack')" aria-label="攻擊${escapeHtml(primary.name||'')}">⚔️ 攻擊</button>
-    <button type="button" class="cmd-btn" onclick="battleAction('flee')" aria-label="逃走">🏃 逃走</button>
-  </div>` : '';
+  const skillMenu = renderSkillMenu(skills, pMp, bd.player_max_mp || pMp, result);
 
   let resultHtml = '';
   if (result !== 'fighting') {
@@ -5093,18 +5192,149 @@ function renderBattleMode(exp) {
     <div class="kt-field-stage" id="mainContent">
       <div class="kt-hero-actor">
         <img class="kt-sprite" src="/kids/mocks/ui-direction/kit/sprites/sprite-hero.png?v=2" alt="">
-        <div class="kt-actor-hp">HP ${pHp}/${pMax} · MP ${pMp}
-          <div class="kt-bar"><span style="width:${playerPct}%"></span></div>
-        </div>
       </div>
       <div class="monster-zone"><div class="monster-row" id="monsterRow">${monstersHtml}</div></div>
     </div>
-    <div class="kt-command-bar">
-      ${cmdHtml}
-      ${skillHotspots}
-    </div>
+    <section class="player-vitals" id="playerVitals" aria-label="玩家 HP 與 MP">
+      <div class="vital-row">
+        <div class="vital-head">
+          <span class="vital-k">HP</span>
+          <span class="vital-n" id="hpNums">${pHp} / ${pMax}</span>
+        </div>
+        <div class="vital-track hp" role="meter" aria-label="HP" aria-valuemin="0" aria-valuemax="${pMax}" aria-valuenow="${pHp}">
+          <span style="width:${playerPct}%"></span>
+        </div>
+      </div>
+      <div class="vital-row">
+        <div class="vital-head">
+          <span class="vital-k">MP</span>
+          <span class="vital-n" id="mpNums">${pMp} / ${bd.player_max_mp || pMp}</span>
+        </div>
+        <div class="vital-track mp" role="meter" aria-label="MP" aria-valuemin="0" aria-valuemax="${bd.player_max_mp || pMp}" aria-valuenow="${pMp}">
+          <span style="width:${Math.max(0, Math.min(100, Math.round(pMp / ((bd.player_max_mp || pMp) || 1) * 100)))}%"></span>
+        </div>
+      </div>
+    </section>
+    ${skillMenu}
     ${resultHtml}
   </div>`;
+}
+
+function skillMenuBag() {
+  if (!window._skillMenu) window._skillMenu = { open: false, page: 0 };
+  return window._skillMenu;
+}
+
+function skillPageCount(skills) {
+  return Math.max(1, Math.ceil((skills || []).length / 6));
+}
+
+function renderSkillMenu(skills, pMp, maxMp, result) {
+  if (result !== 'fighting') return '';
+  const bag = skillMenuBag();
+  const pages = skillPageCount(skills);
+  if (bag.page > pages - 1) bag.page = pages - 1;
+  if (bag.page < 0) bag.page = 0;
+  const open = !!bag.open;
+  const start = bag.page * 6;
+  const slice = (skills || []).slice(start, start + 6);
+  const cards = slice.map((sk) => {
+    const cost = Number(sk.mp_cost) || 0;
+    const broke = pMp < cost;
+    return `<button type="button" class="skill-card" ${broke ? 'aria-disabled="true" disabled' : ''} onclick="castSkillFromMenu(${sk.id})">
+      <span class="skill-top">
+        <span class="skill-icon" aria-hidden="true">${sk.icon || ''}</span>
+        <span class="skill-name">${escapeHtml(sk.name)}</span>
+        <span class="skill-cost">
+          <span class="mp-pill">MP ${cost}</span>
+          ${broke ? '<span class="broke">MP 不夠</span>' : ''}
+        </span>
+      </span>
+      <span class="skill-desc">${escapeHtml(sk.description || '')}</span>
+    </button>`;
+  }).join('');
+  const names = (skills || []).map((sk) => `<span class="skill-name">${escapeHtml(sk.name)}</span>`).join('');
+  const dots = Array.from({ length: pages }, (_, i) =>
+    `<button type="button" class="dot" aria-label="第 ${i + 1} 頁"${i === bag.page ? ' aria-current="page"' : ''} onclick="skillMenuGo(${i})"></button>`
+  ).join('');
+  const prevOff = bag.page <= 0 ? ' aria-disabled="true"' : '';
+  const nextOff = bag.page >= pages - 1 ? ' aria-disabled="true"' : '';
+  return `<section class="skill-panel" id="skillPanel" ${open ? '' : 'hidden'} aria-labelledby="skillTitle">
+    <div class="skill-head">
+      <h2 id="skillTitle">技能</h2>
+      <p class="mp-now" id="mpNow">MP ${pMp} / ${maxMp}</p>
+      <span class="skill-head-spacer"></span>
+      <button type="button" class="btn-back" id="btnBack" onclick="closeSkillMenu()">返回</button>
+      <button type="button" class="btn-x" id="btnClose" aria-label="關閉技能" onclick="closeSkillMenu()">✕</button>
+    </div>
+    <div class="skill-grid" id="skillGrid">${cards}</div>
+    <div class="skill-pager">
+      <button type="button" class="pager-btn" id="btnPrev" aria-label="上一頁"${prevOff} onclick="skillMenuStep(-1)">◀</button>
+      <div class="dots" id="pageDots">${dots}</div>
+      <p class="page-label" id="pageLabel">${bag.page + 1} / ${pages}</p>
+      <button type="button" class="pager-btn" id="btnNext" aria-label="下一頁"${nextOff} onclick="skillMenuStep(1)">▶</button>
+    </div>
+    <div class="skill-name-index" aria-hidden="true">${names}</div>
+  </section>
+  <div class="kt-command-bar">
+    <div class="command-bar">
+      <button type="button" class="cmd cmd-primary" id="btnAttack" onclick="startTarget('attack')">攻擊</button>
+      <button type="button" class="cmd${open ? ' is-open' : ''}" id="btnSkill" aria-expanded="${open ? 'true' : 'false'}" aria-controls="skillPanel" onclick="toggleSkillMenu()">技能</button>
+      <button type="button" class="cmd" id="btnFlee" onclick="battleAction('flee')">逃走</button>
+    </div>
+  </div>`;
+}
+
+function toggleSkillMenu() {
+  const bag = skillMenuBag();
+  bag.open = !bag.open;
+  renderExpedition();
+}
+
+function closeSkillMenu() {
+  skillMenuBag().open = false;
+  renderExpedition();
+}
+
+function skillMenuStep(delta) {
+  const bag = skillMenuBag();
+  const bd = getBattleData() || {};
+  const pages = skillPageCount(bd.skills || []);
+  const next = bag.page + delta;
+  if (next < 0 || next > pages - 1) return;
+  bag.page = next;
+  bag.open = true;
+  renderExpedition();
+}
+
+function skillMenuGo(index) {
+  const bag = skillMenuBag();
+  bag.page = index;
+  bag.open = true;
+  renderExpedition();
+}
+
+function castSkillFromMenu(skillId) {
+  const bd = getBattleData();
+  if (!bd) return;
+  const sk = (bd.skills || []).find((s) => s.id == skillId);
+  if (!sk) return;
+  if ((bd.player_mp || 0) < (Number(sk.mp_cost) || 0)) return;
+  skillMenuBag().open = false;
+  if (sk.target === 'self' || sk.target === 'ally' || sk.target === 'all_allies') {
+    battleAction('skill', sk.id, 0);
+    return;
+  }
+  window._pendingSkill = sk;
+  window._battleTargetMode = null;
+  renderExpedition();
+}
+
+if (!window._skillMenuKeys) {
+  window._skillMenuKeys = true;
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && window._skillMenu && window._skillMenu.open) closeSkillMenu();
+  });
 }
 
 async function battleAction(action, skillId, targetIdx) {
@@ -5112,6 +5342,7 @@ async function battleAction(action, skillId, targetIdx) {
   if (!kidId) return;
   window._battleTargetMode = null;
   window._pendingSkill = null;
+  if (window._skillMenu) window._skillMenu.open = false;
   try {
     const body = {action};
     if (skillId) body.skill_id = skillId;
@@ -5278,6 +5509,7 @@ function monstersLoop(data) {
 
 // ── Targeting mode ──
 function startTarget(mode) {
+  if (window._skillMenu) window._skillMenu.open = false;
   if (window._battleTargetMode === mode) {
     window._battleTargetMode = null;
     renderExpedition();

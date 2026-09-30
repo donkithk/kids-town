@@ -531,21 +531,7 @@ def seed_building_defs():
     if db.execute("SELECT COUNT(*) FROM building_defs").fetchone()[0] > 0:
         db.close()
         return
-    defs = [
-        ("📚", "圖書館", 100, '{"wood":5}', "知識被動", "", "[]", 5, None),
-        ("🏋️", "健身室", 200, '{"wood":10,"brick":5}', "連續保護", "streak_protect", "[1,1,1,1,1]", 5, None),
-        ("🌾", "農場", 300, '{"wood":15,"brick":10}', "每日 +5🪙", "daily_gold", "[5,10,15,25,40]", 5, None),
-        ("🏪", "商店", 500, '{"wood":20,"brick":15,"gear":5}', "獎勵 -10%", "discount", "[0.9,0.85,0.8,0.75,0.7]", 5, None),
-        ("🏥", "醫院", 400, '{"wood":15,"brick":20}', "探險回復 x2", "expedition_recovery", "[2,3,4,5,6]", 5, None),
-        ("🗺️", "探險公會", GUILD_COST_GOLD, DEFAULT_GUILD_MATERIALS, "解鎖探險", "unlock_explore", "[1,1,1,1,1]", 5, None),
-        ("🔨", "工坊", 350, '{"wood":20,"gear":5}', "建築速度 x2", "build_speed", "[2,3,4,5,6]", 5, None),
-        ("🗼", "燈塔", 800, '{"wood":30,"brick":25,"gear":15,"gem":3}', "探險範圍 +1", "explore_range", "[1,2,2,3,3]", 5, "r3"),
-        ("⚔️", "競技場", 1000, '{"wood":40,"brick":30,"gear":20,"gem":5}', "探險金幣 x2", "expedition_gold", "[2,3,4,5,6]", 5, "r4"),
-        ("🔭", "天文台", 1500, '{"wood":50,"brick":40,"gear":25,"gem":10,"glass":3}', "新區域發現率", "discovery_rate", "[1.5,2,2.5,3,4]", 5, "r5"),
-        # Skill building only. Not a ledger passive.
-        ("🏦", "銀行", 600, '{"wood":10,"brick":5}', "技能：金錢砸", "skill", "[0]", 5, None),
-    ]
-    for d in defs:
+    for d in _building_seed_rows():
         db.execute(
             "INSERT INTO building_defs (icon, name, cost_gold, materials, effect, buff_type, buff_vals, max_level, unlock_region) VALUES (?,?,?,?,?,?,?,?,?)",
             (d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8])
@@ -594,7 +580,7 @@ _SKILL_PATCHES = {
         'effect_type': 'utility',
     },
     '疾風斬': {
-        'description': '物理攻擊，施放嗰下唔受反擊',
+        'description': '物理攻擊，施放時不受反擊',
         'target': 'enemy',
         'base_value': 0,
         'per_level': 0,
@@ -609,20 +595,24 @@ _SKILL_PATCHES = {
     '強化': {'description': '物理攻擊，防禦提升 3 回合'},
     '知識的力量': {'description': '魔法攻擊，之後 3 回合知識 +3×等級'},
     '鍛鍊的成果': {'description': '物理攻擊，之後 3 回合臂力 +3×等級'},
-    '營養餐': {'description': '物理攻擊，之後 3 回合持續回復 HP'},
+    '營養餐': {'description': '物理攻擊，回復 5 MP，之後 3 回合持續回復 HP'},
     '金幣袋': {'description': '物理攻擊，戰鬥勝利額外獲得 20 金幣'},
-    '強光': {'description': '魔法攻擊，之後 2 次怪物攻擊打唔中'},
+    # 打不中 keeps TC-API-SKILL-DESC-05; 打唔中 is colloquial and fails the formal cases.
+    '強光': {'description': '魔法攻擊，之後怪物的 2 次攻擊必定落空（打不中）'},
 }
+
+# Restored once, after the skill's MP cost is paid, and never above max MP.
+NUTRITION_MEAL_MP_REGEN = 5
 
 # Inserted only when that name is absent. Building is looked up by name.
 _SKILL_INSERTS = (
     ('盾擊', '🛡️', 4, '競技場', 4, 'enemy', '物理攻擊，怪物攻擊傷害減半，直到下一次被打中', 0, 0, 'str', 'utility'),
-    ('疾風斬', '🏃', 3, '探險公會', 4, 'enemy', '物理攻擊，施放嗰下唔受反擊', 0, 0, 'str', 'utility'),
+    ('疾風斬', '🏃', 3, '探險公會', 4, 'enemy', '物理攻擊，施放時不受反擊', 0, 0, 'str', 'utility'),
     ('知識的力量', '📖', 2, '圖書館', 1, 'self', '魔法攻擊，之後 3 回合知識 +3×等級', 3, 0, 'none', 'buff'),
     ('鍛鍊的成果', '🏋️', 2, '健身室', 1, 'self', '物理攻擊，之後 3 回合臂力 +3×等級', 3, 0, 'none', 'buff'),
-    ('營養餐', '🍱', 4, '農場', 1, 'self', '物理攻擊，之後 3 回合持續回復 HP', 0, 0, 'none', 'heal'),
+    ('營養餐', '🍱', 4, '農場', 1, 'self', '物理攻擊，回復 5 MP，之後 3 回合持續回復 HP', 0, 0, 'none', 'heal'),
     ('金幣袋', '💰', 2, '商店', 1, 'self', '物理攻擊，戰鬥勝利額外獲得 20 金幣', 0, 0, 'none', 'utility'),
-    ('強光', '💡', 6, '燈塔', 1, 'enemy', '魔法攻擊，之後 2 次怪物攻擊打唔中', 20, 5, 'int', 'damage'),
+    ('強光', '💡', 6, '燈塔', 1, 'enemy', '魔法攻擊，之後怪物的 2 次攻擊必定落空（打不中）', 20, 5, 'int', 'damage'),
     ('流星雨', '☄️', 8, '天文台', 1, 'all_enemies', '魔法攻擊全體敵人', 20, 5, 'int', 'damage'),
     ('金錢砸', '🪙', 0, '銀行', 1, 'enemy', '消耗 10 金幣，造成 3 倍普攻傷害', 0, 0, 'none', 'utility'),
 )
@@ -659,14 +649,12 @@ def _sync_skill_catalog(db):
     for name, icon, mp, bldg_name, level_required, target, description, base, per, attr, effect in _SKILL_INSERTS:
         if db.execute("SELECT id FROM skill_defs WHERE name=?", (name,)).fetchone():
             continue
-        bldg = db.execute(
-            "SELECT id FROM building_defs WHERE name=?", (bldg_name,)
-        ).fetchone()
-        if not bldg:
+        bldg_id = _ensure_building_def(db, bldg_name)
+        if bldg_id is None:
             continue
         db.execute(
             "INSERT INTO skill_defs (name, icon, mp_cost, bldg_def_id, level_required, target, description, base_value, per_level, attr_scale, effect_type) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (name, icon, mp, bldg[0], level_required, target, description, base, per, attr, effect),
+            (name, icon, mp, bldg_id, level_required, target, description, base, per, attr, effect),
         )
 
 
@@ -697,7 +685,7 @@ def seed_skill_defs():
         ('冰凍', '❄️', 8, 1, 4, 'enemy', '魔法攻擊，之後 2 回合怪物攻擊力下降', 28, 7, 'int', 'damage'),
         # 探險公會 (6)
         ('偵察', '👁️', 2, 6, 2, 'enemy', '查看怪物弱點', 0, 0, 'none', 'utility'),
-        ('疾風斬', '🏃', 3, 6, 4, 'enemy', '物理攻擊，施放嗰下唔受反擊', 0, 0, 'str', 'utility'),
+        ('疾風斬', '🏃', 3, 6, 4, 'enemy', '物理攻擊，施放時不受反擊', 0, 0, 'str', 'utility'),
         # 工坊 (7)
         ('修復', '🔧', 4, 7, 2, 'ally', '物理攻擊，並回復 MP', 10, 3, 'int', 'heal'),
         ('強化', '🛡️', 5, 7, 4, 'ally', '物理攻擊，防禦提升 3 回合', 3, 1, 'none', 'buff'),
@@ -712,9 +700,9 @@ def seed_skill_defs():
     extra = [
         ('知識的力量', '📖', 2, '圖書館', 1, 'self', '魔法攻擊，之後 3 回合知識 +3×等級', 3, 0, 'none', 'buff'),
         ('鍛鍊的成果', '🏋️', 2, '健身室', 1, 'self', '物理攻擊，之後 3 回合臂力 +3×等級', 3, 0, 'none', 'buff'),
-        ('營養餐', '🍱', 4, '農場', 1, 'self', '物理攻擊，之後 3 回合持續回復 HP', 0, 0, 'none', 'heal'),
+        ('營養餐', '🍱', 4, '農場', 1, 'self', '物理攻擊，回復 5 MP，之後 3 回合持續回復 HP', 0, 0, 'none', 'heal'),
         ('金幣袋', '💰', 2, '商店', 1, 'self', '物理攻擊，戰鬥勝利額外獲得 20 金幣', 0, 0, 'none', 'utility'),
-        ('強光', '💡', 6, '燈塔', 1, 'enemy', '魔法攻擊，之後 2 次怪物攻擊打唔中', 20, 5, 'int', 'damage'),
+        ('強光', '💡', 6, '燈塔', 1, 'enemy', '魔法攻擊，之後怪物的 2 次攻擊必定落空（打不中）', 20, 5, 'int', 'damage'),
         ('流星雨', '☄️', 8, '天文台', 1, 'all_enemies', '魔法攻擊全體敵人', 20, 5, 'int', 'damage'),
         ('金錢砸', '🪙', 0, '銀行', 1, 'enemy', '消耗 10 金幣，造成 3 倍普攻傷害', 0, 0, 'none', 'utility'),
     ]
@@ -1454,6 +1442,43 @@ HK_TZ = timezone(timedelta(hours=8))
 # GAMEPLAY_REDESIGN §6.6 / §7 / §9 Q4 — 入局包 (onboarding pack)
 GUILD_COST_GOLD = 150
 DEFAULT_GUILD_MATERIALS = '{"wood":10,"brick":5}'
+
+
+def _building_seed_rows():
+    """Canonical building_defs rows. Insert order is the fresh-database id order."""
+    return [
+        ("📚", "圖書館", 100, '{"wood":5}', "知識被動", "", "[]", 5, None),
+        ("🏋️", "健身室", 200, '{"wood":10,"brick":5}', "連續保護", "streak_protect", "[1,1,1,1,1]", 5, None),
+        ("🌾", "農場", 300, '{"wood":15,"brick":10}', "每日 +5🪙", "daily_gold", "[5,10,15,25,40]", 5, None),
+        ("🏪", "商店", 500, '{"wood":20,"brick":15,"gear":5}', "獎勵 -10%", "discount", "[0.9,0.85,0.8,0.75,0.7]", 5, None),
+        ("🏥", "醫院", 400, '{"wood":15,"brick":20}', "探險回復 x2", "expedition_recovery", "[2,3,4,5,6]", 5, None),
+        ("🗺️", "探險公會", GUILD_COST_GOLD, DEFAULT_GUILD_MATERIALS, "解鎖探險", "unlock_explore", "[1,1,1,1,1]", 5, None),
+        ("🔨", "工坊", 350, '{"wood":20,"gear":5}', "建築速度 x2", "build_speed", "[2,3,4,5,6]", 5, None),
+        ("🗼", "燈塔", 800, '{"wood":30,"brick":25,"gear":15,"gem":3}', "探險範圍 +1", "explore_range", "[1,2,2,3,3]", 5, "r3"),
+        ("⚔️", "競技場", 1000, '{"wood":40,"brick":30,"gear":20,"gem":5}', "探險金幣 x2", "expedition_gold", "[2,3,4,5,6]", 5, "r4"),
+        ("🔭", "天文台", 1500, '{"wood":50,"brick":40,"gear":25,"gem":10,"glass":3}', "新區域發現率", "discovery_rate", "[1.5,2,2.5,3,4]", 5, "r5"),
+        # Skill building only. Not a ledger passive.
+        ("🏦", "銀行", 600, '{"wood":10,"brick":5}', "技能：金錢砸", "skill", "[0]", 5, None),
+    ]
+
+
+def _ensure_building_def(db, name):
+    """Return building_defs.id, inserting the seed row when an old catalog lacks it.
+
+    Does not place a building for any kid. Learning still requires a placed row.
+    """
+    row = db.execute("SELECT id FROM building_defs WHERE name=?", (name,)).fetchone()
+    if row:
+        return row[0]
+    spec = next((item for item in _building_seed_rows() if item[1] == name), None)
+    if spec is None:
+        return None
+    db.execute(
+        "INSERT INTO building_defs (icon, name, cost_gold, materials, effect, buff_type, buff_vals, max_level, unlock_region) VALUES (?,?,?,?,?,?,?,?,?)",
+        spec,
+    )
+    created = db.execute("SELECT id FROM building_defs WHERE name=?", (name,)).fetchone()
+    return created[0] if created else None
 STARTER_POINTS = 120
 STARTER_MATERIALS = {'wood': 8, 'brick': 5}
 # Preview demo only. Other kids still get the 120-gold starter pack.
@@ -4714,6 +4739,9 @@ def _apply_named_skill(skill, bd, target_monster, bldg_level, base, per_lv, attr
         dmg = _hurt(target_monster, _physical_hit(player_atk, target_monster.get('def')))
         heal = _meal_heal(bd.get('player_max_hp') or 0, bldg_level)
         _queue_turn_buff(bd, 'meal', 3, heal=heal)
+        # Cost is already paid. Restore a flat amount once, capped at max MP.
+        cap = int(bd.get('player_max_mp') or 0)
+        bd['player_mp'] = min(cap, int(bd.get('player_mp') or 0) + NUTRITION_MEAL_MP_REGEN)
         log.append(f'{icon} 營養餐！造成 {dmg} 點傷害，之後 3 回合各回復 {heal} HP')
         return True
 
