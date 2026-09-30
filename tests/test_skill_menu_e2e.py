@@ -865,3 +865,193 @@ def test_back_close_and_escape_dismiss_without_casting(page, base_url, menu_db, 
         _dismiss("close")
         _dismiss("escape")
     _fail("TC-FE-SKILLMENU-CLOSE", problems)
+
+
+def _post_region_battle(page, kid_id):
+    """One real region-1 battle-start. Count comes from random.randint(1, 3)."""
+    started = page.evaluate(
+        """async (kidId) => {
+          const r = await fetch(`/api/kids/${kidId}/expedition/battle-start`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
+            body: JSON.stringify({region_id: 1})
+          });
+          const data = await r.json();
+          const monsters = data.monsters || [];
+          return {
+            status: r.status,
+            error: data.error || '',
+            names: monsters.map((monster) => monster.name || '')
+          };
+        }""",
+        kid_id,
+    )
+    assert started["status"] == 201, started
+    return started
+
+
+def _show_current_battle(page):
+    page.evaluate("async () => { await loadTown(); st('expedition'); }")
+    page.locator(".battle-scene .m-name").first.wait_for(state="visible", timeout=8000)
+
+
+def _start_battle_with_enemy_count(page, kid_id, enemy_count):
+    """Restart region 1 until the live encounter has this many 野狼.
+
+    battle_start rolls random.randint(1, 3) for a non-preview kid. A new
+    start abandons the previous running battle, which is the game's own path.
+    """
+    last = None
+    for _ in range(40):
+        last = _post_region_battle(page, kid_id)
+        if len(last["names"]) == enemy_count and all(name == "野狼" for name in last["names"]):
+            _show_current_battle(page)
+            return last
+    raise AssertionError(
+        f"region 1 did not roll {enemy_count} 野狼 in 40 battle-starts; last={last}"
+    )
+
+
+_ENEMY_PLATE_JS = """
+() => {
+  const box = (el) => {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return {
+      hidden: cs.display === 'none' || cs.visibility === 'hidden' || el.hasAttribute('hidden'),
+      display: cs.display,
+      visibility: cs.visibility,
+      w: r.width, h: r.height,
+      left: r.left, top: r.top, right: r.right, bottom: r.bottom
+    };
+  };
+  const cards = [...document.querySelectorAll('.battle-scene .monster-card')];
+  return {
+    count: cards.length,
+    enemies: cards.map((card) => ({
+      nameText: ((card.querySelector('.m-name') || {}).textContent || '').trim(),
+      name: box(card.querySelector('.m-name')),
+      hpbar: box(card.querySelector('.m-hp-bar')),
+      hpnum: box(card.querySelector('.m-hp-text'))
+    }))
+  };
+}
+"""
+
+_ENEMY_PARTS = (
+    ("name", ".m-name", "name plate"),
+    ("hpbar", ".m-hp-bar", "HP bar"),
+    ("hpnum", ".m-hp-text", "HP number"),
+)
+
+
+def _intersection_area(a, b):
+    if not a or not b:
+        return None
+    width = min(a["right"], b["right"]) - max(a["left"], b["left"])
+    height = min(a["bottom"], b["bottom"]) - max(a["top"], b["top"])
+    if width <= 0 or height <= 0:
+        return 0.0
+    return width * height
+
+
+def _plate_visible(box):
+    return bool(box) and not box["hidden"] and box["w"] > 0 and box["h"] > 0
+
+
+@pytest.mark.case_id("TC-FE-SKILLMENU-ENEMY-VISIBLE")
+@pytest.mark.parametrize("enemy_count", [3, 1], ids=["3-enemies", "1-enemy"])
+def test_skill_menu_leaves_enemy_name_and_hp_visible(
+    page, base_url, menu_db, menu_ids, enemy_count
+):
+    """Open skill menu must not cover any enemy name plate, HP bar, or HP number.
+
+    Sprites may sit under the panel. Viewport is 1280×720. Region 1 lines up
+    1–3 野狼 the same way battle_start does.
+    """
+    case_id = "TC-FE-SKILLMENU-ENEMY-VISIBLE"
+    _login(page, base_url, MENU_KID6)
+    started = _start_battle_with_enemy_count(page, menu_ids[MENU_KID6], enemy_count)
+    problems = []
+    if not _open_skill_menu(page):
+        problems.append(
+            f"no #btnSkill, so enemy plates cannot be checked against #skillPanel; "
+            f"bar is {_bar_labels(page)}; rolled {started['names']}"
+        )
+        _fail(f"{case_id} [{enemy_count}]", problems)
+        return
+    panel_loc = page.locator("#skillPanel")
+    try:
+        panel_loc.wait_for(state="visible", timeout=3000)
+    except Exception:
+        problems.append(f"#skillPanel did not become visible; rolled {started['names']}")
+        _fail(f"{case_id} [{enemy_count}]", problems)
+        return
+
+    plates = page.evaluate(_ENEMY_PLATE_JS)
+    layout = page.evaluate(_LAYOUT_JS)
+    panel = layout["panel"]
+    stage = layout["stage"]
+    footer = layout["footer"]
+    bar = layout["bar"]
+    if plates["count"] != enemy_count:
+        problems.append(
+            f"battle shows {plates['count']} .monster-card, want {enemy_count}; rolled {started['names']}"
+        )
+    if not panel or panel["hidden"]:
+        problems.append("#skillPanel is not visible")
+    else:
+        if not _inside(panel, stage):
+            problems.append(f"#skillPanel is outside the 1280×720 stage: panel {panel} stage {stage}")
+        if layout["panelClipped"]:
+            problems.append("#skillPanel is clipped by overflow")
+        if footer and panel["bottom"] > footer["top"] + 1:
+            problems.append(
+                f"menu overlaps the bottom tab bar: panel.bottom {panel['bottom']:.1f} "
+                f"> #ktFooter.top {footer['top']:.1f}"
+            )
+        if bar and panel["bottom"] > bar["top"] + 1:
+            problems.append(
+                f"menu overlaps the command bar: panel.bottom {panel['bottom']:.1f} "
+                f"> bar.top {bar['top']:.1f}"
+            )
+
+    ranked = sorted(
+        enumerate(plates["enemies"]),
+        key=lambda item: (item[1]["name"] or {}).get("left", item[0]),
+    )
+    side_names = {0: "left", 1: "middle", 2: "right"} if enemy_count == 3 else {0: "only"}
+    plate_tops = []
+    for side, (index, enemy) in enumerate(ranked):
+        label = side_names.get(side, f"slot{side}")
+        title = enemy["nameText"] or f"enemy {index}"
+        for key, selector, what in _ENEMY_PARTS:
+            box = enemy[key]
+            where = f"{label} enemy {index} ({title}) {what} {selector}"
+            if not _plate_visible(box):
+                problems.append(f"{where} is not visible: {box}")
+                continue
+            if key in ("name", "hpbar"):
+                plate_tops.append(box["top"])
+            if panel and not panel["hidden"]:
+                area = _intersection_area(panel, box)
+                if area is None or area > 0:
+                    problems.append(
+                        f"{where} overlaps #skillPanel by {area:.1f} px² "
+                        f"(plate top {box['top']:.1f} bottom {box['bottom']:.1f} "
+                        f"left {box['left']:.1f} right {box['right']:.1f}; "
+                        f"panel top {panel['top']:.1f} bottom {panel['bottom']:.1f})"
+                    )
+    if panel and not panel["hidden"] and plate_tops:
+        topmost = min(plate_tops)
+        gap = topmost - panel["bottom"]
+        if gap < 8:
+            problems.append(
+                f"#skillPanel bottom {panel['bottom']:.1f} is only {gap:.1f}px above "
+                f"the topmost enemy name plate/HP bar at {topmost:.1f}; want >= 8px"
+            )
+    elif panel and not panel["hidden"]:
+        problems.append("no visible enemy name plate or HP bar to measure the 8px clearance")
+    _fail(f"{case_id} [{enemy_count}]", problems)

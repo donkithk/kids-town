@@ -81,6 +81,26 @@ MP 夠嘅卡：一撳就施放（自身目標技能唔使再揀怪），MP 減�
 
 `#playerVitals` 裡面有 `#hpNums` 同 `#mpNums`。選單打開時，呢三個 bounding box 要完全喺舞台內、唔好被 overflow 裁、唔好疊 `#ktFooter`。
 
+### 敵人名牌唔好被選單遮住
+
+區 1 真正開戰跟 `battle_start`：非 preview 小朋友 `random.randint(1, 3)` 隻同一區怪物。區 1 係野狼。測試用同一個 API 重開，直到隻數係 3；另一條直到係 1。唔好自己砌一排假卡。
+
+名牌、血條、血量數字用而家 `index.html` 已有嘅節點。main 同 #59 `f37f6fc` 都有，唔使加新 class：
+
+| 節點 | 意思 |
+|------|------|
+| `.monster-card .m-name` | 敵人名字 |
+| `.monster-card .m-hp-bar` | HP 條 |
+| `.monster-card .m-hp-text` | HP 數字 |
+
+`.m-img` 同入面嘅精靈圖可以俾選單遮住。測試唔量精靈。
+
+1280×720。打開 `#btnSkill` → `#skillPanel` 之後，每一隻敵人：
+
+- `.m-name`、`.m-hp-bar`、`.m-hp-text` 都要看得見（唔好 `display:none`、`visibility:hidden`，亦唔好 `hidden`），而且同 `#skillPanel` 的 bounding box 交集係 0 px²。
+- `#skillPanel` 底邊要高過最高嗰塊名牌或血條至少 8px。
+- 選單仍然要完全喺 1280×720 舞台入面，唔好被 overflow 裁，底邊唔好低過 `.command-bar` 同 `#ktFooter`（同 `TC-FE-SKILLMENU-LAYOUT`）。
+
 ## 書面語
 
 常數 `tests/skill_menu_spec.py` 的 `COLLOQUIAL_CHARS`：
@@ -106,7 +126,7 @@ MP 夠嘅卡：一撳就施放（自身目標技能唔使再揀怪），MP 減�
 - 施放後 MP = `min(max_mp, mp_before - cost + NUTRITION_MEAL_MP_REGEN)`。
 - 若 `mp_before - cost + 5 > max_mp`，MP 正好等於 `max_mp`。
 
-說明（種子同舊庫遷移之後，以及上面兩個 API）要含「回復」同「MP」，並且書面語。
+說明（種子同舊庫遷移之後，以及上面兩個 API）要含「回復」同「MP」，並且書面語。唔使含數字 5，亦唔好逐字。「物理攻擊，回復 MP，並持續回復 HP」含「回復」同「MP」，又冇口語字，所以過。
 
 `TC-API-SKILL-MEAL` 的 MP 斷言已改成上面公式。回血幅度、Lv5 ≥ Lv1、第 4 回合停止，維持原案。
 
@@ -123,6 +143,7 @@ MP 夠嘅卡：一撳就施放（自身目標技能唔使再揀怪），MP 減�
 | TC-FE-SKILLMENU-CAST | 紅。唔能夠由選單施放蓄力 |
 | TC-FE-SKILLMENU-VITALS | 紅。冇 `#playerVitals` |
 | TC-FE-SKILLMENU-LAYOUT | 紅。冇選單可以量度 |
+| TC-FE-SKILLMENU-ENEMY-VISIBLE | 紅。未有 `#skillPanel` 可以同敵人名牌比。3 隻同 1 隻野狼各一條。選單出現之後，每隻 `.m-name`／`.m-hp-bar`／`.m-hp-text` 同選單交集要係 0 px²，選單底邊高過最高名牌或血條至少 8px。精靈可以遮。 |
 | TC-FE-SKILLMENU-CLOSE | 紅。冇返回／關閉 |
 | TC-API-SKILL-FORMAL | 疾風斬、強光紅（含「唔」）；其餘書面語過 |
 | TC-API-SKILL-FORMAL-API | 同上，兩個 API |
@@ -131,6 +152,6 @@ MP 夠嘅卡：一撳就施放（自身目標技能唔使再揀怪），MP 減�
 | TC-API-MEAL-MP-BALANCED | 紅。傷害 5、HoT 14 仍在，MP 未加 5 |
 | TC-API-MEAL-MP-SKEWED | 紅。傷害 35、HoT 14 仍在，MP 未加 5 |
 | TC-API-MEAL-MP-CAP | 紅。MP 停喺 max−cost，未頂到 max |
-| TC-API-MEAL-MP-DESC | 紅。說明有「回復」但冇「MP」 |
-| TC-API-MEAL-MP-DESC-MIGRATE | 紅。遷移後說明仍冇「MP」 |
+| TC-API-MEAL-MP-DESC | 紅。說明有「回復」但冇「MP」。唔要求數字 5 |
+| TC-API-MEAL-MP-DESC-MIGRATE | 紅。遷移後說明仍冇「MP」。唔要求數字 5 |
 | TC-API-SKILL-MEAL | 紅（ intentional 更新）。回血斷言未走到；MP 要加 5 |
