@@ -60,6 +60,8 @@ SEL_MP_NOW = "#mpNow"
 SEL_PAGE_DOTS = "#pageDots .dot"
 SEL_WILD_TOAST = "#wildToast"
 SEL_COMMAND_BAR = ".battle-scene .command-bar"
+# Wood strip the three commands sit in. HP text overlaps this strip on ee8a3eb.
+SEL_BATTLE_BAR = ".battle-scene .kt-command-bar"
 SEL_MONSTER_CARD = ".battle-scene .monster-card"
 SEL_M_NAME = ".m-name"
 SEL_M_HP_BAR = ".m-hp-bar"

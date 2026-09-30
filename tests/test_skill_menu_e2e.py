@@ -34,6 +34,7 @@ from tests.skill_menu_spec import (  # noqa: E402
     SEL_BTN_NEXT,
     SEL_BTN_PREV,
     SEL_BTN_SKILL,
+    SEL_BATTLE_BAR,
     SEL_COMMAND_BAR,
     SEL_M_HP_BAR,
     SEL_M_HP_TEXT,
@@ -1152,6 +1153,7 @@ def _selectors():
         "dots": SEL_PAGE_DOTS,
         "toast": SEL_WILD_TOAST,
         "bar": SEL_COMMAND_BAR,
+        "wood": SEL_BATTLE_BAR,
         "monster": SEL_MONSTER_CARD,
         "mName": SEL_M_NAME,
         "mHp": SEL_M_HP_BAR,
@@ -1632,8 +1634,8 @@ def _set_wild_toast(page, message):
     _wait_fonts(page)
     return page.evaluate(
         """({message, toastId}) => {
-          const toast = document.getElementById(toastId);
-          if (!toast) return {ok: false, why: 'missing #wildToast', path: 'textContent'};
+          const toast = document.querySelector(toastId);
+          if (!toast) return {ok: false, why: 'missing ' + toastId, path: 'textContent'};
           const writer = typeof renderBattleMode === 'function' ? 'renderBattleMode' : '';
           toast.textContent = message;
           return {
@@ -1653,7 +1655,7 @@ def _probe_toast_height(page, message):
     """Height of message at TOAST_WRAP_WIDTH_PX with the live toast font and normal wrapping."""
     return page.evaluate(
         """({message, width, toastId}) => {
-          const toast = document.getElementById(toastId);
+          const toast = document.querySelector(toastId);
           const cs = toast ? getComputedStyle(toast) : null;
           const probe = document.createElement('div');
           probe.style.position = 'absolute';
@@ -1694,6 +1696,7 @@ def _toast_layout(page):
           const cs = toast ? getComputedStyle(toast) : null;
           const panel = document.querySelector(sels.panel);
           const bar = document.querySelector(sels.bar);
+          const wood = document.querySelector(sels.wood);
           const vitals = document.querySelector(sels.vitals);
           const enemies = [...document.querySelectorAll(sels.monster)].map((card) => ({
             idx: card.getAttribute('data-idx') || '',
@@ -1715,6 +1718,7 @@ def _toast_layout(page):
             } : null,
             panel: rect(panel),
             bar: rect(bar),
+            wood: rect(wood),
             vitals: rect(vitals),
             enemies
           };
@@ -1918,21 +1922,25 @@ def test_tc_fe_toast_no_shift(page, base_url, menu_ids, enemy_count):
                 f"(Δ{_px(deltas['left'])}px); want <= {TOAST_SHIFT_TOLERANCE_PX}px"
             )
     for state, layout in (("short", short_layout), ("long", long_layout)):
-        bar = layout.get("bar")
-        if not _visible(bar):
-            problems.append(f"{state} message: no visible {SEL_COMMAND_BAR}")
-            continue
-        for enemy in layout.get("enemies") or []:
-            hp_text = enemy.get("hptext")
-            if not _visible(hp_text):
-                problems.append(f"{state} message: card {enemy.get('idx')} {SEL_M_HP_TEXT} is not visible")
+        # The wood strip is the bar HP text runs into. The inner .command-bar
+        # sits lower, inside the strip's padding, so check both boxes.
+        bars = [(SEL_BATTLE_BAR, layout.get("wood")), (SEL_COMMAND_BAR, layout.get("bar"))]
+        if not _visible(layout.get("wood")):
+            problems.append(f"{state} message: no visible {SEL_BATTLE_BAR}")
+        for selector, bar in bars:
+            if not _visible(bar):
                 continue
-            area = _intersection_area(hp_text, bar)
-            if area is None or area > 0:
-                problems.append(
-                    f"{state} message: card {enemy.get('idx')} {SEL_M_HP_TEXT} intersects "
-                    f"{SEL_COMMAND_BAR} by {_px(area)} px²"
-                )
+            for enemy in layout.get("enemies") or []:
+                hp_text = enemy.get("hptext")
+                if not _visible(hp_text):
+                    problems.append(f"{state} message: card {enemy.get('idx')} {SEL_M_HP_TEXT} is not visible")
+                    continue
+                area = _intersection_area(hp_text, bar)
+                if area is None or area > 0:
+                    problems.append(
+                        f"{state} message: card {enemy.get('idx')} {SEL_M_HP_TEXT} intersects "
+                        f"{selector} by {_px(area)} px²"
+                    )
     before_vitals = short_layout.get("vitals")
     after_vitals = long_layout.get("vitals")
     if not _visible(before_vitals) or not _visible(after_vitals):

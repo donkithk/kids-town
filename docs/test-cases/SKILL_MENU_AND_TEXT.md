@@ -181,10 +181,10 @@ MP 夠嘅卡：一撳就施放（自身目標技能唔使再揀怪），MP 減�
 3 隻同 1 隻野狼，選單收住。先記短句時每張 `.monster-card` 的 top／left，再換成長句：
 
 - 每張卡 top／left 移動 ≤ 1px
-- 短句同長句兩種狀態，每隻 `.m-hp-text` 同 `.battle-scene .command-bar` 交集都係 0 px²
+- 短句同長句兩種狀態，每隻 `.m-hp-text` 同戰鬥指令列交集都係 0 px²。指令列係 `.battle-scene .kt-command-bar`（木條）同入面嘅 `.command-bar`（三個掣）。`ee8a3eb` 嘅血量數字疊住木條，未疊到裡面嗰行掣。
 - `#playerVitals` 的位置同尺寸唔變
 
-`ee8a3eb`：長句將怪物卡推低 14.375px，每張卡的 `.m-hp-text` 同指令列交集 712 px²。main 係推低 24px、交集 2127 px²。所以紅。
+`ee8a3eb`：長句將怪物卡推低 14.375px，每張卡的 `.m-hp-text` 同 `.kt-command-bar` 交集 711.984 px²（約 712）。main 係推低 24px、交集 2127 px²。所以紅。
 
 ### TC-FE-SKILLMENU-PANEL-RECT
 
@@ -208,7 +208,7 @@ MP 夠嘅卡：一撳就施放（自身目標技能唔使再揀怪），MP 減�
 | TC-FE-SKILLMENU-TYPE | 紅。卡名 20px（要 ≥ 22）、說明 13px（要 ≥ 15）、圖示 24px 喺 28×24（要字級 ≥ 28 同盒子 ≥ 28×28）、padding 3px 4px（要上下 ≥ 6、左右 ≥ 8）。6 技能、8 技能第 2 頁、22 技能逐頁。 |
 | TC-FE-SKILLMENU-TITLE | 紅。標題 22px（要 ≥ 26）、頁碼 16px（要 ≥ 20）、返回寬度未到 80px。◀ ▶ ✕ 已係 44×44。 |
 | TC-FE-TOAST-MENU-ONELINE | 紅。3 隻同 1 隻野狼。選單打開時兩行訊息同 `#skillPanel` 交集 9963 px²，而且唔係單行省略。 |
-| TC-FE-TOAST-NO-SHIFT | 紅。選單收住時長句將卡推低 14.375px（main 24px），`.m-hp-text` 同指令列交集 712 px²（main 2127 px²）。 |
+| TC-FE-TOAST-NO-SHIFT | 紅。選單收住時長句將卡推低 14.375px（main 24px），`.m-hp-text` 同 `.kt-command-bar` 交集 711.984 px²（main 2127 px²）。 |
 | TC-FE-SKILLMENU-PANEL-RECT | 守衛。`ee8a3eb` 應過：面板 left 332、top 141、right 980、bottom 461，各 ±2。main 未有面板，所以紅。 |
 | TC-API-SKILL-FORMAL | 疾風斬、強光紅（含「唔」）；其餘書面語過 |
 | TC-API-SKILL-FORMAL-API | 同上，兩個 API |
