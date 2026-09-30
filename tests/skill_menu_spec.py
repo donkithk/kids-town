@@ -1,0 +1,175 @@
+"""Shared constants for the skill-menu, formal-copy, and 營養餐 MP tests.
+
+Product code must not import this module. The selector contract lives in
+docs/test-cases/SKILL_MENU_AND_TEXT.md (mock 63b81c8).
+"""
+from __future__ import annotations
+
+# Cast-turn MP restored by 營養餐, after the skill's MP cost is paid.
+# Tests must use this name. The number may change later; do not hard-code 5
+# at the assertion site.
+NUTRITION_MEAL_MP_REGEN = 5
+
+# One list. A description is colloquial if it contains any of these characters.
+COLLOQUIAL_CHARS = ("嘅", "咩", "啲", "唔", "冇", "係", "喺", "佢", "嘢", "畈")
+
+# Fresh seed at main 3b0a48a. Order matches skill_defs insert order.
+SEEDED_SKILL_NAMES = (
+    "蓄力",
+    "重擊",
+    "連擊",
+    "繃帶",
+    "急救",
+    "全體治療",
+    "橫掃",
+    "盾擊",
+    "必殺",
+    "火球",
+    "冰凍",
+    "偵察",
+    "疾風斬",
+    "修復",
+    "強化",
+    "知識的力量",
+    "鍛鍊的成果",
+    "營養餐",
+    "金幣袋",
+    "強光",
+    "流星雨",
+    "金錢砸",
+)
+
+# Mock page size. 2 columns × 3 rows.
+SKILL_MENU_PAGE_SIZE = 6
+
+# Selectors from index.html at ee8a3eb. Assertions are sizes and behavior.
+SEL_SKILL_PANEL = "#skillPanel"
+SEL_SKILL_GRID = "#skillGrid"
+SEL_SKILL_CARD = "#skillGrid .skill-card"
+SEL_SKILL_NAME = ".skill-name"
+SEL_SKILL_DESC = ".skill-desc"
+SEL_SKILL_ICON = ".skill-icon"
+SEL_SKILL_TITLE = "#skillTitle"
+SEL_PAGE_LABEL = "#pageLabel"
+SEL_BTN_BACK = "#btnBack"
+SEL_BTN_PREV = "#btnPrev"
+SEL_BTN_NEXT = "#btnNext"
+SEL_BTN_CLOSE = "#btnClose"
+SEL_BTN_SKILL = "#btnSkill"
+SEL_MP_NOW = "#mpNow"
+SEL_PAGE_DOTS = "#pageDots .dot"
+SEL_WILD_TOAST = "#wildToast"
+SEL_COMMAND_BAR = ".battle-scene .command-bar"
+# Wood strip the three commands sit in. HP text overlaps this strip on ee8a3eb.
+SEL_BATTLE_BAR = ".battle-scene .kt-command-bar"
+SEL_MONSTER_CARD = ".battle-scene .monster-card"
+SEL_M_NAME = ".m-name"
+SEL_M_HP_BAR = ".m-hp-bar"
+SEL_M_HP_TEXT = ".m-hp-text"
+SEL_PLAYER_VITALS = "#playerVitals"
+
+# Skill card type. ee8a3eb paints name 20px, desc 13px, icon 24px in a 28×24 box,
+# padding 3px 4px.
+SKILL_NAME_MIN_PX = 22
+SKILL_DESC_MIN_PX = 15
+SKILL_ICON_FONT_MIN_PX = 28
+SKILL_ICON_BOX_MIN_PX = 28
+SKILL_CARD_PAD_BLOCK_MIN_PX = 6
+SKILL_CARD_PAD_INLINE_MIN_PX = 8
+SKILL_CARD_MIN_HEIGHT_PX = 72
+SKILL_ICON_INSET_MIN_PX = 4
+SKILL_DESC_LINE_RATIO = 1.3
+
+# TC-FE-SKILLMENU-INSET. Wooden frame of #skillPanel at 8ac7b0d.
+# The panel has no ::before/::after (computed content is none). The wood is
+# the element's own border plus inset box-shadows. The background-image is
+# fill, not the frame.
+#   border: 8px solid #3b2416
+#   box-shadow: inset 0 0 0 3px #e7c48a, inset 0 0 0 6px #6b4428,
+#               0 10px 0 rgba(28,16,8,.28)
+# The inner line is the border box moved inward by border-width plus the
+# furthest inset-shadow reach on that side. Reach is max(0, spread + toward):
+#   left toward = +offsetX, right = -offsetX, top = +offsetY, bottom = -offsetY.
+# Blur is not part of the line. A shadow without `inset` is ignored.
+# At 8ac7b0d both inset offsets are 0, so the reach is the larger spread (6px)
+# and the line sits 14px inside the border box. On the locked panel
+# (left 332, top 141, right 980, bottom 461) the line is
+# left 346, top 155, right 966, bottom 447.
+SKILL_PANEL_PAD_INLINE_MIN_PX = 12
+SKILL_FRAME_CLEARANCE_MIN_PX = 4
+# 12px of side padding on that 648px panel leaves a 608px content box.
+# Two columns and the 6px column gap make each card 301px. 304 still rejects
+# the 309px cards painted with 4px of side padding.
+SKILL_CARD_WIDTH_MAX_PX = 304
+
+# TC-FE-SKILLMENU-ICON. The emoji ink is about 35×38 while the box is 28×28,
+# so the glyph crosses the 6px flex gap and meets the name (gap -1px).
+# Vertical ink taller than the box is a font metric: the glyph must stay
+# inside the card and must not meet the name or the description, but it does
+# not have to fit inside the box vertically.
+SKILL_ICON_BOX_WIDTH_MIN_PX = 36
+SKILL_ICON_NAME_GAP_MIN_PX = 6
+SKILL_GLYPH_EDGE_TOLERANCE_PX = 0.5
+
+# Title row. ee8a3eb paints the title at 22px and the page label at 16px.
+# 返回 is min-width 64px under the global border-box rule.
+SKILL_TITLE_MIN_PX = 26
+PAGE_LABEL_MIN_PX = 20
+BTN_BACK_MIN_WIDTH_PX = 80
+BTN_BACK_MIN_HEIGHT_PX = 44
+TITLE_CONTROL_MIN_PX = 44
+
+# getBoundingClientRect of #skillPanel at 1280×720 on ee8a3eb.
+SKILL_PANEL_RECT = {"left": 332.0, "top": 141.0, "right": 980.0, "bottom": 461.0}
+SKILL_PANEL_RECT_TOLERANCE_PX = 2
+
+# 盾擊 copy. The mechanic is unchanged: a normal physical hit sets
+# halve_counter; the next counter with damage > 0 is integer-halved, then
+# the flag clears. A miss, a pre-emptive 0, or any 0-damage counter does not
+# clear it. Exact text is locked by the formal cases. DESC-05 only requires
+# 減半 and 下一次/下次.
+SHIELD_DESCRIPTION = "物理攻擊，下一次受到的傷害減半"
+# What main 3b0a48a already stores, before the sentence above.
+SHIELD_DESCRIPTION_ON_MAIN = "物理攻擊，怪物攻擊傷害減半，直到下一次被打中"
+# afbc1a6 skill_defs id 8, renamed 挑釁 → 盾擊. Description before migration.
+TAUNT_DESCRIPTION_AFBC1A6 = "強制敵方攻擊自己"
+SHIELD_SKILL_ID = 8
+# Exact strings inside the parametrized formal cases.
+# 疾風斬 and 強光 stay on COLLOQUIAL_CHARS. 營養餐 stays on 回復 + MP.
+EXACT_SKILL_COPY = {
+    "盾擊": SHIELD_DESCRIPTION,
+}
+
+# TC-FE-SKILLMENU-NOSQUEEZE. A negative letter-spacing must not fake the
+# 15px description floor. 'normal' spacing counts as 0.
+NOSQUEEZE_GLYPH_MIN_RATIO = 0.95
+NOSQUEEZE_WIDTH_RATIO_MIN = 0.99
+NOSQUEEZE_WIDTH_RATIO_MAX = 1.01
+NOSQUEEZE_MATRIX_EPS = 0.001
+
+# Battle message. A long line is probed at this width before the live toast is measured.
+TOAST_WRAP_WIDTH_PX = 1100
+TOAST_LINE_TOLERANCE_PX = 1
+TOAST_SHIFT_TOLERANCE_PX = 1
+TOAST_SHORT_MESSAGE = "準備"
+# 8 characters × 12 = 96. At the 16px toast font this wraps to 2 lines inside 1100px.
+TOAST_LONG_MESSAGE = "野狼從草叢撲過來" * 12
+
+# Pinned on main 3b0a48a with crit off and damage variance frozen at 0.
+# Level 20, region 1 (monster def 0), 農場 Lv1 + 探險公會 Lv1.
+# Balanced: every ability 0, player_atk 5. Skewed: ability_str 20, player_atk 35.
+# 營養餐 damage is that physical hit. HoT is 14 HP on each of the next 3 turns.
+MEAL_CAST_DAMAGE = {"balanced": 5, "skewed": 35}
+MEAL_HOT_PER_TURN = 14
+MEAL_HOT_TURNS = 3
+
+
+def colloquial_hits(text):
+    """Characters from COLLOQUIAL_CHARS that appear in text, in list order."""
+    raw = text or ""
+    return [char for char in COLLOQUIAL_CHARS if char in raw]
+
+
+def mp_after_nutrition_meal(mp_before, cost, max_mp, regen=NUTRITION_MEAL_MP_REGEN):
+    """MP after casting 營養餐: pay the cost, restore regen, never above max."""
+    return min(int(max_mp), int(mp_before) - int(cost) + int(regen))

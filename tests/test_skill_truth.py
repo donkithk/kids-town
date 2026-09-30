@@ -25,6 +25,7 @@ from tests.battle_truth import (
 from tests.factories import connect_db, get_kid_points, response_text
 from tests.historical_seed import historical_catalogs, tracked_sha256, use_temp_database
 from tests.phase1_helpers import BUILDING_NAMES, login_kid
+from tests.skill_menu_spec import NUTRITION_MEAL_MP_REGEN, mp_after_nutrition_meal
 
 # Region 1 weakness locked by TC-API-SKILL-SCOUT. Builder copies this onto the monster.
 REGION_WEAKNESS = {1: "火", 2: "冰", 3: "雷"}
@@ -573,8 +574,9 @@ def test_gym_training_result_boosts_physical_for_three_turns(
 def test_farm_meal_heals_over_three_turns(client, family, test_db, monkeypatch):
     """農場「營養餐」係三回合持續回血，大約最大 HP 嘅 8%，等級高唔少過等級低。
 
-    施放當下 HP、MP 都唔好即時回復（MP 只可以扣技能消耗）。
-    之後三個玩家回合每回合 HP 上升，第四回合停止。反擊被 999 防禦擋走。
+    施放當下 HP 唔好即時回復。MP 扣消耗之後再加 NUTRITION_MEAL_MP_REGEN（5），
+    上限係 max_mp。之後三個玩家回合每回合 HP 上升，第四回合停止，呢幾回合
+    唔好再加 MP。反擊被 999 防禦擋走。
     """
     kid_id = family.kid_a.id
     per_level = {}
@@ -601,7 +603,19 @@ def test_farm_meal_heals_over_three_turns(client, family, test_db, monkeypatch):
         )
         cast = _ok(_use(client, kid_id, skill))
         assert cast["player_hp"] == hp_before, cast
-        assert cast["player_mp"] == mp_before - int(skill.get("mp_cost") or 0), cast
+        # Updated for the 營養餐 MP regen spec (docs/test-cases/SKILL_MENU_AND_TEXT.md).
+        # HoT assertions below are unchanged. Later turns must keep this MP.
+        expected_mp = mp_after_nutrition_meal(
+            mp_before,
+            skill.get("mp_cost") or 0,
+            battle["player_max_mp"],
+            NUTRITION_MEAL_MP_REGEN,
+        )
+        assert cast["player_mp"] == expected_mp, (
+            f"營養餐 MP: actual {cast['player_mp']}, "
+            f"want min(max_mp={battle['player_max_mp']}, "
+            f"{mp_before} - cost + {NUTRITION_MEAL_MP_REGEN})"
+        )
         low, high = _meal_band(max_hp)
         hp = cast["player_hp"]
         mp = cast["player_mp"]
@@ -1753,6 +1767,8 @@ def test_skill_descriptions_use_the_locked_keywords(test_db):
     """說明只鎖關鍵字，唔好逐字。
 
     冰凍唔好寫減速。要講怪物或者敵人嘅攻擊下降。
+    強光要有「2 次」，以及「落空」或「打不中」。口語「打唔中」唔再算過。
+    盾擊要有「減半」，以及「下一次」或「下次」。唔再要求「被打中」。
     """
     db = connect_db(test_db)
     rows = {
@@ -1769,13 +1785,13 @@ def test_skill_descriptions_use_the_locked_keywords(test_db):
     shield = rows.get("盾擊")
     if shield is None:
         problems.append("盾擊 missing")
-    elif "下一次被打中" not in shield and "下次被打中" not in shield:
-        problems.append(f"盾擊 description {shield!r} missing 下一次被打中/下次被打中")
+    elif "減半" not in shield or ("下一次" not in shield and "下次" not in shield):
+        problems.append(f"盾擊 description {shield!r} missing 減半 and 下一次/下次")
     flash = rows.get("強光")
     if flash is None:
         problems.append("強光 missing")
-    elif "2 次" not in flash or ("打唔中" not in flash and "打不中" not in flash):
-        problems.append(f"強光 description {flash!r} missing 2 次 and 打唔中/打不中")
+    elif "2 次" not in flash or ("落空" not in flash and "打不中" not in flash):
+        problems.append(f"強光 description {flash!r} missing 2 次 and 落空/打不中")
     freeze = rows.get("冰凍")
     if freeze is None:
         problems.append("冰凍 missing")
