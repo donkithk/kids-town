@@ -109,6 +109,15 @@ MP 夠嘅卡：一撳就施放（自身目標技能唔使再揀怪），MP 減�
 
 新鮮庫 22 個技能、開戰 `skills[].description`、`GET /api/kids/<id>/skills` 的 `description`、舊庫遷移之後，全部唔好含上面任何一字。每個技能一個 case。
 
+盾擊要正好「物理攻擊，下一次受到的傷害減半」。呢句同書面語 case 一齊參數化：`TC-API-SKILL-FORMAL`（種子）、`TC-API-SKILL-FORMAL-API`（兩個 API）、`TC-API-SKILL-FORMAL-MIGRATE`。疾風斬、強光仍然只鎖口語字。營養餐仍然只鎖「回復」同「MP」，唔逐字。
+
+`TC-API-SKILL-DESC-05` 的盾擊關鍵字改為「減半」加上「下一次」或「下次」，唔再要求「被打中」。強光「2 次」加「落空」／「打不中」、拒絕「打唔中」，以及其他 DESC-05 鎖，維持原案。
+
+遷移有兩個來源：
+
+- `afbc1a6`：冇銀行。挑釁 id 8 改名做盾擊之後，說明要變上面嗰句。
+- main `3b0a48a`：盾擊已經係「物理攻擊，怪物攻擊傷害減半，直到下一次被打中」。遷移後要變新句，id 8 唔好變。
+
 戰鬥 UI 讀嘅係 `POST /api/kids/<id>/expedition/battle-start` 回報入面 `skills[].description`，同 `GET /api/kids/<id>/skills`。選單 `.skill-desc` 要同呢段文字一致。
 
 舊庫：`afbc1a6` 的 `backend_v2.py` 用 `/tmp` git worktree 建成暫存庫，放入合成小朋友同已學 skill id，再抄一份，用而家代碼的 `init_db`／`migrate_db`／`migrate_db_v3`／`migrate_db_v4`／`seed_building_defs`／`seed_skill_defs`。小朋友行同已學 skill id 要保留（挑釁→盾擊、迴避→疾風斬可以改名，id 唔好變）。唔好打開版控嘅 `kids_town.db`。
@@ -151,6 +160,22 @@ MP 夠嘅卡：一撳就施放（自身目標技能唔使再揀怪），MP 減�
 - 圖示離卡 border box 每邊 ≥ 4px
 
 `ee8a3eb` 量到：卡名 20px、說明 13px、圖示字 24px、盒子 28×24、padding 3px 4px。所以紅。
+
+### TC-FE-SKILLMENU-NOSQUEEZE
+
+假綠。`#59` `7e00b66` 用 `.skill-desc { letter-spacing: -0.14em }` 把 15px 說明擠到 `scrollWidth` 入到卡裡面，所以 `TC-FE-SKILLMENU-TYPE` 過。中文擠埋一齊，睇唔清。呢條封住負字距，同埋縮放、字寬、省略號呢類同類漏洞。
+
+同一套畫面：1280×720。6 個技能的一頁、8 個技能的第 2 頁、學齊 22 個技能逐頁。每一頁再量 `#skillTitle`「技能」同 `#pageLabel`。字級下限仍然由 `TC-FE-SKILLMENU-TYPE` 負責（說明 ≥ 15、卡名 ≥ 22），呢條唔再寫一次，只係量同一批元素。
+
+每一個 `.skill-desc`、`.skill-name`、`#skillTitle`、`#pageLabel`：
+
+1. computed `letter-spacing` ≥ 0（`normal` 當 0）。computed `word-spacing` ≥ 0。
+2. 元素自己，以及上至 `#skillPanel`（包括面板）的每個祖先，computed `transform` 係 `none`，或者純位移矩陣（`a=1,b=0,c=0,d=1`，容差 0.001）。元素 `getBoundingClientRect().width / offsetWidth` 喺 0.99 到 1.01。
+3. computed `font-stretch` 係 `100%` 或 `normal`。
+4. 只限 `.skill-desc`：`text-overflow` 唔好係 `ellipsis`，`scrollWidth` ≤ `clientWidth`（同 TYPE 一樣容許 1px），而且仍然單行（`white-space:nowrap`，高度 ≤ 1.3×字級）。
+5. CJK 字寬：對每個文字節點用 DOM Range，量每個漢字或全形標點（U+3000–U+303F、U+4E00–U+9FFF、U+FF00–U+FFEF）的 client rect 寬。每個都要 ≥ 0.95 × computed font-size。失敗訊息列出每個技能的最小比例。
+
+main 未有選單，所以紅。`7e00b66` 的說明係 -0.14em，字寬低過 0.95，而且 `text-overflow:ellipsis`，所以都紅。
 
 ### TC-FE-SKILLMENU-TITLE
 
@@ -206,13 +231,14 @@ MP 夠嘅卡：一撳就施放（自身目標技能唔使再揀怪），MP 減�
 | TC-FE-SKILLMENU-ENEMY-VISIBLE | 紅。未有 `#skillPanel` 可以同敵人名牌比。3 隻同 1 隻野狼各一條。選單出現之後，每隻 `.m-name`／`.m-hp-bar`／`.m-hp-text` 同選單交集要係 0 px²，選單底邊高過最高名牌或血條至少 8px。精靈可以遮。 |
 | TC-FE-SKILLMENU-CLOSE | 紅。冇返回／關閉 |
 | TC-FE-SKILLMENU-TYPE | 紅。卡名 20px（要 ≥ 22）、說明 13px（要 ≥ 15）、圖示 24px 喺 28×24（要字級 ≥ 28 同盒子 ≥ 28×28）、padding 3px 4px（要上下 ≥ 6、左右 ≥ 8）。6 技能、8 技能第 2 頁、22 技能逐頁。 |
+| TC-FE-SKILLMENU-NOSQUEEZE | 紅。main 冇選單。假綠：負 `letter-spacing`（`7e00b66` 說明 -0.14em）唔准用來塞 15px。字距、字詞距 ≥ 0；唔好縮放；`font-stretch` 100%；說明唔好 `ellipsis` 或被裁；每個 CJK 字寬 ≥ 0.95×字級。 |
 | TC-FE-SKILLMENU-TITLE | 紅。標題 22px（要 ≥ 26）、頁碼 16px（要 ≥ 20）、返回寬度未到 80px。◀ ▶ ✕ 已係 44×44。 |
 | TC-FE-TOAST-MENU-ONELINE | 紅。3 隻同 1 隻野狼。選單打開時兩行訊息同 `#skillPanel` 交集 9963 px²，而且唔係單行省略。 |
 | TC-FE-TOAST-NO-SHIFT | 紅。選單收住時長句將卡推低 14.375px（main 24px），`.m-hp-text` 同 `.kt-command-bar` 交集 711.984 px²（main 2127 px²）。 |
 | TC-FE-SKILLMENU-PANEL-RECT | 守衛。`ee8a3eb` 應過：面板 left 332、top 141、right 980、bottom 461，各 ±2。main 未有面板，所以紅。 |
-| TC-API-SKILL-FORMAL | 疾風斬、強光紅（含「唔」）；其餘書面語過 |
-| TC-API-SKILL-FORMAL-API | 同上，兩個 API |
-| TC-API-SKILL-FORMAL-MIGRATE | 遷移後疾風斬、強光仍然含「唔」。金錢砸整行唔見：afbc1a6 冇「銀行」，`seed_building_defs` 見目錄非空就返回，`seed_skill_defs` 就跳過金錢砸 |
+| TC-API-SKILL-FORMAL | 疾風斬、強光紅（含「唔」）。盾擊紅：要正好「物理攻擊，下一次受到的傷害減半」。其餘書面語過 |
+| TC-API-SKILL-FORMAL-API | 同上，兩個 API。盾擊兩個 payload 都要正好嗰句 |
+| TC-API-SKILL-FORMAL-MIGRATE | afbc1a6：疾風斬、強光仍然含「唔」；金錢砸整行唔見（冇「銀行」）；挑釁 id 8 改名盾擊後說明仍係舊句。main `3b0a48a`：舊盾擊句遷移後未變新句；疾風斬、強光仍然含「唔」 |
 | TC-API-SKILL-FORMAL-MIGRATE-KEEP | 綠。小朋友行同已學 id 保留 |
 | TC-API-MEAL-MP-BALANCED | 紅。傷害 5、HoT 14 仍在，MP 未加 5 |
 | TC-API-MEAL-MP-SKEWED | 紅。傷害 35、HoT 14 仍在，MP 未加 5 |

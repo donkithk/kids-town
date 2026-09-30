@@ -52,6 +52,10 @@ from tests.skill_menu_spec import (  # noqa: E402
     SEL_SKILL_TITLE,
     SEL_WILD_TOAST,
     SEEDED_SKILL_NAMES,
+    NOSQUEEZE_GLYPH_MIN_RATIO,
+    NOSQUEEZE_MATRIX_EPS,
+    NOSQUEEZE_WIDTH_RATIO_MAX,
+    NOSQUEEZE_WIDTH_RATIO_MIN,
     SKILL_CARD_MIN_HEIGHT_PX,
     SKILL_CARD_PAD_BLOCK_MIN_PX,
     SKILL_CARD_PAD_INLINE_MIN_PX,
@@ -1515,6 +1519,359 @@ def test_tc_fe_skillmenu_type_card_text_is_larger(page, base_url, menu_ids):
             f"menu never showed {missing}"
         )
     _append_card_type_problems(problems, groups)
+    _fail(case_id, problems)
+
+
+_NOSQUEEZE_JS = """(args) => {
+  const sels = args.sels;
+  const eps = args.eps;
+  const spacingPx = (value) => {
+    if (value == null || value === 'normal') return 0;
+    const n = parseFloat(value);
+    return Number.isFinite(n) ? n : null;
+  };
+  const matrixOf = (transform) => {
+    const raw = (transform || 'none').trim();
+    if (raw === 'none') return {ok: true, transform: 'none'};
+    const matched = raw.match(/^matrix3d\\(([^)]+)\\)$/) || raw.match(/^matrix\\(([^)]+)\\)$/);
+    if (!matched) return {ok: false, transform: raw};
+    const parts = matched[1].split(',').map((item) => parseFloat(item));
+    const three = raw.startsWith('matrix3d');
+    const a = parts[0];
+    const b = parts[1];
+    const c = three ? parts[4] : parts[2];
+    const d = three ? parts[5] : parts[3];
+    const ok = [a, b, c, d].every((n) => Number.isFinite(n))
+      && Math.abs(a - 1) <= eps && Math.abs(b) <= eps
+      && Math.abs(c) <= eps && Math.abs(d - 1) <= eps;
+    return {ok, transform: raw, a, b, c, d};
+  };
+  const isCjk = (cp) => (
+    (cp >= 0x3000 && cp <= 0x303F)
+    || (cp >= 0x4E00 && cp <= 0x9FFF)
+    || (cp >= 0xFF00 && cp <= 0xFFEF)
+  );
+  const panel = document.querySelector(sels.panel);
+  const chainOf = (el) => {
+    const rows = [];
+    let node = el;
+    let reached = false;
+    while (node) {
+      const parsed = matrixOf(getComputedStyle(node).transform);
+      const cls = typeof node.className === 'string' ? node.className : '';
+      rows.push({
+        id: node.id || '',
+        cls,
+        ok: parsed.ok,
+        transform: parsed.transform,
+        a: parsed.a, b: parsed.b, c: parsed.c, d: parsed.d
+      });
+      if (panel && node === panel) {
+        reached = true;
+        break;
+      }
+      node = node.parentElement;
+    }
+    return {rows, reached};
+  };
+  const glyphsOf = (el, fontPx) => {
+    const found = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const text = node.textContent || '';
+      for (let i = 0; i < text.length; ) {
+        const cp = text.codePointAt(i);
+        const size = cp > 0xFFFF ? 2 : 1;
+        if (isCjk(cp)) {
+          const range = document.createRange();
+          range.setStart(node, i);
+          range.setEnd(node, i + size);
+          let width = 0;
+          for (const rect of range.getClientRects()) width = Math.max(width, rect.width);
+          found.push({
+            ch: String.fromCodePoint(cp),
+            width,
+            ratio: fontPx > 0 ? width / fontPx : null
+          });
+        }
+        i += size;
+      }
+    }
+    let minRatio = null;
+    let minChar = '';
+    let minWidth = null;
+    for (const glyph of found) {
+      if (glyph.ratio == null) continue;
+      if (minRatio == null || glyph.ratio < minRatio) {
+        minRatio = glyph.ratio;
+        minChar = glyph.ch;
+        minWidth = glyph.width;
+      }
+    }
+    return {count: found.length, minRatio, minChar, minWidth};
+  };
+  const sample = (el, role, skill) => {
+    if (!el) return {present: false, role, skill};
+    const cs = getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    const fontPx = parseFloat(cs.fontSize);
+    const chain = chainOf(el);
+    const glyphs = glyphsOf(el, fontPx);
+    return {
+      present: true,
+      role,
+      skill,
+      text: (el.textContent || '').trim(),
+      letterSpacing: cs.letterSpacing,
+      letterSpacingPx: spacingPx(cs.letterSpacing),
+      wordSpacing: cs.wordSpacing,
+      wordSpacingPx: spacingPx(cs.wordSpacing),
+      fontStretch: cs.fontStretch,
+      textOverflow: cs.textOverflow,
+      whiteSpace: cs.whiteSpace,
+      fontPx,
+      height: rect.height,
+      rectW: rect.width,
+      offsetW: el.offsetWidth,
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+      reachedPanel: chain.reached,
+      transforms: chain.rows,
+      glyphCount: glyphs.count,
+      minRatio: glyphs.minRatio,
+      minChar: glyphs.minChar,
+      minWidth: glyphs.minWidth
+    };
+  };
+  const cards = [...document.querySelectorAll(sels.card)].map((card) => {
+    const nameEl = card.querySelector(sels.name);
+    const descEl = card.querySelector(sels.desc);
+    const skill = nameEl ? (nameEl.textContent || '').trim() : '';
+    return {name: sample(nameEl, 'name', skill), desc: sample(descEl, 'desc', skill)};
+  });
+  const label = document.querySelector(sels.page);
+  return {
+    open: !!(panel && !panel.hasAttribute('hidden') && getComputedStyle(panel).display !== 'none'),
+    label: label ? (label.textContent || '').trim() : '',
+    title: sample(document.querySelector(sels.title), 'title', ''),
+    page: sample(label, 'page', ''),
+    cards
+  };
+}"""
+
+
+def _measure_nosqueeze(page):
+    _wait_fonts(page)
+    return page.evaluate(
+        _NOSQUEEZE_JS,
+        {"sels": _selectors(), "eps": NOSQUEEZE_MATRIX_EPS},
+    )
+
+
+def _collect_nosqueeze_pages(page, where):
+    problems_open = []
+    if not _open_menu_or_problem(page, problems_open, where):
+        return problems_open, []
+    pages = []
+    for index in range(6):
+        payload = _measure_nosqueeze(page)
+        payload["pageIndex"] = index
+        pages.append(payload)
+        if not _go_next_skill_page(page):
+            break
+    return [], pages
+
+
+def _nosqueeze_label(sample):
+    if sample["role"] == "title":
+        return f"{SEL_SKILL_TITLE} {sample.get('text')!r}"
+    if sample["role"] == "page":
+        return f"{SEL_PAGE_LABEL} {sample.get('text')!r}"
+    selector = SEL_SKILL_DESC if sample["role"] == "desc" else SEL_SKILL_NAME
+    skill = sample.get("skill") or "?"
+    return f"{skill} {selector}"
+
+
+def _append_nosqueeze_problems(problems, samples):
+    """samples are measured .skill-desc, .skill-name, title, and page label nodes."""
+    spacing_bad = []
+    transform_bad = []
+    stretch_bad = []
+    ellipsis_bad = []
+    overflow_bad = []
+    wrap_bad = []
+    glyph_bad = []
+    for sample in samples:
+        where = sample["where"]
+        label = _nosqueeze_label(sample)
+        if not sample.get("present"):
+            problems.append(f"{where}: {label} missing")
+            continue
+        letter = sample.get("letterSpacingPx")
+        word = sample.get("wordSpacingPx")
+        if letter is None or letter < 0 or word is None or word < 0:
+            spacing_bad.append(
+                f"{where} {label} letter-spacing {sample.get('letterSpacing')!r} "
+                f"({_px(letter)}px) word-spacing {sample.get('wordSpacing')!r} "
+                f"({_px(word)}px)"
+            )
+        if not sample.get("reachedPanel"):
+            transform_bad.append(f"{where} {label} is not inside {SEL_SKILL_PANEL}")
+        else:
+            scaled = [row for row in sample.get("transforms") or [] if not row.get("ok")]
+            if scaled:
+                shown = scaled[0]
+                transform_bad.append(
+                    f"{where} {label} transform {shown.get('transform')!r} "
+                    f"on #{shown.get('id') or shown.get('cls') or 'element'}"
+                )
+        offset_w = sample.get("offsetW") or 0
+        rect_w = sample.get("rectW")
+        ratio = None if offset_w <= 0 or rect_w is None else rect_w / offset_w
+        if ratio is None or ratio < NOSQUEEZE_WIDTH_RATIO_MIN or ratio > NOSQUEEZE_WIDTH_RATIO_MAX:
+            transform_bad.append(
+                f"{where} {label} rect/offsetWidth {_px(ratio)} "
+                f"(rect {_px(rect_w)} offset {_px(offset_w)}); "
+                f"want {NOSQUEEZE_WIDTH_RATIO_MIN}..{NOSQUEEZE_WIDTH_RATIO_MAX}"
+            )
+        stretch = (sample.get("fontStretch") or "").strip()
+        if stretch not in ("100%", "normal"):
+            stretch_bad.append(f"{where} {label} font-stretch {stretch!r}")
+        if sample["role"] == "desc":
+            if sample.get("textOverflow") == "ellipsis":
+                ellipsis_bad.append(f"{where} {label}")
+            scroll_w = sample.get("scrollWidth")
+            client_w = sample.get("clientWidth")
+            if client_w is None or client_w <= 0 or scroll_w is None or scroll_w > client_w + 1:
+                overflow_bad.append(
+                    f"{label} {sample.get('text')!r} scrollWidth {_px(scroll_w)} "
+                    f"clientWidth {_px(client_w)}"
+                )
+            font_px = sample.get("fontPx") or 0
+            height = sample.get("height")
+            white = sample.get("whiteSpace")
+            if (
+                white != "nowrap"
+                or height is None
+                or font_px <= 0
+                or height > font_px * SKILL_DESC_LINE_RATIO + 0.5
+            ):
+                wrap_bad.append(
+                    f"{where} {label} white-space {white!r} height {_px(height)}px "
+                    f"font {_px(font_px)}px"
+                )
+        if sample.get("glyphCount"):
+            min_ratio = sample.get("minRatio")
+            if min_ratio is None or min_ratio < NOSQUEEZE_GLYPH_MIN_RATIO:
+                glyph_bad.append(
+                    f"{label} min ratio {_px(min_ratio)} "
+                    f"(char {sample.get('minChar')!r} width {_px(sample.get('minWidth'))}px "
+                    f"/ font {_px(sample.get('fontPx'))}px)"
+                )
+    if spacing_bad:
+        problems.append(
+            "check1 letter-spacing/word-spacing < 0: " + " | ".join(spacing_bad)
+        )
+    if transform_bad:
+        problems.append("check2 scaled transform: " + " | ".join(transform_bad))
+    if stretch_bad:
+        problems.append("check3 font-stretch: " + " | ".join(stretch_bad))
+    if ellipsis_bad:
+        problems.append(
+            "check4 text-overflow ellipsis: " + " | ".join(ellipsis_bad)
+        )
+    if overflow_bad:
+        problems.append(
+            f"check4 description overflows on {len(overflow_bad)} skill(s): "
+            + " | ".join(overflow_bad)
+        )
+    if wrap_bad:
+        problems.append("check4 description is not a single nowrap line: " + " | ".join(wrap_bad))
+    if glyph_bad:
+        problems.append(
+            f"check5 CJK glyph width < {NOSQUEEZE_GLYPH_MIN_RATIO}em: " + " | ".join(glyph_bad)
+        )
+
+
+def _extend_nosqueeze(samples, where, payload):
+    if not payload.get("open"):
+        samples.append({
+            "where": where,
+            "present": False,
+            "role": "title",
+            "skill": "",
+            "text": "",
+        })
+        return
+    for key in ("title", "page"):
+        item = dict(payload.get(key) or {"present": False, "role": key, "skill": ""})
+        item["where"] = where
+        samples.append(item)
+    for card in payload.get("cards") or []:
+        for key in ("name", "desc"):
+            item = dict(card.get(key) or {"present": False, "role": key, "skill": ""})
+            item["where"] = where
+            samples.append(item)
+
+
+@pytest.mark.case_id("TC-FE-SKILLMENU-NOSQUEEZE")
+def test_tc_fe_skillmenu_nosqueeze(page, base_url, menu_ids):
+    """Descriptions, names, the title, and the page label are not squeezed to fit.
+
+    Same kids as TC-FE-SKILLMENU-TYPE / TITLE: 6 skills, page 2 of 8 skills,
+    and every page of the 22-skill kid. Font-size floors stay on TYPE.
+    """
+    case_id = "TC-FE-SKILLMENU-NOSQUEEZE"
+    problems = []
+    samples = []
+
+    _login(page, base_url, MENU_KID6)
+    _start_and_show_battle(page, menu_ids[MENU_KID6])
+    open_problems, pages = _collect_nosqueeze_pages(page, "6-skill")
+    problems.extend(open_problems)
+    if pages:
+        _extend_nosqueeze(samples, "6-skill", pages[0])
+        if len(pages[0].get("cards") or []) != 6:
+            problems.append(f"6-skill page shows {len(pages[0].get('cards') or [])} cards; want 6")
+        if pages[0].get("label") != "1 / 1":
+            problems.append(f"6-skill page label {pages[0].get('label')!r}; want '1 / 1'")
+
+    _login(page, base_url, MENU_KID8)
+    _start_and_show_battle(page, menu_ids[MENU_KID8])
+    open_problems, pages = _collect_nosqueeze_pages(page, "8-skill")
+    problems.extend(open_problems)
+    page2 = next((item for item in pages if item.get("pageIndex") == 1), None)
+    if page2 is None:
+        problems.append("8-skill kid has no page 2 to measure")
+    else:
+        _extend_nosqueeze(samples, "8-skill page 2", page2)
+        if page2.get("label") != "2 / 2":
+            problems.append(f"8-skill page 2 label {page2.get('label')!r}; want '2 / 2'")
+        if len(page2.get("cards") or []) != 2:
+            problems.append(f"8-skill page 2 shows {len(page2.get('cards') or [])} cards; want 2")
+
+    _login(page, base_url, MENU_KID22)
+    started = _start_and_show_battle(page, menu_ids[MENU_KID22])
+    open_problems, pages = _collect_nosqueeze_pages(page, "22-skill")
+    problems.extend(open_problems)
+    seen = []
+    for item in pages:
+        _extend_nosqueeze(samples, f"22-skill page {item['pageIndex'] + 1}", item)
+        for card in item.get("cards") or []:
+            name = (card.get("name") or {}).get("skill") or (card.get("name") or {}).get("text")
+            if name:
+                seen.append(name)
+    missing = [name for name in SEEDED_SKILL_NAMES if name not in seen]
+    if pages and missing:
+        problems.append(
+            f"22-skill kid battle skills {[row['name'] for row in started['skills']]}; "
+            f"menu never showed {missing}"
+        )
+    title = next((item for item in samples if item.get("role") == "title" and item.get("present")), None)
+    if title and title.get("text") != "技能":
+        problems.append(f"title text {title.get('text')!r}; want '技能'")
+    _append_nosqueeze_problems(problems, samples)
     _fail(case_id, problems)
 
 

@@ -92,6 +92,30 @@ TITLE_CONTROL_MIN_PX = 44
 SKILL_PANEL_RECT = {"left": 332.0, "top": 141.0, "right": 980.0, "bottom": 461.0}
 SKILL_PANEL_RECT_TOLERANCE_PX = 2
 
+# 盾擊 copy. The mechanic is unchanged: a normal physical hit sets
+# halve_counter; the next counter with damage > 0 is integer-halved, then
+# the flag clears. A miss, a pre-emptive 0, or any 0-damage counter does not
+# clear it. Exact text is locked by the formal cases. DESC-05 only requires
+# 減半 and 下一次/下次.
+SHIELD_DESCRIPTION = "物理攻擊，下一次受到的傷害減半"
+# What main 3b0a48a already stores, before the sentence above.
+SHIELD_DESCRIPTION_ON_MAIN = "物理攻擊，怪物攻擊傷害減半，直到下一次被打中"
+# afbc1a6 skill_defs id 8, renamed 挑釁 → 盾擊. Description before migration.
+TAUNT_DESCRIPTION_AFBC1A6 = "強制敵方攻擊自己"
+SHIELD_SKILL_ID = 8
+# Exact strings inside the parametrized formal cases.
+# 疾風斬 and 強光 stay on COLLOQUIAL_CHARS. 營養餐 stays on 回復 + MP.
+EXACT_SKILL_COPY = {
+    "盾擊": SHIELD_DESCRIPTION,
+}
+
+# TC-FE-SKILLMENU-NOSQUEEZE. A negative letter-spacing must not fake the
+# 15px description floor. 'normal' spacing counts as 0.
+NOSQUEEZE_GLYPH_MIN_RATIO = 0.95
+NOSQUEEZE_WIDTH_RATIO_MIN = 0.99
+NOSQUEEZE_WIDTH_RATIO_MAX = 1.01
+NOSQUEEZE_MATRIX_EPS = 0.001
+
 # Battle message. A long line is probed at this width before the live toast is measured.
 TOAST_WRAP_WIDTH_PX = 1100
 TOAST_LINE_TOLERANCE_PX = 1

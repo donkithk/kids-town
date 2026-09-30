@@ -1768,6 +1768,7 @@ def test_skill_descriptions_use_the_locked_keywords(test_db):
 
     冰凍唔好寫減速。要講怪物或者敵人嘅攻擊下降。
     強光要有「2 次」，以及「落空」或「打不中」。口語「打唔中」唔再算過。
+    盾擊要有「減半」，以及「下一次」或「下次」。唔再要求「被打中」。
     """
     db = connect_db(test_db)
     rows = {
@@ -1784,8 +1785,8 @@ def test_skill_descriptions_use_the_locked_keywords(test_db):
     shield = rows.get("盾擊")
     if shield is None:
         problems.append("盾擊 missing")
-    elif "下一次被打中" not in shield and "下次被打中" not in shield:
-        problems.append(f"盾擊 description {shield!r} missing 下一次被打中/下次被打中")
+    elif "減半" not in shield or ("下一次" not in shield and "下次" not in shield):
+        problems.append(f"盾擊 description {shield!r} missing 減半 and 下一次/下次")
     flash = rows.get("強光")
     if flash is None:
         problems.append("強光 missing")

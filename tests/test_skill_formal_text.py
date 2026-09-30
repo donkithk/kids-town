@@ -18,11 +18,16 @@ from tests.factories import connect_db, response_text
 from tests.historical_seed import tracked_sha256, use_temp_database
 from tests.skill_menu_spec import (
     COLLOQUIAL_CHARS,
+    EXACT_SKILL_COPY,
     MEAL_CAST_DAMAGE,
     MEAL_HOT_PER_TURN,
     MEAL_HOT_TURNS,
     NUTRITION_MEAL_MP_REGEN,
     SEEDED_SKILL_NAMES,
+    SHIELD_DESCRIPTION,
+    SHIELD_DESCRIPTION_ON_MAIN,
+    SHIELD_SKILL_ID,
+    TAUNT_DESCRIPTION_AFBC1A6,
     colloquial_hits,
     mp_after_nutrition_meal,
 )
@@ -30,6 +35,7 @@ from tests.test_skill_truth import _require, _tune
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OLD_REV = "afbc1a6"
+MAIN_REV = "3b0a48a"
 _RENAME = {"挑釁": "盾擊", "迴避": "疾風斬"}
 
 
@@ -40,9 +46,21 @@ def _formal_problem(name, description):
     return f"{name} description {description!r} contains colloquial {''.join(hits)}"
 
 
+def _exact_problem(name, description):
+    """Exact copy locked beside the colloquial rule. Only EXACT_SKILL_COPY names."""
+    expected = EXACT_SKILL_COPY.get(name)
+    if expected is None:
+        return None
+    if (description or "") != expected:
+        return f"{name} description {description!r} != locked {expected!r}"
+    return None
+
+
 def _assert_formal(name, description):
     problem = _formal_problem(name, description)
     assert problem is None, problem
+    exact = _exact_problem(name, description)
+    assert exact is None, exact
 
 
 @pytest.fixture(scope="module")
@@ -266,6 +284,97 @@ def _apply_current_migrations(path):
         b.seed_skill_defs()
 
 
+def _seed_revision_catalog(rev, dest):
+    """Seed skill_defs with ``rev``'s backend into ``dest``. Never the play DB.
+
+    Returns the pre-migration skill rows (id, name, description).
+    """
+    from tests.historical_seed import TRACKED_DB, refuse_tracked
+
+    dest = refuse_tracked(dest)
+    work = f"/tmp/kt-{rev}-skill-menu"
+    if os.path.exists(work):
+        subprocess.check_call(["git", "worktree", "remove", "--force", work], cwd=REPO)
+    subprocess.check_call(
+        ["git", "worktree", "add", "--detach", work, rev],
+        cwd=REPO,
+    )
+    work_db = os.path.join(work, "kids_town.db")
+    work_existed = os.path.exists(work_db)
+    work_digest = _sha256(work_db) if work_existed else None
+    play_digest = _sha256(TRACKED_DB)
+    snapshot_path = dest + ".before.json"
+    script = r"""
+import json, os, sqlite3, sys
+root, dest, snapshot_path = sys.argv[1], sys.argv[2], sys.argv[3]
+root_real = os.path.realpath(root)
+sys.path = [root] + [
+    p for p in sys.path
+    if p and os.path.realpath(p) != os.path.realpath("/workspace")
+]
+os.chdir(root)
+import backend_v2 as old
+if not os.path.realpath(old.__file__).startswith(root_real):
+    raise SystemExit("imported " + old.__file__ + " instead of the worktree")
+tracked = os.path.realpath(os.path.join(root, "kids_town.db"))
+dest_real = os.path.realpath(dest)
+if dest_real == tracked or dest_real.endswith("/kids_town.db"):
+    raise SystemExit("refusing to write " + dest_real)
+old.DB_PATH = dest_real
+old.init_db()
+old.migrate_db()
+old.migrate_db_v3()
+old.migrate_db_v4()
+old.seed_building_defs()
+old.seed_skill_defs()
+db = sqlite3.connect(dest_real)
+db.row_factory = sqlite3.Row
+skills = [
+    {"id": row["id"], "name": row["name"], "description": row["description"] or ""}
+    for row in db.execute("SELECT id, name, description FROM skill_defs ORDER BY id")
+]
+db.close()
+with open(snapshot_path, "w", encoding="utf-8") as handle:
+    json.dump({"skills": skills}, handle, ensure_ascii=False)
+"""
+    try:
+        proc = subprocess.run(
+            [sys_executable(), "-c", script, work, dest, snapshot_path],
+            cwd=work,
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            raise AssertionError(
+                f"{rev} worktree seed failed ({proc.returncode})\n"
+                f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
+            )
+        if work_existed and _sha256(work_db) != work_digest:
+            raise AssertionError("worktree kids_town.db was written")
+        if os.path.exists(work_db) and not work_existed:
+            raise AssertionError("worktree kids_town.db was created")
+        if _sha256(TRACKED_DB) != play_digest:
+            raise AssertionError("tracked kids_town.db changed while seeding " + rev)
+        with open(snapshot_path, encoding="utf-8") as handle:
+            return json.load(handle)
+    finally:
+        subprocess.call(["git", "worktree", "remove", "--force", work], cwd=REPO)
+
+
+def _read_skill_catalog(path):
+    db = connect_db(path)
+    descriptions = {
+        row["name"]: row["description"] or ""
+        for row in db.execute("SELECT name, description FROM skill_defs").fetchall()
+    }
+    by_id = {
+        row["id"]: dict(row)
+        for row in db.execute("SELECT id, name, description FROM skill_defs").fetchall()
+    }
+    db.close()
+    return descriptions, by_id
+
+
 @pytest.fixture(scope="module")
 def migrated_catalog(tmp_path_factory):
     """Old afbc1a6 database copied, then current init/migrations applied."""
@@ -278,15 +387,8 @@ def migrated_catalog(tmp_path_factory):
     shutil.copy2(original, copied)
     _apply_current_migrations(copied)
     assert tracked_sha256() == play_before
+    descriptions, by_id = _read_skill_catalog(copied)
     db = connect_db(copied)
-    descriptions = {
-        row["name"]: row["description"] or ""
-        for row in db.execute("SELECT name, description FROM skill_defs").fetchall()
-    }
-    by_id = {
-        row["id"]: dict(row)
-        for row in db.execute("SELECT id, name, description FROM skill_defs").fetchall()
-    }
     kid = dict(db.execute("SELECT * FROM kids WHERE id=?", (snapshot["kid_id"],)).fetchone())
     auth = dict(
         db.execute(
@@ -312,6 +414,27 @@ def migrated_catalog(tmp_path_factory):
     }
 
 
+@pytest.fixture(scope="module")
+def main_migrated_catalog(tmp_path_factory):
+    """main 3b0a48a catalog, then current migrations. Old 盾擊 text is the input."""
+    folder = tmp_path_factory.mktemp("main-migrated")
+    original = str(folder / "main.db")
+    play_before = tracked_sha256()
+    snapshot = _seed_revision_catalog(MAIN_REV, original)
+    assert tracked_sha256() == play_before
+    before = {row["id"]: row for row in snapshot["skills"]}
+    shield = before.get(SHIELD_SKILL_ID)
+    assert shield, snapshot["skills"]
+    assert shield["name"] == "盾擊", shield
+    assert shield["description"] == SHIELD_DESCRIPTION_ON_MAIN, shield
+    copied = str(folder / "migrated.db")
+    shutil.copy2(original, copied)
+    _apply_current_migrations(copied)
+    assert tracked_sha256() == play_before
+    descriptions, by_id = _read_skill_catalog(copied)
+    return {"descriptions": descriptions, "by_id": by_id, "snapshot": snapshot}
+
+
 @pytest.mark.case_id("TC-API-SKILL-FORMAL-COUNT")
 def test_fresh_catalog_is_the_22_seeded_skills(fresh_catalog):
     """The fresh seed is exactly these 22 names, so each name is its own case."""
@@ -323,7 +446,11 @@ def test_fresh_catalog_is_the_22_seeded_skills(fresh_catalog):
 @pytest.mark.case_id("TC-API-SKILL-FORMAL")
 @pytest.mark.parametrize("skill_name", SEEDED_SKILL_NAMES, ids=list(SEEDED_SKILL_NAMES))
 def test_seed_description_is_formal_written_chinese(fresh_catalog, skill_name):
-    """Fresh skill_defs.description has none of the colloquial characters."""
+    """Fresh skill_defs.description has none of the colloquial characters.
+
+    盾擊 is also locked to EXACT_SKILL_COPY. 疾風斬 and 強光 stay on the
+    colloquial rule. 營養餐 stays on 回復 + MP in the meal cases, not here.
+    """
     description = fresh_catalog["seed"].get(skill_name)
     assert description is not None, skill_name
     _assert_formal(skill_name, description)
@@ -344,6 +471,8 @@ def test_battle_ui_api_description_is_formal(fresh_catalog, skill_name):
         assert skill_name in rows, f"{skill_name} missing from {source}"
         problem = _formal_problem(skill_name, rows[skill_name])
         assert problem is None, f"{source}: {problem}"
+        exact = _exact_problem(skill_name, rows[skill_name])
+        assert exact is None, f"{source}: {exact}"
         assert rows[skill_name] == fresh_catalog["seed"][skill_name], (
             skill_name,
             source,
@@ -353,16 +482,39 @@ def test_battle_ui_api_description_is_formal(fresh_catalog, skill_name):
 
 
 @pytest.mark.case_id("TC-API-SKILL-FORMAL-MIGRATE")
+@pytest.mark.parametrize("origin", ["afbc1a6", "main-3b0a48a"])
 @pytest.mark.parametrize("skill_name", SEEDED_SKILL_NAMES, ids=list(SEEDED_SKILL_NAMES))
-def test_migrated_description_is_formal(migrated_catalog, skill_name):
-    """After current migrations of an afbc1a6 database, every description is formal."""
-    description = migrated_catalog["descriptions"].get(skill_name)
-    assert description is not None, (
-        f"{skill_name} missing after migrating {OLD_REV}. "
-        "seed_building_defs leaves a non-empty catalog untouched, so a building "
-        "that old seed did not have (銀行) never appears, and seed_skill_defs "
-        "then skips the skill that needs it."
-    )
+def test_migrated_description_is_formal(migrated_catalog, main_migrated_catalog, skill_name, origin):
+    """After current migrations, every description is formal.
+
+    afbc1a6 has no 銀行, so 金錢砸 never appears. 挑釁 id 8 is renamed to 盾擊.
+    main 3b0a48a already has 盾擊 with the old sentence. Both must end on the
+    locked 盾擊 sentence. 疾風斬 and 強光 stay on the colloquial rule.
+    """
+    catalog = migrated_catalog if origin == "afbc1a6" else main_migrated_catalog
+    description = catalog["descriptions"].get(skill_name)
+    if description is None and origin == "afbc1a6":
+        raise AssertionError(
+            f"{skill_name} missing after migrating {OLD_REV}. "
+            "seed_building_defs leaves a non-empty catalog untouched, so a building "
+            "that old seed did not have (銀行) never appears, and seed_skill_defs "
+            "then skips the skill that needs it."
+        )
+    assert description is not None, f"{skill_name} missing after migrating {MAIN_REV}"
+    if skill_name == "盾擊":
+        before = {row["id"]: row for row in catalog["snapshot"]["skills"]}
+        prior = before.get(SHIELD_SKILL_ID)
+        assert prior, sorted(before)
+        after = catalog["by_id"].get(SHIELD_SKILL_ID)
+        assert after, f"id {SHIELD_SKILL_ID} missing after migrating {origin}"
+        assert after["name"] == "盾擊", after
+        assert (after.get("description") or "") == SHIELD_DESCRIPTION, after
+        if origin == "afbc1a6":
+            assert prior["name"] == "挑釁", prior
+            assert (prior.get("description") or "") == TAUNT_DESCRIPTION_AFBC1A6, prior
+        else:
+            assert prior["name"] == "盾擊", prior
+            assert prior["description"] == SHIELD_DESCRIPTION_ON_MAIN, prior
     _assert_formal(skill_name, description)
 
 
