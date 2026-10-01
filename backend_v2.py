@@ -1614,10 +1614,6 @@ def grant_starter_pack_once(db, kid_id):
 # Four-scene buildable map. Origins outside this box, or with no legal cell, warehouse on load.
 TOWN_PLACE_COLS = 8
 TOWN_PLACE_ROWS = 8
-# 燈塔 / 競技場 / 天文台 still use the pre-8×8 plots (0–22 × 0–14) once their
-# unlock_region is satisfied. Ungated buildings do not.
-LEGACY_PLACE_MAX_X = 22
-LEGACY_PLACE_MAX_Y = 14
 
 
 def warehouse_legacy_out_of_grid(db, kid_id):
@@ -1677,31 +1673,59 @@ def _placement_origin(cell_x, cell_y):
     return cx, cy, None, None
 
 
-def _region_plot_allowed(db, kid_id, def_id, cx, cy):
-    """Outside 8×8, only an unlocked region building may keep a legacy plot.
+def _origin_in_town(cx, cy):
+    return 0 <= cx < TOWN_PLACE_COLS and 0 <= cy < TOWN_PLACE_ROWS
 
-    Returns (allow, response). allow True means the caller should continue.
-    response is a (body, status) pair when the place must stop.
+
+def _reject_locked_region_plot(db, kid_id, def_id):
+    """Locked 燈塔／競技場／天文台 fail unlock before the shared 8×8 check.
+
+    An unlocked region building uses that same check. There is no 0–22 × 0–14 plot.
+    Returns a Flask response, or None when placement may continue.
     """
-    if 0 <= cx < TOWN_PLACE_COLS and 0 <= cy < TOWN_PLACE_ROWS:
-        return True, None
     early = db.execute(
         "SELECT unlock_region FROM building_defs WHERE id=?", (def_id,)
     ).fetchone()
-    region = parse_unlock_region(early['unlock_region']) if early else None
-    legacy = (
-        region is not None
-        and 0 <= cx <= LEGACY_PLACE_MAX_X
-        and 0 <= cy <= LEGACY_PLACE_MAX_Y
-    )
-    if not legacy:
-        return False, ({'error': '位置超出地圖範圍（0 至 7）'}, 400)
+    if not early or parse_unlock_region(early['unlock_region']) is None:
+        return None
     unlock_err, unlock_extra = building_unlock_error(kid_id, early['unlock_region'], db)
     if unlock_err == 'region_locked':
-        return False, ({'error': 'region_locked', 'region_id': unlock_extra}, 400)
+        return jsonify({'error': 'region_locked', 'region_id': unlock_extra}), 400
     if unlock_err:
-        return False, ({'error': 'unlock_region', 'region_id': unlock_extra}, 400)
-    return True, None
+        return jsonify({'error': 'unlock_region', 'region_id': unlock_extra}), 400
+    return None
+
+
+def _first_legal_cell(db, kid_id, exclude_building_id=None):
+    """First free 8×8 origin, row by row. (7, 7) counts. None when the map is full."""
+    for cy in range(TOWN_PLACE_ROWS):
+        for cx in range(TOWN_PLACE_COLS):
+            blocked, _status = _placement_blocked(db, kid_id, cx, cy, exclude_building_id)
+            if not blocked:
+                return cx, cy
+    return None
+
+
+def place_building_free(db, kid_id, def_id, level=1, exclude_building_id=None):
+    """Auto-place with no gold or materials. First legal cell, else stored=1.
+
+    Does not commit. Caller keeps id, level, and the right to take a stored row out later.
+    """
+    cell = _first_legal_cell(db, kid_id, exclude_building_id)
+    if cell is None:
+        cur = db.execute(
+            "INSERT INTO buildings (kid_id, def_id, plot_idx, level, cell_x, cell_y, stored) "
+            "VALUES (?, ?, 0, ?, NULL, NULL, 1)",
+            (kid_id, def_id, level),
+        )
+        return cur.lastrowid, None
+    cx, cy = cell
+    cur = db.execute(
+        "INSERT INTO buildings (kid_id, def_id, plot_idx, level, cell_x, cell_y, stored) "
+        "VALUES (?, ?, 0, ?, ?, ?, 0)",
+        (kid_id, def_id, level, cx, cy),
+    )
+    return cur.lastrowid, cell
 
 
 def _footprints_overlap(ax, ay, bx, by, size=BUILDING_FOOTPRINT):
@@ -1758,19 +1782,9 @@ def _ensure_building_placement_columns(db):
         db.execute("ALTER TABLE buildings ADD COLUMN stored INTEGER DEFAULT 0")
 
 
-def _preview_guild_cell(db, kid_id):
-    """First free 2×2 plot, preferring the usual guild cell (6, 0)."""
-    occupied = set()
-    for row in db.execute(
-        "SELECT cell_x, cell_y FROM buildings WHERE kid_id=? AND COALESCE(stored, 0)=0",
-        (kid_id,),
-    ):
-        occupied.add((row['cell_x'] or 0, row['cell_y'] or 0))
-    candidates = [(6, 0)] + [(x, y) for y in range(0, 13) for x in range(0, 21)]
-    for x, y in candidates:
-        if all((x + dx, y + dy) not in occupied for dy in range(2) for dx in range(2)):
-            return x, y
-    return 6, 0
+def _preview_guild_cell(db, kid_id, exclude_building_id=None):
+    """First legal 8×8 cell for the preview guild. None when the map is full."""
+    return _first_legal_cell(db, kid_id, exclude_building_id)
 
 
 def ensure_preview_kid(db):
@@ -1834,18 +1848,14 @@ def ensure_preview_kid(db):
             (kid_id, guild['id']),
         ).fetchone()
         if stored:
-            cell_x, cell_y = _preview_guild_cell(db, kid_id)
-            db.execute(
-                "UPDATE buildings SET stored=0, cell_x=?, cell_y=? WHERE id=?",
-                (cell_x, cell_y, stored['id']),
-            )
+            cell = _preview_guild_cell(db, kid_id, stored['id'])
+            if cell is not None:
+                db.execute(
+                    "UPDATE buildings SET stored=0, cell_x=?, cell_y=? WHERE id=?",
+                    (cell[0], cell[1], stored['id']),
+                )
         else:
-            cell_x, cell_y = _preview_guild_cell(db, kid_id)
-            db.execute(
-                "INSERT INTO buildings (kid_id, def_id, plot_idx, level, cell_x, cell_y, stored) "
-                "VALUES (?, ?, 0, 1, ?, ?, 0)",
-                (kid_id, guild['id'], cell_x, cell_y),
-            )
+            place_building_free(db, kid_id, guild['id'], level=1)
 
     # Unlock battle lobby regions 2–3 (UI requires prior explored region).
     for region_id in (1, 2):
@@ -3372,9 +3382,11 @@ def place_building(kid_id):
     if parse_err:
         return jsonify({'error': parse_err}), parse_status
     db = get_db()
-    allowed, stopped = _region_plot_allowed(db, kid_id, def_id, cx, cy)
-    if not allowed:
-        return jsonify(stopped[0]), stopped[1]
+    if not _origin_in_town(cx, cy):
+        locked = _reject_locked_region_plot(db, kid_id, def_id)
+        if locked:
+            return locked
+        return jsonify({'error': '位置超出地圖範圍（0 至 7）'}), 400
     owned = db.execute(
         "SELECT id, stored, level FROM buildings WHERE kid_id=? AND def_id=? ORDER BY id",
         (kid_id, def_id),
