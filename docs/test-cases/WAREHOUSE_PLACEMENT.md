@@ -52,7 +52,7 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 | TC-API-WAREHOUSE-BUILD-REJECT | 負數、原點佔用、地磚：4xx，不扣、不新增。省略座標不再當成拒絕。8×8 每個原點都被佔用時，省略座標的新建造必須 400，金幣與材料不變，不得新增該 `def_id` 的行。若回應有訊息，必須正好是「城鎮沒有空位，請先收起或移動其他建築。」原因：有空位時省略座標要自動放置，不能再把缺座標一律判失敗。 | FAIL | 負數、原點佔用、地磚，以及滿圖的 400、不扣、不新增都通過。訊息是 `def_id, cell_x, cell_y required`，不是「城鎮沒有空位，請先收起或移動其他建築。」 |
 | TC-API-WAREHOUSE-BUILD-OVERLAP | 圖書館建在 `(1,0)`，與已放置健身室 `(0,0)` 的 2×2 重疊：4xx，不扣、不新增、不入倉。 | FAIL | 實際 201，扣 100 金幣與木材 5，新行 `stored=0` 於 `(1,0)`。 |
 | TC-API-WAREHOUSE-BUILD-REUSE | 存倉已有 Lv.2 圖書館時，再 POST 建造該種類並指定格子：放回同一行到要求的格子，等級 2，不扣費，仍然只有一行。 | FAIL | 實際 400「你已經興建咗呢種建築物」；行維持 `stored=1` 於 `(20,12)`。未扣費，但沒有放回。 |
-| TC-API-WAREHOUSE-BUILD-REUSE-AUTO | 同一座 `stored=1`、等級大於 1 的建築，POST 只帶 `def_id`、不帶座標。空圖：201，同一行變成 `stored=0` 於第一個合法格（空圖為 `(0,0)`），等級保留，不扣費，該 `def_id` 的行數不增加。滿圖：400，金幣與材料不變，該行仍是 `stored=1`、同一 id、同一等級，不新增。`BUILD-REUSE` 有指定格子，這條沒有。 | FAIL | 空圖省略座標回 400 `def_id, cell_x, cell_y required`。圖書館仍是 `stored=1`、等級 2、座標 `(20,12)`，沒有放到 `(0,0)`。滿圖該半段通過：400、資源不變、同一行維持 `stored=1`、沒有新增。 |
+| TC-API-WAREHOUSE-BUILD-REUSE-AUTO | 同一座 `stored=1`、等級大於 1 的建築，POST 只帶 `def_id`、不帶座標。空圖：200 或 201，與 `BUILD-REUSE` 相同。放回的是已有那一行，不是新建，所以不要求 201。同一行變成 `stored=0` 於第一個合法格（空圖為 `(0,0)`），等級保留，不扣費，該 `def_id` 的行數不增加。滿圖：400，金幣與材料不變，該行仍是 `stored=1`、同一 id、同一等級，不新增。`BUILD-REUSE` 有指定格子，這條沒有。 | FAIL | 空圖省略座標回 400 `def_id, cell_x, cell_y required`。圖書館仍是 `stored=1`、等級 2、座標 `(20,12)`，沒有放到 `(0,0)`。滿圖該半段通過：400、資源不變、同一行維持 `stored=1`、沒有新增。 |
 | TC-API-WAREHOUSE-MOVE-OOB | `POST /buildings/<id>/move` 到 `(8,0)`、`(0,8)`、`(8,8)`、`(-1,0)`、`(0,-1)`、`(20,12)`：4xx。行仍是 `stored=0` 且停在原格，資源不變。其後 GET `/buildings` 與 GET `/town` 也不得把它收倉。 | FAIL | 負數已是 4xx 且行不變。`(8,0)`、`(0,8)`、`(8,8)`、`(20,12)` 回 200 並改座標；GET 之後該行 `stored=1`，停在新的格外座標，而不是仍放置在原格。 |
 | TC-API-WAREHOUSE-MOVE-OVERLAP | 已放置健身室在 `(0,0)` 時，把醫院從 `(4,0)` 移到 `(1,0)`（2×2 重疊）：4xx，醫院仍在 `(4,0)`、等級 2、資源不變。 | FAIL | 實際 HTTP 200，醫院改到 `(1,0)`。佔用檢查只比對原點。 |
 | TC-API-WAREHOUSE-MOVE-STORED-OCC | 地圖上唯一佔用是存倉行留下的座標時，移動必須成功。存倉圖書館停在 `(0,0)` 時，健身室可移到 `(0,0)`，等級保留，不扣資源，圖書館仍 `stored=1`。 | FAIL | 實際 400「該位置已被佔用」，健身室仍在 `(4,4)`。 |
@@ -70,7 +70,7 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 | TC-FE-WAREHOUSE-CARD | 存倉卡片只顯示名稱、等級與「取出」。「按此放置」不得出現。 | FAIL | 清單文字是「圖書館 Lv.2」加「按此放置」，沒有「取出」。 |
 | TC-FE-WAREHOUSE-UNSTORE | 見下方介面步驟。取出走與新建造相同的場景 2 → 場景 3，不顯示價錢。同一輪截圖的頁尾 RGB 差為 0，結構與 `tests/fixtures/kt_footer_main.json` 相同。 | FAIL | 存倉清單沒有「取出」。卡片文字是「按此放置」，呼叫 `startUnstoreBuilding`。頁尾結構與 JSON 相同，同一輪兩次截圖的 RGB 差為 0。失敗發生在清單，不是頁尾。 |
 
-拒絕狀態只接受 400、409、422。401 不算成功拒絕。取出成功為 200 或 201。新建（沒有可再用的存倉行）成功為 201。移動成功為 200。
+拒絕狀態只接受 400、409、422。401 不算成功拒絕。取出成功為 200 或 201。放回已有存倉行（指定格子或省略座標）成功為 200 或 201。新建（沒有可再用的存倉行）成功為 201。移動成功為 200。
 
 移動端點是 `POST /api/kids/<id>/buildings/<id>/move`，正文為 `cell_x`、`cell_y`。
 
@@ -136,8 +136,7 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 
 | ID | 98ea4bf |
 |----|---------|
-| 倉庫 API，除下列一條 | PASS。含 `BUILD-REJECT`（滿圖訊息正好是指定那句）、`REGION-AUTO`（空圖 201 於 `(0,0)` 並扣費；滿圖 400、不新增行）、`REGION-GRID`、`REGION-NO-AUTOSTORE`、`REPAIR-PLACED-LEGACY`、`BUILD-REUSE`（指定格子）。 |
-| TC-API-WAREHOUSE-BUILD-REUSE-AUTO | FAIL。空圖把同一行放到 `(0,0)`（回應 `id` 1、`cell_x` 0、`cell_y` 0），但 HTTP 是 200，不是 201。滿圖半段沒有另外的失敗。 |
+| 倉庫 API，含 `BUILD-REUSE-AUTO` | PASS。空圖放回接受 200 或 201，與指定格子的 `BUILD-REUSE` 相同。`98ea4bf` 回 200，同一行 `stored=0` 於 `(0,0)`，等級保留，不扣費。滿圖 400，該行維持 `stored=1`。`BUILD-REJECT`、`REGION-AUTO`、`REGION-GRID`、`REGION-NO-AUTOSTORE`、`REPAIR-PLACED-LEGACY` 一併通過。 |
 | TC-FE-WAREHOUSE-GRID、CARD、UNSTORE | PASS。取出走到重新載入之後再登入，`#loginScreen` 隱藏，`#townMap` 與 `#ktFooter` 可見，頁尾結構與同一輪像素比對通過。 |
 | P1-TC-UNL-01、P1-TC-UNL-02、P1-TC-UNL-03 | PASS |
 | TC-FE-WAREHOUSE-FULL-TOAST | 未設自動案例。見上方「滿圖提示」。 |

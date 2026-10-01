@@ -627,7 +627,8 @@ def test_build_reuses_stored_building_without_charge_or_duplicate(client, family
 def test_stored_building_auto_places_without_coordinates(client, family, test_db):
     """TC-API-WAREHOUSE-BUILD-REUSE-AUTO 存倉的屋在省略座標時放回原行。
 
-    等級大於 1。空圖放到 (0,0)，201，stored=0，等級保留，不扣費，行數不增加。
+    等級大於 1。空圖放到 (0,0)，狀態與 BUILD-REUSE 一樣接受 200 或 201
+    （放回原行，不是新增）。stored=0，等級保留，不扣費，行數不增加。
     8×8 每個原點都被佔用時 400，該行維持 stored=1、同一 id、同一等級，不新增。
     """
     kid_id = family.kid_a.id
@@ -642,9 +643,9 @@ def test_stored_building_auto_places_without_coordinates(client, family, test_db
     rows = [row for row in _rows(test_db, kid_id) if row["def_id"] == library_def]
     after = _resources(test_db, kid_id)
     problems = []
-    if response.status_code != 201:
+    if response.status_code not in (200, 201):
         problems.append(
-            "empty map without coords expected HTTP 201 reusing the stored row, "
+            "empty map without coords expected HTTP 200 or 201 reusing the stored row, "
             f"got {response.status_code} {' '.join(response_text(response).split())[:180]}"
         )
     if len(rows) != 1:
