@@ -479,7 +479,12 @@ def test_new_build_outside_8x8_does_not_charge_or_store(client, family, test_db)
 
 @pytest.mark.case_id("TC-API-WAREHOUSE-BUILD-REJECT")
 def test_new_build_rejects_missing_negative_occupied_and_tile(client, family, test_db):
-    """TC-API-WAREHOUSE-BUILD-REJECT 缺座標、負數、原點佔用、地磚：4xx，唔扣、唔新增。"""
+    """TC-API-WAREHOUSE-BUILD-REJECT 負數、原點佔用、地磚，以及滿圖省略座標。
+
+    省略座標在有空位時要自動放置，所以這裡不再把「沒有座標」當成拒絕。
+    8×8 每個原點都被佔用時，省略座標的新建造必須 400，不扣費、不新增。
+    若回應帶訊息，文字必須是「城鎮沒有空位，請先收起或移動其他建築。」
+    """
     kid_id = family.kid_a.id
     _rich(test_db, kid_id)
     insert_building(
@@ -494,7 +499,6 @@ def test_new_build_rejects_missing_negative_occupied_and_tile(client, family, te
     db.close()
     login_kid(client, family)
     calls = (
-        ("missing", "library", lambda: _place(client, kid_id, def_id(test_db, "library"), omit=True)),
         ("negative", "gym", lambda: _place(client, kid_id, def_id(test_db, "gym"), -1, 0)),
         ("origin-occupied", "library", lambda: _place(client, kid_id, def_id(test_db, "library"), 2, 2)),
         ("tile", "farm", lambda: _place(client, kid_id, def_id(test_db, "farm"), 4, 4)),
@@ -515,6 +519,42 @@ def test_new_build_rejects_missing_negative_occupied_and_tile(client, family, te
                 f"{name} expected no charge and no new row; resources {before_res} -> {after_res}; "
                 f"rows {before_rows} -> {after_rows}"
             )
+
+    _clear_buildings(test_db, kid_id)
+    db = connect_db(test_db)
+    db.execute("DELETE FROM town_tiles WHERE kid_id=?", (kid_id,))
+    db.commit()
+    db.close()
+    _rich(test_db, kid_id)
+    blocker = def_id(test_db, "gym")
+    for cell_y in range(8):
+        for cell_x in range(8):
+            insert_building(
+                test_db, kid_id, blocker, level=1, stored=0, cell_x=cell_x, cell_y=cell_y
+            )
+    library = def_id(test_db, "library")
+    before_full = _resources(test_db, kid_id)
+    before_lib = [row for row in _rows(test_db, kid_id) if row["def_id"] == library]
+    full = _place(client, kid_id, library, omit=True)
+    after_full = _resources(test_db, kid_id)
+    after_lib = [row for row in _rows(test_db, kid_id) if row["def_id"] == library]
+    if full.status_code not in REJECT_STATUSES:
+        problems.append(
+            "full 8×8 without coords expected 400, "
+            f"got {full.status_code} {' '.join(response_text(full).split())[:160]}"
+        )
+    if after_full != before_full or len(after_lib) != len(before_lib):
+        problems.append(
+            "full 8×8 without coords must not charge or insert; "
+            f"resources {before_full} -> {after_full}; rows {before_lib} -> {after_lib}"
+        )
+    body = full.get_json(silent=True) or {}
+    message = body.get("error") if isinstance(body, dict) else None
+    if isinstance(message, str) and message != "城鎮沒有空位，請先收起或移動其他建築。":
+        problems.append(
+            "full 8×8 message must be 城鎮沒有空位，請先收起或移動其他建築。 "
+            f"got {message!r}"
+        )
     assert not problems, "TC-API-WAREHOUSE-BUILD-REJECT: " + " | ".join(problems)
 
 
@@ -581,6 +621,70 @@ def test_build_reuses_stored_building_without_charge_or_duplicate(client, family
     if after != before:
         problems.append(f"must not charge, {before} -> {after}")
     assert not problems, "TC-API-WAREHOUSE-BUILD-REUSE: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-API-WAREHOUSE-BUILD-REUSE-AUTO")
+def test_stored_building_auto_places_without_coordinates(client, family, test_db):
+    """TC-API-WAREHOUSE-BUILD-REUSE-AUTO 存倉的屋在省略座標時放回原行。
+
+    等級大於 1。空圖放到 (0,0)，201，stored=0，等級保留，不扣費，行數不增加。
+    8×8 每個原點都被佔用時 400，該行維持 stored=1、同一 id、同一等級，不新增。
+    """
+    kid_id = family.kid_a.id
+    _rich(test_db, kid_id)
+    library_def = def_id(test_db, "library")
+    library = insert_building(
+        test_db, kid_id, library_def, level=2, stored=1, cell_x=20, cell_y=12
+    )
+    login_kid(client, family)
+    before = _resources(test_db, kid_id)
+    response = _place(client, kid_id, library_def, omit=True)
+    rows = [row for row in _rows(test_db, kid_id) if row["def_id"] == library_def]
+    after = _resources(test_db, kid_id)
+    problems = []
+    if response.status_code != 201:
+        problems.append(
+            "empty map without coords expected HTTP 201 reusing the stored row, "
+            f"got {response.status_code} {' '.join(response_text(response).split())[:180]}"
+        )
+    if len(rows) != 1:
+        problems.append(f"expected exactly one library row, got {rows}")
+    elif rows[0]["id"] != library or rows[0]["stored"] != 0 or rows[0]["level"] != 2:
+        problems.append(f"expected the same level-2 row stored=0, got {rows[0]}")
+    elif (rows[0]["cell_x"], rows[0]["cell_y"]) != (0, 0):
+        problems.append(f"expected the first legal cell (0,0), got {rows[0]}")
+    if after != before:
+        problems.append(f"reuse must not charge, {before} -> {after}")
+
+    _clear_buildings(test_db, kid_id)
+    _rich(test_db, kid_id)
+    library = insert_building(
+        test_db, kid_id, library_def, level=2, stored=1, cell_x=20, cell_y=12
+    )
+    blocker = def_id(test_db, "gym")
+    for cell_y in range(8):
+        for cell_x in range(8):
+            insert_building(
+                test_db, kid_id, blocker, level=1, stored=0, cell_x=cell_x, cell_y=cell_y
+            )
+    before_full = _resources(test_db, kid_id)
+    before_row = _row(test_db, library)
+    full = _place(client, kid_id, library_def, omit=True)
+    after_row = _row(test_db, library)
+    after_rows = [row for row in _rows(test_db, kid_id) if row["def_id"] == library_def]
+    if full.status_code not in REJECT_STATUSES:
+        problems.append(
+            "full 8×8 without coords expected 400, "
+            f"got {full.status_code} {' '.join(response_text(full).split())[:160]}"
+        )
+    if _resources(test_db, kid_id) != before_full:
+        problems.append("full 8×8 reuse must not charge")
+    if after_row != before_row or len(after_rows) != 1:
+        problems.append(
+            "stored row must stay stored=1 at the same id and level with no new row; "
+            f"before {before_row}; after {after_row}; rows {after_rows}"
+        )
+    assert not problems, "TC-API-WAREHOUSE-BUILD-REUSE-AUTO: " + " | ".join(problems)
 
 
 @pytest.mark.case_id("TC-API-WAREHOUSE-MOVE-OOB")
@@ -1069,12 +1173,12 @@ def test_region_buildings_use_8x8_after_unlock(client, family, test_db):
 
 
 @pytest.mark.case_id("TC-API-WAREHOUSE-REGION-AUTO")
-def test_region_building_auto_places_or_stores_without_a_stranded_charge(client, family, test_db):
-    """TC-API-WAREHOUSE-REGION-AUTO 冇指定格時，燈塔放到第一個合法 8×8 格。
+def test_region_building_auto_places_or_rejects_a_full_map(client, family, test_db):
+    """TC-API-WAREHOUSE-REGION-AUTO 冇指定格時，新的燈塔放到第一個合法 8×8 格。
 
-    掃描次序跟 firstUnstorePad：行由外、欄由內，空圖係 (0,0)，並扣目錄價。
-    8×8 每一格都有原點時，直接入倉、唔扣，之後騰出一格可以免費取出。
-    伺服器而家缺座標就 400，唔會自動放，亦唔會入倉。
+    掃描次序是行由外、欄由內。空圖第一格是 (0,0)，HTTP 201，stored=0，並扣目錄價。
+    8×8 每個原點都被佔用時必須 400，金幣與材料不變，而且不得新增任何一行
+    （含 stored=1）。免費入倉只適用於小朋友已經擁有的建築。
     """
     kid_id = family.kid_a.id
     insert_explored_region(test_db, kid_id, 3)
@@ -1114,36 +1218,22 @@ def test_region_building_auto_places_or_stores_without_a_stranded_charge(client,
                 test_db, kid_id, blocker, level=1, stored=0, cell_x=cell_x, cell_y=cell_y
             )
     before_full = _resources(test_db, kid_id)
-    before_count = len(_rows(test_db, kid_id))
+    before_rows = [row for row in _rows(test_db, kid_id) if row["def_id"] == building_def]
     full = _place(client, kid_id, building_def, omit=True)
-    full_rows = [row for row in _rows(test_db, kid_id) if row["name"] == "燈塔"]
+    after_rows = [row for row in _rows(test_db, kid_id) if row["def_id"] == building_def]
     after_full = _resources(test_db, kid_id)
-    if full.status_code not in (200, 201) or len(full_rows) != 1 or full_rows[0]["stored"] != 1:
+    if full.status_code not in REJECT_STATUSES:
         problems.append(
-            "full 8×8 without coords expected one stored=1 燈塔 and no charge; "
-            f"got HTTP {full.status_code} {' '.join(response_text(full).split())[:140]}; "
-            f"rows {full_rows}; resources {before_full} -> {after_full}; count {before_count}"
+            "full 8×8 without coords expected HTTP 400 and no new row; "
+            f"got HTTP {full.status_code} {' '.join(response_text(full).split())[:140]}"
         )
-    elif after_full != before_full:
-        problems.append(f"full-grid auto-store charged {before_full} -> {after_full}")
-    else:
-        origin = next(row for row in _rows(test_db, kid_id) if (row["cell_x"], row["cell_y"]) == (0, 0))
-        stored = client.post(f"/api/kids/{kid_id}/buildings/{origin['id']}/store")
-        if stored.status_code not in (200, 201):
-            problems.append(f"could not free (0,0): HTTP {stored.status_code}")
-        else:
-            before_unstore = _resources(test_db, kid_id)
-            unstored = _unstore(client, kid_id, full_rows[0]["id"], 0, 0)
-            placed = _row(test_db, full_rows[0]["id"])
-            if unstored.status_code not in (200, 201):
-                problems.append(
-                    f"unstored onto freed (0,0) expected 200, got {unstored.status_code} "
-                    f"{response_text(unstored)[:140]}"
-                )
-            elif placed["stored"] != 0 or placed["level"] != 1:
-                problems.append(f"expected placed level 1, got {placed}")
-            elif _resources(test_db, kid_id) != before_unstore:
-                problems.append("unstore after a full-grid store must not charge")
+    if after_full != before_full:
+        problems.append(f"full 8×8 without coords changed resources {before_full} -> {after_full}")
+    if len(after_rows) != len(before_rows):
+        problems.append(
+            "full 8×8 without coords must not insert a row, including stored=1; "
+            f"before {before_rows}; after {after_rows}"
+        )
     assert not problems, "TC-API-WAREHOUSE-REGION-AUTO: " + " | ".join(problems)
 
 
