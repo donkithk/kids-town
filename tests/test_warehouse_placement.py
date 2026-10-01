@@ -156,7 +156,8 @@ def _unchanged(before_res, after_res, before_row, after_row):
 def test_unstore_inside_8x8_keeps_level_and_does_not_charge(client, family, test_db):
     """TC-API-WAREHOUSE-UNSTORE-OK 8×8 空格取出：stored=0、等級不變、唔扣任何資源。
 
-    (7,7) 係 8×8 最後一格，必須接受。載入城鎮之後唔好再自動收倉。
+    2×2 最遠合法原點是 (6,6)。(7,7) 足跡伸出地圖，由 EDGE-7 拒絕。
+    載入城鎮之後唔好再自動收倉。
     """
     kid_id = family.kid_a.id
     _rich(test_db, kid_id)
@@ -169,9 +170,9 @@ def test_unstore_inside_8x8_keeps_level_and_does_not_charge(client, family, test
     login_kid(client, family)
     before = _resources(test_db, kid_id)
 
-    placed = _unstore(client, kid_id, hospital, 7, 7)
+    placed = _unstore(client, kid_id, hospital, 6, 6)
     assert placed.status_code in (200, 201), (
-        f"expected unstore 醫院 Lv.2 to (7,7) HTTP 200, got {placed.status_code}: "
+        f"expected unstore 醫院 Lv.2 to (6,6) HTTP 200, got {placed.status_code}: "
         f"{response_text(placed)[:300]}"
     )
     corner = _unstore(client, kid_id, library, 1, 1)
@@ -185,8 +186,8 @@ def test_unstore_inside_8x8_keeps_level_and_does_not_charge(client, family, test
     hospital_row = _row(test_db, hospital)
     library_row = _row(test_db, library)
     assert after == before, f"unstore must not charge, {before} -> {after}"
-    assert hospital_row["stored"] == 0 and (hospital_row["cell_x"], hospital_row["cell_y"]) == (7, 7), (
-        f"expected 醫院 stored=0 at (7,7), got {hospital_row}"
+    assert hospital_row["stored"] == 0 and (hospital_row["cell_x"], hospital_row["cell_y"]) == (6, 6), (
+        f"expected 醫院 stored=0 at (6,6), got {hospital_row}"
     )
     assert hospital_row["level"] == 2, hospital_row
     assert library_row["stored"] == 0 and (library_row["cell_x"], library_row["cell_y"]) == (1, 1), (
@@ -411,26 +412,229 @@ def test_stored_rows_do_not_occupy_map_cells(client, family, test_db):
 
 
 @pytest.mark.case_id("TC-API-WAREHOUSE-BUILD-OK")
-def test_new_build_on_7_7_charges_catalog_and_stays_placed(client, family, test_db):
-    """TC-API-WAREHOUSE-BUILD-OK (7,7) 新建造成功，扣目錄價，GET 之後仍然 stored=0。"""
+def test_new_build_on_6_6_charges_catalog_and_stays_placed(client, family, test_db):
+    """TC-API-WAREHOUSE-BUILD-OK (6,6) 新建造成功，扣目錄價，GET 之後仍然 stored=0。
+
+    (7,7) 對 2×2 不合法，見 TC-API-WAREHOUSE-PLACE-EDGE-7。
+    """
     kid_id = family.kid_a.id
     _rich(test_db, kid_id)
     login_kid(client, family)
     building_def = def_id(test_db, "library")
     gold, materials = _cost(test_db, building_def)
     before = _resources(test_db, kid_id)
-    response = _place(client, kid_id, building_def, 7, 7)
+    response = _place(client, kid_id, building_def, 6, 6)
     assert response.status_code == 201, response_text(response)
     listed = _list_buildings(client, kid_id)
     assert listed.status_code == 200, response_text(listed)
     rows = _rows(test_db, kid_id)
     after = _resources(test_db, kid_id)
     assert len(rows) == 1, rows
-    assert rows[0]["stored"] == 0 and (rows[0]["cell_x"], rows[0]["cell_y"]) == (7, 7), rows
+    assert rows[0]["stored"] == 0 and (rows[0]["cell_x"], rows[0]["cell_y"]) == (6, 6), rows
     assert rows[0]["level"] == 1, rows
     assert after["points"] == before["points"] - gold, (before, after, gold)
     for item_type, qty in materials.items():
         assert after["inventory"].get(item_type, 0) == before["inventory"].get(item_type, 0) - qty
+
+
+def _catalog_columns(test_db):
+    db = connect_db(test_db)
+    columns = [row["name"] for row in db.execute("PRAGMA table_info(building_defs)").fetchall()]
+    names = [row["name"] for row in db.execute("SELECT name FROM building_defs ORDER BY id").fetchall()]
+    db.close()
+    return columns, names
+
+
+def _footprints_overlap(origin, other, footprint):
+    ax, ay = origin
+    bx, by = other
+    return not (
+        ax + footprint <= bx
+        or bx + footprint <= ax
+        or ay + footprint <= by
+        or by + footprint <= ay
+    )
+
+
+@pytest.mark.case_id("TC-API-WAREHOUSE-PLACE-EDGE-7")
+def test_origin_7_sticks_out_of_2x2(client, family, test_db):
+    """TC-API-WAREHOUSE-PLACE-EDGE-7 原點 7 對 2×2 伸出 8×8。
+
+    目錄沒有每座建築自己的尺寸，全部按 2×2。合法條件是原點加足跡兩邊都不超過 8，
+    而且不與已放置建築重疊。最遠合法原點是 8-2=6。(7,0)、(0,7)、(7,7) 必須 400。
+    每個 x、y 都不超過 6 的原點都被佔住、只剩 x=7 或 y=7 空著時，省略座標的
+    新建造與存倉放回都必須 400，不扣費、不新增、不改行。
+    """
+    kid_id = family.kid_a.id
+    columns, names = _catalog_columns(test_db)
+    size_columns = [
+        name for name in columns
+        if name in {"width", "height", "footprint", "size", "cols", "rows", "span_x", "span_y"}
+    ]
+    assert not size_columns, (
+        "TC-API-WAREHOUSE-PLACE-EDGE-7 setup: building_defs has a per-def size column "
+        f"{size_columns}. This case treats every catalog building as 2×2."
+    )
+    assert names, "TC-API-WAREHOUSE-PLACE-EDGE-7 setup: building_defs is empty"
+    footprint = 2
+    limit = 8
+    max_origin = limit - footprint
+    edge = limit - 1
+    targets = ((edge, 0), (0, edge), (edge, edge))
+    blockers = (
+        (0, 0), (2, 0), (5, 0),
+        (0, 2), (2, 2), (5, 2),
+        (0, 5), (2, 5), (5, 5),
+    )
+    for index, origin in enumerate(blockers):
+        for other in blockers[index + 1:]:
+            assert not _footprints_overlap(origin, other, footprint), (
+                f"EDGE-7 setup: blockers overlap {origin} {other}"
+            )
+    open_legal = [
+        (x, y)
+        for y in range(max_origin + 1)
+        for x in range(max_origin + 1)
+        if not any(_footprints_overlap((x, y), blocked, footprint) for blocked in blockers)
+    ]
+    assert open_legal == [], f"EDGE-7 setup: legal origins still open {open_legal}"
+    for origin in targets:
+        assert origin[0] + footprint > limit or origin[1] + footprint > limit, origin
+        assert not any(_footprints_overlap(origin, blocked, footprint) for blocked in blockers), (
+            f"EDGE-7 setup: {origin} overlaps a blocker, so it is not a free edge cell"
+        )
+
+    library = def_id(test_db, "library")
+    gym = def_id(test_db, "gym")
+    hospital_def = def_id(test_db, "hospital")
+    login_kid(client, family)
+    problems = []
+
+    def rejected(label, response, before_res, after_res, before_rows, after_rows):
+        if response.status_code not in REJECT_STATUSES:
+            problems.append(
+                f"{label} expected 4xx, got {response.status_code} "
+                f"{' '.join(response_text(response).split())[:180]}"
+            )
+        if after_res != before_res:
+            problems.append(f"{label} resources changed {before_res} -> {after_res}")
+        if after_rows != before_rows:
+            problems.append(f"{label} rows changed {before_rows} -> {after_rows}")
+
+    for cell_x, cell_y in targets:
+        _clear_buildings(test_db, kid_id)
+        _rich(test_db, kid_id)
+        before_res = _resources(test_db, kid_id)
+        before_rows = _rows(test_db, kid_id)
+        response = _place(client, kid_id, library, cell_x, cell_y)
+        _list_buildings(client, kid_id)
+        rejected(
+            f"new build ({cell_x},{cell_y})",
+            response,
+            before_res,
+            _resources(test_db, kid_id),
+            before_rows,
+            _rows(test_db, kid_id),
+        )
+
+        _clear_buildings(test_db, kid_id)
+        _rich(test_db, kid_id)
+        hospital = insert_building(
+            test_db, kid_id, hospital_def, level=2, stored=0, cell_x=0, cell_y=0
+        )
+        before_res = _resources(test_db, kid_id)
+        before_row = _row(test_db, hospital)
+        response = _move(client, kid_id, hospital, cell_x, cell_y)
+        _list_buildings(client, kid_id)
+        after_row = _row(test_db, hospital)
+        if response.status_code not in REJECT_STATUSES:
+            problems.append(
+                f"move ({cell_x},{cell_y}) expected 4xx, got {response.status_code} "
+                f"{' '.join(response_text(response).split())[:180]}"
+            )
+        if _resources(test_db, kid_id) != before_res:
+            problems.append(
+                f"move ({cell_x},{cell_y}) resources changed "
+                f"{before_res} -> {_resources(test_db, kid_id)}"
+            )
+        if after_row != before_row:
+            problems.append(f"move ({cell_x},{cell_y}) row changed {before_row} -> {after_row}")
+
+        _clear_buildings(test_db, kid_id)
+        _rich(test_db, kid_id)
+        stored = insert_building(
+            test_db, kid_id, hospital_def, level=2, stored=1, cell_x=20, cell_y=12
+        )
+        before_res = _resources(test_db, kid_id)
+        before_row = _row(test_db, stored)
+        response = _unstore(client, kid_id, stored, cell_x, cell_y)
+        _list_buildings(client, kid_id)
+        after_row = _row(test_db, stored)
+        if response.status_code not in REJECT_STATUSES:
+            problems.append(
+                f"unstore ({cell_x},{cell_y}) expected 4xx, got {response.status_code} "
+                f"{' '.join(response_text(response).split())[:180]}"
+            )
+        if _resources(test_db, kid_id) != before_res:
+            problems.append(
+                f"unstore ({cell_x},{cell_y}) resources changed "
+                f"{before_res} -> {_resources(test_db, kid_id)}"
+            )
+        if after_row != before_row:
+            problems.append(
+                f"unstore ({cell_x},{cell_y}) row changed {before_row} -> {after_row}"
+            )
+
+    def plant_blockers():
+        for cell_x, cell_y in blockers:
+            insert_building(test_db, kid_id, gym, level=1, stored=0, cell_x=cell_x, cell_y=cell_y)
+
+    _clear_buildings(test_db, kid_id)
+    _rich(test_db, kid_id)
+    plant_blockers()
+    before_res = _resources(test_db, kid_id)
+    before_rows = _rows(test_db, kid_id)
+    response = _place(client, kid_id, library, omit=True)
+    _list_buildings(client, kid_id)
+    rejected(
+        "auto new build with only edge cells free",
+        response,
+        before_res,
+        _resources(test_db, kid_id),
+        before_rows,
+        _rows(test_db, kid_id),
+    )
+
+    _clear_buildings(test_db, kid_id)
+    _rich(test_db, kid_id)
+    stored_library = insert_building(
+        test_db, kid_id, library, level=2, stored=1, cell_x=20, cell_y=12
+    )
+    plant_blockers()
+    before_res = _resources(test_db, kid_id)
+    before_row = _row(test_db, stored_library)
+    before_count = len(_rows(test_db, kid_id))
+    response = _place(client, kid_id, library, omit=True)
+    _list_buildings(client, kid_id)
+    after_row = _row(test_db, stored_library)
+    after_count = len(_rows(test_db, kid_id))
+    if response.status_code not in REJECT_STATUSES:
+        problems.append(
+            "auto reuse with only edge cells free expected 4xx, got "
+            f"{response.status_code} {' '.join(response_text(response).split())[:180]}"
+        )
+    if _resources(test_db, kid_id) != before_res:
+        problems.append(
+            "auto reuse charged "
+            f"{before_res} -> {_resources(test_db, kid_id)}"
+        )
+    if after_row != before_row or after_count != before_count:
+        problems.append(
+            "auto reuse must keep the stored row and add nothing; "
+            f"row {before_row} -> {after_row}; count {before_count} -> {after_count}"
+        )
+
+    assert not problems, "TC-API-WAREHOUSE-PLACE-EDGE-7: " + " | ".join(problems)
 
 
 @pytest.mark.case_id("TC-API-WAREHOUSE-BUILD-OOB")
@@ -828,7 +1032,7 @@ def test_move_onto_stored_leftover_coords_succeeds(client, family, test_db):
 
 @pytest.mark.case_id("TC-API-WAREHOUSE-MOVE-OK")
 def test_move_inside_8x8_keeps_level_and_does_not_charge(client, family, test_db):
-    """TC-API-WAREHOUSE-MOVE-OK 移到 8×8 空格成功，等級不變，唔扣資源，GET 之後仍然放置。"""
+    """TC-API-WAREHOUSE-MOVE-OK 移到 (6,6) 成功。 (7,7) 對 2×2 不合法，見 EDGE-7。"""
     kid_id = family.kid_a.id
     _rich(test_db, kid_id)
     hospital = insert_building(
@@ -836,20 +1040,20 @@ def test_move_inside_8x8_keeps_level_and_does_not_charge(client, family, test_db
     )
     login_kid(client, family)
     before = _resources(test_db, kid_id)
-    response = _move(client, kid_id, hospital, 7, 7)
+    response = _move(client, kid_id, hospital, 6, 6)
     listed, town = _reload_placement(client, kid_id)
     row = _row(test_db, hospital)
     after = _resources(test_db, kid_id)
     assert response.status_code == 200, response_text(response)
     assert listed.status_code == 200, response_text(listed)
     assert town.status_code == 200, response_text(town)
-    assert row["stored"] == 0 and (row["cell_x"], row["cell_y"]) == (7, 7), row
+    assert row["stored"] == 0 and (row["cell_x"], row["cell_y"]) == (6, 6), row
     assert row["level"] == 2, row
     assert after == before, (before, after)
     payload = town.get_json()
     placed = [item for item in payload.get("buildings") or [] if item.get("id") == hospital]
     stored = [item for item in payload.get("stored_buildings") or [] if item.get("id") == hospital]
-    assert placed and placed[0].get("cell_x") == 7 and placed[0].get("cell_y") == 7, payload
+    assert placed and placed[0].get("cell_x") == 6 and placed[0].get("cell_y") == 6, payload
     assert stored == [], stored
 
 
