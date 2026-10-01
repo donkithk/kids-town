@@ -5701,19 +5701,6 @@ def auth_login():
     return jsonify({'error': '帳號不存在'}), 404
 
 
-@app.route('/api/auth/session', methods=['GET'])
-def auth_session():
-    """Return the signed-in kid so a reload can reopen the town without asking again."""
-    actor = current_actor()
-    if not actor or actor.get('role') != 'kid' or not actor.get('kid_id'):
-        return jsonify({'role': None}), 401
-    db = get_db()
-    kid = db.execute("SELECT * FROM kids WHERE id=?", (actor['kid_id'],)).fetchone()
-    if not kid:
-        return jsonify({'role': None}), 401
-    return jsonify({'role': 'kid', 'user': public_kid(kid)})
-
-
 @app.route('/api/auth/logout', methods=['POST'])
 def auth_logout():
     """Clear the Flask session so later write APIs return 401.
