@@ -1614,6 +1614,10 @@ def grant_starter_pack_once(db, kid_id):
 # Four-scene buildable map. Origins outside this box, or with no legal cell, warehouse on load.
 TOWN_PLACE_COLS = 8
 TOWN_PLACE_ROWS = 8
+# 燈塔 / 競技場 / 天文台 still use the pre-8×8 plots (0–22 × 0–14) once their
+# unlock_region is satisfied. Ungated buildings do not.
+LEGACY_PLACE_MAX_X = 22
+LEGACY_PLACE_MAX_Y = 14
 
 
 def warehouse_legacy_out_of_grid(db, kid_id):
@@ -1643,12 +1647,8 @@ def warehouse_legacy_out_of_grid(db, kid_id):
 BUILDING_FOOTPRINT = 2
 
 
-def _placement_origin(cell_x, cell_y):
-    """Origin must sit inside the 8×8 map. (7, 7) is legal; (8, 0) is not.
-
-    The 2×2 footprint is enforced as overlap against other placed buildings,
-    not as a tighter origin box. Stored rows do not count.
-    """
+def _parse_cell(cell_x, cell_y):
+    """Integer cell, or an error. Does not apply the 8×8 box."""
     if isinstance(cell_x, bool) or isinstance(cell_y, bool):
         return None, None, '座標不正確', 400
     try:
@@ -1660,9 +1660,48 @@ def _placement_origin(cell_x, cell_y):
         return None, None, '座標不正確', 400
     if isinstance(cell_y, float) and cell_y != cy:
         return None, None, '座標不正確', 400
+    return cx, cy, None, None
+
+
+def _placement_origin(cell_x, cell_y):
+    """Origin must sit inside the 8×8 map. (7, 7) is legal; (8, 0) is not.
+
+    The 2×2 footprint is enforced as overlap against other placed buildings,
+    not as a tighter origin box. Stored rows do not count.
+    """
+    cx, cy, err, status = _parse_cell(cell_x, cell_y)
+    if err:
+        return None, None, err, status
     if cx < 0 or cy < 0 or cx >= TOWN_PLACE_COLS or cy >= TOWN_PLACE_ROWS:
         return None, None, '位置超出地圖範圍（0 至 7）', 400
     return cx, cy, None, None
+
+
+def _region_plot_allowed(db, kid_id, def_id, cx, cy):
+    """Outside 8×8, only an unlocked region building may keep a legacy plot.
+
+    Returns (allow, response). allow True means the caller should continue.
+    response is a (body, status) pair when the place must stop.
+    """
+    if 0 <= cx < TOWN_PLACE_COLS and 0 <= cy < TOWN_PLACE_ROWS:
+        return True, None
+    early = db.execute(
+        "SELECT unlock_region FROM building_defs WHERE id=?", (def_id,)
+    ).fetchone()
+    region = parse_unlock_region(early['unlock_region']) if early else None
+    legacy = (
+        region is not None
+        and 0 <= cx <= LEGACY_PLACE_MAX_X
+        and 0 <= cy <= LEGACY_PLACE_MAX_Y
+    )
+    if not legacy:
+        return False, ({'error': '位置超出地圖範圍（0 至 7）'}, 400)
+    unlock_err, unlock_extra = building_unlock_error(kid_id, early['unlock_region'], db)
+    if unlock_err == 'region_locked':
+        return False, ({'error': 'region_locked', 'region_id': unlock_extra}, 400)
+    if unlock_err:
+        return False, ({'error': 'unlock_region', 'region_id': unlock_extra}, 400)
+    return True, None
 
 
 def _footprints_overlap(ax, ay, bx, by, size=BUILDING_FOOTPRINT):
@@ -3329,10 +3368,13 @@ def place_building(kid_id):
     cell_y = data.get('cell_y')
     if not def_id or cell_x is None or cell_y is None:
         return jsonify({'error': 'def_id, cell_x, cell_y required'}), 400
-    cx, cy, origin_err, origin_status = _placement_origin(cell_x, cell_y)
-    if origin_err:
-        return jsonify({'error': origin_err}), origin_status
+    cx, cy, parse_err, parse_status = _parse_cell(cell_x, cell_y)
+    if parse_err:
+        return jsonify({'error': parse_err}), parse_status
     db = get_db()
+    allowed, stopped = _region_plot_allowed(db, kid_id, def_id, cx, cy)
+    if not allowed:
+        return jsonify(stopped[0]), stopped[1]
     owned = db.execute(
         "SELECT id, stored, level FROM buildings WHERE kid_id=? AND def_id=? ORDER BY id",
         (kid_id, def_id),

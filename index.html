@@ -2467,7 +2467,6 @@ async function restoreSession() {
     currentRole = 'kid';
     currentUser = data.user;
     currentKidId = data.user.id;
-    document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('app').style.display = 'block';
     document.body.classList.add('kt-landscape');
     ktPreferLandscape();
