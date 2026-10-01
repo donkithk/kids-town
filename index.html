@@ -2458,35 +2458,6 @@ let expInterval = null;
 let currentRole = null;
 let currentUser = null;
 
-async function restoreSession() {
-  try {
-    const res = await fetch(`${API}/api/auth/session`, {credentials: 'same-origin'});
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.role !== 'kid' || !data.user) return;
-    currentRole = 'kid';
-    currentUser = data.user;
-    currentKidId = data.user.id;
-    const restoredId = data.user.id;
-    document.getElementById('app').style.display = 'block';
-    document.body.classList.add('kt-landscape');
-    ktPreferLandscape();
-    ktSyncArtStage();
-    updateHeader();
-    await loadTown();
-    initCanvas();
-    // A restored kid should not keep the login wall over the town footer.
-    // Leave the form up briefly so a reload that is about to sign in as
-    // someone else can still fill it; doLogin hides it in that case.
-    setTimeout(function () {
-      if (currentRole === 'kid' && currentUser && currentUser.id === restoredId) {
-        const screen = document.getElementById('loginScreen');
-        if (screen) screen.classList.add('hidden');
-      }
-    }, 800);
-  } catch (e) {}
-}
-
 async function doLogin() {
   const username = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value.trim();
@@ -5964,9 +5935,8 @@ document.querySelector('.dbx')?.addEventListener('click', () => {
 // ═══════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════
-// Preload building defs, then reopen the town when the session cookie is still valid.
+// Preload building defs
 loadBuildingDefs();
-restoreSession();
 
 // UI-direction hotspot navigation + honour stamp (delegated)
 ktFooterMountIcons();
