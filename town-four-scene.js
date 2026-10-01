@@ -422,26 +422,26 @@
     return null;
   }
 
-  function originOf(row) {
-    if (!row || row.cell_x == null || row.cell_y == null) return null;
-    return { id: row.id, x: row.cell_x | 0, y: row.cell_y | 0 };
+  function footprintsOverlap(ax, ay, bx, by) {
+    return !(ax + 2 <= bx || bx + 2 <= ax || ay + 2 <= by || by + 2 <= ay);
   }
 
-  /* unstored rejects a 2×2 whose cells hold another building origin or a tile. */
+  /* Placed buildings only. stored=1 does not occupy a cell. */
   function footprintFree(c, r, ignoreId) {
     if (c < 0 || r < 0 || c > COLS - 2 || r > ROWS - 2) return false;
-    var blocks = buildings().concat(storedRows());
+    var blocks = buildings();
+    for (var i = 0; i < blocks.length; i += 1) {
+      var row = blocks[i];
+      if ((row.stored | 0) === 1) continue;
+      if (row.cell_x == null || row.cell_y == null) continue;
+      if (ignoreId != null && String(row.id) === String(ignoreId)) continue;
+      if (footprintsOverlap(c, r, row.cell_x | 0, row.cell_y | 0)) return false;
+    }
     var tiles = (typeof townData !== "undefined" && townData && townData.tiles) || [];
     for (var dy = 0; dy < 2; dy += 1) {
       for (var dx = 0; dx < 2; dx += 1) {
         var cx = c + dx;
         var cy = r + dy;
-        for (var i = 0; i < blocks.length; i += 1) {
-          var origin = originOf(blocks[i]);
-          if (!origin) continue;
-          if (ignoreId != null && String(origin.id) === String(ignoreId)) continue;
-          if (origin.x === cx && origin.y === cy) return false;
-        }
         for (var t = 0; t < tiles.length; t += 1) {
           var tile = tiles[t];
           if ((tile.cell_x | 0) === cx && (tile.cell_y | 0) === cy) return false;
@@ -461,7 +461,21 @@
     return null;
   }
 
-  /* 建築清單放返 stays on the four-scene pad. The 存倉 tab still uses startUnstoreBuilding. */
+  /* 存倉「取出」enters scene 2 on this same pad. The kid picks a cell, then scene 3 confirms. */
+  function beginWarehousePlace(row) {
+    if (!row) return;
+    state.defId = row.def_id;
+    state.unstoreId = row.id;
+    state.sheet = false;
+    state.listOpen = false;
+    state.pad = null;
+    state.confirming = false;
+    state.placeBeat = false;
+    state.scene = 2;
+    render();
+  }
+
+  /* 建築清單放返 stays on the four-scene pad. */
   function placeFromStore(row) {
     if (!row) return;
     state.defId = row.def_id;
@@ -719,8 +733,8 @@
     if (placeStatus) {
       if (placingStore) {
         var storedDefRow = defById(state.defId);
-        var storedName = (storedDefRow && storedDefRow.name) || "呢座屋";
-        placeStatus.textContent = "放返存倉「" + storedName + "」，唔使扣金幣同材料。取消唔會扣。";
+        var storedName = (storedDefRow && storedDefRow.name) || "這座建築";
+        placeStatus.textContent = "放回「" + storedName + "」。不扣除金幣和材料。";
       } else {
         placeStatus.textContent = "確定先至扣資源。取消唔會扣。";
       }
@@ -728,7 +742,10 @@
     var status = $("readyStatus");
     if (status && state.scene === 2) {
       var def = defById(state.defId);
-      if (readyToPreview()) status.textContent = "已揀「" + def.name + "」同呢格空地。";
+      if (state.unstoreId) {
+        var takeName = (def && def.name) || "這座建築";
+        status.textContent = "請點選空地，放回「" + takeName + "」。不扣除金幣和材料。";
+      } else if (readyToPreview()) status.textContent = "已揀「" + def.name + "」同呢格空地。";
       else if (def && storedDef(def.id)) status.textContent = "「" + def.name + "」喺存倉。用存倉放返，唔使再扣資源。";
       else if (state.pad && !def) status.textContent = "已揀空地。打開清單，揀一座未起嘅屋。";
       else if (def && !placedDef(def.id) && !state.pad) status.textContent = "已揀「" + def.name + "」。再點一塊金色空地。";
@@ -828,6 +845,18 @@
     if (state.scene === 2) {
       if (occ) {
         openSheet(occ.def_id);
+        return;
+      }
+      if (state.unstoreId) {
+        if (!footprintFree(c, r, state.unstoreId)) {
+          if (typeof showToast === "function") showToast("這個位置已經有建築物。");
+          return;
+        }
+        state.pad = { c: c, r: r };
+        state.scene = 3;
+        state.listOpen = false;
+        state.sheet = false;
+        render();
         return;
       }
       state.pad = sameCell(state.pad, { c: c, r: r }) ? null : { c: c, r: r };
@@ -943,7 +972,7 @@
       state.unstoreId = null;
       state.listOpen = false;
       render();
-      if (typeof showToast === "function") showToast("放好「" + name + "」。");
+      if (typeof showToast === "function") showToast("已放好「" + name + "」。");
       celebrate("place", cell);
       await loadTown();
     } catch (e) {
@@ -1136,6 +1165,7 @@
 
   motionOn = readMotion();
   window.townUxSync = townUxSync;
+  window.ktBeginWarehousePlace = beginWarehousePlace;
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", townUxSync);
   } else {
