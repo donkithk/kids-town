@@ -49,9 +49,10 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 | TC-API-WAREHOUSE-STORED-OCC | 存倉行的舊座標不佔地圖。另一座建築可取出到該原點；新建造亦可落在存倉行記錄的格子上（新建造仍扣目錄價）。 | FAIL | 取出到存倉圖書館的 `(0,0)` 得 400「該位置已被佔用」。在存倉銀行的 `(4,4)` 建造健身室得 400「該位置已被建築物佔用」。 |
 | TC-API-WAREHOUSE-BUILD-OK | 空的 `(7,7)` 新建圖書館：201，扣目錄價（100 金幣、木材 5），GET 之後仍 `stored=0`、等級 1。 | PASS | 符合。 |
 | TC-API-WAREHOUSE-BUILD-OOB | `(8,0)`、`(0,8)`、`(8,8)`、`(20,12)` 建造：4xx，不扣資源，不新增行，不收入存倉。 | FAIL | 實際 201 並扣費（圖書館 8000→7900 金幣、木材 80→75）；GET 之後該行 `stored=1`，停在格外座標。 |
-| TC-API-WAREHOUSE-BUILD-REJECT | 缺座標、負數、原點佔用、地磚：4xx，不扣、不新增。 | PASS | 符合。 |
+| TC-API-WAREHOUSE-BUILD-REJECT | 負數、原點佔用、地磚：4xx，不扣、不新增。省略座標不再當成拒絕。8×8 每個原點都被佔用時，省略座標的新建造必須 400，金幣與材料不變，不得新增該 `def_id` 的行。若回應有訊息，必須正好是「城鎮沒有空位，請先收起或移動其他建築。」原因：有空位時省略座標要自動放置，不能再把缺座標一律判失敗。 | FAIL | 負數、原點佔用、地磚，以及滿圖的 400、不扣、不新增都通過。訊息是 `def_id, cell_x, cell_y required`，不是「城鎮沒有空位，請先收起或移動其他建築。」 |
 | TC-API-WAREHOUSE-BUILD-OVERLAP | 圖書館建在 `(1,0)`，與已放置健身室 `(0,0)` 的 2×2 重疊：4xx，不扣、不新增、不入倉。 | FAIL | 實際 201，扣 100 金幣與木材 5，新行 `stored=0` 於 `(1,0)`。 |
-| TC-API-WAREHOUSE-BUILD-REUSE | 存倉已有 Lv.2 圖書館時，再 POST 建造該種類：放回同一行到要求的格子，等級 2，不扣費，仍然只有一行。 | FAIL | 實際 400「你已經興建咗呢種建築物」；行維持 `stored=1` 於 `(20,12)`。未扣費，但沒有放回。 |
+| TC-API-WAREHOUSE-BUILD-REUSE | 存倉已有 Lv.2 圖書館時，再 POST 建造該種類並指定格子：放回同一行到要求的格子，等級 2，不扣費，仍然只有一行。 | FAIL | 實際 400「你已經興建咗呢種建築物」；行維持 `stored=1` 於 `(20,12)`。未扣費，但沒有放回。 |
+| TC-API-WAREHOUSE-BUILD-REUSE-AUTO | 同一座 `stored=1`、等級大於 1 的建築，POST 只帶 `def_id`、不帶座標。空圖：201，同一行變成 `stored=0` 於第一個合法格（空圖為 `(0,0)`），等級保留，不扣費，該 `def_id` 的行數不增加。滿圖：400，金幣與材料不變，該行仍是 `stored=1`、同一 id、同一等級，不新增。`BUILD-REUSE` 有指定格子，這條沒有。 | FAIL | 空圖省略座標回 400 `def_id, cell_x, cell_y required`。圖書館仍是 `stored=1`、等級 2、座標 `(20,12)`，沒有放到 `(0,0)`。滿圖該半段通過：400、資源不變、同一行維持 `stored=1`、沒有新增。 |
 | TC-API-WAREHOUSE-MOVE-OOB | `POST /buildings/<id>/move` 到 `(8,0)`、`(0,8)`、`(8,8)`、`(-1,0)`、`(0,-1)`、`(20,12)`：4xx。行仍是 `stored=0` 且停在原格，資源不變。其後 GET `/buildings` 與 GET `/town` 也不得把它收倉。 | FAIL | 負數已是 4xx 且行不變。`(8,0)`、`(0,8)`、`(8,8)`、`(20,12)` 回 200 並改座標；GET 之後該行 `stored=1`，停在新的格外座標，而不是仍放置在原格。 |
 | TC-API-WAREHOUSE-MOVE-OVERLAP | 已放置健身室在 `(0,0)` 時，把醫院從 `(4,0)` 移到 `(1,0)`（2×2 重疊）：4xx，醫院仍在 `(4,0)`、等級 2、資源不變。 | FAIL | 實際 HTTP 200，醫院改到 `(1,0)`。佔用檢查只比對原點。 |
 | TC-API-WAREHOUSE-MOVE-STORED-OCC | 地圖上唯一佔用是存倉行留下的座標時，移動必須成功。存倉圖書館停在 `(0,0)` 時，健身室可移到 `(0,0)`，等級保留，不扣資源，圖書館仍 `stored=1`。 | FAIL | 實際 400「該位置已被佔用」，健身室仍在 `(4,4)`。 |
@@ -63,7 +64,7 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 | TC-API-WAREHOUSE-REPAIR | 格外存倉的探險公會、銀行、圖書館 Lv.2、醫院 Lv.2、農場，以及 GET 後被收倉的工坊 Lv.3，都可取出到 8×8 內互不重疊的原點；等級保留，資源不變，城鎮列表不再有存倉行。 | PASS | 符合。格外舊座標本身不擋住 8×8 內的空格。 |
 | TC-FE-WAREHOUSE-GRID | 讀取 `/kids/` 與 `/kids/town-four-scene.js`。四場景與 `renderTownBuildings` 的 `COLS`/`ROWS` 都必須是 8×8。 | FAIL | 四場景已是 `(8, 8)`。`index.html` 的 `renderTownBuildings` 仍是 `(24, 16)`，並含 `.valid-plot`。 |
 | TC-API-WAREHOUSE-REGION-GRID | 解鎖後燈塔、競技場、天文台：舊座標（`(8,0)`、`(10,0)`、`(12,0)`）與 2×2 重疊必須 4xx，不扣、不新增。合法空格 `(3,3)` 必須 201、`stored=0`，並扣目錄價。競技場 r4、天文台 r5 若仍回 `region_locked`，只要不扣、不新增即算通過。 | FAIL | 燈塔 `(8,0)` 回 201 並扣費（金幣 20000→19200，木材 200→170，磚 200→175，齒輪 80→65，寶石 40→37）。 |
-| TC-API-WAREHOUSE-REGION-AUTO | 省略座標時，燈塔自動放到掃描第一個合法空格（行由外、欄由內，空圖為 `(0,0)`）並扣目錄價。8×8 每個原點都已佔用時，直接 `stored=1`、不扣費；之後騰出一格可免費取出。 | FAIL | 省略座標回 400 `def_id, cell_x, cell_y required`。空圖沒有放到 `(0,0)`。滿圖也沒有免費入倉（64 個原點仍在，資源不變）。 |
+| TC-API-WAREHOUSE-REGION-AUTO | 省略座標的新建造：空圖自動放到第一個合法空格（行由外、欄由內，空圖為 `(0,0)`），201，`stored=0`，扣目錄價。8×8 每個原點都被佔用時必須 400，金幣與材料不變，不得新增任何一行（含 `stored=1`）。免費入倉只給已經擁有的建築；免費再送一座會變成白拿建築。 | FAIL | 空圖省略座標回 400 `def_id, cell_x, cell_y required`，沒有放到 `(0,0)`。滿圖該半段通過：400、資源不變、沒有新增燈塔行。 |
 | TC-API-WAREHOUSE-REGION-NO-AUTOSTORE | 建造之後 GET `/buildings` 與 GET `/town` 不得把該行改成 `stored=1`，也不得再改資源。`(8,0)` 若被拒絕，必須不扣、不新增。 | FAIL | `(8,0)` 被接受（201）並扣費；GET 之後該行 `stored=1`，仍停在 `(8,0)`，沒有退款。 |
 | TC-API-WAREHOUSE-REPAIR-PLACED-LEGACY | 已放置的探險公會在 `(13,9)`、`stored=0`。GET 可把它改成 `stored=1`，但不得扣資源。取出到空的 `(0,0)` 免費、等級保留，其後公會大廳可以出發。 | PASS | 符合。GET 把 `(13,9)` 收成 `stored=1` 且不扣資源；取出到 `(0,0)` 免費，等級 2，出發扣區域 1 的 10 金幣。 |
 | TC-FE-WAREHOUSE-CARD | 存倉卡片只顯示名稱、等級與「取出」。「按此放置」不得出現。 | FAIL | 清單文字是「圖書館 Lv.2」加「按此放置」，沒有「取出」。 |
@@ -85,7 +86,7 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 4. 場景 2：點選 `#townMap` 內 aria-label 以「第 2 欄第 2 行」開頭的格子（資料庫座標 `(1, 1)`）。若新建造那一步的 `#btnToScene3`（「去擺位置」）可見且可按，則按下。
 5. 場景 3：`#uxPlaceBar` 可見，所選格子上的 `img.ghost` 可見，`#btnUxConfirm`（「確定放置」）可按。`#uxPlaceBar`、`#placeStatus`、`#btnUxConfirm`、`#readyBar` 與預覽格不得出現價錢或費用：不得有 `💰`、`升級要`、`確定先至扣資源`，也不得有帶數字的金幣或材料。頁首資源列不在此限。
 6. 按下確定。`POST .../unstored` 回 200 或 201。出現 `[data-town-fx="place"]`（新建造在 `town-four-scene.js` 的 `celebrate("place")` 會寫這個屬性）。`#townMap .cap` 出現「圖書館」。存倉數量變為 0。金幣與材料不變。
-7. 重新載入後，`#loginScreen` 必須隱藏，城鎮仍在畫面上。同一格仍標示圖書館。資料庫該行 `stored=0`、座標 `(1, 1)`、等級 2。頁尾結構仍與 JSON 相同，且與流程開始前的同一輪截圖 RGB 差為 0。選格中途也再比一次同一輪截圖。價錢檢查只看畫面上的放置條、狀態、確定按鈕、預覽格，以及畫面上可見的 `.pal-cost`；藏起來的建築清單不算。
+7. 重新載入後，等到 `#loginScreen` 可見或 `#app` 已就緒。`main` 沒有工作階段還原，會回到登入畫面；這時用同一個合成小朋友再登入一次。然後 `#loginScreen` 必須隱藏，`#townMap` 與 `#ktFooter` 必須可見。不要求重新載入本身保持登入。同一格仍標示圖書館。資料庫該行 `stored=0`、座標 `(1, 1)`、等級 2。頁尾結構仍與 JSON 相同，且與流程開始前的同一輪截圖 RGB 差為 0。選格中途也再比一次同一輪截圖。價錢檢查只看畫面上的放置條、狀態、確定按鈕、預覽格，以及畫面上可見的 `.pal-cost`；藏起來的建築清單不算。
 
 `main` 上第 3 步失敗：清單文字為「圖書館 Lv.2」加「按此放置」，`[data-testid="warehouse-takeout"]` 與名稱正好為「取出」的按鈕數量都是 0。頁尾結構與同一輪像素比對在按下之前已經通過。
 
@@ -110,17 +111,33 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 
 「取出」是畫面上的書面語。不要再用「按此放置」進入 24×16 的 `#placementBar`。四場景調色盤若已有「放返」，本案例仍以存倉清單上的「取出」為準，以便從清單直接放到 8×8。
 
-## 對照 `085d0fc`
+## 滿圖提示（人手，不設自動案例）
 
-同一套測試疊在建造分支 `085d0fc` 的暫用工作樹，沒有推上該分支。
+`main` `5bfe76d` 與建造尖端 `98ea4bf` 都沒有一條介面會送出「只有 `def_id`、沒有 `cell_x`／`cell_y`」的新建造。四場景的確定放置（`town-four-scene.js` 的 `onConfirm`）永遠帶所選格的 `cell_x`、`cell_y`。`index.html` 的 `confirmPlaceBuilding` 同樣帶這兩個欄位。`placeBuilding(defId, plotIdx)` 只送 `def_id` 與 `plot_idx`，後端會把它當成省略座標，但畫面上沒有呼叫 `clickEmptyPlot` 或 `placeBuilding` 的按鈕。後端只在兩個座標都省略、而且 8×8 沒有合法原點時，才回「城鎮沒有空位，請先收起或移動其他建築。」因此這句話在現有畫面上到不了。不設 `TC-FE-WAREHOUSE-FULL-TOAST`，也不另做一條假的按鈕路徑。
 
-| ID | 085d0fc |
+`98ea4bf`（`kids-town-v23`）已經放上中性樣式，失敗分支也改為 `showToast(message, 'info')`。`showToast` 在類型為 `info` 時把 class 設成 `info`。若日後有省略座標的建造路徑，自動案例要鎖下面這些值，只認 class，不要另外寫死選擇器：
+
+| 項目 | 要求 |
+|------|------|
+| 節點 | `#toast`，class 含 `info`，不含 `error` |
+| 底色 | `#6b4f2a`，計算值正好 `rgb(107, 79, 42)` |
+| 字色 | `#fff8e7`，計算值正好 `rgb(255, 248, 231)` |
+| 文字 | 正好「城鎮沒有空位，請先收起或移動其他建築。」 |
+| 不得出現 | 價錢、`💰`、`金幣`、「扣」，以及紅色錯誤 modal |
+| 其餘 | 字級與圓角與預設 `#toast` 相同。現行為 `font-size:13px`、`border-radius:20px`。 |
+
+不要接受預設綠底（`#15803d`，計算值 `rgb(21, 128, 61)`），也不要接受 `.error` 紅底（`#ef4444`，計算值 `rgb(239, 68, 68)`）。`main` 沒有 `#toast.info`。
+
+儲蓄頁的提取與刪除目標本來就呼叫 `showToast(..., 'info')`（「提取咗…」與「目標已刪除」）。`#toast.info` 落地之後，這兩句由綠底改為棕底。現有測試沒有鎖這兩句的顏色或 class，本輪不改那些測試。
+
+## 對照 `98ea4bf`
+
+同一套測試疊在建造尖端 `98ea4bf`（`kids-town-v23`，`#toast.info` 已落地）的暫用工作樹，沒有推上該分支。`restoreSession` 已在 `0c39ccf` 刪除，這個尖端沒有加回。
+
+| ID | 98ea4bf |
 |----|---------|
-| TC-API-WAREHOUSE-UNSTORE-OK / REJECT、BUILD-OK / REJECT、MOVE-OK、EFFECT-*、REPAIR、REPAIR-PLACED-LEGACY | PASS |
-| TC-API-WAREHOUSE-UNSTORE-OOB / OVERLAP、STORED-OCC、BUILD-OOB / OVERLAP / REUSE、MOVE-OOB / OVERLAP / STORED-OCC | PASS |
-| TC-API-WAREHOUSE-REGION-GRID、REGION-NO-AUTOSTORE、TC-FE-WAREHOUSE-GRID | PASS |
-| TC-API-WAREHOUSE-REGION-AUTO | FAIL。省略座標仍是 400 `def_id, cell_x, cell_y required`。空圖沒有放到 `(0,0)`，滿圖也沒有免費入倉。`place_building_free` 只用於預覽小朋友，沒有接到這條 POST。 |
-| TC-FE-WAREHOUSE-CARD | PASS。卡片是名稱、等級與「取出」，沒有「按此放置」。 |
-| TC-FE-WAREHOUSE-UNSTORE | FAIL。取出、場景 2、場景 3、畫面上的確認句「不扣除金幣和材料」、落地特效都已通過。重新載入後 `#loginScreen` 仍蓋住城鎮（`restoreSession` 打開了 `#app`，沒有隱藏登入牆），所以頁尾截圖不是城鎮頁尾。 |
-| P1-TC-UNL-01、P1-TC-UNL-03 | PASS |
-| P1-TC-UNL-02 | PASS。`(8,0)` 為 400 且資源不變；`(0,0)` 為 201、`stored=0`。 |
+| 倉庫 API，除下列一條 | PASS。含 `BUILD-REJECT`（滿圖訊息正好是指定那句）、`REGION-AUTO`（空圖 201 於 `(0,0)` 並扣費；滿圖 400、不新增行）、`REGION-GRID`、`REGION-NO-AUTOSTORE`、`REPAIR-PLACED-LEGACY`、`BUILD-REUSE`（指定格子）。 |
+| TC-API-WAREHOUSE-BUILD-REUSE-AUTO | FAIL。空圖把同一行放到 `(0,0)`（回應 `id` 1、`cell_x` 0、`cell_y` 0），但 HTTP 是 200，不是 201。滿圖半段沒有另外的失敗。 |
+| TC-FE-WAREHOUSE-GRID、CARD、UNSTORE | PASS。取出走到重新載入之後再登入，`#loginScreen` 隱藏，`#townMap` 與 `#ktFooter` 可見，頁尾結構與同一輪像素比對通過。 |
+| P1-TC-UNL-01、P1-TC-UNL-02、P1-TC-UNL-03 | PASS |
+| TC-FE-WAREHOUSE-FULL-TOAST | 未設自動案例。見上方「滿圖提示」。 |

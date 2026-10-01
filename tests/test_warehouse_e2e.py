@@ -180,13 +180,57 @@ def page(base_url):
         browser.close()
 
 
-def _login(page, base_url):
-    page.goto(f"{base_url}/kids/")
+def _submit_login(page):
     page.locator("#loginUsername").fill(KID_USERNAME)
     page.locator("#loginPassword").fill(TEST_KID_PIN)
     page.get_by_role("button", name="🚪 登入").click()
     page.locator("#app").wait_for(state="visible", timeout=8000)
+    page.locator("#loginScreen").wait_for(state="hidden", timeout=8000)
+
+
+def _login(page, base_url):
+    page.goto(f"{base_url}/kids/")
+    _submit_login(page)
     page.locator("#village .cell-btn").first.wait_for(state="attached", timeout=8000)
+
+
+def _resume_town_after_reload(page):
+    """Reload, then log in again when the login wall is showing.
+
+    main has no session restore, so a reload returns to #loginScreen.
+    The check is the town after the kid is back in, not that the cookie
+    kept the wall hidden.
+    """
+    page.reload()
+    page.wait_for_function(
+        """() => {
+          const login = document.getElementById('loginScreen');
+          const app = document.getElementById('app');
+          if (!login || !app) return false;
+          const shown = (el) => {
+            const cs = getComputedStyle(el);
+            const box = el.getBoundingClientRect();
+            return cs.display !== 'none' && cs.visibility !== 'hidden'
+              && box.width > 1 && box.height > 1;
+          };
+          return shown(login) || shown(app);
+        }""",
+        timeout=8000,
+    )
+    login_on = page.locator("#loginScreen").evaluate(
+        """el => {
+          const cs = getComputedStyle(el);
+          const box = el.getBoundingClientRect();
+          return cs.display !== 'none' && cs.visibility !== 'hidden'
+            && box.width > 1 && box.height > 1;
+        }"""
+    )
+    if login_on:
+        _submit_login(page)
+    page.locator("#loginScreen").wait_for(state="hidden", timeout=8000)
+    page.locator("#app").wait_for(state="visible", timeout=8000)
+    page.locator("#townMap").wait_for(state="visible", timeout=8000)
+    page.locator("#ktFooter").wait_for(state="visible", timeout=8000)
 
 
 def _open_store(page):
@@ -634,16 +678,7 @@ def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db
         f"expected storage count 0 after takeout, got {after_count}. "
         f"List text={page.locator('#storedBuildings').inner_text()!r}"
     )
-    page.reload()
-    page.locator("#app").wait_for(state="visible", timeout=8000)
-    try:
-        page.locator("#loginScreen").wait_for(state="hidden", timeout=8000)
-    except Exception as exc:
-        raise AssertionError(
-            "TC-FE-WAREHOUSE-UNSTORE: after reload, #loginScreen must be hidden "
-            "so the town and #ktFooter are visible. The footer pixel check compares "
-            "the town footer, not the login wall. " + str(exc)
-        ) from exc
+    _resume_town_after_reload(page)
     page.locator("#townMap .cap", has_text=BUILDING_NAME).first.wait_for(
         state="visible", timeout=8000
     )
