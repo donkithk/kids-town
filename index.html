@@ -3451,7 +3451,6 @@ async function renderStoredBuildings() {
         <div style="min-height:72px">
           <div style="font-size:32px;margin:4px 0">${b.icon||'🏠'}</div>
           <div style="font-size:12px;font-weight:600">${escapeHtml(b.name)} Lv.${b.level}</div>
-          <div style="font-size:10px;color:#94a3b8">按此放置</div>
         </div>
         <button type="button" class="btn-takeout" data-testid="warehouse-takeout" data-building-id="${b.id}" onclick="event.stopPropagation(); beginWarehouseTakeout(${b.id})">取出</button>
       </div>
