@@ -2,7 +2,7 @@
 
 紅測。只加測試與本說明，不改產品代碼。`main`（`5bfe76dc5ad31b9fcfe2e273e5f2af3f1f750f7e`）上，建造與取出仍接受舊範圍 0–22 × 0–14；讀取建築時若原點落在 8×8 之外，會把該行改為 `stored=1`，且不退還已扣的金幣與材料。效果只計算 `stored=0` 的行，所以被收進存倉的建築失去加成，公會大廳亦無法使用。
 
-格子原點規則：合法原點是 `cell_x`、`cell_y` 皆在 0 至 7（含）。`(7,7)` 必須接受。`(8,0)`、`(0,8)`、`(8,8)`、負數、以及舊座標如 `(20,12)` 必須拒絕。建築足跡是 2×2。本組案例以原點是否在 8×8 內為準，不把原點收窄到 0–6；同時，兩座已放置建築的 2×2 重疊必須拒絕。燈塔、競技場、天文台解鎖之後使用同一套規則，沒有格外豁免。`P1-TC-UNL-02` 因此改為：解鎖區 3 之後，燈塔放在 `(8,0)` 必須 400 且金幣與材料不變；放在 8×8 內的空格 `(0,0)` 必須 201 且 `stored=0`。舊預期是 `(8,0)` 201。變更原因是 8×8 規則（Grok decision）。
+格子原點規則：目錄裡每一座建築都是 2×2。`building_defs` 沒有每座自己的寬高或足跡欄，所以不另設 1×1 成功案例。合法條件是原點加足跡之後兩邊都不超出 8，而且不與 `stored=0` 的 2×2 重疊。`stored=1` 不佔格子。因此 `cell_x`、`cell_y` 都必須在 0 至 6（含），最遠合法原點是 `(6,6)`。`(7,0)`、`(0,7)`、`(7,7)` 足跡伸出地圖，必須拒絕，見 `TC-API-WAREHOUSE-PLACE-EDGE-7`。`(8,0)`、`(0,8)`、`(8,8)`、負數、以及舊座標如 `(20,12)` 仍然必須拒絕。燈塔、競技場、天文台解鎖之後使用同一套規則，沒有格外豁免。`P1-TC-UNL-02` 因此改為：解鎖區 3 之後，燈塔放在 `(8,0)` 必須 400 且金幣與材料不變；放在 8×8 內的空格 `(0,0)` 必須 201 且 `stored=0`。舊預期是 `(8,0)` 201。變更原因是 8×8 規則（Grok decision）。`(7,7)` 曾經被 `BUILD-OK`、`UNSTORE-OK`、`MOVE-OK` 當成合法原點，現已改到 `(6,6)`。
 
 所有案例使用臨時資料庫與測試自行建立的帳號、小朋友。不得讀寫追蹤中的 `kids_town.db`。
 
@@ -36,18 +36,19 @@
 ## 案例
 
 API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。  
-介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE` 與 `TC-FE-WAREHOUSE-CARD`，以及同一 API 檔內讀取已提供頁面的 `TC-FE-WAREHOUSE-GRID`（後者屬 API 套件，因為它只 GET 靜態檔）。
+介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`，以及同一 API 檔內讀取已提供頁面的 `TC-FE-WAREHOUSE-GRID`（後者屬 API 套件，因為它只 GET 靜態檔）。
 
 下表「main」是在 `5bfe76d` 加上這些測試後的結果。紅測的斷言訊息寫明預期與實際。綠測是回歸鎖，不是本缺陷。
 
 | ID | 行為 | main | 實際對預期 |
 |----|------|------|------------|
-| TC-API-WAREHOUSE-UNSTORE-OK | `POST /buildings/<id>/unstored` 到空的 `(7,7)` 或 `(1,1)`：HTTP 200，`stored=0`，Lv.2 保留，金幣與材料不變。 | PASS | 符合。 |
+| TC-API-WAREHOUSE-UNSTORE-OK | `POST /buildings/<id>/unstored` 到空的 `(6,6)` 或 `(1,1)`：HTTP 200，`stored=0`，Lv.2 保留，金幣與材料不變。`(7,7)` 改由 `PLACE-EDGE-7` 拒絕。 | PASS | 符合。2×2 最遠合法原點是 `(6,6)`。 |
 | TC-API-WAREHOUSE-UNSTORE-OOB | `(8,0)`、`(0,8)`、`(8,8)`、`(20,12)` 必須 4xx，行維持 `stored=1`、原座標、資源不變。 | FAIL | 實際 HTTP 200，座標被改成該格外點；其後 GET 再把該行收成 `stored=1` 並留在新的不合法座標。 |
 | TC-API-WAREHOUSE-UNSTORE-REJECT | 缺座標、負數、原點已被已放置建築佔用、地磚佔用：4xx，資料不變。 | PASS | 符合。 |
 | TC-API-WAREHOUSE-UNSTORE-OVERLAP | 已放置健身室原點 `(0,0)` 時，醫院取出到 `(1,0)` 足跡重疊，必須 4xx；醫院仍 `stored=1` 於 `(20,12)`。 | FAIL | 實際 HTTP 200，醫院變成 `stored=0` 於 `(1,0)`。佔用檢查只比對原點。 |
 | TC-API-WAREHOUSE-STORED-OCC | 存倉行的舊座標不佔地圖。另一座建築可取出到該原點；新建造亦可落在存倉行記錄的格子上（新建造仍扣目錄價）。 | FAIL | 取出到存倉圖書館的 `(0,0)` 得 400「該位置已被佔用」。在存倉銀行的 `(4,4)` 建造健身室得 400「該位置已被建築物佔用」。 |
-| TC-API-WAREHOUSE-BUILD-OK | 空的 `(7,7)` 新建圖書館：201，扣目錄價（100 金幣、木材 5），GET 之後仍 `stored=0`、等級 1。 | PASS | 符合。 |
+| TC-API-WAREHOUSE-BUILD-OK | 空的 `(6,6)` 新建圖書館：201，扣目錄價（100 金幣、木材 5），GET 之後仍 `stored=0`、等級 1。`(7,7)` 不合法，見 `PLACE-EDGE-7`。 | PASS | 符合。 |
+| TC-API-WAREHOUSE-PLACE-EDGE-7 | 目錄沒有每座建築的尺寸欄，全部 2×2，不設 1×1。`(7,0)`、`(0,7)`、`(7,7)` 的新建、移動、取出都必須 400，金幣與材料不變；新建不新增行，移動與取出的那一行不變。每個 `x<=6` 且 `y<=6` 的原點都被 2×2 擋住、只剩 `x=7` 或 `y=7` 空著時，省略座標的新建造與存倉放回都必須 400，不扣費、不新增、不改行。 | FAIL | 指定座標的新建回 201 並扣費（圖書館 8000→7900 金幣、木材 80→75），移動回 200，取出回 200，行被放到該格。省略座標的兩半在 main 已是 400（仍要求 `cell_x`、`cell_y`），金幣與行不變，所以這兩半沒有另外失敗。 |
 | TC-API-WAREHOUSE-BUILD-OOB | `(8,0)`、`(0,8)`、`(8,8)`、`(20,12)` 建造：4xx，不扣資源，不新增行，不收入存倉。 | FAIL | 實際 201 並扣費（圖書館 8000→7900 金幣、木材 80→75）；GET 之後該行 `stored=1`，停在格外座標。 |
 | TC-API-WAREHOUSE-BUILD-REJECT | 負數、原點佔用、地磚：4xx，不扣、不新增。省略座標不再當成拒絕。8×8 每個原點都被佔用時，省略座標的新建造必須 400，金幣與材料不變，不得新增該 `def_id` 的行。若回應有訊息，必須正好是「城鎮沒有空位，請先收起或移動其他建築。」原因：有空位時省略座標要自動放置，不能再把缺座標一律判失敗。 | FAIL | 負數、原點佔用、地磚，以及滿圖的 400、不扣、不新增都通過。訊息是 `def_id, cell_x, cell_y required`，不是「城鎮沒有空位，請先收起或移動其他建築。」 |
 | TC-API-WAREHOUSE-BUILD-OVERLAP | 圖書館建在 `(1,0)`，與已放置健身室 `(0,0)` 的 2×2 重疊：4xx，不扣、不新增、不入倉。 | FAIL | 實際 201，扣 100 金幣與木材 5，新行 `stored=0` 於 `(1,0)`。 |
@@ -56,7 +57,7 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 | TC-API-WAREHOUSE-MOVE-OOB | `POST /buildings/<id>/move` 到 `(8,0)`、`(0,8)`、`(8,8)`、`(-1,0)`、`(0,-1)`、`(20,12)`：4xx。行仍是 `stored=0` 且停在原格，資源不變。其後 GET `/buildings` 與 GET `/town` 也不得把它收倉。 | FAIL | 負數已是 4xx 且行不變。`(8,0)`、`(0,8)`、`(8,8)`、`(20,12)` 回 200 並改座標；GET 之後該行 `stored=1`，停在新的格外座標，而不是仍放置在原格。 |
 | TC-API-WAREHOUSE-MOVE-OVERLAP | 已放置健身室在 `(0,0)` 時，把醫院從 `(4,0)` 移到 `(1,0)`（2×2 重疊）：4xx，醫院仍在 `(4,0)`、等級 2、資源不變。 | FAIL | 實際 HTTP 200，醫院改到 `(1,0)`。佔用檢查只比對原點。 |
 | TC-API-WAREHOUSE-MOVE-STORED-OCC | 地圖上唯一佔用是存倉行留下的座標時，移動必須成功。存倉圖書館停在 `(0,0)` 時，健身室可移到 `(0,0)`，等級保留，不扣資源，圖書館仍 `stored=1`。 | FAIL | 實際 400「該位置已被佔用」，健身室仍在 `(4,4)`。 |
-| TC-API-WAREHOUSE-MOVE-OK | 移到空的 `(7,7)`：200，`stored=0`，等級保留，不扣資源。GET `/buildings` 與 GET `/town` 之後仍放置在 `(7,7)`。 | PASS | 符合。 |
+| TC-API-WAREHOUSE-MOVE-OK | 移到空的 `(6,6)`：200，`stored=0`，等級保留，不扣資源。GET `/buildings` 與 GET `/town` 之後仍放置在 `(6,6)`。`(7,7)` 不合法，見 `PLACE-EDGE-7`。 | PASS | 符合。 |
 | TC-API-WAREHOUSE-EFFECT-GUILD | 存倉的探險公會：`expedition/start` 回 `guild_required`，金幣不變。取出到 `(2,2)` 後出發 201，區域 1 費用 10。 | PASS | 符合。 |
 | TC-API-WAREHOUSE-EFFECT-LIBRARY | 存倉時 `buffs.int` 為 0，技能不含「知識的力量」「火球」，且沒有 `task_bonus`。取出 Lv.2 後智力加成為 4，兩項技能出現，`task_bonus` 仍為空。 | PASS | 符合。不要恢復任務經驗加成。 |
 | TC-API-WAREHOUSE-EFFECT-FARM | 存倉時領取回 `farm_required`。取出 Lv.2 後領取成功，金幣 +10。 | PASS | 符合。 |
@@ -69,6 +70,11 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 | TC-API-WAREHOUSE-REPAIR-PLACED-LEGACY | 已放置的探險公會在 `(13,9)`、`stored=0`。GET 可把它改成 `stored=1`，但不得扣資源。取出到空的 `(0,0)` 免費、等級保留，其後公會大廳可以出發。 | PASS | 符合。GET 把 `(13,9)` 收成 `stored=1` 且不扣資源；取出到 `(0,0)` 免費，等級 2，出發扣區域 1 的 10 金幣。 |
 | TC-FE-WAREHOUSE-CARD | 存倉卡片只顯示名稱、等級與「取出」。「按此放置」不得出現。 | FAIL | 清單文字是「圖書館 Lv.2」加「按此放置」，沒有「取出」。 |
 | TC-FE-WAREHOUSE-UNSTORE | 見下方介面步驟。取出走與新建造相同的場景 2 → 場景 3，不顯示價錢。同一輪截圖的頁尾 RGB 差為 0，結構與 `tests/fixtures/kt_footer_main.json` 相同。 | FAIL | 存倉清單沒有「取出」。卡片文字是「按此放置」，呼叫 `startUnstoreBuilding`。頁尾結構與 JSON 相同，同一輪兩次截圖的 RGB 差為 0。失敗發生在清單，不是頁尾。 |
+| TC-FE-WAREHOUSE-CARD-BODY | 點存倉卡片的圖示或名稱（不是「取出」）不得呼叫 `startUnstoreBuilding`，不得進入取出。`#placementBar` 不得 `.active`，維持 `display:none`、0×0。不得出現 `.valid-plot`，也不得出現「📍 選擇位置放置倉庫建築」。卡片沒有 `onclick`，計算游標不是 `pointer`。只有「取出」進入 `#townMap` 場景 2。 | FAIL | 點名稱呼叫了 `startUnstoreBuilding`。卡片有 `onclick="startUnstoreBuilding(...)"`，`cursor` 為 `pointer`。`#placementBar` 變成 `.active`、`display:flex`、底色 `rgb(99, 102, 241)`，文字是「📍 選擇位置放置倉庫建築」。出現 `.valid-plot`。清單沒有「取出」，所以沒有再測按鈕進入場景 2。 |
+| TC-FE-WAREHOUSE-SCENE2-LEGAL | 取出後的場景 2，金色可選格必須正好等於合法原點（原點加 2×2 不超出 8，且不與 `stored=0` 重疊）。點非法、非金色的已佔用格，提示正好是「這個位置已經有建築物。」，class 為 `info` 而不是 `error`，底色 `rgb(107, 79, 42)`。金幣與材料不變。 | FAIL | 清單沒有「取出」（文字是「📚 / 圖書館 Lv.2 / 按此放置」），進不了取出場景 2。 |
+| TC-FE-WAREHOUSE-SCENE3-CANCEL | 取出、選合法格、進入場景 3 之後按「取消」，回到取出場景 2。`#readyStatus` 正好是「請點選空地，放回「圖書館」。不扣除金幣和材料。」不得回到普通建造場景 2，不得出現「喺存倉」「用存倉放返」「唔使再扣資源」。`#placementBar` 維持不啟動。資源不變。 | FAIL | 同樣沒有「取出」，進不了場景 3。 |
+| TC-FE-BUILD-SCENE2-NOREGRESS | 普通新建造場景 2 仍在 `#townMap`。至少一格金色。點索引不大於 6 的合法金色格，選未起的健身室，確認後放置並只扣目錄價一次（200 金幣、木材 10、磚 5）。提示維持 main 的句子。不要求金色格與合法原點集合相等。 | PASS | 符合。點了索引不大於 6 的金色格，一次 201，只扣目錄價。 |
+| TC-FE-WAREHOUSE-COPY-FORMAL | 見下方書面語。返回按鈕「返回地圖」，前往按鈕「選擇位置」，已選格 aria-label 以「已選此格」結尾，存倉種類的新建造提示為「「圖書館」在存倉中，可直接放回，不扣除資源。」 | FAIL | 四句都未改。`#btnUxBack` 是「返去睇地圖」，`#btnToScene3` 是「去擺位置」，已選格 aria-label 是「第 1 欄第 1 行，已揀呢格」。點清單裡的圖書館之後離開場景 2，可見提示是「放返存倉「圖書館」，唔使扣金幣同材料。取消唔會扣。」，含「金幣」，不是指定的那句。可見文字裡沒有「喺存倉」「用存倉放返」「唔使再扣資源」這三截（那句在取消之後才出現，見 `SCENE3-CANCEL` 在建造尖端的結果）。清單沒有「取出」。 |
 
 拒絕狀態只接受 400、409、422。401 不算成功拒絕。取出成功為 200 或 201。放回已有存倉行（指定格子或省略座標）成功為 200 或 201。新建（沒有可再用的存倉行）成功為 201。移動成功為 200。
 
@@ -83,7 +89,7 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 1. 開啟 `/kids/`，以 `#loginUsername`、`#loginPassword` 與按鈕「🚪 登入」登入。`#app` 可見，`#village .cell-btn` 共 64 格。`#ktFooter`（class `kt-footer`）的結構必須與 `tests/fixtures/kt_footer_main.json` 相同。該檔是 main `5bfe76d` 在 1280×720 下的頁尾：正規化 outerHTML、每個後代的計算樣式，以及頁尾、分頁、圖示的 bounding box（四捨五入到 0.5px）。同一輪再截兩次圖，RGB 差必須為 0。不再使用 PNG 對照，以免不同系統的字型點陣造成假失敗。
 2. 打開抽屜「☰」，再按「存倉」，`#tab-store.active` 與 `#storedBuildings` 可見。此時存倉數量為 1。
 3. 「取出」按鈕的 bounding box 高度至少 44px。按下之後，以及之後每一步，`#placementBar` 都不得有 class `active`，也不得變成可見（預設 `display: none`）。不得出現 `.valid-plot`。`#townMap` 必須可見，點選發生在這張 8×8 地圖上。
-4. 場景 2：點選 `#townMap` 內 aria-label 以「第 2 欄第 2 行」開頭的格子（資料庫座標 `(1, 1)`）。若新建造那一步的 `#btnToScene3`（「去擺位置」）可見且可按，則按下。
+4. 場景 2：點選 `#townMap` 內 aria-label 以「第 2 欄第 2 行」開頭的格子（資料庫座標 `(1, 1)`）。若 `#btnToScene3` 可見且可按，則按下。按鈕文字由 `TC-FE-WAREHOUSE-COPY-FORMAL` 鎖定為「選擇位置」。
 5. 場景 3：`#uxPlaceBar` 可見，所選格子上的 `img.ghost` 可見，`#btnUxConfirm`（「確定放置」）可按。`#uxPlaceBar`、`#placeStatus`、`#btnUxConfirm`、`#readyBar` 與預覽格不得出現價錢或費用：不得有 `💰`、`升級要`、`確定先至扣資源`，也不得有帶數字的金幣或材料。頁首資源列不在此限。
 6. 按下確定。`POST .../unstored` 回 200 或 201。出現 `[data-town-fx="place"]`（新建造在 `town-four-scene.js` 的 `celebrate("place")` 會寫這個屬性）。`#townMap .cap` 出現「圖書館」。存倉數量變為 0。金幣與材料不變。
 7. 重新載入後，等到 `#loginScreen` 可見或 `#app` 已就緒。`main` 沒有工作階段還原，會回到登入畫面；這時用同一個合成小朋友再登入一次。然後 `#loginScreen` 必須隱藏，`#townMap` 與 `#ktFooter` 必須可見。不要求重新載入本身保持登入。同一格仍標示圖書館。資料庫該行 `stored=0`、座標 `(1, 1)`、等級 2。頁尾結構仍與 JSON 相同，且與流程開始前的同一輪截圖 RGB 差為 0。選格中途也再比一次同一輪截圖。價錢檢查只看畫面上的放置條、狀態、確定按鈕、預覽格，以及畫面上可見的 `.pal-cost`；藏起來的建築清單不算。
@@ -104,12 +110,51 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 | `[data-testid="warehouse-count"]` | 文字為存倉建築的整數數量。本案例取出前為 `1`，取出後為 `0`。 |
 | `[data-testid="warehouse-takeout"]` | 按鈕。accessible name 正好是「取出」。`data-building-id` 等於 `buildings.id`。bounding box 高度 ≥ 44px。 |
 | 取出之後 | 回到 `#tab-town` / `#townMap`，進入場景 2（與 `#btnBuild` 「我要起屋」之後同一條路）。`#placementBar` 在整個流程都不得 `.active` 或可見。不得顯示 `.valid-plot`。 |
-| 選格 | `#townMap` 內現有 `.cell-btn`，aria-label 以「第 2 欄第 2 行」開頭。需要進入場景 3 時沿用 `#btnToScene3`，文字「去擺位置」。 |
+| 選格 | `#townMap` 內現有 `.cell-btn`，aria-label 以「第 2 欄第 2 行」開頭。需要進入場景 3 時沿用 `#btnToScene3`。文字必須是「選擇位置」，見 `TC-FE-WAREHOUSE-COPY-FORMAL`。已選格的 aria-label 是「第 N 欄第 M 行，已選此格」。 |
 | 預覽 | `#uxPlaceBar`、`#placeStatus`、`#btnUxConfirm`（「確定放置」）、所選格的 `img.ghost`。此處不顯示價錢。 |
 | 落地特效 | `[data-town-fx="place"]`，與新建造的 `celebrate("place")` 相同。粒子的造型與時間只由設計檢視，測試不量顏色或顆數。 |
 | 頁尾 | `#ktFooter.kt-footer` 的結構與 `tests/fixtures/kt_footer_main.json` 相同。流程前、選格中、流程後，同一輪截圖的 RGB 差為 0。不要改頁尾的標記或樣式。 |
 
 「取出」是畫面上的書面語。不要再用「按此放置」進入 24×16 的 `#placementBar`。四場景調色盤若已有「放返」，本案例仍以存倉清單上的「取出」為準，以便從清單直接放到 8×8。
+
+## 原點 7（TC-API-WAREHOUSE-PLACE-EDGE-7）
+
+先讀 `building_defs`。沒有寬、高、足跡這類欄位，目錄裡每一行都按 2×2，不測 1×1。地圖是 8×8，最遠合法原點是 `8 - 2 = 6`，測試不把 6 寫死成與足跡無關的常數。
+
+`(7,0)`、`(0,7)`、`(7,7)` 各做三次：`POST /buildings` 新建圖書館、把已放置的醫院從 `(0,0)` 移過去、把存倉醫院取出到該格。三次都必須是 400、409 或 422。金幣與材料不變。新建不得新增行。移動與取出之後該行與呼叫前相同。
+
+自動選格：用九座健身室佔住 `(0,0)`、`(2,0)`、`(5,0)`、`(0,2)`、`(2,2)`、`(5,2)`、`(0,5)`、`(2,5)`、`(5,5)`。這些 2×2 互不重疊，而且每一個 `x<=6`、`y<=6` 的原點都與其中一座重疊。`(7,0)`、`(0,7)`、`(7,7)` 與它們不重疊，但足跡伸出地圖。此時省略座標、只送圖書館的 `def_id`：新建造必須 400，不扣費、不新增。存倉裡已有等級 2 的圖書館時，同樣省略座標必須 400，該行維持 `stored=1`、同一 id、同一等級，不新增。
+
+## 卡片本體（TC-FE-WAREHOUSE-CARD-BODY）
+
+同一合成小朋友，打開存倉。點卡片裡的名稱或圖示，不點「取出」。`startUnstoreBuilding` 不得被呼叫。`#placementBar` 不得加上 `.active`，維持 `display:none`，bounding box 為 0×0（啟動後才是 `display:flex`，底色 `#6366f1`）。不得出現 `.valid-plot`，畫面上不得出現「📍 選擇位置放置倉庫建築」。`.build-card` 不得有 `onclick`，計算樣式的 `cursor` 不得是 `pointer`。只有「取出」（`[data-testid="warehouse-takeout"]` 或 accessible name「取出」）進入 `#townMap` 場景 2，而且 `#placementBar` 仍然不啟動。
+
+## 取出場景 2 的合法格（TC-FE-WAREHOUSE-SCENE2-LEGAL）
+
+存倉圖書館之外，另放健身室於 `(0,0)`、農場於 `(4,4)`，兩座都是 `stored=0`。測試在頁面之外計算合法原點：`x`、`y` 都在 0 至 6，且 2×2 不與這兩座重疊。存倉行不算佔用。
+
+按下「取出」之後，`#townMap` 為場景 2。金色可選格收集自 `#townMap .pad`：class 含 `is-empty-hot` 或 `is-chosen`，而且可見的 `.mark` 帶金色 `drop-shadow`（`rgba(212, 160, 23, 0.95)`）。格子座標由 aria-label「第 N 欄第 M 行」換算，資料庫格是 `(N-1, M-1)`。這個集合必須與合法原點相等，不多也不少。
+
+再點已佔用、不該是金色的「第 1 欄第 1 行」。`#toast` 文字正好是「這個位置已經有建築物。」，class 含 `info`、不含 `error`，計算底色正好 `rgb(107, 79, 42)`。金幣與材料不變。
+
+## 取消預覽（TC-FE-WAREHOUSE-SCENE3-CANCEL）
+
+只留存倉圖書館。取出後點 `(0,0)`（索引 0，不大於 6）。若 `#btnToScene3` 可見且可按，則按下，進入場景 3。按 `#btnUxCancel`「取消」。
+
+必須回到取出的場景 2，`#readyStatus` 正好是「請點選空地，放回「圖書館」。不扣除金幣和材料。」不得變成普通建造的「點金色空地，或者打開清單揀一座未起嘅屋。」或「已揀「圖書館」同呢格空地。」可見文字不得含「喺存倉」「用存倉放返」「唔使再扣資源」。`#placementBar` 不得 `.active`。金幣與材料不變。
+
+## 新建造不回歸（TC-FE-BUILD-SCENE2-NOREGRESS）
+
+清掉這個小朋友的建築，金幣 800，木材 10、磚 5。目錄裡健身室是 200 金幣、木材 10、磚 5。登入後按「我要起屋」。`#readyStatus` 維持「點金色空地，或者打開清單揀一座未起嘅屋。」場景 2 在 `#townMap`，至少有一格金色。點第一格兩邊索引都不大於 6 的金色格（不用第 8 欄，索引 7）。打開「建築清單」，選 aria-label 含「未起」、不含「已起」的健身室。`#readyStatus` 變成「已揀「健身室」同呢格空地。」按 `#btnToScene3`。場景 3 的 `#placeStatus` 維持「確定先至扣資源。取消唔會扣。」按「確定放置」。正好一次 `POST /buildings`，狀態 201。資料庫只扣目錄價一次，新行是等級 1 的健身室、`stored=0`、座標就是剛點的那一格。本案例不要求金色格與全部合法原點相等。
+
+## 書面語（TC-FE-WAREHOUSE-COPY-FORMAL）
+
+存倉有圖書館。四句都要對上，舊口語不得留下。
+
+1. 取出之後的場景 2，`#btnUxBack` 文字正好是「返回地圖」。「返去睇地圖」不得出現在可見 DOM（`innerText`，不含 `hidden` 或 `display:none`）。
+2. `#btnToScene3` 文字正好是「選擇位置」。「去擺位置」不得出現。
+3. 選中一格之後，該格 aria-label 正好是「第 N 欄第 M 行，已選此格」（欄、行仍是現有的 1-based 寫法，中間空格與現有地圖相同）。任何 aria-label 都不得含「已揀呢格」。新建造場景 2 選格後會留在場景 2，測試在那裡讀這個 label；取出場景 2 若一點就進入場景 3，仍以這個完整 label 為準。
+4. 按「我要起屋」，打開建築清單，再點圖書館（存倉裡已有這一種）。提示正好是「「圖書館」在存倉中，可直接放回，不扣除資源。」不得出現「喺存倉」「用存倉放返」「唔使再扣資源」。這句提示不得含價錢數字、`💰` 或「金幣」。場景 2 讀 `#readyStatus`；若該節點不可見，則以當時可見的 `#placeStatus` 為實際提示並與上句比較。
 
 ## 滿圖提示（人手，不設自動案例）
 
@@ -130,13 +175,20 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 
 儲蓄頁的提取與刪除目標本來就呼叫 `showToast(..., 'info')`（「提取咗…」與「目標已刪除」）。`#toast.info` 落地之後，這兩句由綠底改為棕底。現有測試沒有鎖這兩句的顏色或 class，本輪不改那些測試。
 
-## 對照 `98ea4bf`
+## 對照 `4707808`
 
-同一套測試疊在建造尖端 `98ea4bf`（`kids-town-v23`，`#toast.info` 已落地）的暫用工作樹，沒有推上該分支。`restoreSession` 已在 `0c39ccf` 刪除，這個尖端沒有加回。
+同一套測試疊在建造尖端 `47078086b6963543d0ce81edf55907ace140b828` 的暫用工作樹（`/tmp/kt-green-4707808`），沒有提交、沒有推上該分支。上一尖端 `98ea4bf` 的倉庫案例在當時是綠的；本輪新增的案例在 `4707808` 上如下。
 
-| ID | 98ea4bf |
-|----|---------|
-| 倉庫 API，含 `BUILD-REUSE-AUTO` | PASS。空圖放回接受 200 或 201，與指定格子的 `BUILD-REUSE` 相同。`98ea4bf` 回 200，同一行 `stored=0` 於 `(0,0)`，等級保留，不扣費。滿圖 400，該行維持 `stored=1`。`BUILD-REJECT`、`REGION-AUTO`、`REGION-GRID`、`REGION-NO-AUTOSTORE`、`REPAIR-PLACED-LEGACY` 一併通過。 |
-| TC-FE-WAREHOUSE-GRID、CARD、UNSTORE | PASS。取出走到重新載入之後再登入，`#loginScreen` 隱藏，`#townMap` 與 `#ktFooter` 可見，頁尾結構與同一輪像素比對通過。 |
-| P1-TC-UNL-01、P1-TC-UNL-02、P1-TC-UNL-03 | PASS |
-| TC-FE-WAREHOUSE-FULL-TOAST | 未設自動案例。見上方「滿圖提示」。 |
+| ID | main `5bfe76d` | `4707808` |
+|----|----------------|-----------|
+| TC-API-WAREHOUSE-BUILD-OK、UNSTORE-OK、MOVE-OK | PASS。目標已改為 `(6,6)`。 | PASS。`(6,6)` 仍被接受。 |
+| TC-API-WAREHOUSE-PLACE-EDGE-7 | FAIL。`(7,0)`、`(0,7)`、`(7,7)` 的新建 201 並扣費，移動 200，取出 200。省略座標的兩半已是 400，因為 main 仍要求座標，沒有自動放到邊緣格。 | FAIL。指定的三格同樣被接受。省略座標的新建造回 201，圖書館被放到 `(7,0)` 並扣費。存倉放回回 200，同一行等級 2 被放到 `(7,0)`、`stored=0`，不扣費，行數不增加。 |
+| TC-FE-WAREHOUSE-CARD-BODY | FAIL。見上表。 | FAIL。卡片仍有 `onclick="startUnstoreBuilding(...)"` 與 `cursor:pointer`，旁邊另有「取出」。點名稱仍呼叫 `startUnstoreBuilding`，`#placementBar` 變成 `.active`、`display:flex`、底色 `rgb(99, 102, 241)`，並出現 `.valid-plot`。 |
+| TC-FE-WAREHOUSE-SCENE2-LEGAL | FAIL。沒有「取出」。 | FAIL。取出進入了場景 2。金色格 62、合法原點 36，沒有缺格。多出來的是足跡裡非原點的格子，以及索引 7 的整欄整行，例如 `(0,1)`、`(1,0)`、`(1,1)`、`(3,3)`–`(5,5)` 裡除了農場原點以外的格子，以及 `(7,*)`、`(*,7)`。點「第 1 欄第 1 行」沒有跳出提示，`#toast` 文字是空的、class 是空的，底色仍是預設綠 `rgb(21, 128, 61)`。金幣與材料沒有變。 |
+| TC-FE-WAREHOUSE-SCENE3-CANCEL | FAIL。沒有「取出」。 | FAIL。取消之後仍是場景 2，但 `#readyStatus` 是「「圖書館」喺存倉。用存倉放返，唔使再扣資源。」，`#placeStatus` 回到「確定先至扣資源。取消唔會扣。」可見文字含「喺存倉」「用存倉放返」「唔使再扣資源」。 |
+| TC-FE-BUILD-SCENE2-NOREGRESS | PASS | PASS |
+| TC-FE-WAREHOUSE-COPY-FORMAL | FAIL。見上表。四句都不是指定文字。 | FAIL。取出場景 2 與新建造場景 2 的 `#btnUxBack` 都是「返去睇地圖」，`#btnToScene3` 都是「去擺位置」。已選格 aria-label 是「第 1 欄第 1 行，已揀呢格」，沒有「已選此格」。點清單裡的圖書館之後進入場景 3，可見提示是「放回「圖書館」。不扣除金幣和材料。」，含「金幣」，不是「「圖書館」在存倉中，可直接放回，不扣除資源。」這一步的可見文字沒有「喺存倉」「用存倉放返」「唔使再扣資源」。 |
+| TC-FE-WAREHOUSE-UNSTORE、CARD、GRID，以及其餘倉庫 API | 見上表，仍是原先的紅或綠。 | PASS。含 `BUILD-REUSE-AUTO`、`BUILD-REJECT`、`REGION-*`、`P1-TC-UNL-02`。 |
+| TC-FE-WAREHOUSE-FULL-TOAST | 未設自動案例。 | 未設自動案例。 |
+
+整套 API（`pytest -m "not frontend"`）：main 17 failed、361 passed、92 deselected。`4707808` 1 failed、377 passed、92 deselected，唯一失敗是 `PLACE-EDGE-7`。整套介面（`pytest -m frontend`）：main 6 failed、86 passed、378 deselected。`4707808` 4 failed、88 passed、378 deselected。`4707808` 上通過的是 `UNSTORE`、`CARD` 與 `SCENE2-NOREGRESS`；失敗的是 `CARD-BODY`、`SCENE2-LEGAL`、`SCENE3-CANCEL`、`COPY-FORMAL`。

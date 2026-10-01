@@ -27,10 +27,12 @@ from tests.factories import (  # noqa: E402
     TEST_KID_PIN,
     connect_db,
     get_kid_points,
+    grant_inventory,
     init_empty_db,
     insert_building,
     insert_kid,
     inventory_map,
+    set_kid_points,
 )
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -744,3 +746,570 @@ def test_storage_card_shows_name_level_and_takeout_only(page, base_url, warehous
         "TC-FE-WAREHOUSE-CARD: expected name, level, and 取出 only. "
         f"Actual list text={store_text!r}. " + " | ".join(problems)
     )
+
+
+MAP_N = 8
+FOOTPRINT = 2
+FORMAL_STORED_HINT = "「圖書館」在存倉中，可直接放回，不扣除資源。"
+UNSTORE_SCENE2_HINT = "請點選空地，放回「圖書館」。不扣除金幣和材料。"
+IDLE_SCENE2_HINT = "點金色空地，或者打開清單揀一座未起嘅屋。"
+GYM_PICKED_HINT = "已揀「健身室」同呢格空地。"
+SCENE3_CHARGE_HINT = "確定先至扣資源。取消唔會扣。"
+COLLOQUIAL_BITS = ("喺存倉", "用存倉放返", "唔使再扣資源")
+WAREHOUSE_BAR_TEXT = "📍 選擇位置放置倉庫建築"
+
+_GOLD_CELLS_JS = r"""
+() => {
+  const cells = [];
+  for (const pad of document.querySelectorAll('#townMap .pad')) {
+    const hot = pad.classList.contains('is-empty-hot') || pad.classList.contains('is-chosen');
+    const mark = pad.querySelector(':scope > .mark');
+    if (!hot || !mark || mark.hidden) continue;
+    const cs = getComputedStyle(mark);
+    const box = mark.getBoundingClientRect();
+    const visible = cs.display !== 'none' && cs.visibility !== 'hidden'
+      && box.width > 1 && box.height > 1;
+    const filter = cs.filter || '';
+    const gold = filter.includes('212') && filter.includes('160') && filter.includes('23');
+    if (!visible || !gold) continue;
+    const btn = pad.querySelector('.cell-btn');
+    const label = btn ? (btn.getAttribute('aria-label') || '') : '';
+    const match = label.match(/第\s*(\d+)\s*欄第\s*(\d+)\s*行/);
+    if (!match) continue;
+    cells.push([Number(match[1]) - 1, Number(match[2]) - 1]);
+  }
+  return cells;
+}
+"""
+
+_BAR_JS = r"""
+() => {
+  const bar = document.getElementById('placementBar');
+  if (!bar) return { missing: true };
+  const cs = getComputedStyle(bar);
+  const box = bar.getBoundingClientRect();
+  return {
+    active: bar.classList.contains('active'),
+    display: cs.display,
+    background: cs.backgroundColor,
+    width: box.width,
+    height: box.height,
+    text: bar.innerText || ''
+  };
+}
+"""
+
+_HINT_JS = r"""
+() => {
+  function shown(el) {
+    if (!el || el.hidden) return false;
+    const cs = getComputedStyle(el);
+    const box = el.getBoundingClientRect();
+    return cs.display !== 'none' && cs.visibility !== 'hidden'
+      && box.width > 1 && box.height > 1;
+  }
+  const ready = document.getElementById('readyStatus');
+  const place = document.getElementById('placeStatus');
+  const map = document.getElementById('townMap');
+  return {
+    ready: ready ? ready.textContent : '',
+    readyOn: shown(ready),
+    place: place ? place.textContent : '',
+    placeOn: shown(place),
+    scene: map ? (map.getAttribute('aria-label') || '') : '',
+    back: (document.getElementById('btnUxBack') || {}).textContent || '',
+    go: (document.getElementById('btnToScene3') || {}).textContent || ''
+  };
+}
+"""
+
+
+def _overlaps(origin, other, footprint=FOOTPRINT):
+    ax, ay = origin
+    bx, by = other
+    return not (
+        ax + footprint <= bx
+        or bx + footprint <= ax
+        or ay + footprint <= by
+        or by + footprint <= ay
+    )
+
+
+def _legal_origins(occupied):
+    max_origin = MAP_N - FOOTPRINT
+    return [
+        (x, y)
+        for y in range(max_origin + 1)
+        for x in range(max_origin + 1)
+        if not any(_overlaps((x, y), cell) for cell in occupied)
+    ]
+
+
+def _def_id_by_name(db_path, name):
+    db = connect_db(db_path)
+    row = db.execute("SELECT id, cost_gold, materials FROM building_defs WHERE name=?", (name,)).fetchone()
+    db.close()
+    assert row, name
+    return dict(row)
+
+
+def _reset_kid(db_path, kid_id, points=800, items=None, buildings=None):
+    """Replace this kid's buildings, tiles, inventory, and gold. Session server reads the file."""
+    db = connect_db(db_path)
+    db.execute("DELETE FROM buildings WHERE kid_id=?", (kid_id,))
+    db.execute("DELETE FROM town_tiles WHERE kid_id=?", (kid_id,))
+    db.execute("DELETE FROM inventory WHERE kid_id=?", (kid_id,))
+    db.commit()
+    db.close()
+    set_kid_points(db_path, kid_id, points)
+    if items:
+        grant_inventory(db_path, kid_id, items)
+    ids = []
+    for spec in buildings or []:
+        def_row = _def_id_by_name(db_path, spec["name"])
+        ids.append(insert_building(
+            db_path,
+            kid_id,
+            def_row["id"],
+            level=spec.get("level", 1),
+            stored=spec.get("stored", 0),
+            cell_x=spec.get("cell_x", 0),
+            cell_y=spec.get("cell_y", 0),
+        ))
+    return ids
+
+
+def _hint(page):
+    return page.evaluate(_HINT_JS)
+
+
+def _visible_text(page):
+    return page.locator("body").inner_text()
+
+
+def _aria_labels(page):
+    return page.evaluate(
+        """() => [...document.querySelectorAll('[aria-label]')]
+          .map((el) => el.getAttribute('aria-label') || '')"""
+    )
+
+
+def _gold_cells(page):
+    raw = page.evaluate(_GOLD_CELLS_JS)
+    return sorted((item[0], item[1]) for item in raw)
+
+
+def _click_cell(page, cell_x, cell_y):
+    col = cell_x + 1
+    row = cell_y + 1
+    pad = page.locator("#townMap").get_by_role(
+        "button",
+        name=re.compile(rf"第\s*{col}\s*欄第\s*{row}\s*行"),
+    )
+    assert pad.count() > 0, f"missing pad 第 {col} 欄第 {row} 行"
+    pad.first.click()
+
+
+def _enter_new_build_scene2(page):
+    page.locator("#btnBuild").click()
+    page.locator("#readyBar").wait_for(state="visible", timeout=8000)
+    page.locator("#townMap").wait_for(state="visible", timeout=8000)
+
+
+def _toast_state(page):
+    return page.evaluate(
+        """() => {
+          const el = document.getElementById('toast');
+          if (!el) return { missing: true };
+          const cs = getComputedStyle(el);
+          return {
+            text: el.textContent || '',
+            className: el.className || '',
+            display: el.style.display || '',
+            background: cs.backgroundColor,
+            color: cs.color
+          };
+        }"""
+    )
+
+
+def _open_takeout_scene2(page):
+    """Press 取出. Returns a problem string when the control is missing."""
+    _open_store(page)
+    takeout = page.locator('[data-testid="warehouse-takeout"]')
+    named = page.locator("#tab-store").get_by_role("button", name="取出")
+    if takeout.count() == 0 and named.count() == 0:
+        return (
+            "no 取出 control "
+            f"(warehouse-takeout={takeout.count()}, named={named.count()}). "
+            f"List={page.locator('#storedBuildings').inner_text()!r}"
+        )
+    control = takeout.first if takeout.count() else named.first
+    control.click()
+    page.locator("#townMap").wait_for(state="visible", timeout=8000)
+    return None
+
+
+@pytest.mark.case_id("TC-FE-WAREHOUSE-CARD-BODY")
+def test_storage_card_body_does_not_start_unstore(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-WAREHOUSE-CARD-BODY 卡片本體不可取出。只有「取出」進入場景 2。"""
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        buildings=[{"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12}],
+    )
+    _login(page, base_url)
+    _arm_placement_bar_watch(page)
+    _open_store(page)
+    page.evaluate(
+        """() => {
+          window.__ktUnstoreCalls = 0;
+          const orig = window.startUnstoreBuilding;
+          window.startUnstoreBuilding = function () {
+            window.__ktUnstoreCalls += 1;
+            if (typeof orig === 'function') return orig.apply(this, arguments);
+          };
+        }"""
+    )
+    card = page.locator("#storedBuildings .build-card").first
+    assert card.count() == 1, page.locator("#storedBuildings").inner_text()
+    card_meta = card.evaluate(
+        """el => {
+          const name = [...el.querySelectorAll('div')].find((node) => (node.textContent || '').includes('圖書館'));
+          const probe = name || el;
+          return {
+            onclick: el.getAttribute('onclick'),
+            cursor: getComputedStyle(el).cursor,
+            nameOnclick: probe.getAttribute('onclick'),
+            nameCursor: getComputedStyle(probe).cursor,
+            html: el.outerHTML
+          };
+        }"""
+    )
+    name = card.locator("div").filter(has_text=BUILDING_NAME).first
+    name.click()
+    page.wait_for_timeout(300)
+    calls = page.evaluate("() => window.__ktUnstoreCalls || 0")
+    bar = page.evaluate(_BAR_JS)
+    surface = _placement_surface(page)
+    problems = []
+    if calls:
+        problems.append(f"clicking the card body called startUnstoreBuilding {calls} time(s)")
+    if card_meta.get("onclick"):
+        problems.append(f"card has onclick={card_meta['onclick']!r}")
+    if card_meta.get("cursor") == "pointer":
+        problems.append("card computed cursor is pointer")
+    if bar.get("active") or surface.get("barActive") or surface.get("sawBar"):
+        problems.append(f"#placementBar became active {bar}")
+    if bar.get("width", 0) > 1 or bar.get("height", 0) > 1 or bar.get("display") != "none":
+        problems.append(
+            "#placementBar must stay display:none and 0×0. "
+            f"display={bar.get('display')} box={bar.get('width')}×{bar.get('height')} "
+            f"background={bar.get('background')}"
+        )
+    if page.locator(".valid-plot").count():
+        problems.append(".valid-plot appeared")
+    visible = _visible_text(page)
+    if WAREHOUSE_BAR_TEXT in visible:
+        problems.append(f"visible text contains {WAREHOUSE_BAR_TEXT}")
+    if not problems:
+        opened = _open_takeout_scene2(page)
+        if opened:
+            problems.append("取出 did not open Scene 2: " + opened)
+        else:
+            scene = _hint(page)
+            if "場景 2" not in scene["scene"]:
+                problems.append(f"取出 did not land on Scene 2. Actual {scene}")
+            bar_after = page.evaluate(_BAR_JS)
+            if bar_after.get("active") or bar_after.get("display") != "none":
+                problems.append(f"取出 activated #placementBar {bar_after}")
+    assert not problems, (
+        "TC-FE-WAREHOUSE-CARD-BODY: the card body must not start unstore. "
+        f"html={card_meta.get('html')!r}. " + " | ".join(problems)
+    )
+
+
+@pytest.mark.case_id("TC-FE-WAREHOUSE-SCENE2-LEGAL")
+def test_unstore_scene2_gold_matches_legal_origins(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-WAREHOUSE-SCENE2-LEGAL 取出場景 2 的金色格等於合法原點。"""
+    kid_id = warehouse_ids["kid_id"]
+    placed = ((0, 0), (4, 4))
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        buildings=[
+            {"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12},
+            {"name": "健身室", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0},
+            {"name": "農場", "level": 1, "stored": 0, "cell_x": 4, "cell_y": 4},
+        ],
+    )
+    before_points = get_kid_points(warehouse_db, kid_id)
+    before_items = inventory_map(warehouse_db, kid_id)
+    _login(page, base_url)
+    _arm_placement_bar_watch(page)
+    opened = _open_takeout_scene2(page)
+    assert opened is None, (
+        "TC-FE-WAREHOUSE-SCENE2-LEGAL: 取出 must open unstore Scene 2 on #townMap. " + opened
+    )
+    scene = _hint(page)
+    assert "場景 2" in scene["scene"], f"expected unstore Scene 2, got {scene}"
+    legal = _legal_origins(placed)
+    gold = _gold_cells(page)
+    problems = []
+    if gold != legal:
+        extra = sorted(set(gold) - set(legal))
+        missing = sorted(set(legal) - set(gold))
+        problems.append(
+            f"gold cells != legal origins. gold={len(gold)} legal={len(legal)} "
+            f"extra={extra} missing={missing}"
+        )
+    _click_cell(page, 0, 0)
+    try:
+        page.wait_for_function(
+            """() => {
+              const el = document.getElementById('toast');
+              return !!(el && el.style.display === 'block' && (el.textContent || '').length);
+            }""",
+            timeout=1500,
+        )
+    except Exception:
+        pass
+    toast = _toast_state(page)
+    if toast.get("text") != "這個位置已經有建築物。":
+        problems.append(f"toast text {toast.get('text')!r}, expected 這個位置已經有建築物。")
+    classes = set((toast.get("className") or "").split())
+    if "info" not in classes or "error" in classes:
+        problems.append(f"toast class {toast.get('className')!r}, expected info and not error")
+    if toast.get("background") != "rgb(107, 79, 42)":
+        problems.append(f"toast background {toast.get('background')!r}, expected rgb(107, 79, 42)")
+    if get_kid_points(warehouse_db, kid_id) != before_points or inventory_map(warehouse_db, kid_id) != before_items:
+        problems.append(
+            "resources changed "
+            f"points {before_points}->{get_kid_points(warehouse_db, kid_id)} "
+            f"items {before_items}->{inventory_map(warehouse_db, kid_id)}"
+        )
+    assert not problems, "TC-FE-WAREHOUSE-SCENE2-LEGAL: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-FE-WAREHOUSE-SCENE3-CANCEL")
+def test_unstore_cancel_returns_to_unstore_scene2(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-WAREHOUSE-SCENE3-CANCEL 取消預覽回到取出場景 2，不是普通建造。"""
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        buildings=[{"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12}],
+    )
+    before_points = get_kid_points(warehouse_db, kid_id)
+    before_items = inventory_map(warehouse_db, kid_id)
+    _login(page, base_url)
+    _arm_placement_bar_watch(page)
+    opened = _open_takeout_scene2(page)
+    assert opened is None, (
+        "TC-FE-WAREHOUSE-SCENE3-CANCEL: 取出 must open unstore Scene 2. " + opened
+    )
+    _click_cell(page, 0, 0)
+    advance = page.locator("#btnToScene3")
+    if advance.count() and advance.first.is_visible() and advance.first.is_enabled():
+        advance.first.click()
+    page.locator("#uxPlaceBar").wait_for(state="visible", timeout=8000)
+    page.locator("#btnUxCancel").click()
+    page.locator("#readyStatus").wait_for(state="visible", timeout=8000)
+    hint = _hint(page)
+    visible = _visible_text(page)
+    bar = page.evaluate(_BAR_JS)
+    problems = []
+    if hint["ready"] != UNSTORE_SCENE2_HINT:
+        problems.append(
+            f"#readyStatus {hint['ready']!r}, expected {UNSTORE_SCENE2_HINT!r}. "
+            f"placeStatus={hint['place']!r} scene={hint['scene']!r}"
+        )
+    if "場景 2" not in hint["scene"]:
+        problems.append(f"expected Scene 2 after cancel, got {hint['scene']!r}")
+    for bit in COLLOQUIAL_BITS:
+        if bit in visible:
+            problems.append(f"visible text still contains {bit}")
+    if IDLE_SCENE2_HINT in visible or "已揀「圖書館」同呢格空地。" in visible:
+        problems.append("cancel returned to the normal new-build hint")
+    if bar.get("active") or bar.get("display") != "none":
+        problems.append(f"#placementBar active after cancel {bar}")
+    if get_kid_points(warehouse_db, kid_id) != before_points or inventory_map(warehouse_db, kid_id) != before_items:
+        problems.append("resources changed on cancel")
+    assert not problems, "TC-FE-WAREHOUSE-SCENE3-CANCEL: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-FE-BUILD-SCENE2-NOREGRESS")
+def test_new_build_scene2_still_places_and_charges_once(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-BUILD-SCENE2-NOREGRESS 普通新建造場景 2 仍可放置並只扣一次目錄價。
+
+    點選的格子兩邊索引都不超過 6。不用索引 7。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    gym = _def_id_by_name(warehouse_db, "健身室")
+    materials = json.loads(gym["materials"] or "{}")
+    assert gym["cost_gold"] == 200, gym
+    assert materials == {"wood": 10, "brick": 5}, materials
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        items={"wood": 10, "brick": 5},
+        buildings=[],
+    )
+    before_points = get_kid_points(warehouse_db, kid_id)
+    before_items = inventory_map(warehouse_db, kid_id)
+    _login(page, base_url)
+    _enter_new_build_scene2(page)
+    idle = _hint(page)
+    assert idle["ready"] == IDLE_SCENE2_HINT, idle
+    gold = _gold_cells(page)
+    legal_gold = [cell for cell in gold if cell[0] <= MAP_N - FOOTPRINT and cell[1] <= MAP_N - FOOTPRINT]
+    assert legal_gold, f"new-build Scene 2 has no gold cell with index <= 6. gold={gold}"
+    cell_x, cell_y = legal_gold[0]
+    assert cell_x <= 6 and cell_y <= 6
+    _click_cell(page, cell_x, cell_y)
+    page.locator("#listLauncher").click()
+    page.locator("#palette").wait_for(state="visible", timeout=8000)
+    gym_btn = page.locator("#palette").get_by_role("button", name=re.compile(r"健身室"))
+    assert gym_btn.count() > 0, "missing 健身室 in the building list"
+    gym_label = gym_btn.first.get_attribute("aria-label") or ""
+    assert "未起" in gym_label and "已起" not in gym_label, gym_label
+    gym_btn.first.click()
+    picked = _hint(page)
+    assert picked["ready"] == GYM_PICKED_HINT, picked
+    posts = []
+
+    def _capture(response):
+        url = response.url
+        if (
+            response.request.method == "POST"
+            and "/buildings" in url
+            and "/unstored" not in url
+            and "/move" not in url
+            and "/store" not in url
+        ):
+            posts.append(response)
+
+    page.on("response", _capture)
+    page.locator("#btnToScene3").click()
+    page.locator("#uxPlaceBar").wait_for(state="visible", timeout=8000)
+    confirm_hint = _hint(page)
+    assert confirm_hint["place"] == SCENE3_CHARGE_HINT, confirm_hint
+    with page.expect_response(
+        lambda resp: (
+            resp.request.method == "POST"
+            and "/buildings" in resp.url
+            and "/unstored" not in resp.url
+            and "/move" not in resp.url
+            and "/store" not in resp.url
+        ),
+        timeout=8000,
+    ) as posted:
+        page.locator("#btnUxConfirm").click()
+    page.wait_for_timeout(400)
+    assert len(posts) == 1, [(item.status, item.url) for item in posts]
+    assert posted.value.status == 201, f"HTTP {posted.value.status} {posted.value.text()[:300]}"
+    after_points = get_kid_points(warehouse_db, kid_id)
+    after_items = inventory_map(warehouse_db, kid_id)
+    assert after_points == before_points - gym["cost_gold"], (before_points, after_points, gym["cost_gold"])
+    for item_type, qty in materials.items():
+        assert after_items.get(item_type, 0) == before_items.get(item_type, 0) - qty, (
+            item_type, before_items, after_items
+        )
+    db = connect_db(warehouse_db)
+    rows = db.execute(
+        """
+        SELECT b.cell_x, b.cell_y, b.level, COALESCE(b.stored, 0) AS stored, bd.name
+          FROM buildings b JOIN building_defs bd ON bd.id = b.def_id
+         WHERE b.kid_id=?
+        """,
+        (kid_id,),
+    ).fetchall()
+    db.close()
+    assert len(rows) == 1, [dict(row) for row in rows]
+    placed = dict(rows[0])
+    assert placed["name"] == "健身室" and placed["stored"] == 0 and placed["level"] == 1, placed
+    assert (placed["cell_x"], placed["cell_y"]) == (cell_x, cell_y), placed
+
+
+@pytest.mark.case_id("TC-FE-WAREHOUSE-COPY-FORMAL")
+def test_formal_placement_copy(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-WAREHOUSE-COPY-FORMAL 放置文案改為書面語。"""
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        buildings=[{"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12}],
+    )
+    _login(page, base_url)
+    _enter_new_build_scene2(page)
+    problems = []
+    scene2 = _hint(page)
+    visible = _visible_text(page)
+    if scene2["back"].strip() != "返回地圖":
+        problems.append(f"#btnUxBack is {scene2['back'].strip()!r}, expected 返回地圖")
+    if "返去睇地圖" in visible:
+        problems.append("visible DOM still contains 返去睇地圖")
+    if scene2["go"].strip() != "選擇位置":
+        problems.append(f"#btnToScene3 is {scene2['go'].strip()!r}, expected 選擇位置")
+    if "去擺位置" in visible:
+        problems.append("visible DOM still contains 去擺位置")
+
+    gold = [cell for cell in _gold_cells(page) if cell[0] <= 6 and cell[1] <= 6]
+    assert gold, "COPY-FORMAL: new-build Scene 2 has no cell with index <= 6"
+    cell_x, cell_y = gold[0]
+    _click_cell(page, cell_x, cell_y)
+    labels = _aria_labels(page)
+    expected_label = f"第 {cell_x + 1} 欄第 {cell_y + 1} 行，已選此格"
+    selected = [label for label in labels if label.startswith(f"第 {cell_x + 1} 欄第 {cell_y + 1} 行")]
+    if expected_label not in selected:
+        problems.append(
+            f"selected aria-label {selected!r}, expected {expected_label!r} "
+            "(coordinate prefix plus 已選此格)"
+        )
+    stale = [label for label in labels if "已揀呢格" in label]
+    if stale:
+        problems.append(f"aria-label still contains 已揀呢格: {stale}")
+
+    page.locator("#listLauncher").click()
+    page.locator("#palette").wait_for(state="visible", timeout=8000)
+    library = page.locator("#palette").get_by_role("button", name=re.compile(r"圖書館"))
+    assert library.count() > 0, "missing 圖書館 in the building list"
+    library.first.click()
+    page.wait_for_timeout(200)
+    after = _hint(page)
+    hint_text = after["ready"] if after["readyOn"] else after["place"]
+    if hint_text != FORMAL_STORED_HINT:
+        problems.append(
+            f"stored-copy hint {hint_text!r}, expected {FORMAL_STORED_HINT!r}. "
+            f"readyOn={after['readyOn']} ready={after['ready']!r} "
+            f"placeOn={after['placeOn']} place={after['place']!r} scene={after['scene']!r}"
+        )
+    visible_after = _visible_text(page)
+    for bit in COLLOQUIAL_BITS:
+        if bit in visible_after or bit in hint_text:
+            problems.append(f"colloquial {bit} still visible")
+    if re.search(r"\d|💰|金幣", hint_text or ""):
+        problems.append(f"stored-copy hint contains a price or 金幣: {hint_text!r}")
+
+    opened = _open_takeout_scene2(page)
+    if opened:
+        problems.append(
+            "unstore Scene 2 was not reached, so the back button was checked on new-build Scene 2. "
+            + opened
+        )
+    else:
+        unstore = _hint(page)
+        unstore_visible = _visible_text(page)
+        if "場景 2" not in unstore["scene"]:
+            problems.append(f"取出 did not stay on Scene 2. {unstore}")
+        if unstore["back"].strip() != "返回地圖":
+            problems.append(f"unstore #btnUxBack is {unstore['back'].strip()!r}")
+        if "返去睇地圖" in unstore_visible:
+            problems.append("unstore Scene 2 visible DOM contains 返去睇地圖")
+        if unstore["go"].strip() != "選擇位置":
+            problems.append(f"unstore #btnToScene3 is {unstore['go'].strip()!r}")
+        if "去擺位置" in unstore_visible:
+            problems.append("unstore Scene 2 visible DOM contains 去擺位置")
+    assert not problems, "TC-FE-WAREHOUSE-COPY-FORMAL: " + " | ".join(problems)
