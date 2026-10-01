@@ -1959,9 +1959,9 @@ body.kt-pane-shop .kt-backpack-block{display:none}
       <div class="palette-grid" id="paletteGrid"></div>
     </aside>
     <div class="place-bar" id="readyBar" hidden>
-      <button id="btnUxBack" type="button">返去睇地圖</button>
+      <button id="btnUxBack" type="button">返回地圖</button>
       <p id="readyStatus">點金色空地，或者打開清單揀一座未起嘅屋。</p>
-      <button id="btnToScene3" type="button" disabled>去擺位置</button>
+      <button id="btnToScene3" type="button" disabled>選擇位置</button>
     </div>
     <div class="place-bar" id="uxPlaceBar" hidden>
       <button id="btnUxCancel" type="button">取消</button>
@@ -3437,7 +3437,7 @@ async function renderStoredBuildings() {
       return;
     }
     container.innerHTML = rows.map(b => `
-      <div class="build-card" style="background:#f8fafc;border-radius:10px;padding:8px;text-align:center;cursor:pointer;border:1px solid #e2e8f0" onclick="startUnstoreBuilding(${b.id})">
+      <div class="build-card" style="background:#f8fafc;border-radius:10px;padding:8px;text-align:center;cursor:default;border:1px solid #e2e8f0">
         <div style="min-height:72px">
           <div style="font-size:32px;margin:4px 0">${b.icon||'🏠'}</div>
           <div style="font-size:12px;font-weight:600">${escapeHtml(b.name)} Lv.${b.level}</div>
