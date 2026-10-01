@@ -13,9 +13,11 @@ import json
 import os
 import re
 import socket
+import struct
 import subprocess
 import sys
 import time
+import zlib
 
 import pytest
 
@@ -39,6 +41,10 @@ CELL_COL = 2
 CELL_ROW = 2
 CELL_X = 1
 CELL_Y = 1
+FOOTER_GOLDEN = os.path.join(REPO, "tests", "fixtures", "kt_footer_main.png")
+# Numeric prices and the new-build charge sentence. Saying that nothing is deducted,
+# without an amount, is not a price.
+PRICE_RE = re.compile(r"💰|升級要|確定先至扣資源|\d+\s*(?:金幣|木材|磚|玻璃|齒輪|寶石)")
 
 
 def _playwright_unavailable_reason():
@@ -192,6 +198,188 @@ def _open_store(page):
     page.locator("#storedBuildings").wait_for(state="visible", timeout=8000)
 
 
+def _decode_png(data):
+    """8-bit non-interlaced PNG → (width, height, channels, raw rows)."""
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise AssertionError("footer capture is not a PNG")
+    pos = 8
+    width = height = color_type = None
+    idat = b""
+    while pos + 8 <= len(data):
+        length = struct.unpack(">I", data[pos:pos + 4])[0]
+        kind = data[pos + 4:pos + 8]
+        chunk = data[pos + 8:pos + 8 + length]
+        pos += 12 + length
+        if kind == b"IHDR":
+            width, height, bit_depth, color_type = struct.unpack(">IIBB", chunk[:10])
+            if bit_depth != 8 or color_type not in (2, 6):
+                raise AssertionError(f"unsupported footer PNG {bit_depth=} {color_type=}")
+        elif kind == b"IDAT":
+            idat += chunk
+        elif kind == b"IEND":
+            break
+    channels = 4 if color_type == 6 else 3
+    raw = zlib.decompress(idat)
+    stride = width * channels
+    rows = []
+    index = 0
+    prev = bytearray(stride)
+
+    def paeth(a, b, c):
+        p = a + b - c
+        pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+        if pa <= pb and pa <= pc:
+            return a
+        if pb <= pc:
+            return b
+        return c
+
+    for _y in range(height):
+        filt = raw[index]
+        index += 1
+        row = bytearray(raw[index:index + stride])
+        index += stride
+        if filt == 1:
+            for x in range(stride):
+                left = row[x - channels] if x >= channels else 0
+                row[x] = (row[x] + left) & 255
+        elif filt == 2:
+            for x in range(stride):
+                row[x] = (row[x] + prev[x]) & 255
+        elif filt == 3:
+            for x in range(stride):
+                left = row[x - channels] if x >= channels else 0
+                row[x] = (row[x] + ((left + prev[x]) // 2)) & 255
+        elif filt == 4:
+            for x in range(stride):
+                a = row[x - channels] if x >= channels else 0
+                b = prev[x]
+                c = prev[x - channels] if x >= channels else 0
+                row[x] = (row[x] + paeth(a, b, c)) & 255
+        elif filt != 0:
+            raise AssertionError(f"unsupported PNG filter {filt}")
+        prev = row
+        rows.append(bytes(row))
+    return width, height, channels, b"".join(rows)
+
+
+def _rgb_channel_diff(left, right):
+    """Sum of absolute RGB channel differences. Alpha is ignored."""
+    lw, lh, lc, lraw = _decode_png(left)
+    rw, rh, rc, rraw = _decode_png(right)
+    if (lw, lh) != (rw, rh):
+        return None, f"size {lw}x{lh} vs {rw}x{rh}"
+    total = 0
+    for i in range(lw * lh):
+        lb = i * lc
+        rb = i * rc
+        total += abs(lraw[lb] - rraw[rb]) + abs(lraw[lb + 1] - rraw[rb + 1]) + abs(lraw[lb + 2] - rraw[rb + 2])
+    return total, f"{lw}x{lh}"
+
+
+def _footer_png(page):
+    page.locator("#ktFooter").wait_for(state="visible", timeout=8000)
+    page.wait_for_function(
+        "() => document.querySelectorAll('#ktFooter .kt-footer-tab.has-icon').length >= 5",
+        timeout=8000,
+    )
+    return page.locator("#ktFooter").screenshot(animations="disabled")
+
+
+def _assert_footer_matches_main(page, when):
+    live = _footer_png(page)
+    assert os.path.isfile(FOOTER_GOLDEN), (
+        "TC-FE-WAREHOUSE-UNSTORE: missing tests/fixtures/kt_footer_main.png "
+        "(footer pixels captured from main)."
+    )
+    with open(FOOTER_GOLDEN, "rb") as handle:
+        golden = handle.read()
+    diff, detail = _rgb_channel_diff(live, golden)
+    assert diff == 0, (
+        "TC-FE-WAREHOUSE-UNSTORE: #ktFooter / .kt-footer RGB pixel diff vs main "
+        f"must be 0 {when}. Actual diff={diff} ({detail})."
+    )
+
+
+def _arm_placement_bar_watch(page):
+    page.evaluate(
+        """() => {
+          window.__ktBarBad = false;
+          const bar = document.getElementById('placementBar');
+          if (!bar) return;
+          const note = () => {
+            const cs = getComputedStyle(bar);
+            const visible = cs.display !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0';
+            if (bar.classList.contains('active') || visible) window.__ktBarBad = true;
+          };
+          note();
+          new MutationObserver(note).observe(bar, {attributes: true, attributeFilter: ['class', 'style']});
+        }"""
+    )
+
+
+def _placement_surface(page):
+    return page.evaluate(
+        """() => {
+          const bar = document.getElementById('placementBar');
+          const map = document.getElementById('townMap');
+          const cs = bar ? getComputedStyle(bar) : null;
+          const mapCs = map ? getComputedStyle(map) : null;
+          const mapBox = map ? map.getBoundingClientRect() : null;
+          return {
+            barActive: !!(bar && bar.classList.contains('active')),
+            barVisible: !!(cs && cs.display !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0'),
+            mapVisible: !!(map && mapCs && mapCs.visibility !== 'hidden' && mapCs.display !== 'none'
+              && mapBox && mapBox.width > 1 && mapBox.height > 1),
+            sawBar: !!window.__ktBarBad,
+            scene: map ? (map.getAttribute('aria-label') || '') : '',
+            mapClass: map ? map.className : ''
+          };
+        }"""
+    )
+
+
+def _assert_pick_surface(page, when):
+    surface = _placement_surface(page)
+    assert surface["mapVisible"], (
+        "TC-FE-WAREHOUSE-UNSTORE: while picking, #townMap must be the visible 8×8 map "
+        f"({when}). Actual {surface}."
+    )
+    assert not surface["barActive"] and not surface["barVisible"] and not surface["sawBar"], (
+        "TC-FE-WAREHOUSE-UNSTORE: #placementBar must not be .active or visible at any point "
+        f"({when}). Actual {surface}. "
+        "#placementBar.active hides #townMap and shows the legacy 24×16 grid."
+    )
+    assert page.locator(".valid-plot").count() == 0, (
+        "TC-FE-WAREHOUSE-UNSTORE: 取出 must not show .valid-plot."
+    )
+
+
+def _place_chrome_text(page):
+    return page.evaluate(
+        """() => {
+          const parts = [];
+          for (const sel of ['#uxPlaceBar', '#placeStatus', '#btnUxConfirm', '#readyBar', '#readyStatus']) {
+            const el = document.querySelector(sel);
+            if (!el || el.hidden) continue;
+            const cs = getComputedStyle(el);
+            const box = el.getBoundingClientRect();
+            if (cs.display === 'none' || cs.visibility === 'hidden' || box.width < 1 || box.height < 1) continue;
+            parts.push(el.innerText || '');
+          }
+          for (const el of document.querySelectorAll('#uxPlaceBar .pal-cost, #townMap .pal-cost, #sheetCost')) {
+            const cs = getComputedStyle(el);
+            if (el.hidden || cs.display === 'none' || cs.visibility === 'hidden') continue;
+            parts.push(el.innerText || '');
+          }
+          const ghost = document.querySelector('#townMap .pad.is-preview .ghost, #townMap .ghost');
+          const pad = ghost && ghost.closest('.pad');
+          if (pad) parts.push(pad.innerText || '');
+          return parts.join('\\n');
+        }"""
+    )
+
+
 def _building_row(db_path, building_id):
     db = connect_db(db_path)
     row = db.execute(
@@ -209,18 +397,21 @@ def _building_row(db_path, building_id):
 
 @pytest.mark.case_id("TC-FE-WAREHOUSE-UNSTORE")
 def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db, warehouse_ids):
-    """TC-FE-WAREHOUSE-UNSTORE 打開存倉、撳取出、喺 8×8 揀格，屋出現而且重新載入後仍在。
+    """TC-FE-WAREHOUSE-UNSTORE 存倉「取出」走新建造同一條四場景路。
 
-    預期：存倉數量 1 → 0，地圖第 2 欄第 2 行見到圖書館，金幣唔變，等級仍係 2。
-    main 的清單冇「取出」，卡片係「按此放置」並進入 24×16 放置條。
+    場景 2 在 #townMap 揀空格 → 場景 3 ghost 與「確定放置」，不顯示價錢。
+    落地後 [data-town-fx="place"] 出現（與新建造 celebrate("place") 相同）。
+    main 的清單是「按此放置」，會打開 #placementBar。
     """
     kid_id = warehouse_ids["kid_id"]
     building_id = warehouse_ids["building_id"]
     _login(page, base_url)
     pads = page.locator("#village .cell-btn").count()
     assert pads == 64, f"expected 64 pads on the 8×8 map before takeout, got {pads}"
+    _assert_footer_matches_main(page, "before the takeout flow")
     points_before = get_kid_points(warehouse_db, kid_id)
     mats_before = inventory_map(warehouse_db, kid_id)
+    _arm_placement_bar_watch(page)
     _open_store(page)
     store_text = page.locator("#storedBuildings").inner_text()
     cards = page.locator("#storedBuildings .build-card").count()
@@ -232,10 +423,14 @@ def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db
     assert takeout_n + named_n >= 1, (
         "TC-FE-WAREHOUSE-UNSTORE: expected the storage list to offer 取出 "
         "(data-testid=warehouse-takeout, or a button whose accessible name is 取出) "
-        f"for stored {BUILDING_NAME} Lv.2, then a pick on the 8×8 #townMap cell "
+        f"with bounding-box height >= 44px for stored {BUILDING_NAME} Lv.2. "
+        "The flow is the new-build path: Scene 2 pick on the visible 8×8 #townMap "
         f"第 {CELL_COL} 欄第 {CELL_ROW} 行 (DB cell {CELL_X},{CELL_Y}), "
-        "#btnUxConfirm if it is shown, the building visible on that cell, "
-        "storage count 1 → 0, no gold/material change, and the same placement after reload. "
+        "#btnToScene3 「去擺位置」 when that step is shown, then Scene 3 ghost "
+        "(#uxPlaceBar, #placeStatus, #btnUxConfirm 「確定放置」) with no price, "
+        "then [data-town-fx=\"place\"], the building on that cell, storage count 1 → 0, "
+        "no gold/material change, the same placement after reload, and #ktFooter "
+        "RGB diff 0 vs main before and after. #placementBar must never be .active or visible. "
         f"Actual: takeout controls={takeout_n}, buttons named 取出={named_n}, "
         f"warehouse-count present={count_node.count()}, "
         f"legacy cards={cards}, list text={store_text!r}. "
@@ -246,34 +441,56 @@ def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db
     )
 
     control = takeout.first if takeout_n else named.first
+    box = control.bounding_box()
+    assert box and box["height"] >= 44, (
+        "TC-FE-WAREHOUSE-UNSTORE: 取出 bounding-box height must be >= 44px. "
+        f"Actual box={box}."
+    )
     control.click()
-    bar_class = page.locator("#placementBar").get_attribute("class") or ""
-    assert "active" not in bar_class.split(), (
-        "TC-FE-WAREHOUSE-UNSTORE: 取出 must stay on the 8×8 #townMap. "
-        f"Actual #placementBar class={bar_class!r}. "
-        "active hides the iso map and shows the legacy 24×16 grid."
-    )
-    assert page.locator(".valid-plot").count() == 0, (
-        "TC-FE-WAREHOUSE-UNSTORE: 取出 must not show .valid-plot. "
-        f"Saw {page.locator('.valid-plot').count()} legacy plots."
-    )
-    page.locator("#townMap").wait_for(state="visible", timeout=8000)
-    pad = page.get_by_role(
+    _assert_pick_surface(page, "after 取出")
+    pad = page.locator("#townMap").get_by_role(
         "button",
         name=re.compile(rf"第\s*{CELL_COL}\s*欄第\s*{CELL_ROW}\s*行"),
     )
-    assert pad.count() > 0, f"missing 8×8 pad 第 {CELL_COL} 欄第 {CELL_ROW} 行"
+    assert pad.count() > 0, f"missing 8×8 pad 第 {CELL_COL} 欄第 {CELL_ROW} 行 inside #townMap"
+    pad_box = pad.first.bounding_box()
+    map_box = page.locator("#townMap").bounding_box()
+    assert pad_box and map_box and (
+        pad_box["x"] >= map_box["x"] - 1
+        and pad_box["y"] >= map_box["y"] - 1
+        and pad_box["x"] + pad_box["width"] <= map_box["x"] + map_box["width"] + 1
+        and pad_box["y"] + pad_box["height"] <= map_box["y"] + map_box["height"] + 1
+    ), (
+        "TC-FE-WAREHOUSE-UNSTORE: the tap target must be a cell on the visible #townMap. "
+        f"pad={pad_box} map={map_box}."
+    )
     pad.first.click()
+    _assert_pick_surface(page, "while picking the cell")
+    advance = page.locator("#btnToScene3")
+    if advance.count() and advance.first.is_visible() and advance.first.is_enabled():
+        advance.first.click()
+    _assert_pick_surface(page, "on the ghost confirm step")
+    page.locator("#uxPlaceBar").wait_for(state="visible", timeout=8000)
+    page.locator("#townMap .ghost").filter(visible=True).first.wait_for(state="visible", timeout=8000)
+    chrome = _place_chrome_text(page)
+    assert not PRICE_RE.search(chrome), (
+        "TC-FE-WAREHOUSE-UNSTORE: unstore ghost/confirm must not show a price or cost. "
+        f"Actual place chrome={chrome!r}."
+    )
     confirm = page.locator("#btnUxConfirm")
-    if confirm.count() and confirm.first.is_visible() and confirm.first.is_enabled():
-        with page.expect_response(
-            lambda resp: resp.request.method == "POST" and "/unstored" in resp.url,
-            timeout=8000,
-        ) as info:
-            confirm.first.click()
-        assert info.value.status in (200, 201), (
-            f"unstored HTTP {info.value.status}: {info.value.text()[:300]}"
-        )
+    assert confirm.count() and confirm.first.is_visible() and confirm.first.is_enabled(), (
+        "TC-FE-WAREHOUSE-UNSTORE: Scene 3 must show enabled #btnUxConfirm 「確定放置」."
+    )
+    with page.expect_response(
+        lambda resp: resp.request.method == "POST" and "/unstored" in resp.url,
+        timeout=8000,
+    ) as info:
+        confirm.first.click()
+    assert info.value.status in (200, 201), (
+        f"unstored HTTP {info.value.status}: {info.value.text()[:300]}"
+    )
+    page.locator('[data-town-fx="place"]').first.wait_for(state="attached", timeout=4000)
+    _assert_pick_surface(page, "after confirm")
     page.locator("#townMap .cap", has_text=BUILDING_NAME).first.wait_for(
         state="visible", timeout=8000
     )
@@ -282,6 +499,8 @@ def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db
         after_count = int((count_node.first.inner_text() or "0").strip() or "0")
     else:
         after_count = page.locator('[data-testid="warehouse-takeout"]').count()
+        if after_count == 0:
+            after_count = page.locator("#tab-store").get_by_role("button", name="取出").count()
     assert after_count == 0, (
         f"expected storage count 0 after takeout, got {after_count}. "
         f"List text={page.locator('#storedBuildings').inner_text()!r}"
@@ -291,7 +510,7 @@ def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db
     page.locator("#townMap .cap", has_text=BUILDING_NAME).first.wait_for(
         state="visible", timeout=8000
     )
-    label = page.get_by_role(
+    label = page.locator("#townMap").get_by_role(
         "button",
         name=re.compile(rf"第\s*{CELL_COL}\s*欄第\s*{CELL_ROW}\s*行.*{BUILDING_NAME}"),
     )
@@ -304,3 +523,4 @@ def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db
     assert row["level"] == 2, row
     assert get_kid_points(warehouse_db, kid_id) == points_before
     assert inventory_map(warehouse_db, kid_id) == mats_before
+    _assert_footer_matches_main(page, "after the takeout flow")
