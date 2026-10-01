@@ -1640,6 +1640,74 @@ def warehouse_legacy_out_of_grid(db, kid_id):
     db.commit()
 
 
+BUILDING_FOOTPRINT = 2
+
+
+def _placement_origin(cell_x, cell_y):
+    """Origin must sit inside the 8×8 map. (7, 7) is legal; (8, 0) is not.
+
+    The 2×2 footprint is enforced as overlap against other placed buildings,
+    not as a tighter origin box. Stored rows do not count.
+    """
+    if isinstance(cell_x, bool) or isinstance(cell_y, bool):
+        return None, None, '座標不正確', 400
+    try:
+        cx = int(cell_x)
+        cy = int(cell_y)
+    except (TypeError, ValueError):
+        return None, None, '座標不正確', 400
+    if isinstance(cell_x, float) and cell_x != cx:
+        return None, None, '座標不正確', 400
+    if isinstance(cell_y, float) and cell_y != cy:
+        return None, None, '座標不正確', 400
+    if cx < 0 or cy < 0 or cx >= TOWN_PLACE_COLS or cy >= TOWN_PLACE_ROWS:
+        return None, None, '位置超出地圖範圍（0 至 7）', 400
+    return cx, cy, None, None
+
+
+def _footprints_overlap(ax, ay, bx, by, size=BUILDING_FOOTPRINT):
+    return not (
+        ax + size <= bx or bx + size <= ax or ay + size <= by or by + size <= ay
+    )
+
+
+def _placement_blocked(db, kid_id, cell_x, cell_y, exclude_building_id=None):
+    """Reject when this 2×2 meets a placed building or a tile. stored=1 does not occupy."""
+    rows = db.execute(
+        """
+        SELECT id, cell_x, cell_y FROM buildings
+         WHERE kid_id=? AND COALESCE(stored, 0)=0
+           AND cell_x IS NOT NULL AND cell_y IS NOT NULL
+        """,
+        (kid_id,),
+    ).fetchall()
+    for row in rows:
+        if exclude_building_id is not None and row['id'] == exclude_building_id:
+            continue
+        if _footprints_overlap(cell_x, cell_y, row['cell_x'], row['cell_y']):
+            return '該位置已被建築物佔用', 400
+    for dy in range(BUILDING_FOOTPRINT):
+        for dx in range(BUILDING_FOOTPRINT):
+            tile = db.execute(
+                "SELECT id FROM town_tiles WHERE kid_id=? AND cell_x=? AND cell_y=?",
+                (kid_id, cell_x + dx, cell_y + dy),
+            ).fetchone()
+            if tile:
+                return '該位置已被裝飾佔用', 400
+    return None, None
+
+
+def _building_view(db, building_id):
+    return db.execute(
+        """
+        SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect
+          FROM buildings b JOIN building_defs bd ON b.def_id=bd.id
+         WHERE b.id=?
+        """,
+        (building_id,),
+    ).fetchone()
+
+
 def _ensure_building_placement_columns(db):
     """buildings.cell_x/cell_y/stored exist on live DBs; add them if a fresh file lacks them."""
     cols = [row[1] for row in db.execute("PRAGMA table_info(buildings)").fetchall()]
@@ -3261,26 +3329,32 @@ def place_building(kid_id):
     cell_y = data.get('cell_y')
     if not def_id or cell_x is None or cell_y is None:
         return jsonify({'error': 'def_id, cell_x, cell_y required'}), 400
-    if cell_x < 0 or cell_x > 22 or cell_y < 0 or cell_y > 14:
-        return jsonify({'error': 'Building position out of range (0-22, 0-14)'}), 400
+    cx, cy, origin_err, origin_status = _placement_origin(cell_x, cell_y)
+    if origin_err:
+        return jsonify({'error': origin_err}), origin_status
     db = get_db()
-    # Limit: only 1 of each building type per kid
-    dup = db.execute("SELECT id FROM buildings WHERE kid_id=? AND def_id=?", (kid_id, def_id)).fetchone()
-    if dup:
+    owned = db.execute(
+        "SELECT id, stored, level FROM buildings WHERE kid_id=? AND def_id=? ORDER BY id",
+        (kid_id, def_id),
+    ).fetchall()
+    placed = [row for row in owned if not row['stored']]
+    stored_rows = [row for row in owned if row['stored']]
+    if placed:
         return jsonify({'error': '你已經興建咗呢種建築物'}), 400
-    
-    # Check 2×2 block is free (no building or tile occupies any of the 4 cells)
-    for dy in range(2):
-        for dx in range(2):
-            cx, cy = cell_x + dx, cell_y + dy
-            # Check buildings
-            existing_bld = db.execute("SELECT id FROM buildings WHERE kid_id=? AND cell_x=? AND cell_y=?", (kid_id, cx, cy)).fetchone()
-            if existing_bld:
-                return jsonify({'error': '該位置已被建築物佔用'}), 400
-            # Check tiles
-            existing_tile = db.execute("SELECT id FROM town_tiles WHERE kid_id=? AND cell_x=? AND cell_y=?", (kid_id, cx, cy)).fetchone()
-            if existing_tile:
-                return jsonify({'error': '該位置已被裝飾佔用'}), 400
+    reuse = stored_rows[0] if stored_rows else None
+    blocked, blocked_status = _placement_blocked(
+        db, kid_id, cx, cy, reuse['id'] if reuse else None
+    )
+    if blocked:
+        return jsonify({'error': blocked}), blocked_status
+    if reuse:
+        db.execute(
+            "UPDATE buildings SET stored=0, cell_x=?, cell_y=? WHERE id=?",
+            (cx, cy, reuse['id']),
+        )
+        db.commit()
+        row = _building_view(db, reuse['id'])
+        return jsonify(row_to_dict(row)), 200
 
     bdef = db.execute("SELECT * FROM building_defs WHERE id=?", (def_id,)).fetchone()
     if not bdef:
@@ -3318,7 +3392,7 @@ def place_building(kid_id):
         db.execute("UPDATE inventory SET quantity = quantity - ? WHERE kid_id=? AND item_type=?",
                    (qty, kid_id, item_type))
 
-    cur = db.execute("INSERT INTO buildings (kid_id, def_id, cell_x, cell_y, plot_idx, level) VALUES (?, ?, ?, ?, 0, 1)", (kid_id, def_id, cell_x, cell_y))
+    cur = db.execute("INSERT INTO buildings (kid_id, def_id, cell_x, cell_y, plot_idx, level) VALUES (?, ?, ?, ?, 0, 1)", (kid_id, def_id, cx, cy))
     db.commit()
     row = db.execute("SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect FROM buildings b JOIN building_defs bd ON b.def_id=bd.id WHERE b.id=?", (cur.lastrowid,)).fetchone()
     return jsonify(row_to_dict(row)), 201
@@ -3330,27 +3404,21 @@ def move_building(kid_id, b_id):
     cell_y = data.get('cell_y')
     if cell_x is None or cell_y is None:
         return jsonify({'error': 'cell_x, cell_y required'}), 400
-    if cell_x < 0 or cell_x > 22 or cell_y < 0 or cell_y > 14:
-        return jsonify({'error': 'Position out of range (0-22, 0-14)'}), 400
+    cx, cy, origin_err, origin_status = _placement_origin(cell_x, cell_y)
+    if origin_err:
+        return jsonify({'error': origin_err}), origin_status
     db = get_db()
     b = db.execute("SELECT id, kid_id, stored FROM buildings WHERE id=? AND kid_id=?", (b_id, kid_id)).fetchone()
     if not b:
         return jsonify({'error': 'Building not found'}), 404
     if b['stored']:
         return jsonify({'error': 'Cannot move a stored building'}), 400
-    # Check 2×2 block is free (ignore the building itself)
-    for dy in range(2):
-        for dx in range(2):
-            cx, cy = cell_x + dx, cell_y + dy
-            existing = db.execute("SELECT id FROM buildings WHERE kid_id=? AND cell_x=? AND cell_y=? AND id!=?", (kid_id, cx, cy, b_id)).fetchone()
-            if existing:
-                return jsonify({'error': '該位置已被佔用'}), 400
-            tile = db.execute("SELECT id FROM town_tiles WHERE kid_id=? AND cell_x=? AND cell_y=?", (kid_id, cx, cy)).fetchone()
-            if tile:
-                return jsonify({'error': '該位置已被裝飾佔用'}), 400
-    db.execute("UPDATE buildings SET cell_x=?, cell_y=? WHERE id=?", (cell_x, cell_y, b_id))
+    blocked, blocked_status = _placement_blocked(db, kid_id, cx, cy, b_id)
+    if blocked:
+        return jsonify({'error': blocked}), blocked_status
+    db.execute("UPDATE buildings SET cell_x=?, cell_y=? WHERE id=?", (cx, cy, b_id))
     db.commit()
-    return jsonify({'ok': True, 'cell_x': cell_x, 'cell_y': cell_y}), 200
+    return jsonify({'ok': True, 'cell_x': cx, 'cell_y': cy}), 200
 
 @app.route('/api/kids/<int:kid_id>/buildings/<int:b_id>/store', methods=['POST'])
 def store_building(kid_id, b_id):
@@ -3371,27 +3439,21 @@ def unstored_building(kid_id, b_id):
     cell_y = data.get('cell_y')
     if cell_x is None or cell_y is None:
         return jsonify({'error': 'cell_x, cell_y required'}), 400
-    if cell_x < 0 or cell_x > 22 or cell_y < 0 or cell_y > 14:
-        return jsonify({'error': 'Position out of range (0-22, 0-14)'}), 400
+    cx, cy, origin_err, origin_status = _placement_origin(cell_x, cell_y)
+    if origin_err:
+        return jsonify({'error': origin_err}), origin_status
     db = get_db()
     b = db.execute("SELECT id, stored FROM buildings WHERE id=? AND kid_id=?", (b_id, kid_id)).fetchone()
     if not b:
         return jsonify({'error': 'Building not found'}), 404
     if not b['stored']:
         return jsonify({'error': 'Building is not stored'}), 400
-    # Check 2×2 free
-    for dy in range(2):
-        for dx in range(2):
-            cx, cy = cell_x + dx, cell_y + dy
-            existing = db.execute("SELECT id FROM buildings WHERE kid_id=? AND cell_x=? AND cell_y=? AND id!=?", (kid_id, cx, cy, b_id)).fetchone()
-            if existing:
-                return jsonify({'error': '該位置已被佔用'}), 400
-            tile = db.execute("SELECT id FROM town_tiles WHERE kid_id=? AND cell_x=? AND cell_y=?", (kid_id, cx, cy)).fetchone()
-            if tile:
-                return jsonify({'error': '該位置已被裝飾佔用'}), 400
-    db.execute("UPDATE buildings SET stored=0, cell_x=?, cell_y=? WHERE id=?", (cell_x, cell_y, b_id))
+    blocked, blocked_status = _placement_blocked(db, kid_id, cx, cy, b_id)
+    if blocked:
+        return jsonify({'error': blocked}), blocked_status
+    db.execute("UPDATE buildings SET stored=0, cell_x=?, cell_y=? WHERE id=?", (cx, cy, b_id))
     db.commit()
-    row = db.execute("SELECT b.*, bd.name, bd.icon, bd.buff_type, bd.buff_vals, bd.effect FROM buildings b JOIN building_defs bd ON b.def_id=bd.id WHERE b.id=?", (b_id,)).fetchone()
+    row = _building_view(db, b_id)
     return jsonify(row_to_dict(row)), 200
 
 @app.route('/api/kids/<int:kid_id>/stored-buildings', methods=['GET'])
@@ -5565,6 +5627,19 @@ def auth_login():
         return jsonify({'error': '密碼錯誤'}), 403
     
     return jsonify({'error': '帳號不存在'}), 404
+
+
+@app.route('/api/auth/session', methods=['GET'])
+def auth_session():
+    """Return the signed-in kid so a reload can reopen the town without asking again."""
+    actor = current_actor()
+    if not actor or actor.get('role') != 'kid' or not actor.get('kid_id'):
+        return jsonify({'role': None}), 401
+    db = get_db()
+    kid = db.execute("SELECT * FROM kids WHERE id=?", (actor['kid_id'],)).fetchone()
+    if not kid:
+        return jsonify({'role': None}), 401
+    return jsonify({'role': 'kid', 'user': public_kid(kid)})
 
 
 @app.route('/api/auth/logout', methods=['POST'])

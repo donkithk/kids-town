@@ -754,6 +754,7 @@ body{
 .valid-plot{opacity:0.5;background:rgba(34,197,94,0.25);border:2px dashed rgba(34,197,94,0.6);border-radius:4px;transition:0.15s}
 .valid-plot:hover{opacity:1;background:rgba(34,197,94,0.35);border-color:#22c55e}
 .valid-plot.selected{opacity:1;background:rgba(34,197,94,0.45);border-color:#16a34a;border-style:solid}
+.btn-takeout{display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;height:44px;margin-top:8px;padding:0 12px;border:0;border-radius:10px;background:#b45309;color:#fff;font-size:16px;font-weight:700;line-height:1;cursor:pointer}
 .vp-tip{font-size:10px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#166534;font-weight:700;pointer-events:none;text-shadow:0 0 4px white}
 /* Town tiles */
 .town-tile{display:flex;align-items:center;justify-content:center;pointer-events:none}
@@ -2186,8 +2187,8 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 
 <!-- Tab: Store (Stored Buildings) -->
 <div class="tab-content" id="tab-store" style="padding:12px">
-  <div class="section-title">🏪 存倉</div>
-  <div id="storedBuildings" class="build-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:8px"></div>
+  <div class="section-title">存倉 <span data-testid="warehouse-count" id="warehouseCount">0</span></div>
+  <div id="storedBuildings" data-testid="warehouse-list" class="build-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:8px"></div>
 </div>
 
 <!-- Tab: Achievements -->
@@ -2446,6 +2447,7 @@ let isParentSession = false; // parent PIN verified for current session
 let townData = {buildings:[], inventory:[], explored:[], expedition:null};
 let buildingDefs = [];
 let placementDefId = null; // building def being placed
+let warehouseRows = [];
 let selectedPlaceX = -1, selectedPlaceY = -1; // selected 2×2 position for building
 let isRoadMode = false;
 let expInterval = null;
@@ -2455,6 +2457,26 @@ let expInterval = null;
 // ═══════════════════════════════════════════════════════════════
 let currentRole = null;
 let currentUser = null;
+
+async function restoreSession() {
+  try {
+    const res = await fetch(`${API}/api/auth/session`, {credentials: 'same-origin'});
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.role !== 'kid' || !data.user) return;
+    currentRole = 'kid';
+    currentUser = data.user;
+    currentKidId = data.user.id;
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('app').style.display = 'block';
+    document.body.classList.add('kt-landscape');
+    ktPreferLandscape();
+    ktSyncArtStage();
+    updateHeader();
+    await loadTown();
+    initCanvas();
+  } catch (e) {}
+}
 
 async function doLogin() {
   const username = document.getElementById('loginUsername').value.trim();
@@ -2925,10 +2947,10 @@ function renderTownBuildings() {
     return 'assets-c/building.png'; // generic fallback
   }
 
-  // Now render buildings on a 24×16 grid (cells 4× finer)
+  // Legacy overlay uses the same 8×8 origin box as the town map.
   const buildings = townData.buildings || [];
   const tiles = townData.tiles || [];
-  const COLS = 24, ROWS = 16;
+  const COLS = 8, ROWS = 8;
   
   // Build occupancy grid
   const occupied = Array.from({length: ROWS}, () => Array(COLS).fill(false));
@@ -3416,20 +3438,48 @@ async function renderStoredBuildings() {
     const res = await fetch('/api/kids/' + currentKidId + '/stored-buildings');
     const list = await res.json();
     const container = document.getElementById('storedBuildings');
+    const countEl = document.getElementById('warehouseCount');
     if (!container) return;
-    if (!list || list.length === 0) {
+    const rows = Array.isArray(list) ? list : [];
+    warehouseRows = rows;
+    if (countEl) countEl.textContent = String(rows.length);
+    if (rows.length === 0) {
       container.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:24px">📦 存倉吉咗，未有建築物</p>';
       return;
     }
-    container.innerHTML = list.map(b => `
+    container.innerHTML = rows.map(b => `
       <div class="build-card" style="background:#f8fafc;border-radius:10px;padding:8px;text-align:center;cursor:pointer;border:1px solid #e2e8f0" onclick="startUnstoreBuilding(${b.id})">
-        <div style="font-size:32px;margin:4px 0">${b.icon||'🏠'}</div>
-        <div style="font-size:12px;font-weight:600">${b.name} Lv.${b.level}</div>
-        <div style="font-size:10px;color:#94a3b8">按此放置</div>
+        <div style="min-height:72px">
+          <div style="font-size:32px;margin:4px 0">${b.icon||'🏠'}</div>
+          <div style="font-size:12px;font-weight:600">${escapeHtml(b.name)} Lv.${b.level}</div>
+          <div style="font-size:10px;color:#94a3b8">按此放置</div>
+        </div>
+        <button type="button" class="btn-takeout" data-testid="warehouse-takeout" data-building-id="${b.id}" onclick="event.stopPropagation(); beginWarehouseTakeout(${b.id})">取出</button>
       </div>
     `).join('');
   } catch(e) {
     console.error('renderStoredBuildings error:', e);
+  }
+}
+
+function beginWarehouseTakeout(bId) {
+  const row = warehouseRows.find(function (item) { return String(item.id) === String(bId); });
+  if (!row) {
+    showToast('找不到這座建築', 'error');
+    return;
+  }
+  const bar = document.getElementById('placementBar');
+  if (bar) bar.classList.remove('active');
+  placementDefId = null;
+  selectedPlaceX = -1;
+  selectedPlaceY = -1;
+  const overlay = document.getElementById('dov');
+  const drawer = document.getElementById('dr');
+  if (overlay) overlay.style.display = 'none';
+  if (drawer) drawer.classList.remove('o');
+  st('town');
+  if (typeof window.ktBeginWarehousePlace === 'function') {
+    window.ktBeginWarehousePlace(row);
   }
 }
 
@@ -5899,8 +5949,9 @@ document.querySelector('.dbx')?.addEventListener('click', () => {
 // ═══════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════
-// Preload building defs
+// Preload building defs, then reopen the town when the session cookie is still valid.
 loadBuildingDefs();
+restoreSession();
 
 // UI-direction hotspot navigation + honour stamp (delegated)
 ktFooterMountIcons();
