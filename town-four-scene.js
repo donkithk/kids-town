@@ -4,6 +4,7 @@
 (function () {
   var COLS = 8;
   var ROWS = 8;
+  var FOOTPRINT = 2;
   var ASSET = "mocks/town-building-proof/assets/";
   var MOTION_KEY = "ktTownMotion";
   var MARK_VALID = ASSET + "cell-valid.svg";
@@ -423,12 +424,17 @@
   }
 
   function footprintsOverlap(ax, ay, bx, by) {
-    return !(ax + 2 <= bx || bx + 2 <= ax || ay + 2 <= by || by + 2 <= ay);
+    return !(ax + FOOTPRINT <= bx || bx + FOOTPRINT <= ax || ay + FOOTPRINT <= by || by + FOOTPRINT <= ay);
+  }
+
+  /* Origin plus footprint stays inside the map. Last 2×2 origin is (6, 6). */
+  function originFits(c, r) {
+    return c >= 0 && r >= 0 && c + FOOTPRINT <= COLS && r + FOOTPRINT <= ROWS;
   }
 
   /* Placed buildings only. stored=1 does not occupy a cell. */
   function footprintFree(c, r, ignoreId) {
-    if (c < 0 || r < 0 || c > COLS - 2 || r > ROWS - 2) return false;
+    if (!originFits(c, r)) return false;
     var blocks = buildings();
     for (var i = 0; i < blocks.length; i += 1) {
       var row = blocks[i];
@@ -438,8 +444,8 @@
       if (footprintsOverlap(c, r, row.cell_x | 0, row.cell_y | 0)) return false;
     }
     var tiles = (typeof townData !== "undefined" && townData && townData.tiles) || [];
-    for (var dy = 0; dy < 2; dy += 1) {
-      for (var dx = 0; dx < 2; dx += 1) {
+    for (var dy = 0; dy < FOOTPRINT; dy += 1) {
+      for (var dx = 0; dx < FOOTPRINT; dx += 1) {
         var cx = c + dx;
         var cy = r + dy;
         for (var t = 0; t < tiles.length; t += 1) {
@@ -627,9 +633,12 @@
     var picked = sameCell(state.pad, cell);
     var ghostDef = state.defId != null ? defById(state.defId) : null;
     var showGhost = state.scene === 3 && picked && !!ghostDef && !state.sheet;
-    var hot = state.scene === 2 && !occ && !state.sheet;
+    var legal = footprintFree(cell.c, cell.r, state.unstoreId);
+    var unstoreScene = state.scene === 2 && !state.sheet && !!state.unstoreId;
+    var hot = unstoreScene ? legal : (state.scene === 2 && !occ && !state.sheet);
     var kind = "quiet";
-    if (state.scene === 2 && !occ && !state.sheet) kind = picked ? "chosen" : "empty";
+    if (unstoreScene && legal) kind = picked ? "chosen" : "empty";
+    else if (state.scene === 2 && !occ && !state.sheet && !state.unstoreId) kind = picked ? "chosen" : "empty";
     if (state.scene === 3 && !state.sheet && occ) kind = "illegal";
     else if (state.scene === 3 && !state.sheet && !occ) kind = picked ? "preview" : "valid";
     cell.el.className = "pad is-" + kind + (hot ? " is-empty-hot" : "");
@@ -671,7 +680,7 @@
     else if (occ && state.scene === 3 && !state.sheet) label += "，" + occ.name + "，已經有屋，唔可以放";
     else if (occ) label += "，" + occ.name + "，已起";
     else if (state.scene === 1) label += "，空地";
-    else if (state.scene === 2) label += picked ? "，已揀呢格" : "，空地，撳一下就揀";
+    else if (state.scene === 2) label += picked ? "，已選此格" : "，空地，撳一下就揀";
     else if (kind === "preview") label += "，擺放預覽";
     else if (kind === "valid") label += "，可以放，撳一下就搬去呢格";
     else label += "，空地";
@@ -746,7 +755,7 @@
         var takeName = (def && def.name) || "這座建築";
         status.textContent = "請點選空地，放回「" + takeName + "」。不扣除金幣和材料。";
       } else if (readyToPreview()) status.textContent = "已揀「" + def.name + "」同呢格空地。";
-      else if (def && storedDef(def.id)) status.textContent = "「" + def.name + "」喺存倉。用存倉放返，唔使再扣資源。";
+      else if (def && storedDef(def.id)) status.textContent = "「" + def.name + "」在存倉中，可直接放回，不扣除資源。";
       else if (state.pad && !def) status.textContent = "已揀空地。打開清單，揀一座未起嘅屋。";
       else if (def && !placedDef(def.id) && !state.pad) status.textContent = "已揀「" + def.name + "」。再點一塊金色空地。";
       else status.textContent = "點金色空地，或者打開清單揀一座未起嘅屋。";
@@ -822,7 +831,10 @@
     }
     var warehoused = storedDef(id);
     if (warehoused) {
-      placeFromStore(warehoused);
+      state.unstoreId = null;
+      state.defId = String(id);
+      state.sheet = false;
+      render();
       return;
     }
     state.unstoreId = null;
@@ -843,13 +855,9 @@
       return;
     }
     if (state.scene === 2) {
-      if (occ) {
-        openSheet(occ.def_id);
-        return;
-      }
       if (state.unstoreId) {
         if (!footprintFree(c, r, state.unstoreId)) {
-          if (typeof showToast === "function") showToast("這個位置已經有建築物。");
+          if (typeof showToast === "function") showToast("這個位置已經有建築物。", "info");
           return;
         }
         state.pad = { c: c, r: r };
@@ -857,6 +865,10 @@
         state.listOpen = false;
         state.sheet = false;
         render();
+        return;
+      }
+      if (occ) {
+        openSheet(occ.def_id);
         return;
       }
       state.pad = sameCell(state.pad, { c: c, r: r }) ? null : { c: c, r: r };
@@ -890,11 +902,13 @@
   }
 
   function cancelPreview() {
+    var keepUnstore = state.unstoreId;
     state.scene = 2;
     state.sheet = false;
     state.confirming = false;
     state.instantUpgrade = false;
-    state.unstoreId = null;
+    state.pad = null;
+    state.unstoreId = keepUnstore;
     if (typeof showToast === "function") showToast("已取消，資源未扣除");
     render();
   }
