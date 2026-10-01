@@ -29,6 +29,7 @@ from tests.factories import (
     get_kid_points,
     grant_inventory,
     insert_building,
+    insert_explored_region,
     inventory_map,
     response_text,
     set_kid_points,
@@ -935,6 +936,307 @@ def test_legacy_out_of_grid_stored_buildings_unstore_into_8x8(client, family, te
     assert ("工坊", 3, 2, 2) in {(row["name"], row["level"], row["cell_x"], row["cell_y"]) for row in payload["buildings"]}
     assert len(placed) == 6, placed
     assert _resources(test_db, kid_id) == before
+
+
+def _clear_buildings(test_db, kid_id):
+    db = connect_db(test_db)
+    db.execute("DELETE FROM buildings WHERE kid_id=?", (kid_id,))
+    db.commit()
+    db.close()
+
+
+def _error_code(response):
+    body = response.get_json(silent=True) or {}
+    return body.get("error")
+
+
+# 燈塔 (8,0) 同競技場 (10,0) 係現有 unlock 測試已經在送的舊座標。
+# 天文台 (12,0) 係同一條 0–22 帶上的下一格。三格都在 8×8 外。
+# 空圖自動放格的掃描次序跟 town-four-scene.js firstUnstorePad：
+# 行由外、欄由內，原點 0..7。空圖第一格係 (0,0)。
+REGION_BUILDINGS = (
+    ("lighthouse", "燈塔", 3, (8, 0)),
+    ("arena", "競技場", 4, (10, 0)),
+    ("observatory", "天文台", 5, (12, 0)),
+)
+
+
+def _fund_region(test_db, kid_id):
+    _rich(test_db, kid_id, points=20000)
+    grant_inventory(
+        test_db,
+        kid_id,
+        {"wood": 200, "brick": 200, "glass": 40, "gear": 80, "gem": 40},
+    )
+
+
+@pytest.mark.case_id("TC-API-WAREHOUSE-REGION-GRID")
+def test_region_buildings_use_8x8_after_unlock(client, family, test_db):
+    """TC-API-WAREHOUSE-REGION-GRID 解鎖後燈塔／競技場／天文台都用 8×8。
+
+    格外舊座標同 2×2 重疊要 4xx，唔扣、唔新增。合法空格要成功並保持放置。
+    競技場 r4、天文台 r5 而家係 PHASE1_LOCKED_REGIONS，place 回 region_locked。
+    呢種拒絕只要唔扣、唔新增就算過；燈塔 r3 解鎖後先會碰到格網缺陷。
+    """
+    kid_id = family.kid_a.id
+    for _key, _name, region, _legacy in REGION_BUILDINGS:
+        insert_explored_region(test_db, kid_id, region)
+    login_kid(client, family)
+    problems = []
+    for key, name, _region, legacy in REGION_BUILDINGS:
+        _clear_buildings(test_db, kid_id)
+        _fund_region(test_db, kid_id)
+        before_res = _resources(test_db, kid_id)
+        before_rows = _rows(test_db, kid_id)
+        response = _place(client, kid_id, def_id(test_db, key), legacy[0], legacy[1])
+        _reload_placement(client, kid_id)
+        after_res = _resources(test_db, kid_id)
+        after_rows = _rows(test_db, kid_id)
+        locked = _error_code(response) == "region_locked"
+        if locked:
+            if response.status_code not in REJECT_STATUSES or after_res != before_res or after_rows != before_rows:
+                problems.append(
+                    f"{name} legacy {legacy} region_locked must not charge or insert; "
+                    f"HTTP {response.status_code} {response_text(response)[:120]}; "
+                    f"resources {before_res} -> {after_res}"
+                )
+        elif response.status_code not in REJECT_STATUSES or after_res != before_res or after_rows != before_rows:
+            problems.append(
+                f"{name} legacy {legacy} expected 4xx, no charge, no row; "
+                f"got HTTP {response.status_code} {response_text(response)[:140]}; "
+                f"resources {before_res} -> {after_res}; rows {after_rows}"
+            )
+
+        _clear_buildings(test_db, kid_id)
+        _fund_region(test_db, kid_id)
+        insert_building(
+            test_db, kid_id, def_id(test_db, "gym"), level=1, stored=0, cell_x=0, cell_y=0
+        )
+        before_res = _resources(test_db, kid_id)
+        before_rows = _rows(test_db, kid_id)
+        response = _place(client, kid_id, def_id(test_db, key), 1, 0)
+        _reload_placement(client, kid_id)
+        after_res = _resources(test_db, kid_id)
+        after_rows = _rows(test_db, kid_id)
+        locked = _error_code(response) == "region_locked"
+        if locked:
+            if response.status_code not in REJECT_STATUSES or after_res != before_res or after_rows != before_rows:
+                problems.append(f"{name} overlap region_locked changed data")
+        elif response.status_code not in REJECT_STATUSES or after_res != before_res or after_rows != before_rows:
+            problems.append(
+                f"{name} at (1,0) overlaps 健身室 (0,0); expected 4xx, no charge, no new row; "
+                f"got HTTP {response.status_code} {response_text(response)[:140]}; "
+                f"resources {before_res} -> {after_res}; rows {after_rows}"
+            )
+
+        _clear_buildings(test_db, kid_id)
+        _fund_region(test_db, kid_id)
+        building_def = def_id(test_db, key)
+        gold, materials = _cost(test_db, building_def)
+        before_res = _resources(test_db, kid_id)
+        response = _place(client, kid_id, building_def, 3, 3)
+        after_build = _resources(test_db, kid_id)
+        _reload_placement(client, kid_id)
+        after_get = _resources(test_db, kid_id)
+        rows = [row for row in _rows(test_db, kid_id) if row["name"] == name]
+        locked = _error_code(response) == "region_locked"
+        if locked:
+            if response.status_code not in REJECT_STATUSES or rows or after_get != before_res:
+                problems.append(
+                    f"{name} legal cell region_locked must not charge or insert; rows={rows}"
+                )
+        else:
+            if response.status_code != 201:
+                problems.append(
+                    f"{name} (3,3) expected HTTP 201, got {response.status_code} "
+                    f"{response_text(response)[:160]}"
+                )
+            elif len(rows) != 1 or rows[0]["stored"] != 0 or (rows[0]["cell_x"], rows[0]["cell_y"]) != (3, 3):
+                problems.append(f"{name} expected one placed row at (3,3), got {rows}")
+            elif after_build["points"] != before_res["points"] - gold:
+                problems.append(
+                    f"{name} gold expected {before_res['points'] - gold}, got {after_build['points']}"
+                )
+            elif after_get != after_build:
+                problems.append(f"{name} GET changed resources {after_build} -> {after_get}")
+            else:
+                for item_type, qty in materials.items():
+                    have = after_build["inventory"].get(item_type, 0)
+                    want = before_res["inventory"].get(item_type, 0) - qty
+                    if have != want:
+                        problems.append(f"{name} {item_type} expected {want}, got {have}")
+    assert not problems, "TC-API-WAREHOUSE-REGION-GRID: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-API-WAREHOUSE-REGION-AUTO")
+def test_region_building_auto_places_or_stores_without_a_stranded_charge(client, family, test_db):
+    """TC-API-WAREHOUSE-REGION-AUTO 冇指定格時，燈塔放到第一個合法 8×8 格。
+
+    掃描次序跟 firstUnstorePad：行由外、欄由內，空圖係 (0,0)，並扣目錄價。
+    8×8 每一格都有原點時，直接入倉、唔扣，之後騰出一格可以免費取出。
+    伺服器而家缺座標就 400，唔會自動放，亦唔會入倉。
+    """
+    kid_id = family.kid_a.id
+    insert_explored_region(test_db, kid_id, 3)
+    login_kid(client, family)
+    _fund_region(test_db, kid_id)
+    building_def = def_id(test_db, "lighthouse")
+    gold, materials = _cost(test_db, building_def)
+    before = _resources(test_db, kid_id)
+    response = _place(client, kid_id, building_def, omit=True)
+    rows = [row for row in _rows(test_db, kid_id) if row["name"] == "燈塔"]
+    after = _resources(test_db, kid_id)
+    problems = []
+    if response.status_code not in (200, 201):
+        problems.append(
+            "empty map without coords expected the first cell (0,0), "
+            f"got HTTP {response.status_code} {' '.join(response_text(response).split())[:160]}"
+        )
+    elif len(rows) != 1 or rows[0]["stored"] != 0 or (rows[0]["cell_x"], rows[0]["cell_y"]) != (0, 0):
+        problems.append(f"expected one 燈塔 stored=0 at (0,0), got {rows}")
+    elif rows[0]["level"] != 1:
+        problems.append(f"expected level 1, got {rows[0]}")
+    elif after["points"] != before["points"] - gold:
+        problems.append(f"gold expected {before['points'] - gold}, got {after['points']}")
+    else:
+        for item_type, qty in materials.items():
+            have = after["inventory"].get(item_type, 0)
+            want = before["inventory"].get(item_type, 0) - qty
+            if have != want:
+                problems.append(f"{item_type} expected {want}, got {have}")
+
+    _clear_buildings(test_db, kid_id)
+    _fund_region(test_db, kid_id)
+    blocker = def_id(test_db, "library")
+    for cell_y in range(8):
+        for cell_x in range(8):
+            insert_building(
+                test_db, kid_id, blocker, level=1, stored=0, cell_x=cell_x, cell_y=cell_y
+            )
+    before_full = _resources(test_db, kid_id)
+    before_count = len(_rows(test_db, kid_id))
+    full = _place(client, kid_id, building_def, omit=True)
+    full_rows = [row for row in _rows(test_db, kid_id) if row["name"] == "燈塔"]
+    after_full = _resources(test_db, kid_id)
+    if full.status_code not in (200, 201) or len(full_rows) != 1 or full_rows[0]["stored"] != 1:
+        problems.append(
+            "full 8×8 without coords expected one stored=1 燈塔 and no charge; "
+            f"got HTTP {full.status_code} {' '.join(response_text(full).split())[:140]}; "
+            f"rows {full_rows}; resources {before_full} -> {after_full}; count {before_count}"
+        )
+    elif after_full != before_full:
+        problems.append(f"full-grid auto-store charged {before_full} -> {after_full}")
+    else:
+        origin = next(row for row in _rows(test_db, kid_id) if (row["cell_x"], row["cell_y"]) == (0, 0))
+        stored = client.post(f"/api/kids/{kid_id}/buildings/{origin['id']}/store")
+        if stored.status_code not in (200, 201):
+            problems.append(f"could not free (0,0): HTTP {stored.status_code}")
+        else:
+            before_unstore = _resources(test_db, kid_id)
+            unstored = _unstore(client, kid_id, full_rows[0]["id"], 0, 0)
+            placed = _row(test_db, full_rows[0]["id"])
+            if unstored.status_code not in (200, 201):
+                problems.append(
+                    f"unstored onto freed (0,0) expected 200, got {unstored.status_code} "
+                    f"{response_text(unstored)[:140]}"
+                )
+            elif placed["stored"] != 0 or placed["level"] != 1:
+                problems.append(f"expected placed level 1, got {placed}")
+            elif _resources(test_db, kid_id) != before_unstore:
+                problems.append("unstore after a full-grid store must not charge")
+    assert not problems, "TC-API-WAREHOUSE-REGION-AUTO: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-API-WAREHOUSE-REGION-NO-AUTOSTORE")
+def test_region_build_get_does_not_warehouse_or_lose_the_spend(client, family, test_db):
+    """TC-API-WAREHOUSE-REGION-NO-AUTOSTORE 解鎖後起燈塔，GET 唔好把它收倉。
+
+    舊座標 (8,0) 而家會 201 並扣費，GET /buildings 同 GET /town 再設 stored=1。
+    拒絕呢格就唔好扣、唔好新增。合法 (3,3) 成功之後 GET 仍然放置，資源不再變。
+    """
+    kid_id = family.kid_a.id
+    insert_explored_region(test_db, kid_id, 3)
+    login_kid(client, family)
+    _fund_region(test_db, kid_id)
+    building_def = def_id(test_db, "lighthouse")
+    before = _resources(test_db, kid_id)
+    response = _place(client, kid_id, building_def, 8, 0)
+    after_build = _resources(test_db, kid_id)
+    _reload_placement(client, kid_id)
+    after_get = _resources(test_db, kid_id)
+    rows = [row for row in _rows(test_db, kid_id) if row["name"] == "燈塔"]
+    problems = []
+    if after_get != after_build:
+        problems.append(f"GET changed resources {after_build} -> {after_get}")
+    if response.status_code in REJECT_STATUSES:
+        if rows or after_build != before:
+            problems.append(
+                f"rejected (8,0) must not charge or insert; rows={rows}; "
+                f"resources {before} -> {after_build}"
+            )
+    else:
+        if response.status_code != 201:
+            problems.append(
+                f"(8,0) HTTP {response.status_code} {response_text(response)[:140]}"
+            )
+        if len(rows) != 1 or rows[0]["stored"] != 0 or (rows[0]["cell_x"], rows[0]["cell_y"]) != (8, 0):
+            problems.append(
+                f"after buildings/town GET expected 燈塔 still placed at (8,0), got {rows}. "
+                "place accepted the legacy cell, then warehouse_legacy_out_of_grid "
+                "set stored=1 without refunding."
+            )
+
+    _clear_buildings(test_db, kid_id)
+    _fund_region(test_db, kid_id)
+    legal_before = _resources(test_db, kid_id)
+    legal = _place(client, kid_id, building_def, 3, 3)
+    legal_after = _resources(test_db, kid_id)
+    _reload_placement(client, kid_id)
+    legal_rows = [row for row in _rows(test_db, kid_id) if row["name"] == "燈塔"]
+    if legal.status_code != 201:
+        problems.append(f"legal (3,3) expected 201, got {legal.status_code} {response_text(legal)[:140]}")
+    elif len(legal_rows) != 1 or legal_rows[0]["stored"] != 0 or (legal_rows[0]["cell_x"], legal_rows[0]["cell_y"]) != (3, 3):
+        problems.append(f"legal (3,3) after GET expected stored=0, got {legal_rows}")
+    elif _resources(test_db, kid_id) != legal_after:
+        problems.append("GET after a legal region build changed resources")
+    elif legal_after["points"] >= legal_before["points"]:
+        problems.append("legal region build did not charge gold")
+    assert not problems, "TC-API-WAREHOUSE-REGION-NO-AUTOSTORE: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-API-WAREHOUSE-REPAIR-PLACED-LEGACY")
+def test_placed_legacy_guild_can_be_unstored_after_get(client, family, test_db):
+    """TC-API-WAREHOUSE-REPAIR-PLACED-LEGACY 已放置但格外的公會，GET 後可以免費放回。
+
+    探險公會 stored=0 在 (13,9)。GET 可以把它改成 stored=1，但唔好扣資源。
+    取出到空的 8×8 格免費、等級保留，公會大廳之後可以出發。
+    """
+    kid_id = family.kid_a.id
+    set_kid_points(test_db, kid_id, 80)
+    guild = insert_building(
+        test_db, kid_id, def_id(test_db, "guild"), level=2, stored=0, cell_x=13, cell_y=9
+    )
+    login_kid(client, family)
+    before = _resources(test_db, kid_id)
+    listed, town = _reload_placement(client, kid_id)
+    assert listed.status_code == 200, response_text(listed)
+    assert town.status_code == 200, response_text(town)
+    assert _resources(test_db, kid_id) == before
+    row = _row(test_db, guild)
+    assert row["level"] == 2, row
+    if row["stored"] == 0:
+        assert 0 <= row["cell_x"] <= 7 and 0 <= row["cell_y"] <= 7, row
+    else:
+        assert row["stored"] == 1, row
+        moved = _unstore(client, kid_id, guild, 0, 0)
+        assert moved.status_code in (200, 201), response_text(moved)
+        assert _resources(test_db, kid_id) == before
+        row = _row(test_db, guild)
+        assert row["stored"] == 0 and (row["cell_x"], row["cell_y"]) == (0, 0), row
+        assert row["level"] == 2, row
+    started = start_explore(client, kid_id, 1)
+    assert started.status_code == 201, response_text(started)
+    assert get_kid_points(test_db, kid_id) == 70
 
 
 @pytest.mark.case_id("TC-FE-WAREHOUSE-GRID")
