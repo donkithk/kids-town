@@ -1021,7 +1021,7 @@
     } catch (e) {
       var msg = e.message || "起唔到";
       if (typeof showToast === "function") {
-        if (msg === "城鎮沒有空位，請先收起或移動其他建築。") showToast(msg);
+        if (msg === "城鎮沒有空位，請先收起或移動其他建築。") showToast(msg, "info");
         else showToast(msg, "error");
       }
       render();
