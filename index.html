@@ -691,6 +691,7 @@ body{
   max-width:90vw;overflow:hidden;text-overflow:ellipsis;
 }
 #toast.error{background:#ef4444;color:#fff}
+#toast.info{background:#6b4f2a;color:#fff8e7}
 @keyframes fadeInOut{
   0%{opacity:0;transform:translateX(-50%) translateY(10px)}
   15%{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -3311,7 +3312,7 @@ async function confirmPlaceBuilding() {
 
 function showBuildFailure(message) {
   if (message === '城鎮沒有空位，請先收起或移動其他建築。') {
-    showToast(message);
+    showToast(message, 'info');
     return;
   }
   Audio.errorBuzzer();
@@ -5911,7 +5912,7 @@ function closeModal() {
 function showToast(msg, type) {
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.className = type === 'error' ? 'error' : '';
+  el.className = type === 'error' ? 'error' : (type === 'info' ? 'info' : '');
   el.style.display = 'block';
   el.style.animation = 'none';
   void el.offsetHeight;
