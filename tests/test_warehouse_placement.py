@@ -11,6 +11,8 @@
 - 佔用檢查 :3273 同 :3383 只對原點，唔對 2×2 足跡重疊，亦唔排除 stored=1。
 - :3267 已有同種類（包括存倉）就 400，唔會把存倉嗰行放到要求的格。
 - index.html renderTownBuildings 仍係 COLS=24, ROWS=16，存倉卡片走 startUnstoreBuilding。
+- move_building（backend_v2.py:3333）同樣接受 0–22 × 0–14；格外移動成功後，
+  GET 會把該行收倉。佔用檢查 :3342 只對原點，而且包含 stored=1。
 """
 from __future__ import annotations
 
@@ -120,6 +122,24 @@ def _unstore(client, kid_id, building_id, cell_x=None, cell_y=None, omit=False):
 def _list_buildings(client, kid_id):
     """GET 會跑 warehouse_legacy_out_of_grid。"""
     return client.get(f"/api/kids/{kid_id}/buildings")
+
+
+def _move(client, kid_id, building_id, cell_x=None, cell_y=None, omit=False):
+    if omit:
+        body = {}
+    else:
+        body = {"cell_x": cell_x, "cell_y": cell_y}
+    return client.post(
+        f"/api/kids/{kid_id}/buildings/{building_id}/move",
+        json=body,
+    )
+
+
+def _reload_placement(client, kid_id):
+    """GET buildings and town. Both run warehouse_legacy_out_of_grid."""
+    listed = _list_buildings(client, kid_id)
+    town = client.get(f"/api/kids/{kid_id}/town")
+    return listed, town
 
 
 def _unchanged(before_res, after_res, before_row, after_row):
@@ -560,6 +580,171 @@ def test_build_reuses_stored_building_without_charge_or_duplicate(client, family
     if after != before:
         problems.append(f"must not charge, {before} -> {after}")
     assert not problems, "TC-API-WAREHOUSE-BUILD-REUSE: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-API-WAREHOUSE-MOVE-OOB")
+def test_move_outside_8x8_is_rejected_and_stays_placed(client, family, test_db):
+    """TC-API-WAREHOUSE-MOVE-OOB 移去 8×8 外要 4xx，行留在原格而且仍然放置。
+
+    (8,0)、(0,8)、(8,8)、負數、(20,12)。而家除負數外會 200（閘門 0–22 × 0–14，
+    backend_v2.py:3333）。跟住 GET /buildings 同 GET /town 會把格外原點收倉。
+    """
+    kid_id = family.kid_a.id
+    _rich(test_db, kid_id)
+    targets = (
+        ("library", (0, 0), (8, 0)),
+        ("gym", (2, 0), (0, 8)),
+        ("farm", (4, 0), (8, 8)),
+        ("workshop", (6, 0), (-1, 0)),
+        ("shop", (0, 2), (0, -1)),
+        ("hospital", (2, 2), (20, 12)),
+    )
+    seeded = []
+    for key, (origin_x, origin_y), _dest in targets:
+        seeded.append(
+            insert_building(
+                test_db,
+                kid_id,
+                def_id(test_db, key),
+                level=2,
+                stored=0,
+                cell_x=origin_x,
+                cell_y=origin_y,
+            )
+        )
+    login_kid(client, family)
+    problems = []
+    for building_id, (key, origin, dest) in zip(seeded, targets):
+        cell_x, cell_y = dest
+        before_res = _resources(test_db, kid_id)
+        before_row = _row(test_db, building_id)
+        response = _move(client, kid_id, building_id, cell_x, cell_y)
+        listed, town = _reload_placement(client, kid_id)
+        after_res = _resources(test_db, kid_id)
+        after_row = _row(test_db, building_id)
+        if response.status_code not in REJECT_STATUSES:
+            problems.append(
+                f"{key} ({cell_x},{cell_y}) expected 4xx, got {response.status_code} "
+                f"{response_text(response)[:160]}"
+            )
+        if after_res != before_res or after_row != before_row:
+            problems.append(
+                f"{key} ({cell_x},{cell_y}) expected no change "
+                f"(stored=0 at {origin}, same resources); "
+                f"row {before_row} -> {after_row}; resources {before_res} -> {after_res}"
+            )
+        if after_row["stored"] != 0 or (after_row["cell_x"], after_row["cell_y"]) != origin:
+            problems.append(
+                f"{key} after buildings/town GET expected still placed at {origin}, "
+                f"got stored={after_row['stored']} at "
+                f"({after_row['cell_x']},{after_row['cell_y']}). "
+                "move_building accepts 0-22 x 0-14 (backend_v2.py:3333); "
+                "GET then runs warehouse_legacy_out_of_grid (backend_v2.py:1619)."
+            )
+        if listed.status_code != 200 or town.status_code != 200:
+            problems.append(
+                f"{key} reload HTTP buildings={listed.status_code} town={town.status_code}"
+            )
+    assert not problems, "TC-API-WAREHOUSE-MOVE-OOB: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-API-WAREHOUSE-MOVE-OVERLAP")
+def test_move_rejects_footprint_overlap(client, family, test_db):
+    """TC-API-WAREHOUSE-MOVE-OVERLAP 移去另一座已放置屋的 2×2 足跡要 4xx，資料不變。
+
+    健身室原點 (0,0) 佔 (0,0)–(1,1)。醫院由 (4,0) 移到 (1,0) 佔 (1,0)–(2,1)。
+    而家只檢查有冇另一行的原點落在新 2×2 上，所以會 200。
+    """
+    kid_id = family.kid_a.id
+    _rich(test_db, kid_id)
+    insert_building(
+        test_db, kid_id, def_id(test_db, "gym"), level=1, stored=0, cell_x=0, cell_y=0
+    )
+    hospital = insert_building(
+        test_db, kid_id, def_id(test_db, "hospital"), level=2, stored=0, cell_x=4, cell_y=0
+    )
+    login_kid(client, family)
+    before_res = _resources(test_db, kid_id)
+    before_row = _row(test_db, hospital)
+    response = _move(client, kid_id, hospital, 1, 0)
+    after_res = _resources(test_db, kid_id)
+    after_row = _row(test_db, hospital)
+    problems = []
+    if response.status_code not in REJECT_STATUSES:
+        problems.append(
+            f"expected 4xx for 2x2 overlap of 健身室 (0,0) and 醫院 (1,0), "
+            f"got {response.status_code} {response_text(response)[:180]}"
+        )
+    problems.extend(_unchanged(before_res, after_res, before_row, after_row))
+    assert not problems, (
+        "TC-API-WAREHOUSE-MOVE-OVERLAP: expected reject and no data change "
+        "(醫院 stays stored=0 at (4,0), level 2, resources unchanged). "
+        + " | ".join(problems)
+    )
+
+
+@pytest.mark.case_id("TC-API-WAREHOUSE-MOVE-STORED-OCC")
+def test_move_onto_stored_leftover_coords_succeeds(client, family, test_db):
+    """TC-API-WAREHOUSE-MOVE-STORED-OCC 存倉行的舊座標唔霸佔，移動可以落到該格。
+
+    只有 stored=0 的屋同地磚先算佔用。而家 stored=1 的原點都會 400「該位置已被佔用」。
+    """
+    kid_id = family.kid_a.id
+    _rich(test_db, kid_id)
+    library = insert_building(
+        test_db, kid_id, def_id(test_db, "library"), level=2, stored=1, cell_x=0, cell_y=0
+    )
+    gym = insert_building(
+        test_db, kid_id, def_id(test_db, "gym"), level=2, stored=0, cell_x=4, cell_y=4
+    )
+    login_kid(client, family)
+    before = _resources(test_db, kid_id)
+    response = _move(client, kid_id, gym, 0, 0)
+    gym_row = _row(test_db, gym)
+    library_row = _row(test_db, library)
+    after = _resources(test_db, kid_id)
+    problems = []
+    if response.status_code not in (200, 201):
+        problems.append(
+            f"move 健身室 onto stored 圖書館 origin (0,0) expected HTTP 200, "
+            f"got {response.status_code} {response_text(response)[:180]}"
+        )
+    if gym_row["stored"] != 0 or (gym_row["cell_x"], gym_row["cell_y"]) != (0, 0):
+        problems.append(f"expected 健身室 stored=0 at (0,0), got {gym_row}")
+    if gym_row["level"] != 2:
+        problems.append(f"expected 健身室 level 2, got {gym_row}")
+    if library_row["stored"] != 1 or (library_row["cell_x"], library_row["cell_y"]) != (0, 0):
+        problems.append(f"stored 圖書館 must stay stored at (0,0), got {library_row}")
+    if after != before:
+        problems.append(f"move charged resources {before} -> {after}")
+    assert not problems, "TC-API-WAREHOUSE-MOVE-STORED-OCC: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-API-WAREHOUSE-MOVE-OK")
+def test_move_inside_8x8_keeps_level_and_does_not_charge(client, family, test_db):
+    """TC-API-WAREHOUSE-MOVE-OK 移到 8×8 空格成功，等級不變，唔扣資源，GET 之後仍然放置。"""
+    kid_id = family.kid_a.id
+    _rich(test_db, kid_id)
+    hospital = insert_building(
+        test_db, kid_id, def_id(test_db, "hospital"), level=2, stored=0, cell_x=0, cell_y=0
+    )
+    login_kid(client, family)
+    before = _resources(test_db, kid_id)
+    response = _move(client, kid_id, hospital, 7, 7)
+    listed, town = _reload_placement(client, kid_id)
+    row = _row(test_db, hospital)
+    after = _resources(test_db, kid_id)
+    assert response.status_code == 200, response_text(response)
+    assert listed.status_code == 200, response_text(listed)
+    assert town.status_code == 200, response_text(town)
+    assert row["stored"] == 0 and (row["cell_x"], row["cell_y"]) == (7, 7), row
+    assert row["level"] == 2, row
+    assert after == before, (before, after)
+    payload = town.get_json()
+    placed = [item for item in payload.get("buildings") or [] if item.get("id") == hospital]
+    stored = [item for item in payload.get("stored_buildings") or [] if item.get("id") == hospital]
+    assert placed and placed[0].get("cell_x") == 7 and placed[0].get("cell_y") == 7, payload
+    assert stored == [], stored
 
 
 @pytest.mark.case_id("TC-API-WAREHOUSE-EFFECT-GUILD")
