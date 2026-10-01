@@ -9,6 +9,7 @@ docs/test-cases/WAREHOUSE_PLACEMENT.md。
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -41,7 +42,7 @@ CELL_COL = 2
 CELL_ROW = 2
 CELL_X = 1
 CELL_Y = 1
-FOOTER_GOLDEN = os.path.join(REPO, "tests", "fixtures", "kt_footer_main.png")
+FOOTER_STRUCTURE = os.path.join(REPO, "tests", "fixtures", "kt_footer_main.json")
 # Numeric prices and the new-build charge sentence. Saying that nothing is deducted,
 # without an amount, is not a price.
 PRICE_RE = re.compile(r"💰|升級要|確定先至扣資源|\d+\s*(?:金幣|木材|磚|玻璃|齒輪|寶石)")
@@ -286,18 +287,138 @@ def _footer_png(page):
     return page.locator("#ktFooter").screenshot(animations="disabled")
 
 
-def _assert_footer_matches_main(page, when):
-    live = _footer_png(page)
-    assert os.path.isfile(FOOTER_GOLDEN), (
-        "TC-FE-WAREHOUSE-UNSTORE: missing tests/fixtures/kt_footer_main.png "
-        "(footer pixels captured from main)."
+_FOOTER_STRUCTURE_JS = r"""
+() => {
+  const root = document.querySelector("#ktFooter");
+  if (!root) return null;
+  function roundHalf(n) {
+    return Math.round(n * 2) / 2;
+  }
+  function takesBox(el) {
+    return el.id === "ktFooter"
+      || el.classList.contains("kt-footer-tab")
+      || el.classList.contains("kt-footer-icon")
+      || el.classList.contains("kt-footer-icon-wrap");
+  }
+  function pathOf(el) {
+    const parts = [];
+    let cur = el;
+    while (cur && cur !== root) {
+      const parent = cur.parentElement;
+      const idx = parent ? Array.prototype.indexOf.call(parent.children, cur) : 0;
+      parts.push(cur.tagName.toLowerCase() + "[" + idx + "]");
+      cur = parent;
+    }
+    parts.push("#ktFooter");
+    return parts.reverse().join(">");
+  }
+  const clone = root.cloneNode(true);
+  clone.querySelectorAll("[src]").forEach((img) => {
+    const raw = img.getAttribute("src") || "";
+    try {
+      const url = new URL(raw, location.href);
+      img.setAttribute("src", url.pathname + url.search);
+    } catch (err) {}
+  });
+  const html = clone.outerHTML.replace(/>\s+</g, "><").trim();
+  const nodes = [root].concat(Array.from(root.querySelectorAll("*")));
+  const items = nodes.map((el) => {
+    const cs = getComputedStyle(el);
+    const item = {
+      path: pathOf(el),
+      display: cs.display,
+      position: cs.position,
+      fontFamily: cs.fontFamily,
+      fontSize: cs.fontSize,
+      fontWeight: cs.fontWeight,
+      lineHeight: cs.lineHeight,
+      color: cs.color,
+      backgroundColor: cs.backgroundColor,
+      borderTop: cs.borderTop,
+      borderRight: cs.borderRight,
+      borderBottom: cs.borderBottom,
+      borderLeft: cs.borderLeft,
+      paddingTop: cs.paddingTop,
+      paddingRight: cs.paddingRight,
+      paddingBottom: cs.paddingBottom,
+      paddingLeft: cs.paddingLeft,
+      marginTop: cs.marginTop,
+      marginRight: cs.marginRight,
+      marginBottom: cs.marginBottom,
+      marginLeft: cs.marginLeft,
+      gap: cs.gap,
+      zIndex: cs.zIndex,
+      opacity: cs.opacity,
+      transform: cs.transform,
+      visibility: cs.visibility,
+      pointerEvents: cs.pointerEvents
+    };
+    if (takesBox(el)) {
+      const box = el.getBoundingClientRect();
+      item.box = { w: roundHalf(box.width), h: roundHalf(box.height) };
+    }
+    return item;
+  });
+  return { html: html, nodes: items };
+}
+"""
+
+
+def _footer_structure(page):
+    _footer_png(page)
+    payload = page.evaluate(_FOOTER_STRUCTURE_JS)
+    assert payload and payload.get("html"), "TC-FE-WAREHOUSE-UNSTORE: #ktFooter is missing"
+    payload["html_sha256"] = hashlib.sha256(payload["html"].encode("utf-8")).hexdigest()
+    return payload
+
+
+def _footer_structure_diff(live, expected):
+    problems = []
+    if live.get("html_sha256") != expected.get("html_sha256"):
+        problems.append(
+            "outerHTML sha256 "
+            f"{live.get('html_sha256')} != {expected.get('html_sha256')}"
+        )
+    if live.get("html") != expected.get("html"):
+        problems.append("normalized #ktFooter outerHTML differs from main")
+    live_nodes = live.get("nodes") or []
+    exp_nodes = expected.get("nodes") or []
+    if len(live_nodes) != len(exp_nodes):
+        problems.append(f"descendant count {len(live_nodes)} != {len(exp_nodes)}")
+    for index, (got, want) in enumerate(zip(live_nodes, exp_nodes)):
+        if got != want:
+            problems.append(f"node[{index}] {got.get('path')}: {got} != {want}")
+            if len(problems) >= 4:
+                break
+    return problems
+
+
+def _assert_footer_structure(page, when):
+    live = _footer_structure(page)
+    if os.environ.get("WAREHOUSE_DUMP_FOOTER") == "1":
+        os.makedirs(os.path.dirname(FOOTER_STRUCTURE), exist_ok=True)
+        with open(FOOTER_STRUCTURE, "w", encoding="utf-8") as handle:
+            json.dump(live, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
+    assert os.path.isfile(FOOTER_STRUCTURE), (
+        "TC-FE-WAREHOUSE-UNSTORE: missing tests/fixtures/kt_footer_main.json "
+        "(#ktFooter structure captured from main)."
     )
-    with open(FOOTER_GOLDEN, "rb") as handle:
-        golden = handle.read()
-    diff, detail = _rgb_channel_diff(live, golden)
+    with open(FOOTER_STRUCTURE, encoding="utf-8") as handle:
+        expected = json.load(handle)
+    problems = _footer_structure_diff(live, expected)
+    assert not problems, (
+        "TC-FE-WAREHOUSE-UNSTORE: #ktFooter structure must match main "
+        f"{when}. " + " | ".join(problems)
+    )
+
+
+def _assert_footer_pixels(before, after, when):
+    diff, detail = _rgb_channel_diff(before, after)
     assert diff == 0, (
-        "TC-FE-WAREHOUSE-UNSTORE: #ktFooter / .kt-footer RGB pixel diff vs main "
-        f"must be 0 {when}. Actual diff={diff} ({detail})."
+        "TC-FE-WAREHOUSE-UNSTORE: #ktFooter RGB pixel diff must be 0 "
+        f"{when}. Actual diff={diff} ({detail}). "
+        "The two screenshots are from this same run."
     )
 
 
@@ -369,7 +490,8 @@ def _place_chrome_text(page):
           }
           for (const el of document.querySelectorAll('#uxPlaceBar .pal-cost, #townMap .pal-cost, #sheetCost')) {
             const cs = getComputedStyle(el);
-            if (el.hidden || cs.display === 'none' || cs.visibility === 'hidden') continue;
+            const box = el.getBoundingClientRect();
+            if (el.hidden || cs.display === 'none' || cs.visibility === 'hidden' || box.width < 1 || box.height < 1) continue;
             parts.push(el.innerText || '');
           }
           const ghost = document.querySelector('#townMap .pad.is-preview .ghost, #townMap .ghost');
@@ -408,7 +530,13 @@ def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db
     _login(page, base_url)
     pads = page.locator("#village .cell-btn").count()
     assert pads == 64, f"expected 64 pads on the 8×8 map before takeout, got {pads}"
-    _assert_footer_matches_main(page, "before the takeout flow")
+    _assert_footer_structure(page, "before the takeout flow")
+    footer_before = _footer_png(page)
+    _assert_footer_pixels(
+        footer_before,
+        _footer_png(page),
+        "between two captures before the takeout flow",
+    )
     points_before = get_kid_points(warehouse_db, kid_id)
     mats_before = inventory_map(warehouse_db, kid_id)
     _arm_placement_bar_watch(page)
@@ -430,7 +558,7 @@ def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db
         "(#uxPlaceBar, #placeStatus, #btnUxConfirm 「確定放置」) with no price, "
         "then [data-town-fx=\"place\"], the building on that cell, storage count 1 → 0, "
         "no gold/material change, the same placement after reload, and #ktFooter "
-        "RGB diff 0 vs main before and after. #placementBar must never be .active or visible. "
+        "pixels unchanged within this run. #placementBar must never be .active or visible. "
         f"Actual: takeout controls={takeout_n}, buttons named 取出={named_n}, "
         f"warehouse-count present={count_node.count()}, "
         f"legacy cards={cards}, list text={store_text!r}. "
@@ -466,6 +594,7 @@ def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db
     )
     pad.first.click()
     _assert_pick_surface(page, "while picking the cell")
+    _assert_footer_pixels(footer_before, _footer_png(page), "while picking a cell")
     advance = page.locator("#btnToScene3")
     if advance.count() and advance.first.is_visible() and advance.first.is_enabled():
         advance.first.click()
@@ -507,6 +636,14 @@ def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db
     )
     page.reload()
     page.locator("#app").wait_for(state="visible", timeout=8000)
+    try:
+        page.locator("#loginScreen").wait_for(state="hidden", timeout=8000)
+    except Exception as exc:
+        raise AssertionError(
+            "TC-FE-WAREHOUSE-UNSTORE: after reload, #loginScreen must be hidden "
+            "so the town and #ktFooter are visible. The footer pixel check compares "
+            "the town footer, not the login wall. " + str(exc)
+        ) from exc
     page.locator("#townMap .cap", has_text=BUILDING_NAME).first.wait_for(
         state="visible", timeout=8000
     )
@@ -523,4 +660,52 @@ def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db
     assert row["level"] == 2, row
     assert get_kid_points(warehouse_db, kid_id) == points_before
     assert inventory_map(warehouse_db, kid_id) == mats_before
-    _assert_footer_matches_main(page, "after the takeout flow")
+    _assert_footer_structure(page, "after the takeout flow")
+    _assert_footer_pixels(footer_before, _footer_png(page), "after the takeout flow")
+
+
+@pytest.mark.case_id("TC-FE-WAREHOUSE-CARD")
+def test_storage_card_shows_name_level_and_takeout_only(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-WAREHOUSE-CARD 存倉卡片只顯示名稱、等級和「取出」。
+
+    「按此放置」不得出現。main 的卡片仍有這句。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    stored = _building_row(warehouse_db, warehouse_ids["building_id"])
+    if not stored or stored["stored"] != 1:
+        from tests.factories import insert_building
+
+        db = connect_db(warehouse_db)
+        def_row = db.execute(
+            "SELECT id FROM building_defs WHERE name=?",
+            ("農場",),
+        ).fetchone()
+        db.close()
+        insert_building(
+            warehouse_db,
+            kid_id,
+            def_row["id"],
+            level=1,
+            stored=1,
+            cell_x=18,
+            cell_y=10,
+        )
+    _login(page, base_url)
+    _open_store(page)
+    store_text = page.locator("#storedBuildings").inner_text()
+    takeout_n = page.locator('[data-testid="warehouse-takeout"]').count()
+    named_n = page.locator("#tab-store").get_by_role("button", name="取出").count()
+    problems = []
+    if "按此放置" in store_text:
+        problems.append(
+            "card text still contains 按此放置; the card must show the building name, "
+            "level, and 取出 only"
+        )
+    if takeout_n + named_n < 1:
+        problems.append("missing 取出 button on the storage card")
+    if "Lv" not in store_text:
+        problems.append(f"card text has no level; text={store_text!r}")
+    assert not problems, (
+        "TC-FE-WAREHOUSE-CARD: expected name, level, and 取出 only. "
+        f"Actual list text={store_text!r}. " + " | ".join(problems)
+    )
