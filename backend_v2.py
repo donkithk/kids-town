@@ -1659,22 +1659,35 @@ def _parse_cell(cell_x, cell_y):
     return cx, cy, None, None
 
 
-def _placement_origin(cell_x, cell_y):
-    """Origin must sit inside the 8×8 map. (7, 7) is legal; (8, 0) is not.
+def _origin_fits(cx, cy, footprint=BUILDING_FOOTPRINT):
+    """True when the footprint starting here stays inside the 8×8 map.
 
-    The 2×2 footprint is enforced as overlap against other placed buildings,
-    not as a tighter origin box. Stored rows do not count.
+    Last legal origin is (cols - footprint, rows - footprint). A 2×2 ends at
+    (6, 6). (7, 0) sticks out. The limit is derived from the footprint.
+    """
+    return (
+        cx >= 0 and cy >= 0
+        and cx + footprint <= TOWN_PLACE_COLS
+        and cy + footprint <= TOWN_PLACE_ROWS
+    )
+
+
+def _placement_origin(cell_x, cell_y):
+    """Origin plus footprint must stay on the map. Overlap is checked separately.
+
+    For the shared 2×2, (6, 6) is legal and (7, 0), (0, 7), and (7, 7) are not.
+    Stored rows do not occupy a cell.
     """
     cx, cy, err, status = _parse_cell(cell_x, cell_y)
     if err:
         return None, None, err, status
-    if cx < 0 or cy < 0 or cx >= TOWN_PLACE_COLS or cy >= TOWN_PLACE_ROWS:
+    if not _origin_fits(cx, cy):
         return None, None, '位置超出地圖範圍（0 至 7）', 400
     return cx, cy, None, None
 
 
 def _origin_in_town(cx, cy):
-    return 0 <= cx < TOWN_PLACE_COLS and 0 <= cy < TOWN_PLACE_ROWS
+    return _origin_fits(cx, cy)
 
 
 def _reject_locked_region_plot(db, kid_id, def_id):
@@ -1697,9 +1710,14 @@ def _reject_locked_region_plot(db, kid_id, def_id):
 
 
 def _first_legal_cell(db, kid_id, exclude_building_id=None):
-    """First free 8×8 origin, row by row. (7, 7) counts. None when the map is full."""
-    for cy in range(TOWN_PLACE_ROWS):
-        for cx in range(TOWN_PLACE_COLS):
+    """First free origin whose footprint stays on the map, row by row.
+
+    Never returns an origin that sticks out. None when every legal origin is taken.
+    """
+    last_y = TOWN_PLACE_ROWS - BUILDING_FOOTPRINT
+    last_x = TOWN_PLACE_COLS - BUILDING_FOOTPRINT
+    for cy in range(last_y + 1):
+        for cx in range(last_x + 1):
             blocked, _status = _placement_blocked(db, kid_id, cx, cy, exclude_building_id)
             if not blocked:
                 return cx, cy
@@ -1736,7 +1754,12 @@ def _footprints_overlap(ax, ay, bx, by, size=BUILDING_FOOTPRINT):
 
 
 def _placement_blocked(db, kid_id, cell_x, cell_y, exclude_building_id=None):
-    """Reject when this 2×2 meets a placed building or a tile. stored=1 does not occupy."""
+    """Reject when the footprint leaves the map, meets a placed building, or meets a tile.
+
+    stored=1 rows do not occupy. Place, move, unstore, and auto-pick all use this.
+    """
+    if not _origin_fits(cell_x, cell_y):
+        return '位置超出地圖範圍（0 至 7）', 400
     rows = db.execute(
         """
         SELECT id, cell_x, cell_y FROM buildings
