@@ -2467,6 +2467,7 @@ async function restoreSession() {
     currentRole = 'kid';
     currentUser = data.user;
     currentKidId = data.user.id;
+    const restoredId = data.user.id;
     document.getElementById('app').style.display = 'block';
     document.body.classList.add('kt-landscape');
     ktPreferLandscape();
@@ -2474,6 +2475,15 @@ async function restoreSession() {
     updateHeader();
     await loadTown();
     initCanvas();
+    // A restored kid should not keep the login wall over the town footer.
+    // Leave the form up briefly so a reload that is about to sign in as
+    // someone else can still fill it; doLogin hides it in that case.
+    setTimeout(function () {
+      if (currentRole === 'kid' && currentUser && currentUser.id === restoredId) {
+        const screen = document.getElementById('loginScreen');
+        if (screen) screen.classList.add('hidden');
+      }
+    }, 800);
   } catch (e) {}
 }
 
@@ -3324,9 +3334,17 @@ async function confirmPlaceBuilding() {
     showToast('✅ 建築完成！');
     await loadTown();
   } catch(e) {
-    Audio.errorBuzzer();
-    showToast('❌ ' + e.message, 'error');
+    showBuildFailure(e.message);
   }
+}
+
+function showBuildFailure(message) {
+  if (message === '城鎮沒有空位，請先收起或移動其他建築。') {
+    showToast(message);
+    return;
+  }
+  Audio.errorBuzzer();
+  showToast('❌ ' + (message || '起唔到'), 'error');
 }
 
 // ═══ MOVE BUILDING ═══
@@ -3663,8 +3681,7 @@ async function placeBuilding(defId, plotIdx) {
     showToast('✅ 建築完成！');
     await loadTown();
   } catch(e) {
-    Audio.errorBuzzer();
-    showToast('❌ '+e.message, 'error');
+    showBuildFailure(e.message);
   }
 }
 

@@ -1706,19 +1706,20 @@ def _first_legal_cell(db, kid_id, exclude_building_id=None):
     return None
 
 
-def place_building_free(db, kid_id, def_id, level=1, exclude_building_id=None):
-    """Auto-place with no gold or materials. First legal cell, else stored=1.
+# Shown as a normal toast when a new build has no free 8×8 cell. Not a free gift.
+TOWN_FULL_ERROR = '城鎮沒有空位，請先收起或移動其他建築。'
 
-    Does not commit. Caller keeps id, level, and the right to take a stored row out later.
+
+def place_building_free(db, kid_id, def_id, level=1, exclude_building_id=None):
+    """Put an already-granted building on the first free 8×8 cell. No charge.
+
+    A new build is not inserted when the map is full. Callers that already own
+    the row (preview guild in storage, legacy out-of-grid repair) leave it stored.
+    Does not commit.
     """
     cell = _first_legal_cell(db, kid_id, exclude_building_id)
     if cell is None:
-        cur = db.execute(
-            "INSERT INTO buildings (kid_id, def_id, plot_idx, level, cell_x, cell_y, stored) "
-            "VALUES (?, ?, 0, ?, NULL, NULL, 1)",
-            (kid_id, def_id, level),
-        )
-        return cur.lastrowid, None
+        return None, None
     cx, cy = cell
     cur = db.execute(
         "INSERT INTO buildings (kid_id, def_id, plot_idx, level, cell_x, cell_y, stored) "
@@ -3376,12 +3377,29 @@ def place_building(kid_id):
     def_id = data.get('def_id')
     cell_x = data.get('cell_x')
     cell_y = data.get('cell_y')
-    if not def_id or cell_x is None or cell_y is None:
+    if not def_id:
+        return jsonify({'error': 'def_id, cell_x, cell_y required'}), 400
+    db = get_db()
+    if cell_x is None and cell_y is None:
+        locked = _reject_locked_region_plot(db, kid_id, def_id)
+        if locked:
+            return locked
+        owned = db.execute(
+            "SELECT id, stored FROM buildings WHERE kid_id=? AND def_id=? ORDER BY id",
+            (kid_id, def_id),
+        ).fetchall()
+        if any(not row['stored'] for row in owned):
+            return jsonify({'error': '你已經興建咗呢種建築物'}), 400
+        reuse = next((row for row in owned if row['stored']), None)
+        cell = _first_legal_cell(db, kid_id, reuse['id'] if reuse else None)
+        if cell is None:
+            return jsonify({'error': TOWN_FULL_ERROR}), 400
+        cell_x, cell_y = cell
+    elif cell_x is None or cell_y is None:
         return jsonify({'error': 'def_id, cell_x, cell_y required'}), 400
     cx, cy, parse_err, parse_status = _parse_cell(cell_x, cell_y)
     if parse_err:
         return jsonify({'error': parse_err}), parse_status
-    db = get_db()
     if not _origin_in_town(cx, cy):
         locked = _reject_locked_region_plot(db, kid_id, def_id)
         if locked:
