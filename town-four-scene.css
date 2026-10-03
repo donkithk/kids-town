@@ -162,6 +162,14 @@ body.kt-artstage #tab-town .mp { position: relative; }
   pointer-events: auto;
 }
 
+/* Gold cells reach the sprite of the building in front, so the back pad wins the hit.
+   Center stays at 121*s. */
+#townMap .pad.is-empty .cell-btn,
+#townMap .pad.is-chosen .cell-btn {
+  height: calc(var(--s, 1) * 196px);
+  top: calc(var(--s, 1) * 23px);
+}
+
 #townMap .badge {
   position: absolute;
   z-index: 8;
