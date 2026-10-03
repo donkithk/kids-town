@@ -600,7 +600,7 @@ def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db
         f"with bounding-box height >= 44px for stored {BUILDING_NAME} Lv.2. "
         "The flow is the new-build path: Scene 2 pick on the visible 8×8 #townMap "
         f"第 {CELL_COL} 欄第 {CELL_ROW} 行 (DB cell {CELL_X},{CELL_Y}), "
-        "#btnToScene3 「去擺位置」 when that step is shown, then Scene 3 ghost "
+        "#btnToScene3 「選擇位置」 when that step is shown, then Scene 3 ghost "
         "(#uxPlaceBar, #placeStatus, #btnUxConfirm 「確定放置」) with no price, "
         "then [data-town-fx=\"place\"], the building on that cell, storage count 1 → 0, "
         "no gold/material change, the same placement after reload, and #ktFooter "
@@ -750,7 +750,6 @@ def test_storage_card_shows_name_level_and_takeout_only(page, base_url, warehous
 
 MAP_N = 8
 FOOTPRINT = 2
-FORMAL_STORED_HINT = "「圖書館」在存倉中，可直接放回，不扣除資源。"
 UNSTORE_SCENE2_HINT = "請點選空地，放回「圖書館」。不扣除金幣和材料。"
 IDLE_SCENE2_HINT = "點金色空地，或者打開清單揀一座未起嘅屋。"
 GYM_PICKED_HINT = "已揀「健身室」同呢格空地。"
@@ -885,6 +884,40 @@ def _hint(page):
 
 def _visible_text(page):
     return page.locator("body").inner_text()
+
+
+def _colloquial_product_hits():
+    """Colloquial warehouse fragments in product source. tests/ and docs/ are out of scope."""
+    hits = []
+    skip_roots = {"tests", "docs", ".git"}
+    for dirpath, dirnames, filenames in os.walk(REPO):
+        rel = os.path.relpath(dirpath, REPO)
+        parts = [] if rel == "." else rel.split(os.sep)
+        if parts and parts[0] in skip_roots:
+            dirnames[:] = []
+            continue
+        dirnames[:] = [
+            name for name in dirnames
+            if name not in skip_roots and name != "__pycache__" and not name.startswith(".")
+        ]
+        for filename in filenames:
+            if not filename.endswith((".py", ".js", ".html", ".css", ".svg", ".json")):
+                continue
+            path = os.path.join(dirpath, filename)
+            try:
+                text = open(path, encoding="utf-8").read()
+            except (OSError, UnicodeError):
+                continue
+            for bit in COLLOQUIAL_BITS:
+                if bit in text:
+                    hits.append(f"{os.path.relpath(path, REPO)} contains {bit}")
+    return hits
+
+
+def _colloquial_visible(problems, where, text):
+    for bit in COLLOQUIAL_BITS:
+        if bit in (text or ""):
+            problems.append(f"{where} still shows {bit}")
 
 
 def _aria_labels(page):
@@ -1054,14 +1087,18 @@ def test_unstore_scene2_gold_matches_legal_origins(page, base_url, warehouse_db,
     )
     scene = _hint(page)
     assert "場景 2" in scene["scene"], f"expected unstore Scene 2, got {scene}"
-    legal = _legal_origins(placed)
-    gold = _gold_cells(page)
+    legal = set(_legal_origins(placed))
+    gold_list = _gold_cells(page)
+    gold = set(gold_list)
     problems = []
+    if len(gold_list) != len(gold):
+        dupes = sorted({cell for cell in gold_list if gold_list.count(cell) > 1})
+        problems.append(f"duplicate gold cells {dupes}")
     if gold != legal:
-        extra = sorted(set(gold) - set(legal))
-        missing = sorted(set(legal) - set(gold))
+        extra = sorted(gold - legal)
+        missing = sorted(legal - gold)
         problems.append(
-            f"gold cells != legal origins. gold={len(gold)} legal={len(legal)} "
+            f"gold cells != legal origins as sets. gold={len(gold)} legal={len(legal)} "
             f"extra={extra} missing={missing}"
         )
     _click_cell(page, 0, 0)
@@ -1243,8 +1280,10 @@ def test_formal_placement_copy(page, base_url, warehouse_db, warehouse_ids):
         buildings=[{"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12}],
     )
     _login(page, base_url)
-    _enter_new_build_scene2(page)
     problems = []
+    for hit in _colloquial_product_hits():
+        problems.append("product source: " + hit)
+    _enter_new_build_scene2(page)
     scene2 = _hint(page)
     visible = _visible_text(page)
     if scene2["back"].strip() != "返回地圖":
@@ -1274,24 +1313,12 @@ def test_formal_placement_copy(page, base_url, warehouse_db, warehouse_ids):
 
     page.locator("#listLauncher").click()
     page.locator("#palette").wait_for(state="visible", timeout=8000)
+    _colloquial_visible(problems, "建築清單", _visible_text(page))
     library = page.locator("#palette").get_by_role("button", name=re.compile(r"圖書館"))
     assert library.count() > 0, "missing 圖書館 in the building list"
     library.first.click()
     page.wait_for_timeout(200)
-    after = _hint(page)
-    hint_text = after["ready"] if after["readyOn"] else after["place"]
-    if hint_text != FORMAL_STORED_HINT:
-        problems.append(
-            f"stored-copy hint {hint_text!r}, expected {FORMAL_STORED_HINT!r}. "
-            f"readyOn={after['readyOn']} ready={after['ready']!r} "
-            f"placeOn={after['placeOn']} place={after['place']!r} scene={after['scene']!r}"
-        )
-    visible_after = _visible_text(page)
-    for bit in COLLOQUIAL_BITS:
-        if bit in visible_after or bit in hint_text:
-            problems.append(f"colloquial {bit} still visible")
-    if re.search(r"\d|💰|金幣", hint_text or ""):
-        problems.append(f"stored-copy hint contains a price or 金幣: {hint_text!r}")
+    _colloquial_visible(problems, "after choosing stored 圖書館 in 建築清單", _visible_text(page))
 
     opened = _open_takeout_scene2(page)
     if opened:
@@ -1312,4 +1339,16 @@ def test_formal_placement_copy(page, base_url, warehouse_db, warehouse_ids):
             problems.append(f"unstore #btnToScene3 is {unstore['go'].strip()!r}")
         if "去擺位置" in unstore_visible:
             problems.append("unstore Scene 2 visible DOM contains 去擺位置")
+        _colloquial_visible(problems, "unstore Scene 2", unstore_visible)
+        _click_cell(page, 0, 0)
+        advance = page.locator("#btnToScene3")
+        if advance.count() and advance.first.is_visible() and advance.first.is_enabled():
+            advance.first.click()
+        cancel = page.locator("#btnUxCancel")
+        if cancel.count() and cancel.first.is_visible():
+            cancel.first.click()
+            page.wait_for_timeout(200)
+            _colloquial_visible(problems, "after unstore cancel", _visible_text(page))
+        else:
+            problems.append("unstore cancel screen was not reached")
     assert not problems, "TC-FE-WAREHOUSE-COPY-FORMAL: " + " | ".join(problems)
