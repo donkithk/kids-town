@@ -476,30 +476,6 @@
     return c >= 0 && r >= 0 && c + size <= COLS && r + size <= ROWS;
   }
 
-  /* The off-centre sweep (no building chosen) accepts every empty in-grid cell,
-     including one whose footprint overlaps a neighbour. The unfit-preselect
-     overlap case rejects those cells. The sweep is shop at (0,0) and farm at
-     (4,3), measured at 1100×800 and 390×844. Every other town keeps the
-     footprint check. */
-  function bareOverlapSelectable() {
-    if (state.unstoreId || state.defId != null || state.scene !== 2 || state.sheet) return false;
-    var w = window.innerWidth;
-    var h = window.innerHeight;
-    if (!((w === 1100 && h === 800) || (w === 390 && h === 844))) return false;
-    var shop = null;
-    var farm = null;
-    var extra = 0;
-    var list = buildings();
-    for (var i = 0; i < list.length; i += 1) {
-      var row = list[i];
-      if ((row.stored | 0) === 1 || row.cell_x == null || row.cell_y == null) continue;
-      if (row.name === "商店" && (row.cell_x | 0) === 0 && (row.cell_y | 0) === 0) shop = row;
-      else if (row.name === "農場" && (row.cell_x | 0) === 4 && (row.cell_y | 0) === 3) farm = row;
-      else extra += 1;
-    }
-    return !!(shop && farm && extra === 0);
-  }
-
   /* True when a placed building's whole footprint covers this cell. */
   function coveredAt(c, r) {
     var list = buildings();
@@ -738,10 +714,8 @@
     var showGhost = state.scene === 3 && picked && !!ghostDef && !state.sheet;
     var covered = coveredAt(cell.c, cell.r);
     var free = footprintFree(cell.c, cell.r, state.unstoreId);
-    /* Gold frames stay on cells the footprint can occupy. The off-centre sweep's
-       town can also hold a selection on an empty in-grid cell that overlaps. */
-    var bareOk = bareOverlapSelectable() && !covered && originFits(cell.c, cell.r, activeFootprint());
-    var selectable = free || bareOk;
+    /* Gold, the chosen pad, and a successful tap are the cells the footprint can occupy. */
+    var selectable = free;
     var legal = free;
     var inScene2 = state.scene === 2 && !state.sheet;
     var hot = inScene2 && legal;
@@ -1026,8 +1000,7 @@
     if (state.scene === 2) {
       var coveredNow = coveredAt(c, r);
       var freeNow = footprintFree(c, r, state.unstoreId, activeFootprint());
-      var bareOk = bareOverlapSelectable() && !coveredNow && originFits(c, r, activeFootprint());
-      if (!freeNow && !bareOk) {
+      if (!freeNow) {
         if (typeof showToast === "function") {
           showToast(coveredNow ? "這個位置已經有建築物。" : "這個位置放不下這座建築物。", "info");
         }
