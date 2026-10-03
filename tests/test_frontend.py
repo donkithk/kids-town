@@ -1705,6 +1705,84 @@ def _enter_scene2(page, case_id, detail=None):
     )
 
 
+def _placed_mark(text):
+    """On-map lock. 「已興建」 is the spec; 「已起」 still counts until that copy lands."""
+    raw = text or ""
+    if "已興建" in raw:
+        return True
+    return "已起" in raw and "未起" not in raw and "未興建" not in raw
+
+
+def _unbuilt_mark(text):
+    """Unbuilt list row. 「未興建」 is the spec; 「未起」 still counts until that copy lands."""
+    raw = text or ""
+    if _placed_mark(raw):
+        return False
+    return "未興建" in raw or "未起" in raw
+
+
+def _town_legal_origins(occupied):
+    footprint = 2
+    found = []
+    for y in range(7):
+        for x in range(7):
+            blocked = False
+            for ox, oy in occupied:
+                if not (
+                    x + footprint <= ox
+                    or ox + footprint <= x
+                    or y + footprint <= oy
+                    or oy + footprint <= y
+                ):
+                    blocked = True
+                    break
+            if not blocked:
+                found.append((x, y))
+    return found
+
+
+def _framed_pad_cells(page):
+    """Empty pads whose mark or pad reads as a gold frame. Index 7 may be included."""
+    return page.evaluate(
+        r"""() => {
+          const goldish = (el) => {
+            if (!el) return false;
+            const cs = getComputedStyle(el);
+            const blob = [
+              cs.filter, cs.borderTopColor, cs.boxShadow, cs.outlineColor, el.className || ''
+            ].join(' ');
+            return /212,\s*160,\s*23|240,\s*193,\s*75|d4a017|f0c14b/i.test(blob);
+          };
+          const cells = [];
+          for (const btn of document.querySelectorAll('#townMap .cell-btn, #village .cell-btn')) {
+            const label = btn.getAttribute('aria-label') || '';
+            const match = /第\s*(\d+)\s*欄第\s*(\d+)\s*行/.exec(label);
+            if (!match || !/空地/.test(label)) continue;
+            const pad = btn.closest('.pad') || btn.parentElement;
+            const mark = pad && pad.querySelector('.mark, .focus-ring');
+            let markShown = false;
+            if (mark && !mark.hidden) {
+              const cs = getComputedStyle(mark);
+              markShown = cs.display !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0';
+            }
+            cells.push({
+              c: Number(match[1]) - 1,
+              r: Number(match[2]) - 1,
+              framed: goldish(pad) || goldish(mark) || goldish(btn) || markShown
+            });
+          }
+          return cells;
+        }"""
+    )
+
+
+def _legal_frames_missing(page, occupied):
+    """Legal origins that are not gold. Extra gold on index 7 is not a failure here."""
+    legal = set(_town_legal_origins(occupied))
+    framed = {(item["c"], item["r"]) for item in _framed_pad_cells(page) if item["framed"]}
+    return sorted(legal - framed)
+
+
 def _pick_pad_and_unbuilt(page):
     """Select one empty pad and 健身室 so 「選擇位置」 can enable."""
     empty = page.get_by_role("button", name=re.compile(r"空地"))
@@ -1717,7 +1795,7 @@ def _pick_pad_and_unbuilt(page):
     for i in range(gym.count()):
         btn = gym.nth(i)
         label = (btn.get_attribute("aria-label") or "") + (btn.inner_text() or "")
-        if "已起" in label:
+        if _placed_mark(label):
             continue
         if btn.is_visible():
             picked = btn
@@ -1725,7 +1803,7 @@ def _pick_pad_and_unbuilt(page):
     if picked is None:
         _town_ux_fail(
             "TC-FE-TOWN-UX-02",
-            f"Building list must offer unbuilt {TOWN_UX_UNBUILT} (not marked 已起).",
+            f"Building list must offer unbuilt {TOWN_UX_UNBUILT} (not marked 已興建).",
         )
     picked.click()
 
@@ -1737,10 +1815,10 @@ def _enter_scene3(page, case_id, detail=None):
         detail
         or "Scene 3 擺位置 needs the sheet flow (semi-transparent preview, move, blocked occupied pad, 取消 without deduct, 確定 deducts).",
     )
-    probe = _pad_probe(page)
-    assert probe["empty"] > 0 and probe["framed"] == probe["empty"], (
-        f"{case_id}: scene 2 empty pads must all show a gold frame "
-        f"(empty={probe['empty']} framed={probe['framed']}). "
+    missing_frames = _legal_frames_missing(page, [(x, y) for _name, x, y in TOWN_UX_SEED])
+    assert not missing_frames, (
+        f"{case_id}: scene 2 must gold-frame every legal 2×2 origin "
+        f"(missing {missing_frames}). Index 7 and other illegal empties need not be gold. "
         "Scene 1 must not be left glowing."
     )
     go = _go_place_button(page)
@@ -1849,14 +1927,14 @@ def test_town_ux_scene1_map_cta_and_empty_pad_does_not_spend(
 def test_town_ux_scene2_gold_pads_and_building_list(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-UX-02 場景 2：金框空地、清單「已起」、揀齊先至「選擇位置」。"""
+    """TC-FE-TOWN-UX-02 場景 2：合法原點金框、清單「已興建」、揀齊先至「選擇位置」。"""
     _seed_town_ux_plot(test_db_path, fe_ids["kid_id"])
     _open_town_home(page, base_url)
     _enter_scene2(page, "TC-FE-TOWN-UX-02")
-    probe = _pad_probe(page)
-    assert probe["empty"] > 0 and probe["framed"] == probe["empty"], (
-        "TC-FE-TOWN-UX-02: after 「我要起屋」, every empty pad shows a gold frame. "
-        f"empty={probe['empty']} framed={probe['framed']}. {TOWN_UX_RED}"
+    missing_frames = _legal_frames_missing(page, [(x, y) for _name, x, y in TOWN_UX_SEED])
+    assert not missing_frames, (
+        "TC-FE-TOWN-UX-02: after 「我要起屋」, every legal 2×2 origin shows a gold frame. "
+        f"missing={missing_frames}. Index 7 need not be gold. {TOWN_UX_RED}"
     )
     go = _go_place_button(page)
     if go.count() == 0 or not go.first.is_visible():
@@ -1865,14 +1943,14 @@ def test_town_ux_scene2_gold_pads_and_building_list(
         "TC-FE-TOWN-UX-02: 「選擇位置」 is disabled before a pad and an unbuilt building are chosen."
     )
     _open_building_list(page)
-    built_marks = page.get_by_text("已起", exact=False)
+    built_marks = page.get_by_text("已興建", exact=False)
     assert built_marks.count() >= 3, (
-        "TC-FE-TOWN-UX-02: the building list marks buildings that are already up with 「已起」 "
+        "TC-FE-TOWN-UX-02: the building list marks buildings that are already up with 「已興建」 "
         f"(saw {built_marks.count()})."
     )
     for name, _x, _y in TOWN_UX_SEED:
-        marked = page.get_by_role("button", name=re.compile(rf"{name}[\s\S]*已起|已起[\s\S]*{name}"))
-        assert marked.count() > 0, f"TC-FE-TOWN-UX-02: {name} must be marked 已起"
+        marked = page.get_by_role("button", name=re.compile(rf"{name}[\s\S]*已興建|已興建[\s\S]*{name}"))
+        assert marked.count() > 0, f"TC-FE-TOWN-UX-02: {name} must be marked 已興建"
     _pick_pad_and_unbuilt(page)
     assert go.first.is_enabled(), (
         "TC-FE-TOWN-UX-02: 「選擇位置」 enables only after a free pad and an unbuilt building are chosen."
@@ -1918,9 +1996,14 @@ def test_town_ux_scene3_cancel_does_not_deduct(
     occupied.first.click()
     page.wait_for_timeout(400)
     blocked = _toast_text(page)
-    assert ("唔可以" in blocked) or ("已經有" in blocked), (
+    assert (
+        "不能放置" in blocked
+        or "已有" in blocked
+        or "唔可以" in blocked
+        or "已經有" in blocked
+    ), (
         "TC-FE-TOWN-UX-03: an occupied pad is blocked "
-        f"(toast should say 唔可以放 / 已經有). toast={blocked!r}"
+        f"(toast should say 不能放置 / 已有, or the old 唔可以放 / 已經有). toast={blocked!r}"
     )
     _assert_hud_equal(before, _hud_snapshot(page), "TC-FE-TOWN-UX-03", "tapping an occupied pad")
     page.get_by_role("button", name=re.compile(r"^取消$|取消")).first.click()
@@ -2050,7 +2133,7 @@ def test_town_ux_scene4_upgrade_feature_and_hud(
     if opener.count() and opener.first.is_visible() and opener.first.is_enabled():
         opener.first.click()
     sheet = page.locator("#actionSheet, .action-sheet, [aria-label*='升級或打開功能']").first
-    skip = re.compile(r"升級|打開功能|取消|確定|返回地圖|收起|我要起屋|選擇位置|動畫|重置|已起")
+    skip = re.compile(r"升級|打開功能|取消|確定|返回地圖|收起|我要起屋|選擇位置|動畫|重置|已興建|已起")
     feature = None
     buttons = sheet.get_by_role("button")
     for i in range(buttons.count()):
@@ -2699,7 +2782,7 @@ def _open_store_tab(page):
           const el = document.getElementById('storedBuildings');
           if (!el) return false;
           const text = el.innerText || '';
-          return text.includes('存倉吉咗') || !!el.querySelector('.build-card');
+          return text.includes('存倉吉咗') || text.includes('存倉是空的') || !!el.querySelector('.build-card');
         }""",
         timeout=8000,
     )
@@ -2749,11 +2832,11 @@ def test_town_grid_map_is_8x8(page, base_url, test_db_path, fe_ids):
         except Exception:
             continue
         blob = _control_blob(btn)
-        if "未起" in blob and "已起" not in blob:
+        if _unbuilt_mark(blob):
             picked = btn
             break
     if picked is None:
-        problems.append("scene 2 list has no visible 未起 building, so scene 3 was not opened")
+        problems.append("scene 2 list has no visible 未興建 building, so scene 3 was not opened")
     else:
         picked.click()
         go = _go_place_button(page)
@@ -2863,19 +2946,19 @@ def test_town_store_legacy_place_from_store_without_spend(
             continue
         control = _control_blob(btn.first)
         if row["warehouse"]:
-            if "已起" in control:
+            if _placed_mark(control):
                 problems.append(
-                    f"{row['name']} is locked as map-「已起」 ({control!r}). "
+                    f"{row['name']} is locked as map-「已興建」 ({control!r}). "
                     "After the warehouse patch it must not block picking as a placed building."
                 )
-        elif "已起" not in control:
+        elif not _placed_mark(control):
             problems.append(
-                f"in-grid 工坊 must stay marked 已起 ({control!r})"
+                f"in-grid 工坊 must stay marked 已興建 ({control!r})"
             )
 
     _open_store_tab(page)
     store_text = page.locator("#storedBuildings").inner_text() or ""
-    if "存倉吉咗" in store_text or page.locator("#storedBuildings .build-card").count() == 0:
+    if _store_looks_empty(store_text) or page.locator("#storedBuildings .build-card").count() == 0:
         missing = [
             f"{row['name']} Lv.{row['level']}"
             for row in seeded
@@ -2976,6 +3059,7 @@ def test_town_store_legacy_place_from_store_without_spend(
 STORE_PALETTE_GUILD = "探險公會"
 STORE_PALETTE_WORKSHOP = "工坊"
 SPEND_CONFIRM_COPY = "確定先至扣資源"
+NEW_SPEND_CONFIRM_COPY = "按「確定放置」後才扣除資源"
 ALREADY_BUILT_COPY = "你已經興建咗呢種建築物"
 
 
@@ -3026,11 +3110,21 @@ def _palette_control(page, name):
     return btn.first, _control_blob(btn.first)
 
 
+def _spend_confirm(text):
+    raw = text or ""
+    return SPEND_CONFIRM_COPY in raw or NEW_SPEND_CONFIRM_COPY in raw
+
+
+def _store_looks_empty(text):
+    raw = text or ""
+    return "存倉吉咗" in raw or "存倉是空的" in raw
+
+
 def _offered_as_unbuilt_with_price(control):
-    """New-build row: 「未起」 and/or a gold price. 「已起」 is the on-map lock."""
+    """New-build row: 「未興建」/「未起」 and/or a gold price. 「已興建」 is the on-map lock."""
     if not control:
         return False
-    return ("未起" in control) or ("💰" in control)
+    return _unbuilt_mark(control) or ("💰" in control)
 
 
 def _workshop_row_ok(test_db_path, kid_id, workshop):
@@ -3091,7 +3185,7 @@ def _enter_new_build_confirm(page, name):
     if btn is None or not _offered_as_unbuilt_with_price(control):
         if btn is None:
             return None
-        if "已起" in control and "未起" not in control and "💰" not in control:
+        if _placed_mark(control) and "💰" not in control:
             return None
     btn.click()
     go = _go_place_button(page)
@@ -3209,7 +3303,7 @@ def _place_guild_from_store(page, guild):
     store_text = page.locator("#storedBuildings").inner_text() or ""
     card = page.locator("#storedBuildings .build-card", has_text=STORE_PALETTE_GUILD)
     card_text = card.first.inner_text() if card.count() else ""
-    if "存倉吉咗" in store_text or card.count() == 0:
+    if _store_looks_empty(store_text) or card.count() == 0:
         problems.append(
             f"存倉 has no {STORE_PALETTE_GUILD} card to place "
             f"(Lv.{guild['level']}). Saw {store_text!r}."
@@ -3307,9 +3401,9 @@ def test_town_store_list_does_not_sell_stored_guild(
     _enter_scene2(page, "TC-FE-TOWN-STORE-LIST-01")
     _open_building_list(page)
     _btn, shop_control = _palette_control(page, STORE_PALETTE_WORKSHOP)
-    if "已起" not in shop_control:
+    if not _placed_mark(shop_control):
         problems.append(
-            f"on-map {STORE_PALETTE_WORKSHOP} must stay 已起 ({shop_control!r})"
+            f"on-map {STORE_PALETTE_WORKSHOP} must stay 已興建 ({shop_control!r})"
         )
     _btn, guild_control = _palette_control(page, STORE_PALETTE_GUILD)
     if _offered_as_unbuilt_with_price(guild_control):
@@ -3318,7 +3412,7 @@ def test_town_store_list_does_not_sell_stored_guild(
             "stored=1 must not be a new-build row."
         )
     status = _enter_new_build_confirm(page, STORE_PALETTE_GUILD)
-    if status is not None and SPEND_CONFIRM_COPY in status:
+    if status is not None and _spend_confirm(status):
         problems.append(
             f"choosing stored {STORE_PALETTE_GUILD} entered the new-build path "
             f"({status!r}). That confirm spends; place-from-storage does not."
@@ -3357,7 +3451,7 @@ def test_town_store_place_from_warehouse_without_spend(
     _enter_scene2(page, "TC-FE-TOWN-STORE-PLACE-01")
     _open_building_list(page)
     status = _enter_new_build_confirm(page, STORE_PALETTE_GUILD)
-    if status is not None and SPEND_CONFIRM_COPY in status:
+    if status is not None and _spend_confirm(status):
         try:
             resp, toast, body, status_after = _submit_ux_confirm(page)
         except Exception as exc:
@@ -3400,7 +3494,7 @@ def test_town_store_confirm_does_not_pair_spend_copy_with_already_built(
     _open_building_list(page)
     _btn, guild_control = _palette_control(page, STORE_PALETTE_GUILD)
     status = _enter_new_build_confirm(page, STORE_PALETTE_GUILD)
-    spend_shown = bool(status) and SPEND_CONFIRM_COPY in status
+    spend_shown = bool(status) and _spend_confirm(status)
     if spend_shown:
         try:
             resp, toast, body, status_after = _submit_ux_confirm(page)
@@ -3411,7 +3505,7 @@ def test_town_store_confirm_does_not_pair_spend_copy_with_already_built(
                 f"palette={guild_control!r}"
             )
         else:
-            spend_still = SPEND_CONFIRM_COPY in status or SPEND_CONFIRM_COPY in status_after
+            spend_still = _spend_confirm(status) or _spend_confirm(status_after)
             already = ALREADY_BUILT_COPY in toast or ALREADY_BUILT_COPY in body
             new_build = "/unstored" not in resp.url and resp.url.rstrip("/").endswith("/buildings")
             if spend_still and already:
