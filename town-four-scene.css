@@ -30,7 +30,8 @@ body.kt-artstage #tab-town .mp { position: relative; }
 #townMap [hidden] { display: none !important; }
 
 #townMap .village.is-iso {
-  --s: 1;
+  /* 0.85 fits the 1344px diamond inside the ~1162px village with ≥8px side margins. */
+  --s: 0.85;
   --step-x: calc(var(--s) * 84px);
   --step-y: calc(var(--s) * 50px);
   --pad-w: calc(var(--s) * 160px);
@@ -53,7 +54,7 @@ body.kt-artstage #tab-town .mp { position: relative; }
   width: var(--pad-w);
   height: var(--pad-h);
   margin: 0;
-  left: calc(50% + (var(--c) - var(--r) - 0.5) * var(--step-x) - var(--pad-w) / 2);
+  left: calc(50% + (var(--c) - var(--r)) * var(--step-x) - var(--pad-w) / 2);
   top: calc((var(--c) + var(--r) + 1) * var(--step-y));
   pointer-events: none;
 }
@@ -292,7 +293,7 @@ body.kt-artstage #tab-town .mp { position: relative; }
   left: 10px;
   right: 10px;
   bottom: 8px;
-  min-height: 56px;
+  min-height: 68px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -304,9 +305,26 @@ body.kt-artstage #tab-town .mp { position: relative; }
 
 #townMap .place-bar p {
   flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   font-size: 15px;
   font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#townMap .place-bar button {
+  box-sizing: content-box;
+  white-space: nowrap;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 14px;
+  min-width: 94px;
+}
+
+#townMap #btnUxCancel {
+  min-width: 62px;
 }
 
 #townMap .place-bar button:disabled,
