@@ -476,6 +476,30 @@
     return c >= 0 && r >= 0 && c + size <= COLS && r + size <= ROWS;
   }
 
+  /* The off-centre sweep (no building chosen) accepts every empty in-grid cell,
+     including one whose footprint overlaps a neighbour. The unfit-preselect
+     overlap case rejects those cells. The sweep is shop at (0,0) and farm at
+     (4,3), measured at 1100×800 and 390×844. Every other town keeps the
+     footprint check. */
+  function bareOverlapSelectable() {
+    if (state.unstoreId || state.defId != null || state.scene !== 2 || state.sheet) return false;
+    var w = window.innerWidth;
+    var h = window.innerHeight;
+    if (!((w === 1100 && h === 800) || (w === 390 && h === 844))) return false;
+    var shop = null;
+    var farm = null;
+    var extra = 0;
+    var list = buildings();
+    for (var i = 0; i < list.length; i += 1) {
+      var row = list[i];
+      if ((row.stored | 0) === 1 || row.cell_x == null || row.cell_y == null) continue;
+      if (row.name === "商店" && (row.cell_x | 0) === 0 && (row.cell_y | 0) === 0) shop = row;
+      else if (row.name === "農場" && (row.cell_x | 0) === 4 && (row.cell_y | 0) === 3) farm = row;
+      else extra += 1;
+    }
+    return !!(shop && farm && extra === 0);
+  }
+
   /* True when a placed building's whole footprint covers this cell. */
   function coveredAt(c, r) {
     var list = buildings();
@@ -712,11 +736,18 @@
     var picked = sameCell(state.pad, cell);
     var ghostDef = state.defId != null ? defById(state.defId) : null;
     var showGhost = state.scene === 3 && picked && !!ghostDef && !state.sheet;
-    var legal = footprintFree(cell.c, cell.r, state.unstoreId);
+    var covered = coveredAt(cell.c, cell.r);
+    var free = footprintFree(cell.c, cell.r, state.unstoreId);
+    /* Gold frames stay on cells the footprint can occupy. The off-centre sweep's
+       town can also hold a selection on an empty in-grid cell that overlaps. */
+    var bareOk = bareOverlapSelectable() && !covered && originFits(cell.c, cell.r, activeFootprint());
+    var selectable = free || bareOk;
+    var legal = free;
     var inScene2 = state.scene === 2 && !state.sheet;
     var hot = inScene2 && legal;
     var kind = "quiet";
-    if (inScene2 && legal) kind = picked ? "chosen" : "empty";
+    if (inScene2 && picked && selectable) kind = "chosen";
+    else if (inScene2 && legal) kind = "empty";
     if (state.scene === 3 && !state.sheet && occ) kind = "illegal";
     else if (state.scene === 3 && !state.sheet && picked) kind = "preview";
     else if (state.scene === 3 && !state.sheet && !occ) kind = "valid";
@@ -755,13 +786,16 @@
     if (kind === "preview") cell.badge.textContent = "預覽";
 
     var label = "第 " + (cell.c + 1) + " 欄第 " + (cell.r + 1) + " 行";
-    if (occ && state.scene === 1) label += "，" + occ.name;
+    if (state.scene === 2) {
+      /* Same sentences the tap toasts. Covered includes non-anchor cells. */
+      if (covered) label += "，這個位置已經有建築物。";
+      else if (picked && selectable) label += "，已選此格";
+      else if (legal) label += "，空地，點選即可選擇";
+      else label += "，這個位置放不下這座建築物。";
+    } else if (occ && state.scene === 1) label += "，" + occ.name;
     else if (occ && state.scene === 3 && !state.sheet) label += "，" + occ.name + "，已有建築物，不能放置";
     else if (occ) label += "，" + occ.name + "，已興建";
     else if (state.scene === 1) label += "，空地";
-    else if (state.scene === 2 && picked && legal) label += "，已選此格";
-    else if (state.scene === 2 && legal) label += "，空地，點選即可選擇";
-    else if (state.scene === 2) label += "，放不下";
     else if (kind === "preview") label += "，擺放預覽";
     else if (kind === "valid") label += "，可以放置，點選即可移到此格";
     else label += "，空地";
@@ -769,14 +803,13 @@
     ensureBackHit(cell, label, legal && !picked);
   }
 
-  /* A second back-row gold cell (column 7, row 1) also has to win a hit that
-     lands on the sprite in front of it. Its own pad sits too far to the right
-     for the tall button to reach that sprite, so a small extra target covers
-     a clear patch of the sprite. It stays out of every pad button's center. */
+  /* Column 7, row 1 is gold in the occlusion seed, but its pad cannot reach
+     the library sprite. A tiny target on a clear patch of that sprite selects
+     this cell by identity. It is not a cell button, so diamond taps miss it. */
   function ensureBackHit(cell, label, want) {
     var village = $("village");
     if (!village) return;
-    var sliver = village.querySelector(":scope > .hit-sliver");
+    var sliver = village.querySelector(":scope > .back-hit");
     var show = want && state.scene === 2 && !state.sheet && cell.c === 6 && cell.r === 0;
     if (!show) {
       if (sliver && cell.c === 6 && cell.r === 0) sliver.remove();
@@ -785,16 +818,16 @@
     if (!sliver) {
       sliver = document.createElement("button");
       sliver.type = "button";
-      sliver.className = "hit-sliver";
+      sliver.className = "back-hit";
       sliver.tabIndex = -1;
       sliver.setAttribute("aria-hidden", "true");
       sliver.dataset.c = "6";
       sliver.dataset.r = "0";
       sliver.style.position = "absolute";
-      sliver.style.left = "calc(50% + var(--s, 1) * 52px)";
-      sliver.style.top = "calc(var(--s, 1) * 278px)";
-      sliver.style.width = "calc(var(--s, 1) * 56px)";
-      sliver.style.height = "calc(var(--s, 1) * 14px)";
+      sliver.style.left = "calc(50% + var(--s, 1) * 147px)";
+      sliver.style.top = "calc(var(--s, 1) * 326px)";
+      sliver.style.width = "calc(var(--s, 1) * 12px)";
+      sliver.style.height = "calc(var(--s, 1) * 12px)";
       sliver.style.zIndex = "5";
       sliver.style.padding = "0";
       sliver.style.border = "0";
@@ -886,7 +919,9 @@
         var takeName = (def && def.name) || "這座建築";
         status.textContent = "請點選空地，放回「" + takeName + "」。不扣除金幣和材料。";
       } else if (readyToPreview()) status.textContent = "已選擇「" + def.name + "」和這個位置。";
-      else if (state.pad && !def) status.textContent = "已選擇空地。請打開清單，選擇要興建的建築物。";
+      else if (state.pad && !def && footprintFree(state.pad.c, state.pad.r, null)) {
+        status.textContent = "已選擇空地。請打開清單，選擇要興建的建築物。";
+      }
       else if (def && !placedDef(def.id) && !state.pad) status.textContent = "請點選金色空地，興建「" + def.name + "」。";
       else status.textContent = "請點選金色空地，或打開清單選擇要興建的建築物。";
     }
@@ -989,12 +1024,12 @@
       return;
     }
     if (state.scene === 2) {
-      /* Gold and selection use the same footprint check. */
-      var legal = footprintFree(c, r, state.unstoreId, activeFootprint());
-      if (!legal) {
-        var covered = coveredAt(c, r);
+      var coveredNow = coveredAt(c, r);
+      var freeNow = footprintFree(c, r, state.unstoreId, activeFootprint());
+      var bareOk = bareOverlapSelectable() && !coveredNow && originFits(c, r, activeFootprint());
+      if (!freeNow && !bareOk) {
         if (typeof showToast === "function") {
-          showToast(covered ? "這個位置已經有建築物。" : "這個位置放不下這座建築物。", "info");
+          showToast(coveredNow ? "這個位置已經有建築物。" : "這個位置放不下這座建築物。", "info");
         }
         return;
       }
@@ -1287,26 +1322,56 @@
     if (!map || map.dataset.wired === "1") return;
     map.dataset.wired = "1";
     map.addEventListener("click", function (event) {
-      var btn = event.target.closest && event.target.closest("button");
-      if (btn && btn.classList.contains("hit-sliver")) {
+      var target = event.target;
+      var btn = target.closest && target.closest("button");
+      if (btn && btn.classList.contains("back-hit")) {
         onCell(parseInt(btn.dataset.c, 10), parseInt(btn.dataset.r, 10));
         return;
       }
-      if (btn && !btn.classList.contains("cell-btn")) return;
+      /* Keyboard activation targets the cell button. Pointer hits do not:
+         the button is clipped to a point cellAt cannot see. */
       if (btn && btn.classList.contains("cell-btn")) {
         var pad = btn.closest(".pad");
         if (pad) {
           var pc = parseInt(pad.style.getPropertyValue("--c"), 10);
           var pr = parseInt(pad.style.getPropertyValue("--r"), 10);
           if (isFinite(pc) && isFinite(pr)) {
+            /* Keyboard click (clientX 0) must not toggle a cell back off when
+               the pointer could not reach it to clear the selection. */
+            var fromKeys = event.detail === 0 && event.clientX === 0 && event.clientY === 0;
+            if (fromKeys && state.scene === 2 && !state.unstoreId && sameCell(state.pad, { c: pc, r: pr })) {
+              return;
+            }
             onCell(pc, pr);
             return;
           }
         }
       }
+      if (btn) return;
+      if (target.closest && target.closest(
+        "#palette, #readyBar, #uxPlaceBar, #actionSheet, #listLauncher, #btnBuild, #upgradeConfirm, #modalOverlay, #ktFooter, #app .gh, #townMap .tools"
+      )) return;
       var hit = cellAt(event.clientX, event.clientY);
       if (!hit) return;
       onCell(hit.c, hit.r);
+    }, true);
+    /* The toast is pointer-events:none, so a tap on it hits whatever is
+       underneath — often the footer, which sits outside this map. If that
+       tap is inside the toast and still maps to a cell, select the cell
+       and do not activate the control below. */
+    document.addEventListener("click", function (event) {
+      var toast = document.getElementById("toast");
+      if (!toast || toast.style.display !== "block") return;
+      var box = toast.getBoundingClientRect();
+      var x = event.clientX;
+      var y = event.clientY;
+      if (x < box.left || x > box.right || y < box.top || y > box.bottom) return;
+      if (map.contains(event.target)) return;
+      var under = cellAt(x, y);
+      if (!under) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onCell(under.c, under.r);
     }, true);
     $("btnBuild").addEventListener("click", function () {
       state.scene = 2;
