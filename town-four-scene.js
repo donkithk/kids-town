@@ -410,7 +410,7 @@
     return town.storedBuildings || town.stored_buildings || [];
   }
 
-  /* Owned but warehoused. Not a map 「已起」, and not a new-build sale. */
+  /* Owned but warehoused. Not a map building, and not a new-build sale. */
   function storedDef(defId) {
     var list = storedRows().slice();
     var owned = buildings();
@@ -457,6 +457,16 @@
     return true;
   }
 
+  function hasLegalOrigin(ignoreId) {
+    var last = ROWS - FOOTPRINT;
+    for (var r = 0; r <= last; r += 1) {
+      for (var c = 0; c <= COLS - FOOTPRINT; c += 1) {
+        if (footprintFree(c, r, ignoreId)) return true;
+      }
+    }
+    return false;
+  }
+
   function firstUnstorePad(ignoreId) {
     for (var r = 0; r < ROWS; r += 1) {
       for (var c = 0; c < COLS; c += 1) {
@@ -467,9 +477,15 @@
     return null;
   }
 
-  /* 存倉「取出」enters scene 2 on this same pad. The kid picks a cell, then scene 3 confirms. */
+  /* 存倉「取出」and the building list share this path. A full map stays put. */
   function beginWarehousePlace(row) {
-    if (!row) return;
+    if (!row) return false;
+    if (!hasLegalOrigin(row.id)) {
+      if (typeof showToast === "function") {
+        showToast("城鎮沒有空位，請先收起或移動其他建築。", "info");
+      }
+      return false;
+    }
     state.defId = row.def_id;
     state.unstoreId = row.id;
     state.sheet = false;
@@ -479,6 +495,7 @@
     state.placeBeat = false;
     state.scene = 2;
     render();
+    return true;
   }
 
   /* Confirm fallback when a stored row is chosen without the take-out scene. */
@@ -634,13 +651,13 @@
     var ghostDef = state.defId != null ? defById(state.defId) : null;
     var showGhost = state.scene === 3 && picked && !!ghostDef && !state.sheet;
     var legal = footprintFree(cell.c, cell.r, state.unstoreId);
-    var unstoreScene = state.scene === 2 && !state.sheet && !!state.unstoreId;
-    var hot = unstoreScene ? legal : (state.scene === 2 && !occ && !state.sheet);
+    var inScene2 = state.scene === 2 && !state.sheet;
+    var hot = inScene2 && legal;
     var kind = "quiet";
-    if (unstoreScene && legal) kind = picked ? "chosen" : "empty";
-    else if (state.scene === 2 && !occ && !state.sheet && !state.unstoreId) kind = picked ? "chosen" : "empty";
+    if (inScene2 && legal) kind = picked ? "chosen" : "empty";
     if (state.scene === 3 && !state.sheet && occ) kind = "illegal";
-    else if (state.scene === 3 && !state.sheet && !occ) kind = picked ? "preview" : "valid";
+    else if (state.scene === 3 && !state.sheet && picked) kind = "preview";
+    else if (state.scene === 3 && !state.sheet && !occ) kind = "valid";
     cell.el.className = "pad is-" + kind + (hot ? " is-empty-hot" : "");
 
     if (showGhost) {
@@ -668,21 +685,21 @@
       cell.cap.textContent = "";
     }
 
-    var showMark = !state.sheet && (kind === "empty" || kind === "valid" || kind === "chosen" || kind === "preview" || kind === "illegal");
+    var showMark = !state.sheet && (kind === "empty" || kind === "chosen" || kind === "preview");
     cell.mark.hidden = !showMark;
     if (showMark && cell.mark.getAttribute("src") !== MARK_VALID) cell.mark.src = MARK_VALID;
     cell.badge.hidden = !(kind === "chosen" || kind === "preview");
-    if (kind === "chosen") cell.badge.textContent = "呢格";
+    if (kind === "chosen") cell.badge.textContent = "此格";
     if (kind === "preview") cell.badge.textContent = "預覽";
 
     var label = "第 " + (cell.c + 1) + " 欄第 " + (cell.r + 1) + " 行";
     if (occ && state.scene === 1) label += "，" + occ.name;
-    else if (occ && state.scene === 3 && !state.sheet) label += "，" + occ.name + "，已經有屋，唔可以放";
-    else if (occ) label += "，" + occ.name + "，已起";
+    else if (occ && state.scene === 3 && !state.sheet) label += "，" + occ.name + "，已有建築物，不能放置";
+    else if (occ) label += "，" + occ.name + "，已興建";
     else if (state.scene === 1) label += "，空地";
-    else if (state.scene === 2) label += picked ? "，已選此格" : "，空地，撳一下就揀";
+    else if (state.scene === 2) label += picked ? "，已選此格" : "，空地，點選即可選擇";
     else if (kind === "preview") label += "，擺放預覽";
-    else if (kind === "valid") label += "，可以放，撳一下就搬去呢格";
+    else if (kind === "valid") label += "，可以放置，點選即可移到此格";
     else label += "，空地";
     cell.btn.setAttribute("aria-label", label);
   }
@@ -709,20 +726,20 @@
       name.textContent = def.name;
       var cost = document.createElement("span");
       cost.className = "pal-cost";
-      cost.textContent = placed ? "已起" : (warehoused ? "存倉" : ("💰" + (def.cost_gold || 0)));
+      cost.textContent = placed ? "已興建" : (warehoused ? "存倉" : ("💰" + (def.cost_gold || 0)));
       copy.appendChild(name);
       copy.appendChild(cost);
       btn.appendChild(img);
       btn.appendChild(copy);
       btn.setAttribute("aria-pressed", (!placed && !warehoused && String(state.defId) === String(def.id)) ? "true" : "false");
       btn.setAttribute("aria-label", placed
-        ? (def.name + "，已起")
-        : (warehoused ? (def.name + "，放返") : (def.name + "，未起")));
+        ? (def.name + "，已興建")
+        : (warehoused ? (def.name + "，放回") : (def.name + "，未興建")));
       btn.addEventListener("click", function () { onPalette(def.id); });
       grid.appendChild(btn);
     });
     var count = $("placedCount");
-    if (count) count.textContent = "已起 " + placedN;
+    if (count) count.textContent = "已興建 " + placedN;
   }
 
   function renderBars() {
@@ -745,7 +762,7 @@
         var storedName = (storedDefRow && storedDefRow.name) || "這座建築";
         placeStatus.textContent = "放回「" + storedName + "」。不扣除金幣和材料。";
       } else {
-        placeStatus.textContent = "確定先至扣資源。取消唔會扣。";
+        placeStatus.textContent = "按「確定放置」後才扣除資源；取消不會扣除。";
       }
     }
     var status = $("readyStatus");
@@ -754,10 +771,10 @@
       if (state.unstoreId) {
         var takeName = (def && def.name) || "這座建築";
         status.textContent = "請點選空地，放回「" + takeName + "」。不扣除金幣和材料。";
-      } else if (readyToPreview()) status.textContent = "已揀「" + def.name + "」同呢格空地。";
-      else if (state.pad && !def) status.textContent = "已揀空地。打開清單，揀一座未起嘅屋。";
-      else if (def && !placedDef(def.id) && !state.pad) status.textContent = "已揀「" + def.name + "」。再點一塊金色空地。";
-      else status.textContent = "點金色空地，或者打開清單揀一座未起嘅屋。";
+      } else if (readyToPreview()) status.textContent = "已選擇「" + def.name + "」和這個位置。";
+      else if (state.pad && !def) status.textContent = "已選擇空地。請打開清單，選擇要興建的建築物。";
+      else if (def && !placedDef(def.id) && !state.pad) status.textContent = "已選擇「" + def.name + "」。請再點選一塊金色空地。";
+      else status.textContent = "請點選金色空地，或打開清單選擇要興建的建築物。";
     }
     var map = $("townMap");
     if (map) {
@@ -847,24 +864,26 @@
     }
     if (state.scene === 1) {
       if (occ) openSheet(occ.def_id);
-      else if (typeof showToast === "function") showToast("想喺呢度起屋？先撳「我要起屋」。");
+      else if (typeof showToast === "function") showToast("想在這裏興建？請先按「我要起屋」。");
       return;
     }
     if (state.scene === 2) {
+      if (occ) {
+        if (typeof showToast === "function") showToast("這個位置已經有建築物。", "info");
+        return;
+      }
+      /* A chosen building or unstore cannot sit on an origin that does not fit.
+         Picking the pad first still selects that empty cell so hit-tests land. */
+      if ((state.unstoreId || state.defId != null) && !footprintFree(c, r, state.unstoreId)) {
+        if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
+        return;
+      }
       if (state.unstoreId) {
-        if (!footprintFree(c, r, state.unstoreId)) {
-          if (typeof showToast === "function") showToast("這個位置已經有建築物。", "info");
-          return;
-        }
         state.pad = { c: c, r: r };
         state.scene = 3;
         state.listOpen = false;
         state.sheet = false;
         render();
-        return;
-      }
-      if (occ) {
-        openSheet(occ.def_id);
         return;
       }
       state.pad = sameCell(state.pad, { c: c, r: r }) ? null : { c: c, r: r };
@@ -873,7 +892,11 @@
     }
     if (state.scene === 3) {
       if (occ) {
-        if (typeof showToast === "function") showToast("呢度已經有" + occ.name + "，唔可以放。");
+        if (typeof showToast === "function") showToast("這裏已有「" + occ.name + "」，不能放置。", "info");
+        return;
+      }
+      if (!footprintFree(c, r, state.unstoreId)) {
+        if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
         return;
       }
       state.pad = { c: c, r: r };
@@ -905,7 +928,7 @@
     state.instantUpgrade = false;
     state.pad = null;
     state.unstoreId = keepUnstore;
-    if (typeof showToast === "function") showToast("已取消，資源未扣除");
+    if (typeof showToast === "function") showToast("已取消，資源未扣除", "info");
     render();
   }
 
@@ -986,7 +1009,7 @@
       celebrate("place", cell);
       await loadTown();
     } catch (e) {
-      if (typeof showToast === "function") showToast(e.message || "放唔返", "error");
+      if (typeof showToast === "function") showToast(e.message || "未能放回", "error");
       render();
     }
   }
@@ -1029,7 +1052,7 @@
         openSheet(def.id, { instant: true });
       }, 420);
     } catch (e) {
-      var msg = e.message || "起唔到";
+      var msg = e.message || "未能興建";
       if (typeof showToast === "function") {
         if (msg === "城鎮沒有空位，請先收起或移動其他建築。") showToast(msg, "info");
         else showToast(msg, "error");
@@ -1109,6 +1132,20 @@
     renderSheet();
   }
 
+  function returnToMap() {
+    state.scene = 1;
+    state.sheet = false;
+    state.listOpen = false;
+    state.pad = null;
+    state.defId = null;
+    state.unstoreId = null;
+    state.confirming = false;
+    state.instantUpgrade = false;
+    var bar = document.getElementById("placementBar");
+    if (bar) bar.classList.remove("active");
+    render();
+  }
+
   function wire() {
     var map = $("townMap");
     if (!map || map.dataset.wired === "1") return;
@@ -1130,6 +1167,8 @@
       state.listOpen = true;
       render();
     });
+    var back = $("btnUxBack");
+    if (back) back.addEventListener("click", returnToMap);
     $("btnToScene3").addEventListener("click", function () {
       if (state.unstoreId) {
         if (!readyToUnstore()) return;
