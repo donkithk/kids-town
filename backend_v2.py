@@ -3468,7 +3468,7 @@ def place_building(kid_id):
             (kid_id, def_id),
         ).fetchall()
         if any(not row['stored'] for row in owned):
-            return jsonify({'error': '你已經興建咗呢種建築物'}), 400
+            return jsonify({'error': '你已經興建了這種建築物。'}), 400
         reuse = next((row for row in owned if row['stored']), None)
         cell = _first_legal_cell(
             db, kid_id, reuse['id'] if reuse else None,
