@@ -27,8 +27,7 @@ from tests.town_tap import (  # noqa: E402
     cell_access,
     cell_points,
     dismiss_selection,
-    element_at,
-    overlay_rects,
+    point_cover,
     point_in_rect,
     press_cell,
     read_reaction,
@@ -3704,9 +3703,21 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
                 cell = (x, y)
                 kind = _tap_kind(cell, blocks, size, bare)
                 data = cell_points(page, x, y)
-                overlays = overlay_rects(page)
-                panels = [rect for rect in overlays if rect.get("role") == "panel"]
-                chrome = [rect for rect in overlays if rect.get("role") != "panel"]
+                # Diamond vertices are the slab box's edge midpoints. A drift
+                # here is the helper, not the product hit-test.
+                verts = data.get("vertices") or {}
+                for edge, vx, vy in (
+                    ("top", data["cx"], data["cy"] - data["hh"]),
+                    ("right", data["cx"] + data["hw"], data["cy"]),
+                    ("bottom", data["cx"], data["cy"] + data["hh"]),
+                    ("left", data["cx"] - data["hw"], data["cy"]),
+                ):
+                    got = verts.get(edge) or {}
+                    if abs(got.get("x", 0) - vx) > 0.5 or abs(got.get("y", 0) - vy) > 0.5:
+                        problems.append(
+                            f"{mode} {width}x{height} {cell} vertex-{edge} "
+                            f"{got} != bbox midpoint ({vx:.1f},{vy:.1f})"
+                        )
                 for name in _SAMPLE_NAMES:
                     point = data["points"][name]
                     if not _strictly_inside(data, point):
@@ -3715,14 +3726,11 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
                             f"{mode} {width}x{height} {cell} {name} is not strictly inside the slab diamond"
                         )
                         continue
-                    if any(point_in_rect(point, rect) for rect in chrome):
-                        chrome_skipped += 1
-                        continue
-                    top = element_at(page, point["x"], point["y"])
-                    if not top or not top.get("inMap"):
-                        chrome_skipped += 1
-                        continue
-                    if any(point_in_rect(point, rect) for rect in panels):
+                    cover = point_cover(page, point["x"], point["y"])
+                    # Palette click-through is a point elementFromPoint puts on
+                    # the panel. A bbox corner outside the rounded panel is an
+                    # exposed map point, not a panel point.
+                    if cover.get("kind") == "panel":
                         dismiss_selection(page)
                         tap_point(page, point["x"], point["y"])
                         hit = read_reaction(page)
@@ -3738,6 +3746,9 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
                             _ensure_picked_build(page, "健身室")
                         else:
                             dismiss_selection(page)
+                        continue
+                    if cover.get("kind") == "chrome" or not cover.get("inMap"):
+                        chrome_skipped += 1
                         continue
                     exposed += 1
                     dismiss_selection(page)
@@ -4034,11 +4045,16 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
             return
         holes = _control_boxes(page, selector)
         points = _background_grid(rect, holes)
-        selected = stolen = 0
+        selected = stolen = on_surface = 0
         examples = []
         for point in points:
             owner = _hit_owner(page, point["x"], point["y"], selector)
-            if not owner or not owner.get("inside") or owner.get("cell"):
+            # The CSS box includes rounded corners and gaps. A point counts
+            # only when elementFromPoint is actually this surface.
+            if not owner or not owner.get("inside"):
+                continue
+            on_surface += 1
+            if owner.get("cell"):
                 stolen += 1
                 if len(examples) < 4:
                     examples.append(
@@ -4055,13 +4071,13 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
                     )
             dismiss_selection(page)
         summaries.append(
-            f"{name}: background {len(points)}, selected {selected}, hit-stolen {stolen}"
+            f"{name}: background {on_surface}, selected {selected}, hit-stolen {stolen}"
         )
-        if not points:
+        if not on_surface:
             problems.append(f"{name} background grid was empty")
         if selected or stolen:
             problems.append(
-                f"{name}: selected {selected}, hit-stolen {stolen} of {len(points)} | "
+                f"{name}: selected {selected}, hit-stolen {stolen} of {on_surface} | "
                 + " | ".join(examples)
             )
 
@@ -4155,6 +4171,9 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
     _enter_new_build_scene2(page)
     _pick_unbuilt(page, "健身室")
     dismiss_selection(page)
+    # Occupied (0,0) shows the info toast. Read its box in the same beat:
+    # showToast hides it after 2s, and a later keyboard click does not
+    # refresh it on builds that ignore clientX 0.
     tap_cell_centre(page, 0, 0)
     toast_box = _surface_box(page, "#toast")
     toast_state = page.evaluate(
@@ -4184,6 +4203,28 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
         problems.append(
             f"placement .fx-burst pointer-events is {toast_state.get('burst')!r}, expected none"
         )
+    # 1280×720 puts the fixed bottom toast over gold (4,5)'s diamond centre.
+    # Assert that cover explicitly, then tap the centre while the toast is up.
+    gold = (4, 5)
+    centre = cell_points(page, gold[0], gold[1])["points"]["centre"]
+    covers = bool(toast_box) and point_in_rect(centre, toast_box)
+    if not covers:
+        problems.append(
+            f"toast rect {toast_box} does not cover gold {gold} diamond centre "
+            f"({centre['x']:.0f},{centre['y']:.0f}) text {toast_state.get('text')!r}"
+        )
+        summaries.append("toast-gold: (4,5) not covered")
+    else:
+        tap_point(page, centre["x"], centre["y"])
+        hit = read_reaction(page)
+        acted = _acted_cell(hit)
+        ok = acted == gold and "場景 3" not in (hit.get("scene") or "")
+        summaries.append(f"toast-gold: {gold} covered -> {acted}")
+        if not ok:
+            problems.append(
+                f"gold {gold} under the visible toast was not selected (got {acted}, "
+                f"toast {hit.get('toast')!r})"
+            )
     page.evaluate("() => { if (typeof showToast === 'function') showToast('放置完成'); }")
     success_pe = page.evaluate(
         """() => {
@@ -4193,41 +4234,6 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
     )
     if success_pe != "none":
         problems.append(f"success toast pointer-events is {success_pe!r}, expected none")
-    # The success toast replaced the info toast. Show the occupied toast again
-    # and immediately search for a gold centre underneath it.
-    dismiss_selection(page)
-    press_cell(page, 0, 0, "Enter")
-    toast_box = _surface_box(page, "#toast")
-    overlapped = None
-    if toast_box:
-        for y in range(MAP_N):
-            for x in range(MAP_N):
-                if _tap_kind((x, y), blocks, 2, False) != "select":
-                    continue
-                centre = cell_points(page, x, y)["points"]["centre"]
-                if point_in_rect(centre, toast_box):
-                    overlapped = ((x, y), centre)
-                    break
-            if overlapped:
-                break
-    if not overlapped:
-        problems.append(
-            "toast does not overlap any gold cell diamond centre "
-            f"(toast box {toast_box}, text {toast_state.get('text')!r})"
-        )
-        summaries.append("toast-gold: no overlap")
-    else:
-        cell, centre = overlapped
-        tap_point(page, centre["x"], centre["y"])
-        hit = read_reaction(page)
-        acted = _acted_cell(hit)
-        ok = acted == cell and "場景 3" not in (hit.get("scene") or "")
-        summaries.append(f"toast-gold: {cell} -> {acted}")
-        if not ok:
-            problems.append(
-                f"gold {cell} under the visible toast was not selected (got {acted}, "
-                f"toast {hit.get('toast')!r})"
-            )
     summaries.append(
         f"toast pointer-events {toast_state.get('pointerEvents')!r} "
         f"burst {toast_state.get('burst')!r}"
