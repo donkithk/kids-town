@@ -78,7 +78,20 @@ from datetime import date
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tests.town_tap import tap_cell_centre, tap_labeled_button  # noqa: E402
+from tests.town_tap import (  # noqa: E402
+    dismiss_selection,
+    point_cover,
+    read_reaction,
+    sprite_overlap_points,
+    tap_cell_centre,
+    tap_labeled_button,
+    tap_point,
+)
+from tests.test_warehouse_e2e import (  # noqa: E402
+    _catalog_defs,
+    _reaction_blame,
+    _rendered_tap_kinds,
+)
 from tests.factories import (  # noqa: E402
     TEST_KID_PIN,
     TEST_PARENT_PASSWORD,
@@ -1467,60 +1480,6 @@ _PAD_PROBE_JS = r"""
   return {count: buttons.length, empty, framed};
 }
 """
-_OCCLUSION_JS = r"""
-() => {
-  const parse = (label) => {
-    const m = /第\s*(\d+)\s*欄第\s*(\d+)\s*行/.exec(label || '');
-    return m ? {c: Number(m[1]), r: Number(m[2])} : null;
-  };
-  const buttons = [...document.querySelectorAll('button')].map((btn) => {
-    const label = btn.getAttribute('aria-label') || '';
-    const pos = parse(label);
-    if (!pos) return null;
-    const pad = btn.closest('.pad') || btn.parentElement;
-    const sprite = pad && pad.querySelector('img.sprite, .sprite');
-    let spriteBox = null;
-    if (sprite && !sprite.hidden) {
-      const cs = getComputedStyle(sprite);
-      const box = sprite.getBoundingClientRect();
-      if (cs.display !== 'none' && box.width > 2 && box.height > 2) {
-        spriteBox = {left: box.left, top: box.top, right: box.right, bottom: box.bottom};
-      }
-    }
-    const box = btn.getBoundingClientRect();
-    return {
-      label,
-      pos,
-      empty: /空地/.test(label),
-      sprite: spriteBox,
-      left: box.left,
-      top: box.top,
-      width: box.width,
-      height: box.height
-    };
-  }).filter(Boolean);
-  const contains = (rect, x, y) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
-  for (const back of buttons) {
-    if (!back.empty || back.width < 2) continue;
-    for (let i = 1; i <= 3; i += 1) {
-      for (let j = 1; j <= 3; j += 1) {
-        const x = back.left + (back.width * i) / 4;
-        const y = back.top + (back.height * j) / 4;
-        for (const front of buttons) {
-          if (front.empty || !front.sprite) continue;
-          if (front.pos.c === back.pos.c && front.pos.r === back.pos.r) continue;
-          if (back.pos.r >= front.pos.r) continue;
-          if (!contains(front.sprite, x, y)) continue;
-          return {x, y, back: back.label, front: front.label, c: back.pos.c, r: back.pos.r};
-        }
-      }
-    }
-  }
-  return null;
-}
-"""
-
-
 def _town_ux_fail(case_id, detail):
     pytest.fail(f"{case_id}: {detail} {TOWN_UX_RED}")
 
@@ -2167,9 +2126,11 @@ def test_town_ux_scene4_upgrade_feature_and_hud(
 def test_town_ux_hit_back_pad_not_front_sprite(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-HIT-01 背面格被前面建築遮住時，撳落去選背面格，唔係棟建築。
+    """TC-FE-TOWN-HIT-01 背面菱形蓋在前面建築圖上時，打中背面那一格。
 
-    Runs at the letterboxed 1100×800 viewport and again at 1280×720.
+    The cell button is only the keyboard target. Overlap points are samples
+    inside the rendered slab diamond and a front sprite. The reaction is the
+    back cell's rendered state, the same rule as the off-centre sweep.
     """
     _seed_town_ux_plot(test_db_path, fe_ids["kid_id"])
     _open_town_home(page, base_url)
@@ -2178,8 +2139,8 @@ def test_town_ux_hit_back_pad_not_front_sprite(
         _town_ux_fail(
             "TC-FE-TOWN-HIT-01",
             "Iso hit-test needs pad buttons 「第 N 欄第 M 行」. "
-            "A tap on a back-row diamond covered by a front building sprite "
-            "must select that back pad, not the sprite, at viewport 1100×800 "
+            "A tap inside a back-row diamond covered by a front building sprite "
+            "must hit that back cell, not the sprite, at viewport 1100×800 "
             f"(stage layout {stage['w']}×{stage['h']}, visual {stage['rw']:.1f}×{stage['rh']:.1f}) "
             "and at 1280×720. "
             "Do not use the old .valid-plot / .town-building stack as a stand-in.",
@@ -2189,27 +2150,57 @@ def test_town_ux_hit_back_pad_not_front_sprite(
         "TC-FE-TOWN-HIT-01",
         "Back-row diamond occluded by a front building must win the hit test at 1100×800 and 1280×720.",
     )
+    catalog = _catalog_defs(base_url)
+    problems = []
+    summaries = []
     for width, height in ((1100, 800), (1280, 720)):
         page.set_viewport_size({"width": width, "height": height})
         page.wait_for_timeout(200)
-        hit = page.evaluate(_OCCLUSION_JS)
-        if not hit:
-            _town_ux_fail(
-                "TC-FE-TOWN-HIT-01",
-                f"No back empty pad is visually covered by a front building sprite at {width}×{height}. "
-                "Seed is 商店 (0,2), 圖書館 (2,1), 農場 (4,0). "
-                "The occluded back pad must win the hit test.",
+        hits = sprite_overlap_points(page, per_cell=5)
+        reachable = []
+        for hit in hits:
+            cover = point_cover(page, hit["x"], hit["y"])
+            if cover.get("kind") in ("panel", "chrome") or not cover.get("inMap"):
+                continue
+            reachable.append(hit)
+        if not hits:
+            problems.append(
+                f"{width}x{height}: zero diamond/sprite overlap points. "
+                "Seed is 商店 (0,2), 圖書館 (2,1), 農場 (4,0). Not a pass."
             )
-        page.mouse.click(hit["x"], hit["y"])
-        chosen = page.get_by_role(
-            "button",
-            name=re.compile(rf"第\s*{hit['c']}\s*欄第\s*{hit['r']}\s*行[\s\S]*已選"),
+            summaries.append(f"{width}x{height}: 0 overlap")
+            continue
+        kinds = _rendered_tap_kinds(page, catalog)
+        bad = 0
+        for hit in reachable:
+            cell = (hit["c"], hit["r"])
+            front = (hit["frontC"], hit["frontR"])
+            kind = kinds.get(cell, "unfit")
+            dismiss_selection(page)
+            tap_point(page, hit["x"], hit["y"])
+            reaction = read_reaction(page)
+            bucket, detail = _reaction_blame(cell, kind, reaction, False)
+            acted = reaction.get("chosen") or reaction.get("preview") or []
+            front_hit = front in [tuple(item) for item in acted]
+            if bucket or front_hit:
+                bad += 1
+                if len(problems) < 8:
+                    problems.append(
+                        f"{width}x{height} {kind} {cell} over {front} "
+                        f"at ({hit['x']:.0f},{hit['y']:.0f}): {detail or acted}"
+                    )
+        cells = sorted({(hit["c"], hit["r"]) for hit in reachable})
+        summaries.append(
+            f"{width}x{height}: overlap {len(hits)}, tapped {len(reachable)} "
+            f"on {cells}, bad {bad}"
         )
-        assert chosen.count() > 0 and chosen.first.is_visible(), (
-            "TC-FE-TOWN-HIT-01: the click on the occluded point must select back pad "
-            f"第 {hit['c']} 欄第 {hit['r']} 行 (已選此格) at {width}×{height}, "
-            f"not the front building {hit['front']!r}."
-        )
+        if not reachable:
+            problems.append(
+                f"{width}x{height}: {len(hits)} diamond/sprite overlaps exist but "
+                "solid UI covers every one, so the hit was not tested."
+            )
+    print("TC-FE-TOWN-HIT-01 " + " || ".join(summaries))
+    assert not problems, "TC-FE-TOWN-HIT-01: " + " | ".join(problems)
 
 
 @pytest.mark.case_id("TC-FE-TOWN-HIT-02")

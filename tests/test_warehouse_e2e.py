@@ -3892,6 +3892,63 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
     assert not problems, "TC-FE-TAP-OFFCENTER: " + " || ".join(problems[:12])
 
 
+def _palette_covers_cell_button(page, cell_x, cell_y):
+    """True when the focused cell button's centre is the open palette."""
+    return bool(page.evaluate(
+        """([c, r]) => {
+          const pad = [...document.querySelectorAll('#townMap .pad')].find((el) => {
+            const cs = getComputedStyle(el);
+            return parseInt(cs.getPropertyValue('--c'), 10) === c
+              && parseInt(cs.getPropertyValue('--r'), 10) === r;
+          });
+          const btn = pad && pad.querySelector(':scope > .cell-btn');
+          if (!btn) return false;
+          const box = btn.getBoundingClientRect();
+          if (box.width < 1 || box.height < 1) return false;
+          const top = document.elementFromPoint(
+            box.left + box.width / 2,
+            box.top + box.height / 2
+          );
+          const palette = document.getElementById('palette');
+          if (!top || !palette) return false;
+          const shown = palette.offsetParent !== null || getComputedStyle(palette).display !== 'none';
+          if (!shown) return false;
+          return top === palette || palette.contains(top);
+        }""",
+        [cell_x, cell_y],
+    ))
+
+
+def _clear_cell_selection(page):
+    """Clear a chosen cell before the next key.
+
+    OVERLAP requires a second tap on a selected gold cell to deselect it.
+    Enter and Space share that toggle, so each key has to start unselected.
+    A pointer dismiss misses a cell under the open palette; the key still
+    reaches the button.
+    """
+    dismiss_selection(page)
+    reaction = read_reaction(page)
+    if "場景 3" in (reaction.get("scene") or ""):
+        dismiss_selection(page)
+        reaction = read_reaction(page)
+    chosen = []
+    for item in reaction.get("chosen") or []:
+        if isinstance(item, (list, tuple)) and len(item) == 2:
+            chosen.append((item[0], item[1]))
+    for cell in chosen:
+        try:
+            press_cell(page, cell[0], cell[1], "Enter")
+        except AssertionError as exc:
+            return f"could not focus {cell} to clear it: {exc}"
+    if chosen:
+        _silence_toast(page)
+        reaction = read_reaction(page)
+        if reaction.get("chosen") or "場景 3" in (reaction.get("scene") or ""):
+            return f"selection remained after keyboard clear: {reaction.get('chosen')}"
+    return None
+
+
 @pytest.mark.case_id("TC-FE-CELL-ARIA-MATCH")
 @pytest.mark.parametrize("mode", ["picked", "unstore"])
 def test_cell_aria_matches_tap(page, base_url, warehouse_db, warehouse_ids, mode):
@@ -3901,7 +3958,9 @@ def test_cell_aria_matches_tap(page, base_url, warehouse_db, warehouse_ids, mode
     Empty cells that overlap or leave the grid say 放不下. Gold cells say
     they can be chosen. Kinds come from the rendered gold marks and sprites,
     the same split as the off-centre sweep. Every cell keeps a focusable
-    button; Enter and Space on it do what a tap on that cell does.
+    button. Enter and Space each start from a cleared selection, because a
+    second activation of a selected cell toggles it off, and each key must
+    match a first tap. A cell under the open palette still receives the key.
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(
@@ -3937,6 +3996,7 @@ def test_cell_aria_matches_tap(page, base_url, warehouse_db, warehouse_ids, mode
             f"(kind={kinds.get((1, 0))!r}); 商店 sprite should occupy it and it should not be gold"
         )
     aria_miss = key_miss = anchor_miss = nonanchor_miss = 0
+    palette_focus = []
     for y in range(MAP_N):
         for x in range(MAP_N):
             cell = (x, y)
@@ -3964,8 +4024,15 @@ def test_cell_aria_matches_tap(page, base_url, warehouse_db, warehouse_ids, mode
                     role = ""
                 if len(problems) < 16:
                     problems.append(f"{role}{cell} {kind}: {wording}")
+            if _palette_covers_cell_button(page, x, y) and cell not in palette_focus:
+                palette_focus.append(cell)
             for key in ("Enter", "Space"):
-                dismiss_selection(page)
+                stuck = _clear_cell_selection(page)
+                if stuck:
+                    key_miss += 1
+                    if len(problems) < 16:
+                        problems.append(f"{cell} {key}: {stuck}")
+                    continue
                 try:
                     press_cell(page, x, y, key)
                 except AssertionError as exc:
@@ -3982,7 +4049,8 @@ def test_cell_aria_matches_tap(page, base_url, warehouse_db, warehouse_ids, mode
     summary = (
         f"{mode}: aria-mismatches {aria_miss} "
         f"(anchor {anchor_miss}, non-anchor {nonanchor_miss}), "
-        f"key-mismatches {key_miss}"
+        f"key-mismatches {key_miss}, "
+        f"palette-covered focus {palette_focus or 'none'}"
     )
     print("TC-FE-CELL-ARIA-MATCH " + summary)
     assert not problems, "TC-FE-CELL-ARIA-MATCH " + summary + ": " + " | ".join(problems[:16])

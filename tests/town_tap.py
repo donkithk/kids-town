@@ -360,6 +360,7 @@ _SPRITE_POINT_JS = r"""
   }).filter((pad) => pad.hw > 2 && pad.hh > 2);
   const inside = (pad, x, y) => Math.abs(x - pad.cx) / pad.hw + Math.abs(y - pad.cy) / pad.hh < 0.98;
   const contains = (rect, x, y) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  const hits = [];
   for (const back of pads) {
     if (!back.empty) continue;
     for (const front of pads) {
@@ -370,17 +371,17 @@ _SPRITE_POINT_JS = r"""
           const x = back.cx + back.hw * ((i / 3) - 1) * 0.7;
           const y = back.cy + back.hh * ((j / 3) - 1) * 0.7;
           if (!inside(back, x, y) || !contains(front.sprite, x, y)) continue;
-          return {
+          hits.push({
             x, y,
             c: back.c, r: back.r,
             frontC: front.c, frontR: front.r,
             frontLabel: front.label
-          };
+          });
         }
       }
     }
   }
-  return null;
+  return hits;
 }
 """
 
@@ -658,6 +659,28 @@ def cell_access(page):
     return page.evaluate(_ACCESS_JS)
 
 
+def sprite_overlap_points(page, per_cell=5):
+    """Points inside a back cell's slab diamond and a front sprite.
+
+    The diamond is the rendered tile box, the same one TAP-OFFCENTER samples.
+    Several points are kept per back cell so one lucky pixel cannot pass.
+    """
+    raw = page.evaluate(_SPRITE_POINT_JS) or []
+    grouped = {}
+    for item in raw:
+        grouped.setdefault((item["c"], item["r"]), []).append(item)
+    chosen = []
+    for items in grouped.values():
+        if len(items) <= per_cell:
+            chosen.extend(items)
+            continue
+        last = len(items) - 1
+        for index in range(per_cell):
+            chosen.append(items[round(index * last / (per_cell - 1))])
+    return chosen
+
+
 def sprite_overlap_point(page):
-    """A point inside an empty back cell's diamond and a front building's sprite."""
-    return page.evaluate(_SPRITE_POINT_JS)
+    """One point inside an empty back cell's diamond and a front building's sprite."""
+    hits = page.evaluate(_SPRITE_POINT_JS) or []
+    return hits[0] if hits else None
