@@ -759,17 +759,69 @@
     else if (occ && state.scene === 3 && !state.sheet) label += "，" + occ.name + "，已有建築物，不能放置";
     else if (occ) label += "，" + occ.name + "，已興建";
     else if (state.scene === 1) label += "，空地";
-    else if (state.scene === 2) label += picked ? "，已選此格" : "，空地，點選即可選擇";
+    else if (state.scene === 2 && picked && legal) label += "，已選此格";
+    else if (state.scene === 2 && legal) label += "，空地，點選即可選擇";
+    else if (state.scene === 2) label += "，放不下";
     else if (kind === "preview") label += "，擺放預覽";
     else if (kind === "valid") label += "，可以放置，點選即可移到此格";
     else label += "，空地";
     cell.btn.setAttribute("aria-label", label);
+    ensureBackHit(cell, label, legal && !picked);
+  }
+
+  /* A second back-row gold cell (column 7, row 1) also has to win a hit that
+     lands on the sprite in front of it. Its own pad sits too far to the right
+     for the tall button to reach that sprite, so a small extra target covers
+     a clear patch of the sprite. It stays out of every pad button's center. */
+  function ensureBackHit(cell, label, want) {
+    var village = $("village");
+    if (!village) return;
+    var sliver = village.querySelector(":scope > .hit-sliver");
+    var show = want && state.scene === 2 && !state.sheet && cell.c === 6 && cell.r === 0;
+    if (!show) {
+      if (sliver && cell.c === 6 && cell.r === 0) sliver.remove();
+      return;
+    }
+    if (!sliver) {
+      sliver = document.createElement("button");
+      sliver.type = "button";
+      sliver.className = "hit-sliver";
+      sliver.tabIndex = -1;
+      sliver.setAttribute("aria-hidden", "true");
+      sliver.dataset.c = "6";
+      sliver.dataset.r = "0";
+      sliver.style.position = "absolute";
+      sliver.style.left = "calc(50% + var(--s, 1) * 52px)";
+      sliver.style.top = "calc(var(--s, 1) * 278px)";
+      sliver.style.width = "calc(var(--s, 1) * 56px)";
+      sliver.style.height = "calc(var(--s, 1) * 14px)";
+      sliver.style.zIndex = "5";
+      sliver.style.padding = "0";
+      sliver.style.border = "0";
+      sliver.style.background = "transparent";
+      sliver.style.pointerEvents = "auto";
+      village.appendChild(sliver);
+    }
+    sliver.setAttribute("aria-label", label);
+  }
+
+  /* Stored, then not-yet-built, then already built. Each group keeps catalog order. */
+  function paletteOrder(list) {
+    var stored = [];
+    var unbuilt = [];
+    var built = [];
+    list.forEach(function (def) {
+      if (placedDef(def.id)) built.push(def);
+      else if (storedDef(def.id)) stored.push(def);
+      else unbuilt.push(def);
+    });
+    return stored.concat(unbuilt, built);
   }
 
   function renderPalette() {
     var grid = $("paletteGrid");
     if (!grid) return;
-    var list = defs();
+    var list = paletteOrder(defs());
     grid.textContent = "";
     var placedN = 0;
     list.forEach(function (def) {
@@ -937,24 +989,13 @@
       return;
     }
     if (state.scene === 2) {
-      var placing = !!(state.unstoreId || state.defId != null);
-      /* Before a building is chosen, a covered cell or one the smallest
-         footprint cannot sit on is not a selection. Other empty pads still
-         select so an occluded back cell keeps its hit target. */
-      if (!placing && coveredAt(c, r)) {
-        if (typeof showToast === "function") showToast("這個位置已經有建築物。", "info");
-        return;
-      }
-      if (!placing && !originFits(c, r, minCatalogFootprint())) {
-        if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
-        return;
-      }
-      if (placing && occ) {
-        if (typeof showToast === "function") showToast("這個位置已經有建築物。", "info");
-        return;
-      }
-      if (placing && !footprintFree(c, r, state.unstoreId, activeFootprint())) {
-        if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
+      /* Gold and selection use the same footprint check. */
+      var legal = footprintFree(c, r, state.unstoreId, activeFootprint());
+      if (!legal) {
+        var covered = coveredAt(c, r);
+        if (typeof showToast === "function") {
+          showToast(covered ? "這個位置已經有建築物。" : "這個位置放不下這座建築物。", "info");
+        }
         return;
       }
       if (state.unstoreId) {
@@ -1096,11 +1137,10 @@
   }
 
   function showUnfit(err) {
-    var msg = (err && err.message) || "";
-    if (msg.indexOf("位置超出") === -1 && msg.indexOf("已被建築物佔用") === -1 && msg.indexOf("已被裝飾佔用") === -1) {
-      return false;
-    }
+    var status = err && err.status;
+    if (!(status >= 400 && status < 500)) return false;
     state.scene = 2;
+    state.pad = null;
     state.sheet = false;
     state.confirming = false;
     state.instantUpgrade = false;
@@ -1248,7 +1288,22 @@
     map.dataset.wired = "1";
     map.addEventListener("click", function (event) {
       var btn = event.target.closest && event.target.closest("button");
+      if (btn && btn.classList.contains("hit-sliver")) {
+        onCell(parseInt(btn.dataset.c, 10), parseInt(btn.dataset.r, 10));
+        return;
+      }
       if (btn && !btn.classList.contains("cell-btn")) return;
+      if (btn && btn.classList.contains("cell-btn")) {
+        var pad = btn.closest(".pad");
+        if (pad) {
+          var pc = parseInt(pad.style.getPropertyValue("--c"), 10);
+          var pr = parseInt(pad.style.getPropertyValue("--r"), 10);
+          if (isFinite(pc) && isFinite(pr)) {
+            onCell(pc, pr);
+            return;
+          }
+        }
+      }
       var hit = cellAt(event.clientX, event.clientY);
       if (!hit) return;
       onCell(hit.c, hit.r);
