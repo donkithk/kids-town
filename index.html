@@ -2657,7 +2657,42 @@ async function loadTown() {
     updateHeader();
     renderAll();
     ktSyncArtStage();
+    ktRememberTown();
   } catch(e) { console.error('loadTown error:', e); }
+}
+
+function ktRememberTown() {
+  try {
+    sessionStorage.setItem('ktOfflineTown', JSON.stringify({
+      kidId: currentKidId,
+      user: currentUser,
+      townData: townData,
+      defs: (typeof buildingDefs !== 'undefined') ? buildingDefs : []
+    }));
+  } catch (e) {}
+}
+
+function ktShowOfflineTown() {
+  if (navigator.onLine) return;
+  const login = document.getElementById('loginScreen');
+  const app = document.getElementById('app');
+  if (login) login.classList.add('hidden');
+  if (app) app.style.display = 'block';
+  document.body.classList.add('kt-landscape');
+  try {
+    const raw = sessionStorage.getItem('ktOfflineTown');
+    if (raw) {
+      const saved = JSON.parse(raw);
+      if (saved.kidId) currentKidId = saved.kidId;
+      if (saved.user) currentUser = saved.user;
+      if (saved.townData) townData = saved.townData;
+      if (saved.defs && typeof buildingDefs !== 'undefined') buildingDefs = saved.defs;
+    }
+  } catch (e) {}
+  ktPreferLandscape();
+  ktSyncArtStage();
+  if (typeof updateHeader === 'function') updateHeader();
+  if (typeof townUxSync === 'function') townUxSync();
 }
 
 async function loadBuildingDefs() {
@@ -2670,7 +2705,16 @@ async function loadBuildingDefs() {
 
 async function fetchAPI(path, options={}) {
   const res = await fetch(`${API}${path}`, {credentials: 'same-origin', ...options});
-  if (!res.ok) { const err = await res.json().catch(()=>({})); throw new Error(err.error||'Request failed'); }
+  if (!res.ok) {
+    let message = 'Request failed';
+    try {
+      const err = await res.json();
+      if (err && err.error) message = err.error;
+    } catch (e) { /* plain-text and empty 4xx still carry the status */ }
+    const error = new Error(message);
+    error.status = res.status;
+    throw error;
+  }
   return res.json();
 }
 
@@ -2902,31 +2946,33 @@ function initCanvas() {}
 // ═══════════════════════════════════════════════════════════════
 // TOWN SCENE - dynamic building display
 // ═══════════════════════════════════════════════════════════════
+function buildingImage(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('圖書') || n.includes('library') || n.includes('book')) return 'assets-c/library.png';
+  if (n.includes('銀行') || n.includes('bank')) return 'assets-c/bank.png';
+  if (n.includes('健身') || n.includes('gym') || n.includes('fitness')) return 'assets-c/gym.png';
+  if (n.includes('農') || n.includes('farm')) return 'assets-c/farm.png';
+  if (n.includes('工坊') || n.includes('workshop') || n.includes('craft')) return 'assets-c/workshop.png';
+  if (n.includes('醫院') || n.includes('hospital') || n.includes('clinic')) return 'assets-c/hospital.png';
+  if (n.includes('商店') || n.includes('shop') || n.includes('store')) return 'assets-c/shop.png';
+  if (n.includes('探險') || n.includes('公會') || n.includes('guild') || n.includes('adventure')) return 'assets-c/expedition-guild.png';
+  if (n.includes('燈塔') || n.includes('lighthouse')) return 'assets-c/lighthouse.png';
+  if (n.includes('競技') || n.includes('arena') || n.includes('colosseum')) return 'assets-c/arena.png';
+  if (n.includes('天文') || n.includes('observatory') || n.includes('telescope')) return 'assets-c/observatory.png';
+  if (n.includes('屋') || n.includes('house') || n.includes('home')) return 'assets-c/house.png';
+  if (n.includes('學校') || n.includes('school')) return 'assets-c/school.png';
+  if (n.includes('消防') || n.includes('fire')) return 'assets-c/fire.png';
+  if (n.includes('麵包') || n.includes('bakery') || n.includes('bread')) return 'assets-c/bakery.png';
+  return 'assets-c/building.png';
+}
+
+function plotToGrid(plotIdx) {
+  return {x: (plotIdx % 6) * 4 + 1, y: Math.floor(plotIdx / 6) * 4 + 1};
+}
+
 function renderTownBuildings() {
   const container = document.getElementById('townBuildings');
   if (!container) return;
-  
-  // Map building name to style C PNG (never use emoji)
-  function buildingImage(name) {
-    const n = (name || '').toLowerCase();
-    // All building definitions from building-defs API
-    if (n.includes('圖書') || n.includes('library') || n.includes('book')) return 'assets-c/library.png';
-    if (n.includes('銀行') || n.includes('bank')) return 'assets-c/bank.png';
-    if (n.includes('健身') || n.includes('gym') || n.includes('fitness')) return 'assets-c/gym.png';
-    if (n.includes('農') || n.includes('farm')) return 'assets-c/farm.png';
-    if (n.includes('工坊') || n.includes('workshop') || n.includes('craft')) return 'assets-c/workshop.png';
-    if (n.includes('醫院') || n.includes('hospital') || n.includes('clinic')) return 'assets-c/hospital.png';
-    if (n.includes('商店') || n.includes('shop') || n.includes('store')) return 'assets-c/shop.png';
-    if (n.includes('探險') || n.includes('公會') || n.includes('guild') || n.includes('adventure')) return 'assets-c/expedition-guild.png';
-    if (n.includes('燈塔') || n.includes('lighthouse')) return 'assets-c/lighthouse.png';
-    if (n.includes('競技') || n.includes('arena') || n.includes('colosseum')) return 'assets-c/arena.png';
-    if (n.includes('天文') || n.includes('observatory') || n.includes('telescope')) return 'assets-c/observatory.png';
-    if (n.includes('屋') || n.includes('house') || n.includes('home')) return 'assets-c/house.png';
-    if (n.includes('學校') || n.includes('school')) return 'assets-c/school.png';
-    if (n.includes('消防') || n.includes('fire')) return 'assets-c/fire.png';
-    if (n.includes('麵包') || n.includes('bakery') || n.includes('bread')) return 'assets-c/bakery.png';
-    return 'assets-c/building.png'; // generic fallback
-  }
 
   // Legacy overlay uses the same 8×8 origin box as the town map.
   const buildings = townData.buildings || [];
@@ -2962,11 +3008,6 @@ function renderTownBuildings() {
     }
   });
   
-  // Map plot_idx to grid coords (2×2 block inside 4×4 zone)
-  function plotToGrid(plotIdx) {
-    return {x: (plotIdx % 6) * 4 + 1, y: Math.floor(plotIdx / 6) * 4 + 1};
-  }
-  
   const CELL_W = 100 / COLS;  // 4.17%
   const CELL_H = 100 / ROWS;  // 6.25%
   
@@ -2977,6 +3018,7 @@ function renderTownBuildings() {
         if (gy + dy >= ROWS || gx + dx >= COLS || occupied[gy + dy][gx + dx]) return false;
     return true;
   }
+  window.isBlockFree = isBlockFree;
   
   let html = '';
   
@@ -6487,7 +6529,7 @@ window.st = st;
 window.renderTownBuildings = renderTownBuildings;
 window.buildingImage = buildingImage;
 window.plotToGrid = plotToGrid;
-window.isBlockFree = isBlockFree;
+if (typeof isBlockFree === 'function') window.isBlockFree = isBlockFree;
 window.zoomIn = zoomIn;
 window.zoomOut = zoomOut;
 window.zoomReset = zoomReset;
@@ -6573,18 +6615,16 @@ if ('serviceWorker' in navigator) {
     }
   });
 
-  // Listen for controller change (new SW activated)
-  let refreshing = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!refreshing) {
-      refreshing = true;
-      window.location.reload();
-    }
-  });
+  // A new worker claims the page. Reloading here races the login and the
+  // placement tests, so the page stays put and the next navigation uses it.
+  navigator.serviceWorker.addEventListener('controllerchange', () => {});
 } else {
   console.log('[PWA] Service Worker not supported');
 }
 </script>
 <script src="/kids/town-four-scene.js"></script>
+<script>
+if (!navigator.onLine && typeof ktShowOfflineTown === 'function') ktShowOfflineTown();
+</script>
 </body>
 </html>
