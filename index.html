@@ -686,11 +686,12 @@ body{
 #toast{
   position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
   background:#15803d;color:#1e293b;padding:10px 20px;border-radius:20px;
-  font-size:13px;font-weight:700;z-index:300;display:none;
+  font-size:13px;font-weight:700;z-index:300;display:none;pointer-events:none;
   animation:fadeInOut 2s ease;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.15);
   max-width:90vw;overflow:hidden;text-overflow:ellipsis;
 }
 #toast.error{background:#ef4444;color:#fff}
+#toast.info{background:#6b4f2a;color:#fff8e7}
 @keyframes fadeInOut{
   0%{opacity:0;transform:translateX(-50%) translateY(10px)}
   15%{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -754,6 +755,7 @@ body{
 .valid-plot{opacity:0.5;background:rgba(34,197,94,0.25);border:2px dashed rgba(34,197,94,0.6);border-radius:4px;transition:0.15s}
 .valid-plot:hover{opacity:1;background:rgba(34,197,94,0.35);border-color:#22c55e}
 .valid-plot.selected{opacity:1;background:rgba(34,197,94,0.45);border-color:#16a34a;border-style:solid}
+.btn-takeout{display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;height:44px;margin-top:8px;padding:0 12px;border:0;border-radius:10px;background:#b45309;color:#fff;font-size:16px;font-weight:700;line-height:1;cursor:pointer}
 .vp-tip{font-size:10px;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#166534;font-weight:700;pointer-events:none;text-shadow:0 0 4px white}
 /* Town tiles */
 .town-tile{display:flex;align-items:center;justify-content:center;pointer-events:none}
@@ -958,8 +960,8 @@ body{
 .act .q{background:linear-gradient(180deg,#55efc4,#3dd9a0);color:#2d3436}
 .act .b{background:linear-gradient(180deg,#fab1a0,#e8866a);color:#fff}
 .dov{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:200;display:none}
-.dr{position:fixed;top:0;right:-280px;width:250px;height:100dvh;background:var(--theme-panel-bg,#f0f8ff);border-left:3px solid var(--theme-panel-border,#4a6a8a);z-index:201;padding:14px 0;box-shadow:-4px 0 20px rgba(0,0,0,.2);overflow-y:auto;transition:right .3s cubic-bezier(.4,0,.2,1)}
-.dr.o{right:0}
+.dr{position:fixed;top:0;right:-280px;width:250px;height:100dvh;background:var(--theme-panel-bg,#f0f8ff);border-left:3px solid var(--theme-panel-border,#4a6a8a);z-index:201;padding:14px 0;box-shadow:-4px 0 20px rgba(0,0,0,.2);overflow-y:auto;transition:right .3s cubic-bezier(.4,0,.2,1);pointer-events:none}
+.dr.o{right:0;pointer-events:auto}
 .dh{padding:4px 16px 10px;border-bottom:2px solid var(--theme-panel-border,#4a6a8a);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
 .dh h3{font-family:var(--pixel-font);font-size:9px;color:var(--theme-text-primary,#2a3a5a)}
 .dc{background:none;border:none;font-size:18px;cursor:pointer;color:var(--theme-text-secondary,#6a8aaa);padding:4px;line-height:1}
@@ -1942,7 +1944,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
     <span>📍 點擊地圖上空地放置建築</span>
     <button class="cancel-place" onclick="cancelPlacement()">✕ 取消</button>
   </div>
-  <section class="map is-scene-1" id="townMap" aria-label="場景 1 · 睇地圖">
+  <section class="map is-scene-1" id="townMap" aria-label="場景 1 · 查看地圖">
     <div class="village is-iso" id="village"></div>
     <button class="cta" id="btnBuild" type="button">我要起屋</button>
     <div class="tools">
@@ -1952,18 +1954,18 @@ body.kt-pane-shop .kt-backpack-block{display:none}
     <aside class="palette" id="palette" hidden>
       <div class="palette-head">
         <h2>建築清單</h2>
-        <p id="placedCount">已起 0</p>
+        <p id="placedCount">已興建 0</p>
       </div>
       <div class="palette-grid" id="paletteGrid"></div>
     </aside>
     <div class="place-bar" id="readyBar" hidden>
-      <button id="btnUxBack" type="button">返去睇地圖</button>
-      <p id="readyStatus">點金色空地，或者打開清單揀一座未起嘅屋。</p>
-      <button id="btnToScene3" type="button" disabled>去擺位置</button>
+      <button id="btnUxBack" type="button">返回地圖</button>
+      <p id="readyStatus">請點選金色空地，或打開清單選擇要興建的建築物。</p>
+      <button id="btnToScene3" type="button" disabled>選擇位置</button>
     </div>
     <div class="place-bar" id="uxPlaceBar" hidden>
       <button id="btnUxCancel" type="button">取消</button>
-      <p id="placeStatus">確定先至扣資源。取消唔會扣。</p>
+      <p id="placeStatus">按「確定放置」後才扣除資源；取消不會扣除。</p>
       <button id="btnUxConfirm" type="button" disabled>確定放置</button>
     </div>
     <section class="action-sheet" id="actionSheet" hidden aria-label="升級或打開功能">
@@ -2186,8 +2188,8 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 
 <!-- Tab: Store (Stored Buildings) -->
 <div class="tab-content" id="tab-store" style="padding:12px">
-  <div class="section-title">🏪 存倉</div>
-  <div id="storedBuildings" class="build-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:8px"></div>
+  <div class="section-title">存倉 <span data-testid="warehouse-count" id="warehouseCount">0</span></div>
+  <div id="storedBuildings" data-testid="warehouse-list" class="build-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:8px"></div>
 </div>
 
 <!-- Tab: Achievements -->
@@ -2446,6 +2448,7 @@ let isParentSession = false; // parent PIN verified for current session
 let townData = {buildings:[], inventory:[], explored:[], expedition:null};
 let buildingDefs = [];
 let placementDefId = null; // building def being placed
+let warehouseRows = [];
 let selectedPlaceX = -1, selectedPlaceY = -1; // selected 2×2 position for building
 let isRoadMode = false;
 let expInterval = null;
@@ -2654,7 +2657,42 @@ async function loadTown() {
     updateHeader();
     renderAll();
     ktSyncArtStage();
+    ktRememberTown();
   } catch(e) { console.error('loadTown error:', e); }
+}
+
+function ktRememberTown() {
+  try {
+    sessionStorage.setItem('ktOfflineTown', JSON.stringify({
+      kidId: currentKidId,
+      user: currentUser,
+      townData: townData,
+      defs: (typeof buildingDefs !== 'undefined') ? buildingDefs : []
+    }));
+  } catch (e) {}
+}
+
+function ktShowOfflineTown() {
+  if (navigator.onLine) return;
+  const login = document.getElementById('loginScreen');
+  const app = document.getElementById('app');
+  if (login) login.classList.add('hidden');
+  if (app) app.style.display = 'block';
+  document.body.classList.add('kt-landscape');
+  try {
+    const raw = sessionStorage.getItem('ktOfflineTown');
+    if (raw) {
+      const saved = JSON.parse(raw);
+      if (saved.kidId) currentKidId = saved.kidId;
+      if (saved.user) currentUser = saved.user;
+      if (saved.townData) townData = saved.townData;
+      if (saved.defs && typeof buildingDefs !== 'undefined') buildingDefs = saved.defs;
+    }
+  } catch (e) {}
+  ktPreferLandscape();
+  ktSyncArtStage();
+  if (typeof updateHeader === 'function') updateHeader();
+  if (typeof townUxSync === 'function') townUxSync();
 }
 
 async function loadBuildingDefs() {
@@ -2667,7 +2705,16 @@ async function loadBuildingDefs() {
 
 async function fetchAPI(path, options={}) {
   const res = await fetch(`${API}${path}`, {credentials: 'same-origin', ...options});
-  if (!res.ok) { const err = await res.json().catch(()=>({})); throw new Error(err.error||'Request failed'); }
+  if (!res.ok) {
+    let message = 'Request failed';
+    try {
+      const err = await res.json();
+      if (err && err.error) message = err.error;
+    } catch (e) { /* plain-text and empty 4xx still carry the status */ }
+    const error = new Error(message);
+    error.status = res.status;
+    throw error;
+  }
   return res.json();
 }
 
@@ -2899,36 +2946,38 @@ function initCanvas() {}
 // ═══════════════════════════════════════════════════════════════
 // TOWN SCENE - dynamic building display
 // ═══════════════════════════════════════════════════════════════
+function buildingImage(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('圖書') || n.includes('library') || n.includes('book')) return 'assets-c/library.png';
+  if (n.includes('銀行') || n.includes('bank')) return 'assets-c/bank.png';
+  if (n.includes('健身') || n.includes('gym') || n.includes('fitness')) return 'assets-c/gym.png';
+  if (n.includes('農') || n.includes('farm')) return 'assets-c/farm.png';
+  if (n.includes('工坊') || n.includes('workshop') || n.includes('craft')) return 'assets-c/workshop.png';
+  if (n.includes('醫院') || n.includes('hospital') || n.includes('clinic')) return 'assets-c/hospital.png';
+  if (n.includes('商店') || n.includes('shop') || n.includes('store')) return 'assets-c/shop.png';
+  if (n.includes('探險') || n.includes('公會') || n.includes('guild') || n.includes('adventure')) return 'assets-c/expedition-guild.png';
+  if (n.includes('燈塔') || n.includes('lighthouse')) return 'assets-c/lighthouse.png';
+  if (n.includes('競技') || n.includes('arena') || n.includes('colosseum')) return 'assets-c/arena.png';
+  if (n.includes('天文') || n.includes('observatory') || n.includes('telescope')) return 'assets-c/observatory.png';
+  if (n.includes('屋') || n.includes('house') || n.includes('home')) return 'assets-c/house.png';
+  if (n.includes('學校') || n.includes('school')) return 'assets-c/school.png';
+  if (n.includes('消防') || n.includes('fire')) return 'assets-c/fire.png';
+  if (n.includes('麵包') || n.includes('bakery') || n.includes('bread')) return 'assets-c/bakery.png';
+  return 'assets-c/building.png';
+}
+
+function plotToGrid(plotIdx) {
+  return {x: (plotIdx % 6) * 4 + 1, y: Math.floor(plotIdx / 6) * 4 + 1};
+}
+
 function renderTownBuildings() {
   const container = document.getElementById('townBuildings');
   if (!container) return;
-  
-  // Map building name to style C PNG (never use emoji)
-  function buildingImage(name) {
-    const n = (name || '').toLowerCase();
-    // All building definitions from building-defs API
-    if (n.includes('圖書') || n.includes('library') || n.includes('book')) return 'assets-c/library.png';
-    if (n.includes('銀行') || n.includes('bank')) return 'assets-c/bank.png';
-    if (n.includes('健身') || n.includes('gym') || n.includes('fitness')) return 'assets-c/gym.png';
-    if (n.includes('農') || n.includes('farm')) return 'assets-c/farm.png';
-    if (n.includes('工坊') || n.includes('workshop') || n.includes('craft')) return 'assets-c/workshop.png';
-    if (n.includes('醫院') || n.includes('hospital') || n.includes('clinic')) return 'assets-c/hospital.png';
-    if (n.includes('商店') || n.includes('shop') || n.includes('store')) return 'assets-c/shop.png';
-    if (n.includes('探險') || n.includes('公會') || n.includes('guild') || n.includes('adventure')) return 'assets-c/expedition-guild.png';
-    if (n.includes('燈塔') || n.includes('lighthouse')) return 'assets-c/lighthouse.png';
-    if (n.includes('競技') || n.includes('arena') || n.includes('colosseum')) return 'assets-c/arena.png';
-    if (n.includes('天文') || n.includes('observatory') || n.includes('telescope')) return 'assets-c/observatory.png';
-    if (n.includes('屋') || n.includes('house') || n.includes('home')) return 'assets-c/house.png';
-    if (n.includes('學校') || n.includes('school')) return 'assets-c/school.png';
-    if (n.includes('消防') || n.includes('fire')) return 'assets-c/fire.png';
-    if (n.includes('麵包') || n.includes('bakery') || n.includes('bread')) return 'assets-c/bakery.png';
-    return 'assets-c/building.png'; // generic fallback
-  }
 
-  // Now render buildings on a 24×16 grid (cells 4× finer)
+  // Legacy overlay uses the same 8×8 origin box as the town map.
   const buildings = townData.buildings || [];
   const tiles = townData.tiles || [];
-  const COLS = 24, ROWS = 16;
+  const COLS = 8, ROWS = 8;
   
   // Build occupancy grid
   const occupied = Array.from({length: ROWS}, () => Array(COLS).fill(false));
@@ -2959,11 +3008,6 @@ function renderTownBuildings() {
     }
   });
   
-  // Map plot_idx to grid coords (2×2 block inside 4×4 zone)
-  function plotToGrid(plotIdx) {
-    return {x: (plotIdx % 6) * 4 + 1, y: Math.floor(plotIdx / 6) * 4 + 1};
-  }
-  
   const CELL_W = 100 / COLS;  // 4.17%
   const CELL_H = 100 / ROWS;  // 6.25%
   
@@ -2974,6 +3018,7 @@ function renderTownBuildings() {
         if (gy + dy >= ROWS || gx + dx >= COLS || occupied[gy + dy][gx + dx]) return false;
     return true;
   }
+  window.isBlockFree = isBlockFree;
   
   let html = '';
   
@@ -3303,9 +3348,17 @@ async function confirmPlaceBuilding() {
     showToast('✅ 建築完成！');
     await loadTown();
   } catch(e) {
-    Audio.errorBuzzer();
-    showToast('❌ ' + e.message, 'error');
+    showBuildFailure(e.message);
   }
+}
+
+function showBuildFailure(message) {
+  if (message === '城鎮沒有空位，請先收起或移動其他建築。') {
+    showToast(message, 'info');
+    return;
+  }
+  Audio.errorBuzzer();
+  showToast('❌ ' + (message || '未能興建'), 'error');
 }
 
 // ═══ MOVE BUILDING ═══
@@ -3361,7 +3414,7 @@ async function confirmMoveBuilding() {
 
 // ═══ STORE BUILDING ═══
 async function storeBuilding(bId) {
-  if (!confirm('📦 確定收起呢棟建築物？')) return;
+  if (!confirm('📦 確定收起這座建築物？')) return;
   try {
     closeModal();
     await fetchAPI('/api/kids/' + currentKidId + '/buildings/' + bId + '/store', {method:'POST'});
@@ -3416,21 +3469,48 @@ async function renderStoredBuildings() {
     const res = await fetch('/api/kids/' + currentKidId + '/stored-buildings');
     const list = await res.json();
     const container = document.getElementById('storedBuildings');
+    const countEl = document.getElementById('warehouseCount');
     if (!container) return;
-    if (!list || list.length === 0) {
-      container.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:24px">📦 存倉吉咗，未有建築物</p>';
+    const rows = Array.isArray(list) ? list : [];
+    warehouseRows = rows;
+    if (countEl) countEl.textContent = String(rows.length);
+    if (rows.length === 0) {
+      container.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:24px">📦 存倉是空的，暫時沒有建築物。</p>';
       return;
     }
-    container.innerHTML = list.map(b => `
-      <div class="build-card" style="background:#f8fafc;border-radius:10px;padding:8px;text-align:center;cursor:pointer;border:1px solid #e2e8f0" onclick="startUnstoreBuilding(${b.id})">
-        <div style="font-size:32px;margin:4px 0">${b.icon||'🏠'}</div>
-        <div style="font-size:12px;font-weight:600">${b.name} Lv.${b.level}</div>
-        <div style="font-size:10px;color:#94a3b8">按此放置</div>
+    container.innerHTML = rows.map(b => `
+      <div class="build-card" style="background:#f8fafc;border-radius:10px;padding:8px;text-align:center;cursor:default;border:1px solid #e2e8f0">
+        <div style="min-height:72px">
+          <div style="font-size:32px;margin:4px 0">${b.icon||'🏠'}</div>
+          <div style="font-size:12px;font-weight:600">${escapeHtml(b.name)} Lv.${b.level}</div>
+        </div>
+        <button type="button" class="btn-takeout" data-testid="warehouse-takeout" data-building-id="${b.id}" onclick="event.stopPropagation(); beginWarehouseTakeout(${b.id})">取出</button>
       </div>
     `).join('');
   } catch(e) {
     console.error('renderStoredBuildings error:', e);
   }
+}
+
+function beginWarehouseTakeout(bId) {
+  const row = warehouseRows.find(function (item) { return String(item.id) === String(bId); });
+  if (!row) {
+    showToast('找不到這座建築', 'error');
+    return;
+  }
+  if (typeof window.ktBeginWarehousePlace === 'function' && window.ktBeginWarehousePlace(row) === false) {
+    return;
+  }
+  const bar = document.getElementById('placementBar');
+  if (bar) bar.classList.remove('active');
+  placementDefId = null;
+  selectedPlaceX = -1;
+  selectedPlaceY = -1;
+  const overlay = document.getElementById('dov');
+  const drawer = document.getElementById('dr');
+  if (overlay) overlay.style.display = 'none';
+  if (drawer) drawer.classList.remove('o');
+  st('town');
 }
 
 function cancelPlacement() {
@@ -3490,13 +3570,13 @@ async function showStoredBuildingsModal() {
     const res = await fetch('/api/kids/' + currentKidId + '/stored-buildings');
     const list = await res.json();
     if (!list || list.length === 0) {
-      showToast('📦 存倉吉咗');
+      showToast('📦 存倉是空的');
       return;
     }
     const modal = document.getElementById('modalContent');
     modal.innerHTML = `
       <h2>📦 從存倉取出</h2>
-      <p style="font-size:12px;color:#94a3b8;margin-bottom:12px;">㩒要放返出嚟嘅建築物</p>
+      <p style="font-size:12px;color:#94a3b8;margin-bottom:12px;">請點選要放回地圖的建築物</p>
       <div class="build-list">
         ${list.map(b => `
           <div class="build-option" onclick="closeModal();startUnstoreBuilding(${b.id})">
@@ -3529,7 +3609,7 @@ function showDecoModal(cellX, cellY) {
         <div class="bo-icon">📦</div>
         <div class="bo-info">
           <div class="bo-name">從存倉取出 (${stored.length})</div>
-          <div class="bo-cost">㩒入去揀建築物放返出嚟</div>
+          <div class="bo-cost">點選進入，選擇要放回的建築物</div>
         </div>
       </div>` : ''}
       <div class="build-option" onclick="closeModal();showBuildModal(0)" style="border-color:#f59e0b">
@@ -3615,8 +3695,7 @@ async function placeBuilding(defId, plotIdx) {
     showToast('✅ 建築完成！');
     await loadTown();
   } catch(e) {
-    Audio.errorBuzzer();
-    showToast('❌ '+e.message, 'error');
+    showBuildFailure(e.message);
   }
 }
 
@@ -5875,12 +5954,13 @@ function closeModal() {
 function showToast(msg, type) {
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.className = type === 'error' ? 'error' : '';
+  el.className = type === 'error' ? 'error' : (type === 'info' ? 'info' : '');
   el.style.display = 'block';
   el.style.animation = 'none';
   void el.offsetHeight;
   el.style.animation = 'fadeInOut 2s ease';
-  setTimeout(() => { el.style.display = 'none'; }, 2000);
+  if (el._hideTimer) clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => { el.style.display = 'none'; }, 2000);
 }
 
 // Close modal on overlay click
@@ -6450,7 +6530,7 @@ window.st = st;
 window.renderTownBuildings = renderTownBuildings;
 window.buildingImage = buildingImage;
 window.plotToGrid = plotToGrid;
-window.isBlockFree = isBlockFree;
+if (typeof isBlockFree === 'function') window.isBlockFree = isBlockFree;
 window.zoomIn = zoomIn;
 window.zoomOut = zoomOut;
 window.zoomReset = zoomReset;
@@ -6536,18 +6616,16 @@ if ('serviceWorker' in navigator) {
     }
   });
 
-  // Listen for controller change (new SW activated)
-  let refreshing = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!refreshing) {
-      refreshing = true;
-      window.location.reload();
-    }
-  });
+  // A new worker claims the page. Reloading here races the login and the
+  // placement tests, so the page stays put and the next navigation uses it.
+  navigator.serviceWorker.addEventListener('controllerchange', () => {});
 } else {
   console.log('[PWA] Service Worker not supported');
 }
 </script>
 <script src="/kids/town-four-scene.js"></script>
+<script>
+if (!navigator.onLine && typeof ktShowOfflineTown === 'function') ktShowOfflineTown();
+</script>
 </body>
 </html>

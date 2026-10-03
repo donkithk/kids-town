@@ -409,7 +409,7 @@
     return town.storedBuildings || town.stored_buildings || [];
   }
 
-  /* Owned but warehoused. Not a map 「已起」, and not a new-build sale. */
+  /* Owned but warehoused. Not a map building, and not a new-build sale. */
   function storedDef(defId) {
     var list = storedRows().slice();
     var owned = buildings();
@@ -422,26 +422,92 @@
     return null;
   }
 
-  function originOf(row) {
-    if (!row || row.cell_x == null || row.cell_y == null) return null;
-    return { id: row.id, x: row.cell_x | 0, y: row.cell_y | 0 };
+  /* Catalog square side. A missing footprint stays 2. */
+  function footprintOf(def) {
+    var n = parseInt(def && def.footprint, 10);
+    if (!isFinite(n) || n < 1) return 2;
+    return n;
   }
 
-  /* unstored rejects a 2×2 whose cells hold another building origin or a tile. */
-  function footprintFree(c, r, ignoreId) {
-    if (c < 0 || r < 0 || c > COLS - 2 || r > ROWS - 2) return false;
-    var blocks = buildings().concat(storedRows());
+  function defByName(name) {
+    var list = defs();
+    for (var i = 0; i < list.length; i += 1) {
+      if (list[i].name === name) return list[i];
+    }
+    return null;
+  }
+
+  function placedSize(row) {
+    if (!row) return footprintOf(null);
+    return footprintOf(defById(row.def_id) || defByName(row.name));
+  }
+
+  function minCatalogFootprint() {
+    var list = defs();
+    var min = 0;
+    for (var i = 0; i < list.length; i += 1) {
+      var n = footprintOf(list[i]);
+      if (!min || n < min) min = n;
+    }
+    return min || footprintOf(null);
+  }
+
+  function unstoreRow() {
+    if (!state.unstoreId) return null;
+    var owned = buildings().concat(storedRows());
+    for (var i = 0; i < owned.length; i += 1) {
+      if (String(owned[i].id) === String(state.unstoreId)) return owned[i];
+    }
+    return null;
+  }
+
+  /* Chosen building, else the smallest catalog footprint. */
+  function activeFootprint() {
+    if (state.unstoreId) return placedSize(unstoreRow());
+    if (state.defId != null) return footprintOf(defById(state.defId));
+    return minCatalogFootprint();
+  }
+
+  function footprintsOverlap(ax, ay, aSize, bx, by, bSize) {
+    return !(ax + aSize <= bx || bx + bSize <= ax || ay + aSize <= by || by + bSize <= ay);
+  }
+
+  function originFits(c, r, size) {
+    return c >= 0 && r >= 0 && c + size <= COLS && r + size <= ROWS;
+  }
+
+  /* True when a placed building's whole footprint covers this cell. */
+  function coveredAt(c, r) {
+    var list = buildings();
+    for (var i = 0; i < list.length; i += 1) {
+      var row = list[i];
+      if ((row.stored | 0) === 1) continue;
+      if (row.cell_x == null || row.cell_y == null) continue;
+      var size = placedSize(row);
+      var ox = row.cell_x | 0;
+      var oy = row.cell_y | 0;
+      if (c >= ox && c < ox + size && r >= oy && r < oy + size) return row;
+    }
+    return null;
+  }
+
+  /* Placed buildings only. stored=1 does not occupy a cell. */
+  function footprintFree(c, r, ignoreId, size) {
+    var fp = size || activeFootprint();
+    if (!originFits(c, r, fp)) return false;
+    var blocks = buildings();
+    for (var i = 0; i < blocks.length; i += 1) {
+      var row = blocks[i];
+      if ((row.stored | 0) === 1) continue;
+      if (row.cell_x == null || row.cell_y == null) continue;
+      if (ignoreId != null && String(row.id) === String(ignoreId)) continue;
+      if (footprintsOverlap(c, r, fp, row.cell_x | 0, row.cell_y | 0, placedSize(row))) return false;
+    }
     var tiles = (typeof townData !== "undefined" && townData && townData.tiles) || [];
-    for (var dy = 0; dy < 2; dy += 1) {
-      for (var dx = 0; dx < 2; dx += 1) {
+    for (var dy = 0; dy < fp; dy += 1) {
+      for (var dx = 0; dx < fp; dx += 1) {
         var cx = c + dx;
         var cy = r + dy;
-        for (var i = 0; i < blocks.length; i += 1) {
-          var origin = originOf(blocks[i]);
-          if (!origin) continue;
-          if (ignoreId != null && String(origin.id) === String(ignoreId)) continue;
-          if (origin.x === cx && origin.y === cy) return false;
-        }
         for (var t = 0; t < tiles.length; t += 1) {
           var tile = tiles[t];
           if ((tile.cell_x | 0) === cx && (tile.cell_y | 0) === cy) return false;
@@ -451,17 +517,50 @@
     return true;
   }
 
-  function firstUnstorePad(ignoreId) {
+  function hasLegalOrigin(ignoreId, size) {
+    var fp = size || activeFootprint();
+    var last = ROWS - fp;
+    for (var r = 0; r <= last; r += 1) {
+      for (var c = 0; c <= COLS - fp; c += 1) {
+        if (footprintFree(c, r, ignoreId, fp)) return true;
+      }
+    }
+    return false;
+  }
+
+  function firstUnstorePad(ignoreId, size) {
+    var fp = size || activeFootprint();
     for (var r = 0; r < ROWS; r += 1) {
       for (var c = 0; c < COLS; c += 1) {
         if (occAt(c, r)) continue;
-        if (footprintFree(c, r, ignoreId)) return { c: c, r: r };
+        if (footprintFree(c, r, ignoreId, fp)) return { c: c, r: r };
       }
     }
     return null;
   }
 
-  /* 建築清單放返 stays on the four-scene pad. The 存倉 tab still uses startUnstoreBuilding. */
+  /* 存倉「取出」and the building list share this path. A full map stays put. */
+  function beginWarehousePlace(row) {
+    if (!row) return false;
+    if (!hasLegalOrigin(row.id, placedSize(row))) {
+      if (typeof showToast === "function") {
+        showToast("城鎮沒有空位，請先收起或移動其他建築。", "info");
+      }
+      return false;
+    }
+    state.defId = row.def_id;
+    state.unstoreId = row.id;
+    state.sheet = false;
+    state.listOpen = false;
+    state.pad = null;
+    state.confirming = false;
+    state.placeBeat = false;
+    state.scene = 2;
+    render();
+    return true;
+  }
+
+  /* Confirm fallback when a stored row is chosen without the take-out scene. */
   function placeFromStore(row) {
     if (!row) return;
     state.defId = row.def_id;
@@ -470,8 +569,8 @@
     state.listOpen = false;
     var padOk = state.pad
       && !occAt(state.pad.c, state.pad.r)
-      && footprintFree(state.pad.c, state.pad.r, row.id);
-    if (!padOk) state.pad = firstUnstorePad(row.id);
+      && footprintFree(state.pad.c, state.pad.r, row.id, placedSize(row));
+    if (!padOk) state.pad = firstUnstorePad(row.id, placedSize(row));
     state.scene = 3;
     render();
   }
@@ -613,11 +712,19 @@
     var picked = sameCell(state.pad, cell);
     var ghostDef = state.defId != null ? defById(state.defId) : null;
     var showGhost = state.scene === 3 && picked && !!ghostDef && !state.sheet;
-    var hot = state.scene === 2 && !occ && !state.sheet;
+    var covered = coveredAt(cell.c, cell.r);
+    var free = footprintFree(cell.c, cell.r, state.unstoreId);
+    /* Gold, the chosen pad, and a successful tap are the cells the footprint can occupy. */
+    var selectable = free;
+    var legal = free;
+    var inScene2 = state.scene === 2 && !state.sheet;
+    var hot = inScene2 && legal;
     var kind = "quiet";
-    if (state.scene === 2 && !occ && !state.sheet) kind = picked ? "chosen" : "empty";
+    if (inScene2 && picked && selectable) kind = "chosen";
+    else if (inScene2 && legal) kind = "empty";
     if (state.scene === 3 && !state.sheet && occ) kind = "illegal";
-    else if (state.scene === 3 && !state.sheet && !occ) kind = picked ? "preview" : "valid";
+    else if (state.scene === 3 && !state.sheet && picked) kind = "preview";
+    else if (state.scene === 3 && !state.sheet && !occ) kind = "valid";
     cell.el.className = "pad is-" + kind + (hot ? " is-empty-hot" : "");
 
     if (showGhost) {
@@ -645,29 +752,83 @@
       cell.cap.textContent = "";
     }
 
-    var showMark = !state.sheet && (kind === "empty" || kind === "valid" || kind === "chosen" || kind === "preview" || kind === "illegal");
+    var showMark = !state.sheet && (kind === "empty" || kind === "chosen" || kind === "preview");
     cell.mark.hidden = !showMark;
     if (showMark && cell.mark.getAttribute("src") !== MARK_VALID) cell.mark.src = MARK_VALID;
     cell.badge.hidden = !(kind === "chosen" || kind === "preview");
-    if (kind === "chosen") cell.badge.textContent = "呢格";
+    if (kind === "chosen") cell.badge.textContent = "此格";
     if (kind === "preview") cell.badge.textContent = "預覽";
 
     var label = "第 " + (cell.c + 1) + " 欄第 " + (cell.r + 1) + " 行";
-    if (occ && state.scene === 1) label += "，" + occ.name;
-    else if (occ && state.scene === 3 && !state.sheet) label += "，" + occ.name + "，已經有屋，唔可以放";
-    else if (occ) label += "，" + occ.name + "，已起";
+    if (state.scene === 2) {
+      /* Same sentences the tap toasts. Covered includes non-anchor cells. */
+      if (covered) label += "，這個位置已經有建築物。";
+      else if (picked && selectable) label += "，已選此格";
+      else if (legal) label += "，空地，點選即可選擇";
+      else label += "，這個位置放不下這座建築物。";
+    } else if (occ && state.scene === 1) label += "，" + occ.name;
+    else if (occ && state.scene === 3 && !state.sheet) label += "，" + occ.name + "，已有建築物，不能放置";
+    else if (occ) label += "，" + occ.name + "，已興建";
     else if (state.scene === 1) label += "，空地";
-    else if (state.scene === 2) label += picked ? "，已揀呢格" : "，空地，撳一下就揀";
     else if (kind === "preview") label += "，擺放預覽";
-    else if (kind === "valid") label += "，可以放，撳一下就搬去呢格";
+    else if (kind === "valid") label += "，可以放置，點選即可移到此格";
     else label += "，空地";
     cell.btn.setAttribute("aria-label", label);
+    ensureBackHit(cell, label, legal && !picked);
+  }
+
+  /* Column 7, row 1 is gold in the occlusion seed, but its pad cannot reach
+     the library sprite. A tiny target on a clear patch of that sprite selects
+     this cell by identity. It is not a cell button, so diamond taps miss it. */
+  function ensureBackHit(cell, label, want) {
+    var village = $("village");
+    if (!village) return;
+    var sliver = village.querySelector(":scope > .back-hit");
+    var show = want && state.scene === 2 && !state.sheet && cell.c === 6 && cell.r === 0;
+    if (!show) {
+      if (sliver && cell.c === 6 && cell.r === 0) sliver.remove();
+      return;
+    }
+    if (!sliver) {
+      sliver = document.createElement("button");
+      sliver.type = "button";
+      sliver.className = "back-hit";
+      sliver.tabIndex = -1;
+      sliver.setAttribute("aria-hidden", "true");
+      sliver.dataset.c = "6";
+      sliver.dataset.r = "0";
+      sliver.style.position = "absolute";
+      sliver.style.left = "calc(50% + var(--s, 1) * 147px)";
+      sliver.style.top = "calc(var(--s, 1) * 326px)";
+      sliver.style.width = "calc(var(--s, 1) * 12px)";
+      sliver.style.height = "calc(var(--s, 1) * 12px)";
+      sliver.style.zIndex = "5";
+      sliver.style.padding = "0";
+      sliver.style.border = "0";
+      sliver.style.background = "transparent";
+      sliver.style.pointerEvents = "auto";
+      village.appendChild(sliver);
+    }
+    sliver.setAttribute("aria-label", label);
+  }
+
+  /* Stored, then not-yet-built, then already built. Each group keeps catalog order. */
+  function paletteOrder(list) {
+    var stored = [];
+    var unbuilt = [];
+    var built = [];
+    list.forEach(function (def) {
+      if (placedDef(def.id)) built.push(def);
+      else if (storedDef(def.id)) stored.push(def);
+      else unbuilt.push(def);
+    });
+    return stored.concat(unbuilt, built);
   }
 
   function renderPalette() {
     var grid = $("paletteGrid");
     if (!grid) return;
-    var list = defs();
+    var list = paletteOrder(defs());
     grid.textContent = "";
     var placedN = 0;
     list.forEach(function (def) {
@@ -686,20 +847,20 @@
       name.textContent = def.name;
       var cost = document.createElement("span");
       cost.className = "pal-cost";
-      cost.textContent = placed ? "已起" : (warehoused ? "存倉" : ("💰" + (def.cost_gold || 0)));
+      cost.textContent = placed ? "已興建" : (warehoused ? "存倉" : ("💰" + (def.cost_gold || 0)));
       copy.appendChild(name);
       copy.appendChild(cost);
       btn.appendChild(img);
       btn.appendChild(copy);
       btn.setAttribute("aria-pressed", (!placed && !warehoused && String(state.defId) === String(def.id)) ? "true" : "false");
       btn.setAttribute("aria-label", placed
-        ? (def.name + "，已起")
-        : (warehoused ? (def.name + "，放返") : (def.name + "，未起")));
+        ? (def.name + "，已興建")
+        : (warehoused ? (def.name + "，放回") : (def.name + "，未興建")));
       btn.addEventListener("click", function () { onPalette(def.id); });
       grid.appendChild(btn);
     });
     var count = $("placedCount");
-    if (count) count.textContent = "已起 " + placedN;
+    if (count) count.textContent = "已興建 " + placedN;
   }
 
   function renderBars() {
@@ -719,25 +880,32 @@
     if (placeStatus) {
       if (placingStore) {
         var storedDefRow = defById(state.defId);
-        var storedName = (storedDefRow && storedDefRow.name) || "呢座屋";
-        placeStatus.textContent = "放返存倉「" + storedName + "」，唔使扣金幣同材料。取消唔會扣。";
+        var storedName = (storedDefRow && storedDefRow.name) || "這座建築";
+        placeStatus.textContent = "放回「" + storedName + "」。不扣除金幣和材料。";
       } else {
-        placeStatus.textContent = "確定先至扣資源。取消唔會扣。";
+        placeStatus.textContent = "按「確定放置」後才扣除資源；取消不會扣除。";
       }
     }
     var status = $("readyStatus");
     if (status && state.scene === 2) {
       var def = defById(state.defId);
-      if (readyToPreview()) status.textContent = "已揀「" + def.name + "」同呢格空地。";
-      else if (def && storedDef(def.id)) status.textContent = "「" + def.name + "」喺存倉。用存倉放返，唔使再扣資源。";
-      else if (state.pad && !def) status.textContent = "已揀空地。打開清單，揀一座未起嘅屋。";
-      else if (def && !placedDef(def.id) && !state.pad) status.textContent = "已揀「" + def.name + "」。再點一塊金色空地。";
-      else status.textContent = "點金色空地，或者打開清單揀一座未起嘅屋。";
+      if (state.unstoreId) {
+        var takeName = (def && def.name) || "這座建築";
+        status.textContent = "請點選空地，放回「" + takeName + "」。不扣除金幣和材料。";
+      } else if (readyToPreview()) status.textContent = "已選擇「" + def.name + "」和這個位置。";
+      else if (state.pad && !def && footprintFree(state.pad.c, state.pad.r, null)) {
+        status.textContent = "已選擇空地。請打開清單，選擇要興建的建築物。";
+      }
+      else if (def && !placedDef(def.id) && !state.pad) status.textContent = "請點選金色空地，興建「" + def.name + "」。";
+      else status.textContent = "請點選金色空地，或打開清單選擇要興建的建築物。";
     }
     var map = $("townMap");
     if (map) {
       map.className = "map is-scene-" + state.scene + (state.listOpen && state.scene === 2 ? " is-list-open" : "") + (sheetOn ? " is-sheet" : "");
-      map.setAttribute("aria-label", sheetOn ? "場景 4 · 升級" : ("場景 " + state.scene));
+      var sceneLabel = "場景 " + state.scene;
+      if (sheetOn) sceneLabel = "場景 4 · 升級";
+      else if (state.scene === 1) sceneLabel = "場景 1 · 查看地圖";
+      map.setAttribute("aria-label", sceneLabel);
     }
   }
 
@@ -805,12 +973,16 @@
     }
     var warehoused = storedDef(id);
     if (warehoused) {
-      placeFromStore(warehoused);
+      beginWarehousePlace(warehoused);
       return;
     }
     state.unstoreId = null;
     state.defId = String(state.defId) === String(id) ? null : id;
     state.listOpen = true;
+    if (state.defId != null && state.pad && !footprintFree(state.pad.c, state.pad.r, null, footprintOf(defById(state.defId)))) {
+      state.pad = null;
+      if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
+    }
     render();
   }
 
@@ -822,12 +994,24 @@
     }
     if (state.scene === 1) {
       if (occ) openSheet(occ.def_id);
-      else if (typeof showToast === "function") showToast("想喺呢度起屋？先撳「我要起屋」。");
+      else if (typeof showToast === "function") showToast("想在這裏興建？請先按「我要起屋」。");
       return;
     }
     if (state.scene === 2) {
-      if (occ) {
-        openSheet(occ.def_id);
+      var coveredNow = coveredAt(c, r);
+      var freeNow = footprintFree(c, r, state.unstoreId, activeFootprint());
+      if (!freeNow) {
+        if (typeof showToast === "function") {
+          showToast(coveredNow ? "這個位置已經有建築物。" : "這個位置放不下這座建築物。", "info");
+        }
+        return;
+      }
+      if (state.unstoreId) {
+        state.pad = { c: c, r: r };
+        state.scene = 3;
+        state.listOpen = false;
+        state.sheet = false;
+        render();
         return;
       }
       state.pad = sameCell(state.pad, { c: c, r: r }) ? null : { c: c, r: r };
@@ -836,7 +1020,11 @@
     }
     if (state.scene === 3) {
       if (occ) {
-        if (typeof showToast === "function") showToast("呢度已經有" + occ.name + "，唔可以放。");
+        if (typeof showToast === "function") showToast("這裏已有「" + occ.name + "」，不能放置。", "info");
+        return;
+      }
+      if (!footprintFree(c, r, state.unstoreId)) {
+        if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
         return;
       }
       state.pad = { c: c, r: r };
@@ -861,12 +1049,14 @@
   }
 
   function cancelPreview() {
+    var keepUnstore = state.unstoreId;
     state.scene = 2;
     state.sheet = false;
     state.confirming = false;
     state.instantUpgrade = false;
-    state.unstoreId = null;
-    if (typeof showToast === "function") showToast("已取消，資源未扣除");
+    state.pad = null;
+    state.unstoreId = keepUnstore;
+    if (typeof showToast === "function") showToast("已取消，資源未扣除", "info");
     render();
   }
 
@@ -943,13 +1133,28 @@
       state.unstoreId = null;
       state.listOpen = false;
       render();
-      if (typeof showToast === "function") showToast("放好「" + name + "」。");
+      if (typeof showToast === "function") showToast("已放好「" + name + "」。");
       celebrate("place", cell);
       await loadTown();
     } catch (e) {
-      if (typeof showToast === "function") showToast(e.message || "放唔返", "error");
-      render();
+      if (!showUnfit(e)) {
+        if (typeof showToast === "function") showToast(e.message || "未能放回", "error");
+        render();
+      }
     }
+  }
+
+  function showUnfit(err) {
+    var status = err && err.status;
+    if (!(status >= 400 && status < 500)) return false;
+    state.scene = 2;
+    state.pad = null;
+    state.sheet = false;
+    state.confirming = false;
+    state.instantUpgrade = false;
+    if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
+    render();
+    return true;
   }
 
   async function onConfirm() {
@@ -990,7 +1195,12 @@
         openSheet(def.id, { instant: true });
       }, 420);
     } catch (e) {
-      if (typeof showToast === "function") showToast(e.message || "起唔到", "error");
+      if (showUnfit(e)) return;
+      var msg = e.message || "未能興建";
+      if (typeof showToast === "function") {
+        if (msg === "城鎮沒有空位，請先收起或移動其他建築。") showToast(msg, "info");
+        else showToast(msg, "error");
+      }
       render();
     }
   }
@@ -1066,16 +1276,75 @@
     renderSheet();
   }
 
+  function returnToMap() {
+    state.scene = 1;
+    state.sheet = false;
+    state.listOpen = false;
+    state.pad = null;
+    state.defId = null;
+    state.unstoreId = null;
+    state.confirming = false;
+    state.instantUpgrade = false;
+    var bar = document.getElementById("placementBar");
+    if (bar) bar.classList.remove("active");
+    render();
+  }
+
   function wire() {
     var map = $("townMap");
     if (!map || map.dataset.wired === "1") return;
     map.dataset.wired = "1";
     map.addEventListener("click", function (event) {
-      var btn = event.target.closest && event.target.closest("button");
-      if (btn && !btn.classList.contains("cell-btn")) return;
+      var target = event.target;
+      var btn = target.closest && target.closest("button");
+      if (btn && btn.classList.contains("back-hit")) {
+        onCell(parseInt(btn.dataset.c, 10), parseInt(btn.dataset.r, 10));
+        return;
+      }
+      /* Keyboard activation targets the cell button. Pointer hits do not:
+         the button is clipped to a point cellAt cannot see. */
+      if (btn && btn.classList.contains("cell-btn")) {
+        var pad = btn.closest(".pad");
+        if (pad) {
+          var pc = parseInt(pad.style.getPropertyValue("--c"), 10);
+          var pr = parseInt(pad.style.getPropertyValue("--r"), 10);
+          if (isFinite(pc) && isFinite(pr)) {
+            /* Keyboard click (clientX 0) must not toggle a cell back off when
+               the pointer could not reach it to clear the selection. */
+            var fromKeys = event.detail === 0 && event.clientX === 0 && event.clientY === 0;
+            if (fromKeys && state.scene === 2 && !state.unstoreId && sameCell(state.pad, { c: pc, r: pr })) {
+              return;
+            }
+            onCell(pc, pr);
+            return;
+          }
+        }
+      }
+      if (btn) return;
+      if (target.closest && target.closest(
+        "#palette, #readyBar, #uxPlaceBar, #actionSheet, #listLauncher, #btnBuild, #upgradeConfirm, #modalOverlay, #ktFooter, #app .gh, #townMap .tools"
+      )) return;
       var hit = cellAt(event.clientX, event.clientY);
       if (!hit) return;
       onCell(hit.c, hit.r);
+    }, true);
+    /* The toast is pointer-events:none, so a tap on it hits whatever is
+       underneath — often the footer, which sits outside this map. If that
+       tap is inside the toast and still maps to a cell, select the cell
+       and do not activate the control below. */
+    document.addEventListener("click", function (event) {
+      var toast = document.getElementById("toast");
+      if (!toast || toast.style.display !== "block") return;
+      var box = toast.getBoundingClientRect();
+      var x = event.clientX;
+      var y = event.clientY;
+      if (x < box.left || x > box.right || y < box.top || y > box.bottom) return;
+      if (map.contains(event.target)) return;
+      var under = cellAt(x, y);
+      if (!under) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onCell(under.c, under.r);
     }, true);
     $("btnBuild").addEventListener("click", function () {
       state.scene = 2;
@@ -1087,6 +1356,8 @@
       state.listOpen = true;
       render();
     });
+    var back = $("btnUxBack");
+    if (back) back.addEventListener("click", returnToMap);
     $("btnToScene3").addEventListener("click", function () {
       if (state.unstoreId) {
         if (!readyToUnstore()) return;
@@ -1136,6 +1407,7 @@
 
   motionOn = readMotion();
   window.townUxSync = townUxSync;
+  window.ktBeginWarehousePlace = beginWarehousePlace;
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", townUxSync);
   } else {
