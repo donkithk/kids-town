@@ -1904,7 +1904,7 @@ def test_town_ux_scene1_map_cta_and_empty_pad_does_not_spend(
     if missing:
         _town_ux_fail(
             "TC-FE-TOWN-UX-01",
-            "Scene 1 睇地圖 must show placed buildings from the kid's real data "
+            "Scene 1 must show placed buildings from the kid's real data "
             "(seeded 圖書館／農場／商店 on the iso map; unplaced 健身室 must not appear as built). "
             "Legacy .town-building sprites and the footer 「商店」 tab do not count. "
             "Also quiet empty pads (no gold frames) and CTA 「我要起屋」. "

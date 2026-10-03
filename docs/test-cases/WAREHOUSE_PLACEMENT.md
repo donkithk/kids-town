@@ -36,7 +36,7 @@
 ## 案例
 
 API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。  
-介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`，以及同一 API 檔內讀取已提供頁面的 `TC-FE-WAREHOUSE-GRID`（後者屬 API 套件，因為它只 GET 靜態檔）。
+介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`，以及同一 API 檔內讀取已提供頁面的 `TC-FE-WAREHOUSE-GRID`（後者屬 API 套件，因為它只 GET 靜態檔）。
 
 下表「main」是在 `5bfe76d` 加上這些測試後的結果。紅測的斷言訊息寫明預期與實際。綠測是回歸鎖，不是本缺陷。
 
@@ -80,7 +80,7 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 | TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL | 新建造場景 2 的金色格集合必須正好等於合法原點。進入場景 3 之後，金色格不得多過合法原點，而且每一格要麼是合法原點，要麼落在所選預覽的 2×2 裡。 | FAIL | 場景 2 把空格（含第 8 欄、第 8 行）都塗金，多於合法原點。場景 3 亦然。 |
 | TC-FE-WAREHOUSE-OFFGRID-TOAST | 取出場景 2 與新建造場景 2，點放不下的空格（第 8 欄第 1 行，以及與已放置 2×2 重疊的空格）提示正好是「這個位置放不下這座建築物。」已佔用格仍是「這個位置已經有建築物。」兩者都是 `#toast.info`。 | FAIL | 取出進不去。新建造點空格只是選格，沒有提示；點已佔用格打開升級面板，也沒有這句。 |
 | TC-FE-WAREHOUSE-CANCEL-TOAST-INFO | 場景 3 按「取消」，文字維持「已取消，資源未扣除」，但必須是 `#toast.info`（底 `rgb(107, 79, 42)`、字 `rgb(255, 248, 231)`），不是預設綠底。新建造與取出各測一次。 | FAIL | 新建造文字正確，class 是空的，底色 `rgb(21, 128, 61)`。取出進不去。 |
-| TC-FE-WAREHOUSE-BAR-NOOVERFLOW | 1280×720 與 1100×800：底欄「返回地圖」「選擇位置」「確定放置」「取消」為 `white-space:nowrap`，高至少 45px，左右 padding 至少 13px，文字不溢出，四字按鈕寬至少 90px，「取消」至少 58px。中間提示一行。390×720 只查按鈕文字不溢出。 | FAIL | 1280×720 與 1100×800：`white-space` 是 `normal`，高 44（1100 縮到 37.8），padding 0，寬度低於下限。390 沒有溢出。 |
+| TC-FE-WAREHOUSE-BAR-NOOVERFLOW | 1280×720、1100×800、390×720：四個底欄按鈕的邊框盒高 46±1，底欄本身 64±1。1280 與 1100 另查 `nowrap`、左右 padding ≥13、寬度、提示一行。三個視窗都查文字不溢出。 | FAIL | 見下方。按鈕邊框盒是 44，底欄更高，不是 46 / 64。 |
 | TC-FE-TOWN-MAP-FIT | 1280×720。場景 1（商店在 `(0,6)`、農場在 `(6,0)`）、新建造場景 2、取出場景 2：`#townMap` 的 `scrollWidth` 不得大於 `clientWidth`。每一格金色的外框，以及每一座已放置建築的 `img.sprite`，橫向必須落在 `#townMap` 可見範圍內（左 ≥ 框左 −1px，右 ≤ 框右 +1px）。不查直向。 | FAIL | 場景 1 與新建造場景 2：`scrollWidth` 等於 `clientWidth`（1178/1178），但 `(0,6)` 的商店圖 `x=14–174`，框左是 51，左側伸出 37px。新建造金色格伸到 `x=-70` 與 `x=1266`（框是 51–1229）。取出進不去。農場 `(6,0)` 的圖 `x=1022–1182` 在框內。 |
 
 拒絕狀態只接受 400、409、422。401 不算成功拒絕。取出成功為 200 或 201。放回已有存倉行（指定格子或省略座標）成功為 200 或 201。新建（沒有可再用的存倉行）成功為 201。移動成功為 200。
@@ -208,20 +208,40 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 
 ## 底欄不溢出（TC-FE-WAREHOUSE-BAR-NOOVERFLOW）
 
-新建造場景 2 量 `#btnUxBack`、`#btnToScene3`、`#readyStatus`。進入場景 3 之後量 `#btnUxCancel`、`#btnUxConfirm`、`#placeStatus`。按 id 量，不按按鈕上的舊字。
+新建造場景 2 量 `#btnUxBack`、`#btnToScene3`、`#readyStatus`、`#readyBar`。進入場景 3 之後量 `#btnUxCancel`、`#btnUxConfirm`、`#placeStatus`、`#uxPlaceBar`。按 id 量，不按按鈕上的舊字。
 
-1280×720 與 1100×800：
+三個視窗都量：1280×720、1100×800、390×720。
 
-- 按鈕的計算 `white-space` 是 `nowrap`。
-- 高度至少 45px（規格 46，允許少 1）。
-- 左右 padding 至少 13px（規格 14，允許少 1）。
-- `scrollWidth` 不得大於 `clientWidth`。
-- 畫出來的寬度：四個字的按鈕至少 90px，「取消」至少 58px。不讀 CSS 的 `min-width`。
-- 中間提示用 `Range.getClientRects()` 數行，必須是 1。區塊元素自己的 `getClientRects()` 包行時仍是 1，所以改數文字行。
+- 「返回地圖」「選擇位置」「確定放置」「取消」的邊框盒高是 46±1。
+- `#readyBar` 與 `#uxPlaceBar` 的邊框盒高是 64±1。
+- 高度用 `getBoundingClientRect().height`（含 border），不用 `getComputedStyle().height`。`content-box` 高 48 再加上下各 3px border 是 54，必須失敗。舞台 `.gsw` 有 `transform: scale(...)`。1280×720 的縮放是 1，矩形高度就是邊框盒。1100 與 390 先把矩形高度除以舞台縮放（`stage.getBoundingClientRect().width / stage.offsetWidth`），再跟 46 / 64 比。這樣 54px 的按鈕在 1100 上畫成約 46px 時仍然失敗。
+- 三個視窗都查 `scrollWidth` 不大於 `clientWidth`。
+- 1280×720 與 1100×800 另查：`white-space` 是 `nowrap`，左右 padding 至少 13px，四字按鈕寬至少 90px，「取消」至少 58px，中間提示 `Range.getClientRects()` 是一行。寬度仍用畫面上的矩形，不除縮放。390 不查寬、padding、`nowrap`、提示行數。
 
-390×720 只查按鈕的 `scrollWidth` 不大於 `clientWidth`。不查寬、高、padding、提示行數。
+倉庫測試裡沒有別的案例用計算樣式去鎖這四個按鈕或底欄的高度。`tests/test_frontend.py` 的 `offsetHeight` 只量舞台，不量底欄。
 
-`25b959a` 與 `main` 的底欄按鈕共用 `min-height:44px`，沒有水平 padding。1280×720：`white-space` 是 `normal`，高 44，padding 0/0。「返回地圖」與「選擇位置」「確定放置」寬 70，「取消」寬 44。1100×800 因畫面縮放，高約 37.8，四字按鈕寬約 60.2，「取消」約 37.8。390 沒有量到溢出。提示在 1280 與 1100 是一行，這部分通過。
+`ba93ca9` 在 1280×720：四個按鈕 `getBoundingClientRect().height` 是 54，計算樣式 `height` 是 48（`box-sizing: content-box` 再加上下各 3px border）。`#readyBar` 與 `#uxPlaceBar` 都是 72。1100×800 的矩形高度是 46.4（按鈕）與 61.9（底欄），除以舞台縮放 0.859 之後仍是 54 與 72。390×720 的矩形是 16.5 與 21.9，除以 0.305 之後同樣是 54 與 72。`nowrap`、padding、寬度、不溢出、提示一行在 `ba93ca9` 通過。`main` 的按鈕邊框盒是 44（1100 的矩形約 37.8），底欄是 62，而且 `white-space` 是 `normal`、padding 是 0、寬度低於下限。390 沒有溢出。
+
+## 未選建築時不能預選放不下的格（TC-FE-BUILD-UNFIT-PRESELECT）
+
+新建造場景 2，商店已放在 `(0,0)`，還沒選建築物。
+
+(a) 點空的、非金的 `(5,7)`：不得選中（沒有「已選此格」、沒有「此格」徽章）。`#toast.info` 正好是「這個位置放不下這座建築物。」然後選工坊，「選擇位置」不得把這個原點帶進場景 3，也不得出現紅色 `.error`「位置超出地圖範圍（0 至 7）」。
+
+再重新進入場景 2，點已放置商店足跡裡的 `(1,0)`：同樣不得選中。`#toast.info` 正好是「這個位置已經有建築物。」然後選工坊並按「選擇位置」，不得進入以 `(1,0)` 為原點的場景 3，也不得出現紅色 `.error`「該位置已被建築物佔用」。
+
+(b) `TC-FE-BUILD-UNFIT-PRESELECT-MINFP`：攔截 `GET /api/building-defs`，既有列加 `footprint: 2`，並加一座 `footprint: 1` 的郵箱。未選建築時 `(5,7)` 必須是金格而且可以選。再選 2×2 的工坊：清掉這格、`#toast.info`「這個位置放不下這座建築物。」、工坊仍選中、提示以「請點選金色空地」開頭（或含工坊與「金色空地」）、`#btnToScene3` 保持停用，直到再點一個 2×2 金格。選完工坊之後 `(5,7)` 不再是金。`ba93ca9` 的目錄物件沒有 `footprint` / `width` / `height`，`town-four-scene.js` 寫死 `FOOTPRINT = 2`。
+
+(c) 新建造與取出都進到場景 3 的合法格，再用 `page.route` 把確定的 POST 回 400，正文 `{"error":"位置超出地圖範圍（0 至 7）"}`。畫面必須 `#toast.info`「這個位置放不下這座建築物。」回到場景 2，不出現紅色 `.error`，也不顯示伺服器原文。金幣、材料與行不變。
+
+## 建築清單按鈕不裁切（TC-FE-PAL-BTN-NOCLIP）
+
+合成小朋友有已放置的商店、存倉的圖書館，以及目錄裡還沒蓋的建築（例如健身室）。新建造場景 2 打開 `#palette`。每一個 `.pal-btn`：
+
+- `scrollHeight` 不得大於 `clientHeight`。
+- 第二行（`.pal-cost`：存倉、已興建或已起、💰 價錢）的 `getBoundingClientRect().bottom` 必須比按鈕內底邊至少高 4px。內底邊是按鈕矩形的 `bottom` 減去 `border-bottom-width`。
+
+1280×720。三種列都要出現，否則案例失敗。
 
 ## 地圖橫向不裁切（TC-FE-TOWN-MAP-FIT）
 
@@ -326,3 +346,18 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 | TC-FE-TOWN-STORE-UX-01 | FAIL。點清單裡的探險公會之後是場景 3。 | PASS。點存倉列進入取出場景 2，提示是「請點選空地，放回「探險公會」。不扣除金幣和材料。」 |
 
 整套 API（`pytest -m "not frontend"`）：main 17 failed、361 passed、103 deselected。`25b959a` 378 passed、103 deselected。多出來的 deselected 是本輪新增的 11 條介面案例。API 失敗名單與上一輪相同。整套介面（`pytest -m frontend`）：main 32 failed、71 passed、378 deselected。`25b959a` 14 failed、89 passed、378 deselected。上一輪對 `f785d04` 的測試是介面 92 passed、0 failed。本輪 14 條失敗就是上表裡 `25b959a` 的 FAIL：兩條返回地圖、兩條滿圖取出、新建造金色格、兩條放不下、書面語、兩條取消底色、底欄、地圖橫向、`UX-02` 的「已興建」、`NOREGRESS` 的三句新提示。其餘原本通過的行為案例仍然通過，包括 `STORE-UX-01`、`SCENE2-LEGAL`、`SCENE3-CANCEL`。
+
+## 對照 `ba93ca9`（收緊的三條）
+
+產品是 `ba93ca9fd9620a4c4bd6db7147a88379c8fd2934` 的暫用工作樹，測試是本紅測分支。沒有推上建造分支。目錄物件沒有 `footprint`、`width`、`height`；`town-four-scene.js` 的 `FOOTPRINT` 仍是常數 2。`occAt` 只比對原點，所以商店在 `(0,0)` 時 `(1,0)` 不算已佔用。
+
+| ID | main `5bfe76d` | `ba93ca9` |
+|----|----------------|-----------|
+| TC-FE-BUILD-UNFIT-PRESELECT | FAIL。`(5,7)` 與 `(1,0)` 在未選建築時都是金格，點下去選中（aria「已揀呢格」、徽章「呢格」），沒有 info 提示。選建築後「去擺位置」進入場景 3。確定時的 `.error` 是英文 `Insufficient resources`，不是「該位置已被建築物佔用」。 | FAIL。`(5,7)` 與 `(1,0)` 都不是金格，但點下去仍選中（aria「已選此格」）。選工坊後提示是「已選擇「工坊」和這個位置。」，「選擇位置」進入場景 3。`(5,7)` 確定時紅色 `.error`「位置超出地圖範圍（0 至 7）」。`(1,0)` 確定時紅色 `.error`「該位置已被建築物佔用」。兩次點格都沒有 info 提示。 |
+| TC-FE-WAREHOUSE-BAR-NOOVERFLOW | FAIL。按鈕邊框盒 44，底欄 62。另有 `nowrap`、padding、寬度。390 無溢出。 | FAIL。只剩高度：按鈕邊框盒 54（計算樣式 48），底欄 72。1100 的矩形是 46.4，除以縮放後仍是 54。`nowrap`、padding、寬度、不溢出、提示一行通過。 |
+| TC-FE-PAL-BTN-NOCLIP | FAIL。三種列都有（存倉、已起、💰）。每個 `.pal-btn` 的 `scrollHeight` 41 大於 `clientHeight` 38。存倉與已起的第二行在內底邊之下 1px，價錢行只高出 0.5px。 | FAIL。同一組數字。已放置列的第二行是「已興建」。 |
+| TC-FE-BUILD-UNFIT-PRESELECT-MINFP | FAIL。`(5,7)` 在未選建築時已是金格。選工坊後仍選中，提示是「已揀「工坊」同呢格空地。」，「去擺位置」可按，`(5,7)` 仍是金。沒有 info 提示。 | FAIL。目錄鍵是 `buff_type`、`buff_vals`、`cost_gold`、`effect`、`icon`、`id`、`materials`、`max_level`、`name`、`unlock_region`，沒有足跡欄。注入 `footprint: 1` 之後 `(5,7)` 仍不是金。選工坊後格子仍選中，提示是「已選擇「工坊」和這個位置。」，沒有 info 提示。 |
+| TC-FE-BUILD-UNFIT-PRESELECT (c) | FAIL。新建造停在場景 3，紅色提示是伺服器原文「位置超出地圖範圍（0 至 7）」。取出沒有「取出」，進不了場景 3。 | FAIL。新建造與取出都停在場景 3，`#toast.error` 顯示伺服器原文「位置超出地圖範圍（0 至 7）」，底色 `rgb(239, 68, 68)`。 |
+| TC-FE-WAREHOUSE-COPY-FORMAL | FAIL。畫面與原始碼仍是舊口語，含「睇地圖」「確定收起呢棟建築物」。 | FAIL。只剩這兩句：`#townMap` aria 是「場景 1」，不是「場景 1 · 查看地圖」。`index.html` 仍有「睇地圖」與「確定收起呢棟」。收起對話框是「📦 確定收起呢棟建築物？」。 |
+
+整套：`pytest -m "not frontend"` main 17 failed、361 passed、108 deselected；`ba93ca9` 378 passed、108 deselected。`pytest -m frontend` main 37 failed、71 passed、378 deselected（比上一輪多 5 條失敗，就是未預選、400 回場景 2 的兩條、最小足跡、清單裁切；通過數仍是 71）。`ba93ca9` 7 failed、101 passed、378 deselected。這 7 條是：書面語剩下的「睇地圖／確定收起呢棟」、底欄高度、未預選、400 回場景 2 的兩條、最小足跡、清單裁切。上一輪在 `25b959a` 失敗的返回地圖、滿圖、金色格、放不下、取消底色、地圖橫向、`UX-02`、`NOREGRESS` 在 `ba93ca9` 通過。
