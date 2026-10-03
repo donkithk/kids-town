@@ -24,14 +24,14 @@ Requirements:
   TC-FE-TOWN-MOTION-01/02  慶祝層 pointer-events:none；動畫掣跟 prefers-reduced-motion，開／關撳先寫 localStorage。
   TC-FE-TOWN-GRID-01  四場景地圖係 8×8。
   TC-FE-TOWN-STORE-LEGACY-01  格外（或無合法格）且 stored=0 嘅屋，載入時收進存倉 stored=1，保留種類同等級。
-  TC-FE-TOWN-STORE-LEGACY-02  收倉之後唔好畫喺地圖、唔好當地圖「已起」；用現有存倉流程放返空地，唔扣資源。
+  TC-FE-TOWN-STORE-LEGACY-02  收倉之後唔好畫喺地圖、唔好當地圖「已起」；用卡片「取出」放回空地，唔扣資源。
   篩選 `-k 'town_grid or store_legacy'`。
   TC-FE-TOWN-STORE-LIST-01  已存倉（stored=1）嘅屋，場景 2 建築清單唔好當未起兼標價錢，亦唔好入「確定先至扣資源」。
-  TC-FE-TOWN-STORE-PLACE-01  用存倉／#placementBar／unstored 放返，地圖見到屋，金幣材料唔變，同一行 stored=0。
-  TC-FE-TOWN-STORE-CONFIRM-01  唔好同時見到扣資源確認文案同「你已經興建咗呢種建築物」；正確放返之後資源唔變。
+  TC-FE-TOWN-STORE-PLACE-01  用卡片「取出」走場景 2 → 場景 3／unstored 放回，地圖見到屋，金幣材料唔變，同一行 stored=0。
+  TC-FE-TOWN-STORE-CONFIRM-01  唔好同時見到扣資源確認文案同「你已經興建咗呢種建築物」；正確放回之後資源唔變。
   篩選 `-k 'store_list or store_place or store_confirm'`。
-  TC-FE-TOWN-STORE-UX-01  清單放返存倉屋要留喺四場景 8×8。唔好 `#placementBar.active`、
-  唔好藏 `#townMap`、唔好露出 24×16 `.valid-plot`／`↘️`。確認走 POST `/unstored`。
+  TC-FE-TOWN-STORE-UX-01  建築清單點已存倉的屋，直接進入取出場景 2。唔好 `#placementBar.active`、
+  唔好藏 `#townMap`、唔好露出 24×16 `.valid-plot`／`↘️`。提示是放回該建築且不扣資源。確認走 POST `/unstored`。
   篩選 `-k store_ux`。
   TC-FE-TOWN-UX-UPGRADE-COST-01  撳已起屋打開 #actionSheet，sheet 或確認層要顯示金幣同材料 need。
   TC-FE-TOWN-UX-UPGRADE-COST-02  資源唔夠就唔好撳得，亦唔好 POST /upgrade。
@@ -1689,7 +1689,7 @@ def _open_building_list(page):
 
 
 def _go_place_button(page):
-    return page.get_by_role("button", name=re.compile(r"去擺位置"))
+    return page.get_by_role("button", name=re.compile(r"選擇位置"))
 
 
 def _enter_scene2(page, case_id, detail=None):
@@ -1697,7 +1697,7 @@ def _enter_scene2(page, case_id, detail=None):
         page,
         case_id,
         detail
-        or "Scene 2 must open from 「我要起屋」: gold frames on empty pads, a building list that marks built ones 「已起」, and 「去擺位置」 disabled until a free pad and an unbuilt building are chosen.",
+        or "Scene 2 must open from 「我要起屋」: gold frames on empty pads, a building list that marks built ones 「已起」, and 「選擇位置」 disabled until a free pad and an unbuilt building are chosen.",
     )
     cta.click()
     page.get_by_role("button", name=re.compile(r"第\s*\d+\s*欄")).first.wait_for(
@@ -1706,7 +1706,7 @@ def _enter_scene2(page, case_id, detail=None):
 
 
 def _pick_pad_and_unbuilt(page):
-    """Select one empty pad and 健身室 so 「去擺位置」 can enable."""
+    """Select one empty pad and 健身室 so 「選擇位置」 can enable."""
     empty = page.get_by_role("button", name=re.compile(r"空地"))
     if empty.count() == 0:
         _town_ux_fail("TC-FE-TOWN-UX-02", "Scene 2 has no empty-pad button (accessible name contains 空地).")
@@ -1745,13 +1745,13 @@ def _enter_scene3(page, case_id, detail=None):
     )
     go = _go_place_button(page)
     if go.count() == 0 or not go.first.is_visible():
-        _town_ux_fail(case_id, "Scene 2 must show 「去擺位置」.")
+        _town_ux_fail(case_id, "Scene 2 must show 「選擇位置」.")
     assert go.first.is_disabled(), (
-        f"{case_id}: 「去擺位置」 stays disabled until a free pad and an unbuilt building are both chosen."
+        f"{case_id}: 「選擇位置」 stays disabled until a free pad and an unbuilt building are both chosen."
     )
     _pick_pad_and_unbuilt(page)
     assert go.first.is_enabled(), (
-        f"{case_id}: 「去擺位置」 enables only after a free pad and unbuilt {TOWN_UX_UNBUILT} are chosen."
+        f"{case_id}: 「選擇位置」 enables only after a free pad and unbuilt {TOWN_UX_UNBUILT} are chosen."
     )
     go.first.click()
     page.get_by_role("button", name=re.compile(r"取消")).first.wait_for(state="visible", timeout=8000)
@@ -1849,7 +1849,7 @@ def test_town_ux_scene1_map_cta_and_empty_pad_does_not_spend(
 def test_town_ux_scene2_gold_pads_and_building_list(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-UX-02 場景 2：金框空地、清單「已起」、揀齊先至「去擺位置」。"""
+    """TC-FE-TOWN-UX-02 場景 2：金框空地、清單「已起」、揀齊先至「選擇位置」。"""
     _seed_town_ux_plot(test_db_path, fe_ids["kid_id"])
     _open_town_home(page, base_url)
     _enter_scene2(page, "TC-FE-TOWN-UX-02")
@@ -1860,9 +1860,9 @@ def test_town_ux_scene2_gold_pads_and_building_list(
     )
     go = _go_place_button(page)
     if go.count() == 0 or not go.first.is_visible():
-        _town_ux_fail("TC-FE-TOWN-UX-02", "Scene 2 must show 「去擺位置」.")
+        _town_ux_fail("TC-FE-TOWN-UX-02", "Scene 2 must show 「選擇位置」.")
     assert go.first.is_disabled(), (
-        "TC-FE-TOWN-UX-02: 「去擺位置」 is disabled before a pad and an unbuilt building are chosen."
+        "TC-FE-TOWN-UX-02: 「選擇位置」 is disabled before a pad and an unbuilt building are chosen."
     )
     _open_building_list(page)
     built_marks = page.get_by_text("已起", exact=False)
@@ -1875,7 +1875,7 @@ def test_town_ux_scene2_gold_pads_and_building_list(
         assert marked.count() > 0, f"TC-FE-TOWN-UX-02: {name} must be marked 已起"
     _pick_pad_and_unbuilt(page)
     assert go.first.is_enabled(), (
-        "TC-FE-TOWN-UX-02: 「去擺位置」 enables only after a free pad and an unbuilt building are chosen."
+        "TC-FE-TOWN-UX-02: 「選擇位置」 enables only after a free pad and an unbuilt building are chosen."
     )
 
 
@@ -2050,7 +2050,7 @@ def test_town_ux_scene4_upgrade_feature_and_hud(
     if opener.count() and opener.first.is_visible() and opener.first.is_enabled():
         opener.first.click()
     sheet = page.locator("#actionSheet, .action-sheet, [aria-label*='升級或打開功能']").first
-    skip = re.compile(r"升級|打開功能|取消|確定|返去|收起|我要起屋|去擺位置|動畫|重置|已起")
+    skip = re.compile(r"升級|打開功能|取消|確定|返回地圖|收起|我要起屋|選擇位置|動畫|重置|已起")
     feature = None
     buttons = sheet.get_by_role("button")
     for i in range(buttons.count()):
@@ -2119,11 +2119,11 @@ def test_town_ux_hit_back_pad_not_front_sprite(
         page.mouse.click(hit["x"], hit["y"])
         chosen = page.get_by_role(
             "button",
-            name=re.compile(rf"第\s*{hit['c']}\s*欄第\s*{hit['r']}\s*行[\s\S]*已揀"),
+            name=re.compile(rf"第\s*{hit['c']}\s*欄第\s*{hit['r']}\s*行[\s\S]*已選"),
         )
         assert chosen.count() > 0 and chosen.first.is_visible(), (
             "TC-FE-TOWN-HIT-01: the click on the occluded point must select back pad "
-            f"第 {hit['c']} 欄第 {hit['r']} 行 (已揀) at {width}×{height}, "
+            f"第 {hit['c']} 欄第 {hit['r']} 行 (已選此格) at {width}×{height}, "
             f"not the front building {hit['front']!r}."
         )
 
@@ -2169,7 +2169,7 @@ def test_town_ux_letterbox_pad_hit_alignment(page, base_url, test_db_path, fe_id
         chosen = page.get_by_role(
             "button",
             name=re.compile(
-                rf"第\s*{match.group(1)}\s*欄第\s*{match.group(2)}\s*行[\s\S]*已揀"
+                rf"第\s*{match.group(1)}\s*欄第\s*{match.group(2)}\s*行[\s\S]*已選"
             ),
         )
         assert chosen.count() > 0, (
@@ -2491,8 +2491,9 @@ def test_town_ux_motion_toggle_follows_reduced_motion_until_click(
 # col 0..7 × row 0..7, or with no legal cell, and stored=0, must become
 # stored=1 when the town loads. Keep the same row id, def_id, and level.
 # Scene 1 must not paint them. The build list must not lock them as map-「已起」.
-# Place them back from the existing 存倉 tab onto an empty pad. That path
-# must not deduct resources. Do not use 「去擺位置」 as the place-back path.
+# Place them back with the card's 「取出」 button: unstore Scene 2, then Scene 3.
+# That path must not deduct resources. Do not click the card body, and do not
+# use 「選擇位置」 on a new-build as the place-back path.
 
 TOWN_GRID_COLS = 8
 TOWN_GRID_ROWS = 8
@@ -2762,7 +2763,7 @@ def test_town_grid_map_is_8x8(page, base_url, test_db_path, fe_ids):
         except Exception:
             enabled = False
         if not enabled:
-            problems.append("「去擺位置」 stayed disabled, so scene 3 was not measured")
+            problems.append("「選擇位置」 stayed disabled, so scene 3 was not measured")
         else:
             go.first.click()
             page.locator("#btnUxCancel").wait_for(state="visible", timeout=8000)
@@ -2892,104 +2893,48 @@ def test_town_store_legacy_place_from_store_without_spend(
             card_text = card.first.inner_text() if card.count() else ""
             if card.count() == 0 or f"Lv.{row['level']}" not in card_text:
                 problems.append(
-                    f"存倉 must list {row['name']} Lv.{row['level']} (按此放置). "
+                    f"存倉 must list {row['name']} Lv.{row['level']} and a 取出 button. "
                     f"Saw {card_text!r}."
                 )
         library_card = page.locator("#storedBuildings .build-card", has_text="圖書館")
         if library_card.count() == 0:
             problems.append("存倉 has no 圖書館 card to place back")
         else:
-            library_card.first.click()
-            bar = page.locator("#placementBar")
-            active = "active" in (bar.get_attribute("class") or "")
-            if not active:
-                problems.append(
-                    "clicking the 存倉 card must start the existing place-from-storage "
-                    "flow (#placementBar.active). Do not use 「去擺位置」."
+            place_problems = _unstore_from_card(page, library_card.first, 0, 0)
+            problems.extend(place_problems)
+            if not place_problems:
+                placed = _rows_named(
+                    _building_rows(test_db_path, kid_id), "圖書館"
                 )
-            else:
-                _goto_town_map(page)
-                try:
-                    page.locator(".valid-plot").first.wait_for(state="visible", timeout=8000)
-                except Exception:
-                    problems.append("place-from-storage did not show a .valid-plot on the town map")
-                else:
-                    picked = _pick_in_grid_valid_plot(page)
-                    if not picked:
-                        problems.append(
-                            "no .valid-plot with origin inside 0..6 × 0..6 "
-                            "(the 2×2 must stay inside the 8×8 grid)"
-                        )
-                    else:
-                        page.locator(
-                            f'.valid-plot[data-px="{picked["px"]}"][data-py="{picked["py"]}"]'
-                        ).first.dispatch_event("click")
-                        confirm = page.locator("#placementBar").get_by_role(
-                            "button", name=re.compile(r"確認")
-                        )
-                        try:
-                            confirm.first.wait_for(state="visible", timeout=8000)
-                        except Exception:
-                            problems.append(
-                                "selecting an empty pad did not show 「確認建造」 "
-                                "on the place-from-storage bar"
-                            )
-                        else:
-                            try:
-                                with page.expect_response(
-                                    lambda r: r.request.method == "POST"
-                                    and "/buildings/" in r.url,
-                                    timeout=8000,
-                                ) as resp_info:
-                                    confirm.first.click()
-                                resp = resp_info.value
-                            except Exception as exc:
-                                problems.append(
-                                    f"confirm did not finish a place-from-storage request ({exc})"
-                                )
-                            else:
-                                if "/unstored" not in resp.url:
-                                    problems.append(
-                                        "confirm must POST the existing unstored endpoint "
-                                        f"for the stored row, not a new build. url={resp.url}"
-                                    )
-                                if resp.status not in (200, 201):
-                                    problems.append(
-                                        f"unstored failed HTTP {resp.status}: {resp.text()[:300]}"
-                                    )
-                                page.wait_for_timeout(400)
-                                placed = _rows_named(
-                                    _building_rows(test_db_path, kid_id), "圖書館"
-                                )
-                                if (
-                                    len(placed) != 1
-                                    or placed[0]["id"] != library["id"]
-                                    or placed[0]["level"] != 3
-                                    or placed[0]["stored"] != 0
-                                    or placed[0]["def_id"] != library["def_id"]
-                                    or not (
-                                        placed[0]["cell_x"] is not None
-                                        and placed[0]["cell_y"] is not None
-                                        and 0 <= placed[0]["cell_x"] < TOWN_GRID_COLS
-                                        and 0 <= placed[0]["cell_y"] < TOWN_GRID_ROWS
-                                    )
-                                ):
-                                    problems.append(
-                                        "圖書館 must stay the same row (id, def_id, level 3) "
-                                        "and land stored=0 on a cell inside 0..7 × 0..7. "
-                                        f"saw {placed!r} picked={picked!r}"
-                                    )
-                                on_iso = any(
-                                    "圖書館" in label for label in _iso_pad_labels(page)
-                                )
-                                on_canvas = page.locator(
-                                    '#townBuildings img[alt="圖書館"]'
-                                ).count() > 0
-                                if not on_iso and not on_canvas:
-                                    problems.append(
-                                        "after place-from-storage, 圖書館 is not on the "
-                                        f"iso map or the town canvas. toast={_toast_text(page)!r}"
-                                    )
+                if (
+                    len(placed) != 1
+                    or placed[0]["id"] != library["id"]
+                    or placed[0]["level"] != 3
+                    or placed[0]["stored"] != 0
+                    or placed[0]["def_id"] != library["def_id"]
+                    or not (
+                        placed[0]["cell_x"] is not None
+                        and placed[0]["cell_y"] is not None
+                        and 0 <= placed[0]["cell_x"] < TOWN_GRID_COLS
+                        and 0 <= placed[0]["cell_y"] < TOWN_GRID_ROWS
+                    )
+                ):
+                    problems.append(
+                        "圖書館 must stay the same row (id, def_id, level 3) "
+                        "and land stored=0 on a cell inside 0..7 × 0..7. "
+                        f"saw {placed!r}"
+                    )
+                on_iso = any(
+                    "圖書館" in label for label in _iso_pad_labels(page)
+                )
+                on_canvas = page.locator(
+                    '#townBuildings img[alt="圖書館"]'
+                ).count() > 0
+                if not on_iso and not on_canvas:
+                    problems.append(
+                        "after 取出, 圖書館 is not on the "
+                        f"iso map or the town canvas. toast={_toast_text(page)!r}"
+                    )
 
     after = _resource_snapshot(page, test_db_path, kid_id)
     if (
@@ -3024,8 +2969,8 @@ def test_town_store_legacy_place_from_store_without_spend(
 # stored=1 means the kid already owns that building. Scene 2 建築清單 must not
 # sell it as 未起 with a gold price, and 確定放置 must not POST /buildings.
 # That create call dup-checks stored rows and returns 400
-# 「你已經興建咗呢種建築物」. The correct place is the existing 存倉 tab:
-# #placementBar and POST /buildings/<id>/unstored, with no spend.
+# 「你已經興建咗呢種建築物」. The correct place is the card's 取出 button:
+# unstore Scene 2, then Scene 3, POST /buildings/<id>/unstored, with no spend.
 # Filter: `-k 'store_list or store_place or store_confirm'`.
 
 STORE_PALETTE_GUILD = "探險公會"
@@ -3040,8 +2985,9 @@ def _store_palette_fail(case_id, detail):
         "A stored=1 building is already owned. The four-scene 建築清單 must not "
         "show it as unbuilt with a price, and 確定 must not POST /buildings "
         f"(the dup check includes stored rows and answers 400 {ALREADY_BUILT_COPY}). "
-        "Place it from 存倉 with #placementBar and POST /buildings/<id>/unstored, "
-        "without spending gold or materials."
+        "Place it with the card's 取出 button: unstore Scene 2, then Scene 3, "
+        "POST /buildings/<id>/unstored, without spending gold or materials. "
+        "Do not click the card body and do not activate #placementBar."
     )
 
 
@@ -3136,7 +3082,7 @@ def _resource_delta(before, after):
 def _enter_new_build_confirm(page, name):
     """Pick an empty pad and name in scene 2. Return place-status text, or None.
 
-    None means the list did not enable 「去擺位置」 for this building, so the
+    None means the list did not enable 「選擇位置」 for this building, so the
     new-build spend confirm was not entered.
     """
     _select_empty_pad(page, 1, 1)
@@ -3164,8 +3110,97 @@ def _enter_new_build_confirm(page, name):
     return page.locator("#placeStatus").inner_text() or ""
 
 
+def _card_takeout(card):
+    """The 「取出」 button on one storage card. Never the card body."""
+    named = card.get_by_role("button", name="取出")
+    if named.count():
+        return named.first
+    marked = card.locator('[data-testid="warehouse-takeout"]')
+    if marked.count():
+        return marked.first
+    return None
+
+
+def _unstore_from_card(page, card, cell_x, cell_y):
+    """取出 → unstore Scene 2 → a legal cell → Scene 3 確定放置.
+
+    Returns a list of problems. Empty means POST /unstored finished.
+    Does not click the card body and does not accept #placementBar.
+    """
+    problems = []
+    button = _card_takeout(card)
+    if button is None:
+        problems.append(
+            "storage card has no 「取出」 button. "
+            "Do not click the card body to activate #placementBar."
+        )
+        return problems
+    button.click()
+    try:
+        page.locator("#townMap").wait_for(state="visible", timeout=8000)
+    except Exception as exc:
+        problems.append(f"取出 did not show #townMap ({exc})")
+        return problems
+    bar_class = page.locator("#placementBar").get_attribute("class") or ""
+    if "active" in bar_class:
+        problems.append("#placementBar became .active after 取出")
+        return problems
+    scene = page.locator("#townMap").get_attribute("aria-label") or ""
+    if "場景 2" not in scene:
+        problems.append(f"取出 must open unstore Scene 2, got {scene!r}")
+        return problems
+    col = cell_x + 1
+    row = cell_y + 1
+    pad = page.locator("#townMap").get_by_role(
+        "button",
+        name=re.compile(rf"第\s*{col}\s*欄第\s*{row}\s*行"),
+    )
+    if pad.count() == 0:
+        problems.append(f"missing pad 第 {col} 欄第 {row} 行")
+        return problems
+    pad.first.click()
+    advance = page.locator("#btnToScene3")
+    try:
+        if advance.count() and advance.first.is_visible() and advance.first.is_enabled():
+            advance.first.click()
+    except Exception:
+        pass
+    confirm = page.locator("#btnUxConfirm")
+    try:
+        confirm.wait_for(state="visible", timeout=8000)
+    except Exception:
+        problems.append(
+            "Scene 3 #btnUxConfirm did not appear after the legal cell. "
+            f"scene={page.locator('#townMap').get_attribute('aria-label')!r}"
+        )
+        return problems
+    try:
+        with page.expect_response(
+            lambda r: r.request.method == "POST" and "/buildings/" in r.url,
+            timeout=8000,
+        ) as resp_info:
+            confirm.click()
+        resp = resp_info.value
+    except Exception as exc:
+        problems.append(f"confirm did not finish POST /unstored ({exc})")
+        return problems
+    if "/unstored" not in resp.url:
+        problems.append(
+            "confirm must POST /buildings/<id>/unstored for the stored row, "
+            f"not a new build. url={resp.url}"
+        )
+    if resp.status not in (200, 201):
+        try:
+            body = resp.text()[:300]
+        except Exception:
+            body = ""
+        problems.append(f"unstored failed HTTP {resp.status}: {body}")
+    page.wait_for_timeout(400)
+    return problems
+
+
 def _place_guild_from_store(page, guild):
-    """存倉 card → #placementBar → in-grid .valid-plot → 確認. Like STORE-LEGACY-02.
+    """存倉「取出」→ 場景 2 → 場景 3. Like STORE-LEGACY-02.
 
     Returns a list of problems. Empty means the unstored place finished.
     """
@@ -3182,58 +3217,11 @@ def _place_guild_from_store(page, guild):
         return problems
     if f"Lv.{guild['level']}" not in card_text:
         problems.append(
-            f"存倉 must list {STORE_PALETTE_GUILD} Lv.{guild['level']} (按此放置). "
+            f"存倉 must list {STORE_PALETTE_GUILD} Lv.{guild['level']} and a 取出 button. "
             f"Saw {card_text!r}."
         )
         return problems
-    card.first.click()
-    bar = page.locator("#placementBar")
-    if "active" not in (bar.get_attribute("class") or ""):
-        problems.append(
-            "clicking the 存倉 card must start #placementBar.active "
-            "(place-from-storage). Do not use 「去擺位置」."
-        )
-        return problems
-    _goto_town_map(page)
-    try:
-        page.locator(".valid-plot").first.wait_for(state="visible", timeout=8000)
-    except Exception:
-        problems.append("place-from-storage did not show a .valid-plot on the town map")
-        return problems
-    picked = _pick_in_grid_valid_plot(page)
-    if not picked:
-        problems.append(
-            "no .valid-plot with origin inside 0..6 × 0..6 "
-            "(the 2×2 must stay inside the 8×8 grid)"
-        )
-        return problems
-    page.locator(
-        f'.valid-plot[data-px="{picked["px"]}"][data-py="{picked["py"]}"]'
-    ).first.dispatch_event("click")
-    confirm = page.locator("#placementBar").get_by_role("button", name=re.compile(r"確認"))
-    try:
-        confirm.first.wait_for(state="visible", timeout=8000)
-    except Exception:
-        problems.append("selecting an empty pad did not show 「確認建造」 on #placementBar")
-        return problems
-    try:
-        with page.expect_response(
-            lambda r: r.request.method == "POST" and "/buildings/" in r.url,
-            timeout=8000,
-        ) as resp_info:
-            confirm.first.click()
-        resp = resp_info.value
-    except Exception as exc:
-        problems.append(f"confirm did not finish a place-from-storage request ({exc})")
-        return problems
-    if "/unstored" not in resp.url:
-        problems.append(
-            "confirm must POST /buildings/<id>/unstored for the stored row, "
-            f"not a new build. url={resp.url}"
-        )
-    if resp.status not in (200, 201):
-        problems.append(f"unstored failed HTTP {resp.status}: {resp.text()[:300]}")
-    page.wait_for_timeout(400)
+    problems.extend(_unstore_from_card(page, card.first, 0, 0))
     return problems
 
 
@@ -3348,11 +3336,10 @@ def test_town_store_list_does_not_sell_stored_guild(
 def test_town_store_place_from_warehouse_without_spend(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-STORE-PLACE-01 放返存倉探險公會必須走 unstored，地圖見到、唔扣資源。
+    """TC-FE-TOWN-STORE-PLACE-01 放回存倉探險公會必須走 unstored，地圖見到、唔扣資源。
 
-    The building list currently offers this stored row as a new build. That
-    confirm has to be the 存倉 / #placementBar / unstored path (STORE-LEGACY-02).
-    When the list no longer opens 「確定先至扣資源」, place from the 存倉 tab.
+    If the building list still opens the new-build spend confirm, that is a failure.
+    The place itself is the card's 取出 button, then unstore Scene 2 and Scene 3.
     """
     kid_id = fe_ids["kid_id"]
     seeded = _seed_town_store_palette(test_db_path, kid_id)
@@ -3376,11 +3363,11 @@ def test_town_store_place_from_warehouse_without_spend(
         except Exception as exc:
             problems.append(
                 f"list confirm showed {status!r} but did not finish a place "
-                f"({exc}). Correct path is 存倉 #placementBar POST /unstored."
+                f"({exc}). Correct path is the card 取出 button, then POST /unstored."
             )
         else:
             problems.append(
-                "place did not use 存倉 / #placementBar / POST /buildings/<id>/unstored. "
+                "place did not use 取出 / unstore Scene 2 / POST /buildings/<id>/unstored. "
                 f"The list confirm showed {status_after or status!r} and "
                 f"POST {resp.url} HTTP {resp.status} {body[:180]}. toast={toast!r}. "
                 "The 400 is before any deduct, so gold and materials stay put, "
@@ -3457,13 +3444,12 @@ def test_town_store_confirm_does_not_pair_spend_copy_with_already_built(
         _store_palette_fail("TC-FE-TOWN-STORE-CONFIRM-01", " | ".join(problems))
 
 
-# ── TC-FE-TOWN-STORE-UX: warehouse place stays on the four-scene 8×8 pad ──
+# ── TC-FE-TOWN-STORE-UX: 建築清單 opens unstore Scene 2 ──
 #
-# After #35, the 建築清單 warehouse row calls placeFromStore, which calls
-# legacy startUnstoreBuilding. That adds #placementBar.active. The sibling
-# rule `#placementBar.active ~ #townMap { visibility:hidden }` hides the iso
-# map and leaves the 24×16 #townCanvasWrapper .valid-plot / ↘️ grid.
-# Acceptance: stay on the four-scene 8×8 pad and confirm with POST /unstored.
+# Clicking a building that already has a stored copy goes directly into the
+# unstore Scene 2, the same path as the card's 取出 button. The hint names
+# that building and says nothing is deducted. #placementBar stays inactive.
+# Confirm still uses POST /unstored on the four-scene pad, with no charge.
 # Filter: `-k store_ux`.
 
 _STORE_UX_CHROME_JS = r"""
@@ -3809,7 +3795,7 @@ def _confirm_stored_on_four_scene(page):
 def test_town_store_ux_place_stays_on_four_scene(
     page, base_url, test_db_path, fe_ids
 ):
-    """TC-FE-TOWN-STORE-UX-01 清單放返存倉屋要留喺四場景 8×8，確認走 unstored。"""
+    """TC-FE-TOWN-STORE-UX-01 清單點存倉屋直接進入取出場景 2，確認走 unstored。"""
     kid_id = fe_ids["kid_id"]
     seeded = _seed_town_store_palette(test_db_path, kid_id)
     guild = seeded["guild"]
@@ -3817,6 +3803,7 @@ def test_town_store_ux_place_stays_on_four_scene(
     _open_town_home(page, base_url)
     before = _resource_snapshot(page, test_db_path, kid_id)
     case_id = "TC-FE-TOWN-STORE-UX-01"
+    expected_hint = f"請點選空地，放回「{STORE_PALETTE_GUILD}」。不扣除金幣和材料。"
     _enter_scene2(page, case_id)
     _open_building_list(page)
     btn, control = _palette_control(page, STORE_PALETTE_GUILD)
@@ -3830,15 +3817,36 @@ def test_town_store_ux_place_stays_on_four_scene(
             f"saw {control!r}"
         )
     btn.click()
+    page.wait_for_timeout(300)
+    scene = page.locator("#townMap").get_attribute("aria-label") or ""
+    ready = page.locator("#readyStatus")
+    ready_on = False
+    actual_hint = ""
     try:
-        _wait_warehouse_place_ui(page)
-    except Exception as exc:
-        problems.append(f"place did not start from the 建築清單 row ({exc})")
+        ready_on = ready.is_visible()
+        actual_hint = (ready.inner_text() or "").strip()
+    except Exception:
+        ready_on = False
+    bar_class = page.locator("#placementBar").get_attribute("class") or ""
+    if "場景 2" not in scene or not ready_on or actual_hint != expected_hint:
+        problems.append(
+            "clicking a stored building in 建築清單 must enter unstore Scene 2, "
+            f"the same path as 取出. scene={scene!r} ready_visible={ready_on} "
+            f"hint={actual_hint!r} expected {expected_hint!r}"
+        )
+    if "active" in bar_class:
+        problems.append("#placementBar must stay inactive when the list opens unstore Scene 2")
+    if re.search(r"💰|\d", actual_hint):
+        problems.append(f"unstore hint must not show a price: {actual_hint!r}")
+    entered = _resource_snapshot(page, test_db_path, kid_id)
+    if not _resources_unchanged(before, entered):
+        problems.append(
+            "opening unstore Scene 2 from the list must not charge "
+            f"({_resource_delta(before, entered)})"
+        )
+    if problems:
         _store_ux_fail(case_id, " | ".join(problems))
     chrome = _store_ux_chrome(page)
-    if chrome["barActive"] and chrome["plotCount"] > 0 and "確認建造" not in chrome["confirmText"]:
-        _reveal_legacy_confirm(page)
-        chrome = _store_ux_chrome(page)
     problems.extend(_legacy_place_problems(chrome))
     if problems:
         problems.append(
@@ -3869,7 +3877,7 @@ UPGRADE_UX_TARGET = "健身室"
 UPGRADE_UX_LEVEL = 2
 UPGRADE_UX_SHOP = "商店"
 _UPGRADE_CONFIRM_NAME = re.compile(r"確定|確認")
-_UPGRADE_PLACE_CONFIRM = re.compile(r"確定放置|確認建造|去擺位置")
+_UPGRADE_PLACE_CONFIRM = re.compile(r"確定放置|確認建造|選擇位置")
 _UPGRADE_CANCEL_NAME = re.compile(r"取消")
 _UPGRADE_SHORT_RE = re.compile(r"唔夠|不足|未夠|不夠|買唔起")
 UPGRADE_UX_RED = (
