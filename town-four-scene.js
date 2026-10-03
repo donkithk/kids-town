@@ -7,6 +7,11 @@
   var ASSET = "mocks/town-building-proof/assets/";
   var MOTION_KEY = "ktTownMotion";
   var MARK_VALID = ASSET + "cell-valid.svg";
+  var MARK_CHOSEN = "data:image/svg+xml," + encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='-84 -50 168 120'>" +
+    "<polygon points='0,-50 84,0 0,50 -84,0' fill='#fff3c4' fill-opacity='.62' " +
+    "stroke='#d4a017' stroke-width='4' stroke-linejoin='round'/></svg>"
+  );
 
   var ASSET_ID = {
     "圖書館": "library",
@@ -754,7 +759,8 @@
 
     var showMark = !state.sheet && (kind === "empty" || kind === "chosen" || kind === "preview");
     cell.mark.hidden = !showMark;
-    if (showMark && cell.mark.getAttribute("src") !== MARK_VALID) cell.mark.src = MARK_VALID;
+    var markSrc = kind === "chosen" ? MARK_CHOSEN : MARK_VALID;
+    if (showMark && cell.mark.getAttribute("src") !== markSrc) cell.mark.src = markSrc;
     cell.badge.hidden = !(kind === "chosen" || kind === "preview");
     if (kind === "chosen") cell.badge.textContent = "此格";
     if (kind === "preview") cell.badge.textContent = "預覽";
@@ -1261,20 +1267,13 @@
     map.addEventListener("click", function (event) {
       var target = event.target;
       var btn = target.closest && target.closest("button");
-      /* Keyboard activation targets the cell button. Pointer hits do not:
-         the button is clipped to a point cellAt cannot see. */
+      /* Enter and Space activate the cell button. That is the same onCell a tap uses. */
       if (btn && btn.classList.contains("cell-btn")) {
         var pad = btn.closest(".pad");
         if (pad) {
           var pc = parseInt(pad.style.getPropertyValue("--c"), 10);
           var pr = parseInt(pad.style.getPropertyValue("--r"), 10);
           if (isFinite(pc) && isFinite(pr)) {
-            /* Keyboard click (clientX 0) must not toggle a cell back off when
-               the pointer could not reach it to clear the selection. */
-            var fromKeys = event.detail === 0 && event.clientX === 0 && event.clientY === 0;
-            if (fromKeys && state.scene === 2 && !state.unstoreId && sameCell(state.pad, { c: pc, r: pr })) {
-              return;
-            }
             onCell(pc, pr);
             return;
           }
