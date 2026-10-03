@@ -764,6 +764,7 @@ OLD_SCENE3_CHARGE_HINT = "確定先至扣資源。取消唔會扣。"
 FULL_TOWN_TOAST = "城鎮沒有空位，請先收起或移動其他建築。"
 CANNOT_FIT_TOAST = "這個位置放不下這座建築物。"
 OCCUPIED_TOAST = "這個位置已經有建築物。"
+OCCUPIED_RED = "該位置已被建築物佔用"
 CANCEL_TOAST = "已取消，資源未扣除"
 INFO_BG = "rgb(107, 79, 42)"
 INFO_FG = "rgb(255, 248, 231)"
@@ -787,7 +788,6 @@ BACKLOG_LINE_MARKERS = (
     "撳「升級」會彈出確認窗",
     "升級唔到",
     "先揀位置，再按「確認」建造",
-    "確定收起呢棟建築物",
     "㩒此放置",
     "㨒此放置",
     "選擇要起嘅建築",
@@ -810,6 +810,8 @@ OLD_COPY_FRAGMENTS = (
     "呢格",
     "已起",
     "未起",
+    "確定收起呢棟",
+    "睇地圖",
 )
 COLLOQUIAL_BITS = ("喺存倉", "用存倉放返", "唔使再扣資源")
 WAREHOUSE_BAR_TEXT = "📍 選擇位置放置倉庫建築"
@@ -1472,6 +1474,11 @@ def test_formal_placement_copy(page, base_url, warehouse_db, warehouse_ids):
     )
     _login(page, base_url)
     problems = []
+    scene_label = page.locator("#townMap").get_attribute("aria-label") or ""
+    if scene_label != "場景 1 · 查看地圖":
+        problems.append(
+            f"#townMap aria-label {scene_label!r}, expected 場景 1 · 查看地圖"
+        )
     for hit in _colloquial_product_hits():
         problems.append("product source: " + hit)
     for filename, needle in (
@@ -1649,6 +1656,51 @@ def test_formal_placement_copy(page, base_url, warehouse_db, warehouse_ids):
                 problems.append("unstore confirm was disabled, so 未能放回 was not shown")
         else:
             problems.append("unstore confirm was not reached, so 未能放回 was not shown")
+
+    shop_rows = [
+        row for row in _kid_rows(warehouse_db, kid_id)
+        if row["name"] == "商店" and row["stored"] == 0
+    ]
+    dialogs = []
+
+    def _on_store_dialog(dialog):
+        dialogs.append(dialog.message)
+        dialog.dismiss()
+
+    page.on("dialog", _on_store_dialog)
+    if not shop_rows:
+        problems.append("no placed 商店, so the store confirm was not opened")
+    else:
+        shop_id = shop_rows[0]["id"]
+        opened = page.evaluate(
+            """async (bid) => {
+              if (typeof showBuildingUpgrade !== 'function') return false;
+              await showBuildingUpgrade(bid);
+              return true;
+            }""",
+            shop_id,
+        )
+        clicked = False
+        store_btn = page.locator("#modalContent .btn-store")
+        if opened and store_btn.count():
+            try:
+                store_btn.first.click(timeout=3000)
+                clicked = True
+            except Exception:
+                clicked = False
+        if not clicked:
+            page.evaluate(
+                "(bid) => { if (typeof storeBuilding === 'function') storeBuilding(bid); }",
+                shop_id,
+            )
+        page.wait_for_timeout(300)
+    if not any("確定收起這座建築物？" in msg for msg in dialogs):
+        problems.append(
+            f"store confirm {dialogs!r}, expected a dialog containing 確定收起這座建築物？"
+        )
+    if any("呢棟" in msg for msg in dialogs):
+        problems.append(f"store confirm still contains 呢棟: {dialogs!r}")
+    page.remove_listener("dialog", _on_store_dialog)
 
     _reset_kid(warehouse_db, kid_id, buildings=[])
     _relogin(page, base_url)
@@ -1890,10 +1942,17 @@ def test_cancel_toast_uses_info_style(page, base_url, warehouse_db, warehouse_id
 
 _BAR_METRICS_JS = r"""
 (spec) => {
+  const stage = document.querySelector('body.kt-artstage .gsw');
+  let scale = 1;
+  if (stage && stage.offsetWidth) {
+    const stageBox = stage.getBoundingClientRect();
+    scale = stageBox.width / stage.offsetWidth;
+  }
+  if (!scale || !isFinite(scale)) scale = 1;
   const out = [];
   for (const item of spec) {
     const el = document.getElementById(item.id);
-    if (!el) { out.push({id: item.id, missing: true}); continue; }
+    if (!el) { out.push({id: item.id, missing: true, scale}); continue; }
     const cs = getComputedStyle(el);
     const box = el.getBoundingClientRect();
     const shown = cs.display !== 'none' && cs.visibility !== 'hidden' && !el.hidden
@@ -1904,12 +1963,16 @@ _BAR_METRICS_JS = r"""
       range.selectNodeContents(el);
       lines = range.getClientRects().length;
     } catch (err) { /* keep the element rect count */ }
+    const rendered = box.height;
     out.push({
       id: item.id,
       text: (el.innerText || '').trim(),
       shown,
       whiteSpace: cs.whiteSpace,
-      height: box.height,
+      renderedHeight: rendered,
+      layoutHeight: rendered / scale,
+      scale,
+      computedHeight: parseFloat(cs.height) || 0,
       padL: parseFloat(cs.paddingLeft) || 0,
       padR: parseFloat(cs.paddingRight) || 0,
       scrollWidth: el.scrollWidth,
@@ -1928,6 +1991,32 @@ def _bar_metrics(page, spec):
     return page.evaluate(_BAR_METRICS_JS, spec)
 
 
+def _border_box_height(row):
+    """Border box from getBoundingClientRect, with the art-stage scale removed.
+
+    The stage is transform:scale(...). At 1280×720 the scale is 1, so this is
+    the raw rect height (border included). Computed style height is not used:
+    a content-box 48px plus 3px borders is 54px on screen and must fail 46±1.
+    """
+    if row.get("layoutHeight") is not None:
+        return float(row["layoutHeight"])
+    return float(row.get("renderedHeight") or row.get("height") or 0)
+
+
+def _height_band_problem(row, target, kind):
+    height = _border_box_height(row)
+    if abs(height - target) <= 1.05:
+        return None
+    rendered = float(row.get("renderedHeight") or height)
+    scale = float(row.get("scale") or 1)
+    computed = row.get("computedHeight")
+    return (
+        f"{row.get('id')} {kind} border-box {height:.1f}px "
+        f"(getBoundingClientRect {rendered:.1f} / scale {scale:.3f}, "
+        f"computed height {computed}), expected {target}±1"
+    )
+
+
 def _button_metric_problems(row, min_width, widths_required):
     problems = []
     if row.get("missing") or not row.get("shown"):
@@ -1936,12 +2025,13 @@ def _button_metric_problems(row, min_width, widths_required):
         problems.append(
             f"{row['id']} overflow scrollWidth {row.get('scrollWidth')} > clientWidth {row.get('clientWidth')}"
         )
+    height_problem = _height_band_problem(row, 46, "button")
+    if height_problem:
+        problems.append(height_problem)
     if not widths_required:
         return problems
     if row.get("whiteSpace") != "nowrap":
         problems.append(f"{row['id']} white-space {row.get('whiteSpace')!r}, expected nowrap")
-    if row.get("height", 0) < 45:
-        problems.append(f"{row['id']} height {row.get('height'):.1f} < 45 (46±1)")
     if row.get("padL", 0) < 13 or row.get("padR", 0) < 13:
         problems.append(
             f"{row['id']} padding {row.get('padL'):.1f}/{row.get('padR'):.1f} < 13 (14−1)"
@@ -1989,13 +2079,23 @@ def test_place_bar_buttons_do_not_overflow(page, base_url, warehouse_db, warehou
     for width, height, widths in ((1280, 720, True), (1100, 800, True), (390, 720, False)):
         page.set_viewport_size({"width": width, "height": height})
         page.wait_for_timeout(200)
-        for row in _bar_metrics(page, [{"id": item["id"]} for item in buttons_s2] + [{"id": "readyStatus"}]):
+        for row in _bar_metrics(
+            page,
+            [{"id": item["id"]} for item in buttons_s2]
+            + [{"id": "readyStatus"}, {"id": "readyBar"}],
+        ):
             spec = next((item for item in buttons_s2 if item["id"] == row.get("id")), None)
             if spec:
                 problems.extend(
                     f"{width}x{height} {item}"
                     for item in _button_metric_problems(row, spec["min"], widths)
                 )
+            elif row.get("id") == "readyBar":
+                band = _height_band_problem(row, 64, "bar")
+                if band:
+                    problems.append(f"{width}x{height} {band}")
+                elif row.get("missing") or not row.get("shown"):
+                    problems.append(f"{width}x{height} #readyBar is not visible")
             elif row.get("id") == "readyStatus" and widths:
                 problems.extend(f"{width}x{height} {item}" for item in _hint_line_problems(row))
     page.set_viewport_size({"width": 1280, "height": 720})
@@ -2004,13 +2104,23 @@ def test_place_bar_buttons_do_not_overflow(page, base_url, warehouse_db, warehou
     for width, height, widths in ((1280, 720, True), (1100, 800, True), (390, 720, False)):
         page.set_viewport_size({"width": width, "height": height})
         page.wait_for_timeout(200)
-        for row in _bar_metrics(page, [{"id": item["id"]} for item in buttons_s3] + [{"id": "placeStatus"}]):
+        for row in _bar_metrics(
+            page,
+            [{"id": item["id"]} for item in buttons_s3]
+            + [{"id": "placeStatus"}, {"id": "uxPlaceBar"}],
+        ):
             spec = next((item for item in buttons_s3 if item["id"] == row.get("id")), None)
             if spec:
                 problems.extend(
                     f"{width}x{height} {item}"
                     for item in _button_metric_problems(row, spec["min"], widths)
                 )
+            elif row.get("id") == "uxPlaceBar":
+                band = _height_band_problem(row, 64, "bar")
+                if band:
+                    problems.append(f"{width}x{height} {band}")
+                elif row.get("missing") or not row.get("shown"):
+                    problems.append(f"{width}x{height} #uxPlaceBar is not visible")
             elif row.get("id") == "placeStatus" and widths:
                 problems.extend(f"{width}x{height} {item}" for item in _hint_line_problems(row))
     assert not problems, "TC-FE-WAREHOUSE-BAR-NOOVERFLOW: " + " | ".join(problems)
@@ -2134,3 +2244,417 @@ def test_town_map_fits_horizontally(page, base_url, warehouse_db, warehouse_ids)
     )
     print("TC-FE-TOWN-MAP-FIT " + summary)
     assert not problems, "TC-FE-TOWN-MAP-FIT: " + " | ".join(problems) + " || " + summary
+
+
+RANGE_ERROR = "位置超出地圖範圍（0 至 7）"
+MIN_FP_NAME = "郵箱"
+
+
+def _cell_choice(page, cell_x, cell_y):
+    col = cell_x + 1
+    row = cell_y + 1
+    return page.evaluate(
+        """([col, row]) => {
+          const prefix = '第 ' + col + ' 欄第 ' + row + ' 行';
+          const btn = [...document.querySelectorAll('#townMap .cell-btn')].find((el) =>
+            (el.getAttribute('aria-label') || '').startsWith(prefix)
+          );
+          if (!btn) return { missing: true, label: '', badge: '', chosen: false };
+          const pad = btn.closest('.pad');
+          const badge = pad ? pad.querySelector(':scope > .badge') : null;
+          let badgeText = '';
+          if (badge && !badge.hidden) {
+            const cs = getComputedStyle(badge);
+            const box = badge.getBoundingClientRect();
+            if (cs.display !== 'none' && cs.visibility !== 'hidden' && box.width > 1) {
+              badgeText = (badge.textContent || '').trim();
+            }
+          }
+          const label = btn.getAttribute('aria-label') || '';
+          return {
+            missing: false,
+            label,
+            badge: badgeText,
+            chosen: !!(pad && pad.classList.contains('is-chosen')) || label.includes('已選此格') || badgeText === '此格'
+          };
+        }""",
+        [col, row],
+    )
+
+
+def _selected_cell_problems(choice, cell, selected):
+    """selected=True means the cell must show as the chosen pad."""
+    problems = []
+    where = f"({cell[0]},{cell[1]})"
+    if choice.get("missing"):
+        return [f"{where} pad is missing"]
+    is_on = bool(choice.get("chosen"))
+    if selected and not is_on:
+        problems.append(f"{where} was not selected. aria={choice.get('label')!r} badge={choice.get('badge')!r}")
+    if not selected and is_on:
+        problems.append(
+            f"{where} stayed selected. aria={choice.get('label')!r} badge={choice.get('badge')!r}"
+        )
+    return problems
+
+
+def _go_disabled(page):
+    go = page.locator("#btnToScene3")
+    if go.count() == 0 or not go.first.is_visible():
+        return False, "missing"
+    return go.first.is_disabled(), (go.first.inner_text() or "").strip()
+
+
+def _install_min_footprint_catalog(page):
+    """GET /api/building-defs gains footprint. Existing rows are 2; one new row is 1.
+
+    ba93ca9's catalog objects have no footprint, width, height, or size key.
+    town-four-scene.js uses a hard-coded FOOTPRINT = 2. The product must read
+    `footprint` (square side) from each def. A missing key stays 2, so the
+    default catalog still treats (5,7) as unfit.
+    """
+    seen = {"keys": None}
+
+    def handle(route):
+        response = route.fetch()
+        try:
+            data = response.json()
+        except Exception:
+            route.fulfill(status=response.status, body=response.body())
+            return
+        if not isinstance(data, list):
+            route.fulfill(status=response.status, body=response.body())
+            return
+        for item in data:
+            if isinstance(item, dict):
+                if seen["keys"] is None:
+                    seen["keys"] = sorted(item.keys())
+                item["footprint"] = 2
+        data.append({
+            "id": 9001,
+            "icon": "📮",
+            "name": MIN_FP_NAME,
+            "cost_gold": 10,
+            "materials": "{}",
+            "effect": "1×1",
+            "buff_type": "",
+            "buff_vals": "[]",
+            "max_level": 1,
+            "unlock_region": None,
+            "footprint": 1,
+        })
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(data),
+        )
+
+    page.route("**/api/building-defs", handle)
+    return seen
+
+
+def _force_confirm_400(page, mode):
+    def handle(route):
+        request = route.request
+        url = request.url
+        if request.method != "POST":
+            route.continue_()
+            return
+        unstore = "/unstored" in url
+        build = (
+            "/buildings" in url
+            and not unstore
+            and "/move" not in url
+            and "/store" not in url
+            and "/upgrade" not in url
+        )
+        if (mode == "unstore" and unstore) or (mode == "new-build" and build):
+            route.fulfill(
+                status=400,
+                content_type="application/json",
+                body=json.dumps({"error": RANGE_ERROR}),
+            )
+            return
+        route.continue_()
+
+    page.route("**/api/kids/**", handle)
+
+
+def _server_error_problems(toast, phrase):
+    text = toast.get("text") or ""
+    if phrase not in text:
+        return []
+    classes = set((toast.get("className") or "").split())
+    if "error" in classes:
+        return [f"red .error showed {text!r}"]
+    return [f"showed server wording {text!r}"]
+
+
+def _must_not_enter_scene3(page, origin, phrase):
+    """Choosing a building must not carry an unfit origin into Scene 3."""
+    problems = []
+    disabled, label = _go_disabled(page)
+    if disabled:
+        return problems
+    problems.append(f"「選擇位置」 enabled after {origin} (button {label!r})")
+    page.locator("#btnToScene3").click()
+    page.wait_for_timeout(250)
+    scene = _scene_aria(page)
+    if "場景 3" in scene:
+        problems.append(f"reached Scene 3 with origin {origin}. scene={scene!r}")
+    confirm = page.locator("#btnUxConfirm")
+    if confirm.count() and confirm.first.is_visible():
+        confirm.first.click()
+        toast = _wait_toast(page)
+        problems.extend(_server_error_problems(toast, phrase))
+        classes = set((toast.get("className") or "").split())
+        if "error" in classes:
+            problems.append(f"confirm toast used .error {toast.get('text')!r}")
+    return problems
+
+
+@pytest.mark.case_id("TC-FE-BUILD-UNFIT-PRESELECT")
+def test_unfit_cell_is_not_preselected(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-BUILD-UNFIT-PRESELECT (a) 未選建築時，放不下或已佔用的格不能選。"""
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[{"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0}],
+    )
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _enter_new_build_scene2(page)
+    problems = []
+    gold = set(_mark_gold_cells(page))
+    for cell in ((5, 7),):
+        if cell in gold:
+            problems.append(f"{cell} is gold before a building is chosen")
+        _click_cell(page, *cell)
+        toast = _wait_toast(page)
+        problems.extend(_toast_info_problems(toast, CANNOT_FIT_TOAST))
+        problems.extend(_server_error_problems(toast, RANGE_ERROR))
+        problems.extend(_selected_cell_problems(_cell_choice(page, *cell), cell, False))
+    _pick_unbuilt(page, "工坊")
+    hint = _hint(page)["ready"]
+    if hint == "已選擇「工坊」和這個位置。":
+        problems.append(f"picking 工坊 kept the unfit cell. hint={hint!r}")
+    problems.extend(_must_not_enter_scene3(page, (5, 7), RANGE_ERROR))
+    _relogin(page, base_url)
+    _enter_new_build_scene2(page)
+    occupied = (1, 0)
+    gold = set(_mark_gold_cells(page))
+    if occupied in gold:
+        problems.append(f"{occupied} footprint cell is gold before a building is chosen")
+    _click_cell(page, *occupied)
+    toast = _wait_toast(page)
+    problems.extend(
+        [f"occupied {occupied}: {item}" for item in _toast_info_problems(toast, OCCUPIED_TOAST)]
+    )
+    problems.extend(_server_error_problems(toast, OCCUPIED_RED))
+    problems.extend(_selected_cell_problems(_cell_choice(page, *occupied), occupied, False))
+    _pick_unbuilt(page, "工坊")
+    hint = _hint(page)["ready"]
+    if hint == "已選擇「工坊」和這個位置。":
+        problems.append(f"picking 工坊 kept occupied {occupied}. hint={hint!r}")
+    problems.extend(_must_not_enter_scene3(page, occupied, OCCUPIED_RED))
+    assert not problems, "TC-FE-BUILD-UNFIT-PRESELECT: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-FE-BUILD-UNFIT-PRESELECT")
+@pytest.mark.parametrize("mode", ["new-build", "unstore"])
+def test_confirm_400_returns_to_scene2(page, base_url, warehouse_db, warehouse_ids, mode):
+    """TC-FE-BUILD-UNFIT-PRESELECT (c) 伺服器 400 時回到場景 2，不顯示原始錯誤。"""
+    kid_id = warehouse_ids["kid_id"]
+    if mode == "unstore":
+        _reset_kid(
+            warehouse_db,
+            kid_id,
+            points=800,
+            buildings=[{"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12}],
+        )
+    else:
+        _reset_kid(
+            warehouse_db,
+            kid_id,
+            points=800,
+            items={"wood": 40, "brick": 20},
+            buildings=[],
+        )
+    before_points = get_kid_points(warehouse_db, kid_id)
+    before_items = inventory_map(warehouse_db, kid_id)
+    before_rows = _kid_rows(warehouse_db, kid_id)
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    if mode == "unstore":
+        opened = _open_takeout_scene2(page)
+        assert opened is None, "TC-FE-BUILD-UNFIT-PRESELECT: " + opened
+        _click_cell(page, 0, 0)
+    else:
+        _enter_new_build_scene2(page)
+        _click_cell(page, 0, 0)
+        _pick_unbuilt(page, "健身室")
+    advance = page.locator("#btnToScene3")
+    if advance.count() and advance.first.is_visible() and advance.first.is_enabled():
+        advance.first.click()
+    page.locator("#btnUxConfirm").wait_for(state="visible", timeout=8000)
+    _force_confirm_400(page, mode)
+    page.locator("#btnUxConfirm").click()
+    toast = _wait_toast(page)
+    problems = _toast_info_problems(toast, CANNOT_FIT_TOAST)
+    text = toast.get("text") or ""
+    if RANGE_ERROR in text or "位置超出" in text:
+        problems.append(f"toast showed the raw server error {text!r}")
+    if "error" in set((toast.get("className") or "").split()):
+        problems.append(f"toast used .error {toast.get('className')!r}")
+    scene = _scene_aria(page)
+    if "場景 2" not in scene:
+        problems.append(f"stayed on {scene!r}, expected 場景 2")
+    if "場景 3" in scene:
+        problems.append("still stuck in Scene 3")
+    if not _resources_same(warehouse_db, kid_id, before_points, before_items):
+        problems.append("resources changed")
+    if _kid_rows(warehouse_db, kid_id) != before_rows:
+        problems.append("rows changed")
+    assert not problems, "TC-FE-BUILD-UNFIT-PRESELECT " + mode + ": " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-FE-BUILD-UNFIT-PRESELECT-MINFP")
+def test_smallest_catalog_footprint_golds_index_7(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-BUILD-UNFIT-PRESELECT-MINFP 未選建築時金格跟目錄最小足跡。
+
+    這也是 (b) 的介面路徑：先選 (5,7)，再選 2×2 的工坊。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(warehouse_db, kid_id, points=800, buildings=[])
+    seen = _install_min_footprint_catalog(page)
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _enter_new_build_scene2(page)
+    problems = []
+    keys = seen["keys"]
+    gold = set(_mark_gold_cells(page))
+    if (5, 7) not in gold:
+        problems.append(
+            f"(5,7) is not gold before a building is chosen. "
+            f"catalog keys={keys}. Injected footprint=1 on {MIN_FP_NAME}, footprint=2 on the rest."
+        )
+    _click_cell(page, 5, 7)
+    problems.extend(_selected_cell_problems(_cell_choice(page, 5, 7), (5, 7), True))
+    _pick_unbuilt(page, "工坊")
+    toast = _wait_toast(page)
+    problems.extend(
+        [f"after 工坊: {item}" for item in _toast_info_problems(toast, CANNOT_FIT_TOAST)]
+    )
+    problems.extend(_selected_cell_problems(_cell_choice(page, 5, 7), (5, 7), False))
+    hint = _hint(page)["ready"]
+    kept = "工坊" in hint
+    if not kept:
+        pressed = page.locator("#palette").get_by_role("button", name=re.compile(r"工坊"))
+        kept = pressed.count() > 0 and (pressed.first.get_attribute("aria-pressed") == "true")
+    if not kept:
+        problems.append(f"工坊 was cleared with the cell. hint={hint!r}")
+    if "和這個位置" in hint:
+        problems.append(f"unfit cell still counted as chosen. hint={hint!r}")
+    if not (hint.startswith("請點選金色空地") or ("工坊" in hint and "金色空地" in hint)):
+        problems.append(
+            f"hint {hint!r} should start with 請點選金色空地, "
+            "or be the building-specific 金色空地 sentence"
+        )
+    disabled, label = _go_disabled(page)
+    if not disabled:
+        problems.append(f"「選擇位置」 enabled before a fitting cell (button {label!r})")
+    gold_after = set(_mark_gold_cells(page))
+    if (5, 7) in gold_after:
+        problems.append("(5,7) is still gold after choosing the 2×2 工坊")
+    if (0, 0) not in gold_after and (6, 6) not in gold_after:
+        problems.append(f"no 2×2 origin stayed gold. sample={sorted(gold_after)[:8]}")
+    if disabled:
+        _click_cell(page, 0, 0)
+        enabled_now, label_now = _go_disabled(page)
+        if enabled_now:
+            problems.append(
+                f"「選擇位置」 stayed disabled after a 2×2 gold cell (button {label_now!r})"
+            )
+    assert not problems, "TC-FE-BUILD-UNFIT-PRESELECT-MINFP: " + " | ".join(problems)
+
+
+_PAL_CLIP_JS = r"""
+() => {
+  const buttons = [...document.querySelectorAll('#palette .pal-btn')];
+  return buttons.map((btn) => {
+    const cs = getComputedStyle(btn);
+    const borderBottom = parseFloat(cs.borderBottomWidth) || 0;
+    const btnBox = btn.getBoundingClientRect();
+    const second = btn.querySelector('.pal-cost');
+    const secondBox = second ? second.getBoundingClientRect() : null;
+    const gap = secondBox ? (btnBox.bottom - borderBottom - secondBox.bottom) : null;
+    return {
+      text: (btn.innerText || '').replace(/\\s+/g, ' ').trim(),
+      second: second ? (second.textContent || '').trim() : '',
+      className: btn.className || '',
+      scrollHeight: btn.scrollHeight,
+      clientHeight: btn.clientHeight,
+      gap,
+      borderBottom
+    };
+  });
+}
+"""
+
+
+@pytest.mark.case_id("TC-FE-PAL-BTN-NOCLIP")
+def test_palette_buttons_do_not_clip(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-PAL-BTN-NOCLIP 建築清單按鈕不可裁掉第二行。"""
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[
+            {"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0},
+            {"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12},
+        ],
+    )
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _enter_new_build_scene2(page)
+    page.locator("#listLauncher").click()
+    page.locator("#palette .pal-btn").first.wait_for(state="visible", timeout=8000)
+    rows = page.evaluate(_PAL_CLIP_JS)
+    problems = []
+    if not rows:
+        problems.append("palette has no .pal-btn")
+    saw_stored = saw_built = saw_unbuilt = False
+    for row in rows:
+        label = row.get("text") or row.get("second") or "?"
+        scroll_h = row.get("scrollHeight") or 0
+        client_h = row.get("clientHeight") or 0
+        if scroll_h > client_h:
+            problems.append(
+                f"{label!r} scrollHeight {scroll_h} > clientHeight {client_h}"
+            )
+        gap = row.get("gap")
+        if gap is None:
+            problems.append(f"{label!r} has no second line")
+        elif gap < 4 - 0.05:
+            problems.append(
+                f"{label!r} second line {row.get('second')!r} is {gap:.1f}px above "
+                "the inner bottom border, expected >= 4"
+            )
+        kind = row.get("className") or ""
+        second = row.get("second") or ""
+        if "is-stored" in kind or second == "存倉":
+            saw_stored = True
+        if "is-placed" in kind or second in ("已興建", "已起"):
+            saw_built = True
+        if "is-stored" not in kind and "is-placed" not in kind and ("💰" in second or second[:1].isdigit()):
+            saw_unbuilt = True
+    if not saw_stored:
+        problems.append("no stored palette row (存倉)")
+    if not saw_built:
+        problems.append("no built palette row (已興建)")
+    if not saw_unbuilt:
+        problems.append("no unbuilt palette row (price)")
+    assert not problems, "TC-FE-PAL-BTN-NOCLIP: " + " | ".join(problems)
