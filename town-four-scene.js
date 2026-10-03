@@ -774,42 +774,6 @@
     else if (kind === "valid") label += "，可以放置，點選即可移到此格";
     else label += "，空地";
     cell.btn.setAttribute("aria-label", label);
-    ensureBackHit(cell, label, legal && !picked);
-  }
-
-  /* Column 7, row 1 is gold in the occlusion seed, but its pad cannot reach
-     the library sprite. A tiny target on a clear patch of that sprite selects
-     this cell by identity. It is not a cell button, so diamond taps miss it. */
-  function ensureBackHit(cell, label, want) {
-    var village = $("village");
-    if (!village) return;
-    var sliver = village.querySelector(":scope > .back-hit");
-    var show = want && state.scene === 2 && !state.sheet && cell.c === 6 && cell.r === 0;
-    if (!show) {
-      if (sliver && cell.c === 6 && cell.r === 0) sliver.remove();
-      return;
-    }
-    if (!sliver) {
-      sliver = document.createElement("button");
-      sliver.type = "button";
-      sliver.className = "back-hit";
-      sliver.tabIndex = -1;
-      sliver.setAttribute("aria-hidden", "true");
-      sliver.dataset.c = "6";
-      sliver.dataset.r = "0";
-      sliver.style.position = "absolute";
-      sliver.style.left = "calc(50% + var(--s, 1) * 147px)";
-      sliver.style.top = "calc(var(--s, 1) * 326px)";
-      sliver.style.width = "calc(var(--s, 1) * 12px)";
-      sliver.style.height = "calc(var(--s, 1) * 12px)";
-      sliver.style.zIndex = "5";
-      sliver.style.padding = "0";
-      sliver.style.border = "0";
-      sliver.style.background = "transparent";
-      sliver.style.pointerEvents = "auto";
-      village.appendChild(sliver);
-    }
-    sliver.setAttribute("aria-label", label);
   }
 
   /* Stored, then not-yet-built, then already built. Each group keeps catalog order. */
@@ -1297,10 +1261,6 @@
     map.addEventListener("click", function (event) {
       var target = event.target;
       var btn = target.closest && target.closest("button");
-      if (btn && btn.classList.contains("back-hit")) {
-        onCell(parseInt(btn.dataset.c, 10), parseInt(btn.dataset.r, 10));
-        return;
-      }
       /* Keyboard activation targets the cell button. Pointer hits do not:
          the button is clipped to a point cellAt cannot see. */
       if (btn && btn.classList.contains("cell-btn")) {
