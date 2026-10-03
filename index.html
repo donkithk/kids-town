@@ -1954,18 +1954,18 @@ body.kt-pane-shop .kt-backpack-block{display:none}
     <aside class="palette" id="palette" hidden>
       <div class="palette-head">
         <h2>建築清單</h2>
-        <p id="placedCount">已起 0</p>
+        <p id="placedCount">已興建 0</p>
       </div>
       <div class="palette-grid" id="paletteGrid"></div>
     </aside>
     <div class="place-bar" id="readyBar" hidden>
       <button id="btnUxBack" type="button">返回地圖</button>
-      <p id="readyStatus">點金色空地，或者打開清單揀一座未起嘅屋。</p>
+      <p id="readyStatus">請點選金色空地，或打開清單選擇要興建的建築物。</p>
       <button id="btnToScene3" type="button" disabled>選擇位置</button>
     </div>
     <div class="place-bar" id="uxPlaceBar" hidden>
       <button id="btnUxCancel" type="button">取消</button>
-      <p id="placeStatus">確定先至扣資源。取消唔會扣。</p>
+      <p id="placeStatus">按「確定放置」後才扣除資源；取消不會扣除。</p>
       <button id="btnUxConfirm" type="button" disabled>確定放置</button>
     </div>
     <section class="action-sheet" id="actionSheet" hidden aria-label="升級或打開功能">
@@ -3316,7 +3316,7 @@ function showBuildFailure(message) {
     return;
   }
   Audio.errorBuzzer();
-  showToast('❌ ' + (message || '起唔到'), 'error');
+  showToast('❌ ' + (message || '未能興建'), 'error');
 }
 
 // ═══ MOVE BUILDING ═══
@@ -3433,7 +3433,7 @@ async function renderStoredBuildings() {
     warehouseRows = rows;
     if (countEl) countEl.textContent = String(rows.length);
     if (rows.length === 0) {
-      container.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:24px">📦 存倉吉咗，未有建築物</p>';
+      container.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:24px">📦 存倉是空的，暫時沒有建築物。</p>';
       return;
     }
     container.innerHTML = rows.map(b => `
@@ -3456,6 +3456,9 @@ function beginWarehouseTakeout(bId) {
     showToast('找不到這座建築', 'error');
     return;
   }
+  if (typeof window.ktBeginWarehousePlace === 'function' && window.ktBeginWarehousePlace(row) === false) {
+    return;
+  }
   const bar = document.getElementById('placementBar');
   if (bar) bar.classList.remove('active');
   placementDefId = null;
@@ -3466,9 +3469,6 @@ function beginWarehouseTakeout(bId) {
   if (overlay) overlay.style.display = 'none';
   if (drawer) drawer.classList.remove('o');
   st('town');
-  if (typeof window.ktBeginWarehousePlace === 'function') {
-    window.ktBeginWarehousePlace(row);
-  }
 }
 
 function cancelPlacement() {
@@ -3528,13 +3528,13 @@ async function showStoredBuildingsModal() {
     const res = await fetch('/api/kids/' + currentKidId + '/stored-buildings');
     const list = await res.json();
     if (!list || list.length === 0) {
-      showToast('📦 存倉吉咗');
+      showToast('📦 存倉是空的');
       return;
     }
     const modal = document.getElementById('modalContent');
     modal.innerHTML = `
       <h2>📦 從存倉取出</h2>
-      <p style="font-size:12px;color:#94a3b8;margin-bottom:12px;">㩒要放返出嚟嘅建築物</p>
+      <p style="font-size:12px;color:#94a3b8;margin-bottom:12px;">請點選要放回地圖的建築物</p>
       <div class="build-list">
         ${list.map(b => `
           <div class="build-option" onclick="closeModal();startUnstoreBuilding(${b.id})">
@@ -3567,7 +3567,7 @@ function showDecoModal(cellX, cellY) {
         <div class="bo-icon">📦</div>
         <div class="bo-info">
           <div class="bo-name">從存倉取出 (${stored.length})</div>
-          <div class="bo-cost">㩒入去揀建築物放返出嚟</div>
+          <div class="bo-cost">點選進入，選擇要放回的建築物</div>
         </div>
       </div>` : ''}
       <div class="build-option" onclick="closeModal();showBuildModal(0)" style="border-color:#f59e0b">
