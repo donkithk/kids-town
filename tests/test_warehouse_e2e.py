@@ -3919,33 +3919,84 @@ def _palette_covers_cell_button(page, cell_x, cell_y):
     ))
 
 
+def _chosen_cells(reaction):
+    chosen = []
+    for item in reaction.get("chosen") or []:
+        if isinstance(item, (list, tuple)) and len(item) == 2:
+            chosen.append((item[0], item[1]))
+    return chosen
+
+
+def _shift_selection_to_reachable_gold(page):
+    """Move a stuck selection onto a gold cell the pointer can toggle off.
+
+    A second key on the selected cell deselects it (OVERLAP's second tap).
+    Some tips swallow that keyboard click in picked scene 2, so Enter cannot
+    clear a cell the pointer cannot reach. Selecting a different gold cell
+    the pointer can hit moves the selection to a place a tap can clear.
+    """
+    cells = page.evaluate(
+        """() => [...document.querySelectorAll('#townMap .pad.is-empty-hot')].map((pad) => {
+          const cs = getComputedStyle(pad);
+          return [parseInt(cs.getPropertyValue('--c'), 10), parseInt(cs.getPropertyValue('--r'), 10)];
+        })"""
+    ) or []
+    for raw in cells:
+        cell_x, cell_y = raw
+        data = cell_points(page, cell_x, cell_y)
+        if not data or not data.get("points"):
+            continue
+        candidates = [data["points"].get("centre")]
+        button = data.get("button") or {}
+        if button.get("x") is not None and button.get("y") is not None:
+            candidates.append({"x": button["x"], "y": button["y"]})
+        for point in candidates:
+            if not point:
+                continue
+            cover = point_cover(page, point["x"], point["y"])
+            if cover.get("kind") in ("panel", "chrome", "toast") or not cover.get("inMap"):
+                continue
+            if cover.get("foreignButton"):
+                continue
+            tap_point(page, point["x"], point["y"])
+            chosen = _chosen_cells(read_reaction(page))
+            if chosen == [(cell_x, cell_y)]:
+                return True
+    return False
+
+
 def _clear_cell_selection(page):
     """Clear a chosen cell before the next key.
 
     OVERLAP requires a second tap on a selected gold cell to deselect it.
     Enter and Space share that toggle, so each key has to start unselected.
-    A pointer dismiss misses a cell under the open palette; the key still
-    reaches the button.
+    A pointer dismiss misses a cell under the open palette. Enter on that
+    button clears it when the product honours the key. When the product
+    swallows that second key, the selection is moved to a reachable gold
+    cell and cleared with a pointer tap.
     """
     dismiss_selection(page)
     reaction = read_reaction(page)
     if "場景 3" in (reaction.get("scene") or ""):
         dismiss_selection(page)
         reaction = read_reaction(page)
-    chosen = []
-    for item in reaction.get("chosen") or []:
-        if isinstance(item, (list, tuple)) and len(item) == 2:
-            chosen.append((item[0], item[1]))
-    for cell in chosen:
-        try:
-            press_cell(page, cell[0], cell[1], "Enter")
-        except AssertionError as exc:
-            return f"could not focus {cell} to clear it: {exc}"
+    chosen = _chosen_cells(reaction)
     if chosen:
+        try:
+            press_cell(page, chosen[0][0], chosen[0][1], "Enter")
+        except AssertionError:
+            pass
         _silence_toast(page)
         reaction = read_reaction(page)
-        if reaction.get("chosen") or "場景 3" in (reaction.get("scene") or ""):
-            return f"selection remained after keyboard clear: {reaction.get('chosen')}"
+        chosen = _chosen_cells(reaction)
+    if chosen and "場景 3" not in (reaction.get("scene") or ""):
+        if _shift_selection_to_reachable_gold(page):
+            dismiss_selection(page)
+            _silence_toast(page)
+            reaction = read_reaction(page)
+            chosen = _chosen_cells(reaction)
+    if chosen or "場景 3" in (reaction.get("scene") or ""):
+        return f"selection remained after clear: {reaction.get('chosen')}"
     return None
 
 
@@ -3961,6 +4012,7 @@ def test_cell_aria_matches_tap(page, base_url, warehouse_db, warehouse_ids, mode
     button. Enter and Space each start from a cleared selection, because a
     second activation of a selected cell toggles it off, and each key must
     match a first tap. A cell under the open palette still receives the key.
+    Clearing does not depend on that second key: some tips swallow it.
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(
