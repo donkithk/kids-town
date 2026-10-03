@@ -2156,7 +2156,7 @@ def test_town_ux_hit_back_pad_not_front_sprite(
     for width, height in ((1100, 800), (1280, 720)):
         page.set_viewport_size({"width": width, "height": height})
         page.wait_for_timeout(200)
-        hits = sprite_overlap_points(page, per_cell=5)
+        hits = sprite_overlap_points(page, per_cell=5, exclusive=True)
         reachable = []
         for hit in hits:
             cover = point_cover(page, hit["x"], hit["y"])

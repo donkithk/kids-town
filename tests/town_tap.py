@@ -659,13 +659,47 @@ def cell_access(page):
     return page.evaluate(_ACCESS_JS)
 
 
-def sprite_overlap_points(page, per_cell=5):
+def _exclusive_diamond_points(page, hits):
+    """Keep points that sit in the back cell's slab diamond and no other."""
+    if not hits:
+        return []
+    return page.evaluate(
+        r"""(hits) => {
+          const pads = [...document.querySelectorAll('#townMap .pad')].map((pad) => {
+            const cs = getComputedStyle(pad);
+            const slab = pad.querySelector(':scope > .slab');
+            const box = slab ? slab.getBoundingClientRect() : null;
+            if (!box || box.width < 2 || box.height < 2) return null;
+            return {
+              c: parseInt(cs.getPropertyValue('--c'), 10),
+              r: parseInt(cs.getPropertyValue('--r'), 10),
+              cx: box.left + box.width / 2,
+              cy: box.top + box.height / 2,
+              hw: box.width / 2,
+              hh: box.height / 2
+            };
+          }).filter(Boolean);
+          const inside = (pad, x, y) => Math.abs(x - pad.cx) / pad.hw + Math.abs(y - pad.cy) / pad.hh < 0.98;
+          return hits.filter((hit) => {
+            const owners = pads.filter((pad) => inside(pad, hit.x, hit.y));
+            return owners.length === 1 && owners[0].c === hit.c && owners[0].r === hit.r;
+          });
+        }""",
+        hits,
+    )
+
+
+def sprite_overlap_points(page, per_cell=5, exclusive=False):
     """Points inside a back cell's slab diamond and a front sprite.
 
     The diamond is the rendered tile box, the same one TAP-OFFCENTER samples.
     Several points are kept per back cell so one lucky pixel cannot pass.
+    exclusive drops a point that also sits in another cell's diamond: that
+    point does not belong to only the back cell.
     """
     raw = page.evaluate(_SPRITE_POINT_JS) or []
+    if exclusive:
+        raw = _exclusive_diamond_points(page, raw)
     grouped = {}
     for item in raw:
         grouped.setdefault((item["c"], item["r"]), []).append(item)
