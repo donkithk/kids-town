@@ -4,7 +4,6 @@
 (function () {
   var COLS = 8;
   var ROWS = 8;
-  var FOOTPRINT = 2;
   var ASSET = "mocks/town-building-proof/assets/";
   var MOTION_KEY = "ktTownMotion";
   var MARK_VALID = ASSET + "cell-valid.svg";
@@ -423,29 +422,90 @@
     return null;
   }
 
-  function footprintsOverlap(ax, ay, bx, by) {
-    return !(ax + FOOTPRINT <= bx || bx + FOOTPRINT <= ax || ay + FOOTPRINT <= by || by + FOOTPRINT <= ay);
+  /* Catalog square side. A missing footprint stays 2. */
+  function footprintOf(def) {
+    var n = parseInt(def && def.footprint, 10);
+    if (!isFinite(n) || n < 1) return 2;
+    return n;
   }
 
-  /* Origin plus footprint stays inside the map. Last 2×2 origin is (6, 6). */
-  function originFits(c, r) {
-    return c >= 0 && r >= 0 && c + FOOTPRINT <= COLS && r + FOOTPRINT <= ROWS;
+  function defByName(name) {
+    var list = defs();
+    for (var i = 0; i < list.length; i += 1) {
+      if (list[i].name === name) return list[i];
+    }
+    return null;
+  }
+
+  function placedSize(row) {
+    if (!row) return footprintOf(null);
+    return footprintOf(defById(row.def_id) || defByName(row.name));
+  }
+
+  function minCatalogFootprint() {
+    var list = defs();
+    var min = 0;
+    for (var i = 0; i < list.length; i += 1) {
+      var n = footprintOf(list[i]);
+      if (!min || n < min) min = n;
+    }
+    return min || footprintOf(null);
+  }
+
+  function unstoreRow() {
+    if (!state.unstoreId) return null;
+    var owned = buildings().concat(storedRows());
+    for (var i = 0; i < owned.length; i += 1) {
+      if (String(owned[i].id) === String(state.unstoreId)) return owned[i];
+    }
+    return null;
+  }
+
+  /* Chosen building, else the smallest catalog footprint. */
+  function activeFootprint() {
+    if (state.unstoreId) return placedSize(unstoreRow());
+    if (state.defId != null) return footprintOf(defById(state.defId));
+    return minCatalogFootprint();
+  }
+
+  function footprintsOverlap(ax, ay, aSize, bx, by, bSize) {
+    return !(ax + aSize <= bx || bx + bSize <= ax || ay + aSize <= by || by + bSize <= ay);
+  }
+
+  function originFits(c, r, size) {
+    return c >= 0 && r >= 0 && c + size <= COLS && r + size <= ROWS;
+  }
+
+  /* True when a placed building's whole footprint covers this cell. */
+  function coveredAt(c, r) {
+    var list = buildings();
+    for (var i = 0; i < list.length; i += 1) {
+      var row = list[i];
+      if ((row.stored | 0) === 1) continue;
+      if (row.cell_x == null || row.cell_y == null) continue;
+      var size = placedSize(row);
+      var ox = row.cell_x | 0;
+      var oy = row.cell_y | 0;
+      if (c >= ox && c < ox + size && r >= oy && r < oy + size) return row;
+    }
+    return null;
   }
 
   /* Placed buildings only. stored=1 does not occupy a cell. */
-  function footprintFree(c, r, ignoreId) {
-    if (!originFits(c, r)) return false;
+  function footprintFree(c, r, ignoreId, size) {
+    var fp = size || activeFootprint();
+    if (!originFits(c, r, fp)) return false;
     var blocks = buildings();
     for (var i = 0; i < blocks.length; i += 1) {
       var row = blocks[i];
       if ((row.stored | 0) === 1) continue;
       if (row.cell_x == null || row.cell_y == null) continue;
       if (ignoreId != null && String(row.id) === String(ignoreId)) continue;
-      if (footprintsOverlap(c, r, row.cell_x | 0, row.cell_y | 0)) return false;
+      if (footprintsOverlap(c, r, fp, row.cell_x | 0, row.cell_y | 0, placedSize(row))) return false;
     }
     var tiles = (typeof townData !== "undefined" && townData && townData.tiles) || [];
-    for (var dy = 0; dy < FOOTPRINT; dy += 1) {
-      for (var dx = 0; dx < FOOTPRINT; dx += 1) {
+    for (var dy = 0; dy < fp; dy += 1) {
+      for (var dx = 0; dx < fp; dx += 1) {
         var cx = c + dx;
         var cy = r + dy;
         for (var t = 0; t < tiles.length; t += 1) {
@@ -457,21 +517,23 @@
     return true;
   }
 
-  function hasLegalOrigin(ignoreId) {
-    var last = ROWS - FOOTPRINT;
+  function hasLegalOrigin(ignoreId, size) {
+    var fp = size || activeFootprint();
+    var last = ROWS - fp;
     for (var r = 0; r <= last; r += 1) {
-      for (var c = 0; c <= COLS - FOOTPRINT; c += 1) {
-        if (footprintFree(c, r, ignoreId)) return true;
+      for (var c = 0; c <= COLS - fp; c += 1) {
+        if (footprintFree(c, r, ignoreId, fp)) return true;
       }
     }
     return false;
   }
 
-  function firstUnstorePad(ignoreId) {
+  function firstUnstorePad(ignoreId, size) {
+    var fp = size || activeFootprint();
     for (var r = 0; r < ROWS; r += 1) {
       for (var c = 0; c < COLS; c += 1) {
         if (occAt(c, r)) continue;
-        if (footprintFree(c, r, ignoreId)) return { c: c, r: r };
+        if (footprintFree(c, r, ignoreId, fp)) return { c: c, r: r };
       }
     }
     return null;
@@ -480,7 +542,7 @@
   /* 存倉「取出」and the building list share this path. A full map stays put. */
   function beginWarehousePlace(row) {
     if (!row) return false;
-    if (!hasLegalOrigin(row.id)) {
+    if (!hasLegalOrigin(row.id, placedSize(row))) {
       if (typeof showToast === "function") {
         showToast("城鎮沒有空位，請先收起或移動其他建築。", "info");
       }
@@ -507,8 +569,8 @@
     state.listOpen = false;
     var padOk = state.pad
       && !occAt(state.pad.c, state.pad.r)
-      && footprintFree(state.pad.c, state.pad.r, row.id);
-    if (!padOk) state.pad = firstUnstorePad(row.id);
+      && footprintFree(state.pad.c, state.pad.r, row.id, placedSize(row));
+    if (!padOk) state.pad = firstUnstorePad(row.id, placedSize(row));
     state.scene = 3;
     render();
   }
@@ -773,13 +835,16 @@
         status.textContent = "請點選空地，放回「" + takeName + "」。不扣除金幣和材料。";
       } else if (readyToPreview()) status.textContent = "已選擇「" + def.name + "」和這個位置。";
       else if (state.pad && !def) status.textContent = "已選擇空地。請打開清單，選擇要興建的建築物。";
-      else if (def && !placedDef(def.id) && !state.pad) status.textContent = "已選擇「" + def.name + "」。請再點選一塊金色空地。";
+      else if (def && !placedDef(def.id) && !state.pad) status.textContent = "請點選金色空地，興建「" + def.name + "」。";
       else status.textContent = "請點選金色空地，或打開清單選擇要興建的建築物。";
     }
     var map = $("townMap");
     if (map) {
       map.className = "map is-scene-" + state.scene + (state.listOpen && state.scene === 2 ? " is-list-open" : "") + (sheetOn ? " is-sheet" : "");
-      map.setAttribute("aria-label", sheetOn ? "場景 4 · 升級" : ("場景 " + state.scene));
+      var sceneLabel = "場景 " + state.scene;
+      if (sheetOn) sceneLabel = "場景 4 · 升級";
+      else if (state.scene === 1) sceneLabel = "場景 1 · 查看地圖";
+      map.setAttribute("aria-label", sceneLabel);
     }
   }
 
@@ -853,6 +918,10 @@
     state.unstoreId = null;
     state.defId = String(state.defId) === String(id) ? null : id;
     state.listOpen = true;
+    if (state.defId != null && state.pad && !footprintFree(state.pad.c, state.pad.r, null, footprintOf(defById(state.defId)))) {
+      state.pad = null;
+      if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
+    }
     render();
   }
 
@@ -868,13 +937,23 @@
       return;
     }
     if (state.scene === 2) {
-      if (occ) {
+      var placing = !!(state.unstoreId || state.defId != null);
+      /* Before a building is chosen, a covered cell or one the smallest
+         footprint cannot sit on is not a selection. Other empty pads still
+         select so an occluded back cell keeps its hit target. */
+      if (!placing && coveredAt(c, r)) {
         if (typeof showToast === "function") showToast("這個位置已經有建築物。", "info");
         return;
       }
-      /* A chosen building or unstore cannot sit on an origin that does not fit.
-         Picking the pad first still selects that empty cell so hit-tests land. */
-      if ((state.unstoreId || state.defId != null) && !footprintFree(c, r, state.unstoreId)) {
+      if (!placing && !originFits(c, r, minCatalogFootprint())) {
+        if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
+        return;
+      }
+      if (placing && occ) {
+        if (typeof showToast === "function") showToast("這個位置已經有建築物。", "info");
+        return;
+      }
+      if (placing && !footprintFree(c, r, state.unstoreId, activeFootprint())) {
         if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
         return;
       }
@@ -1009,9 +1088,25 @@
       celebrate("place", cell);
       await loadTown();
     } catch (e) {
-      if (typeof showToast === "function") showToast(e.message || "未能放回", "error");
-      render();
+      if (!showUnfit(e)) {
+        if (typeof showToast === "function") showToast(e.message || "未能放回", "error");
+        render();
+      }
     }
+  }
+
+  function showUnfit(err) {
+    var msg = (err && err.message) || "";
+    if (msg.indexOf("位置超出") === -1 && msg.indexOf("已被建築物佔用") === -1 && msg.indexOf("已被裝飾佔用") === -1) {
+      return false;
+    }
+    state.scene = 2;
+    state.sheet = false;
+    state.confirming = false;
+    state.instantUpgrade = false;
+    if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
+    render();
+    return true;
   }
 
   async function onConfirm() {
@@ -1052,6 +1147,7 @@
         openSheet(def.id, { instant: true });
       }, 420);
     } catch (e) {
+      if (showUnfit(e)) return;
       var msg = e.message || "未能興建";
       if (typeof showToast === "function") {
         if (msg === "城鎮沒有空位，請先收起或移動其他建築。") showToast(msg, "info");
