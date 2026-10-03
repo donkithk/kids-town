@@ -481,7 +481,7 @@
     render();
   }
 
-  /* 建築清單放返 stays on the four-scene pad. */
+  /* Confirm fallback when a stored row is chosen without the take-out scene. */
   function placeFromStore(row) {
     if (!row) return;
     state.defId = row.def_id;
@@ -755,7 +755,6 @@
         var takeName = (def && def.name) || "這座建築";
         status.textContent = "請點選空地，放回「" + takeName + "」。不扣除金幣和材料。";
       } else if (readyToPreview()) status.textContent = "已揀「" + def.name + "」同呢格空地。";
-      else if (def && storedDef(def.id)) status.textContent = "「" + def.name + "」在存倉中，可直接放回，不扣除資源。";
       else if (state.pad && !def) status.textContent = "已揀空地。打開清單，揀一座未起嘅屋。";
       else if (def && !placedDef(def.id) && !state.pad) status.textContent = "已揀「" + def.name + "」。再點一塊金色空地。";
       else status.textContent = "點金色空地，或者打開清單揀一座未起嘅屋。";
@@ -831,10 +830,7 @@
     }
     var warehoused = storedDef(id);
     if (warehoused) {
-      state.unstoreId = null;
-      state.defId = String(id);
-      state.sheet = false;
-      render();
+      beginWarehousePlace(warehoused);
       return;
     }
     state.unstoreId = null;
