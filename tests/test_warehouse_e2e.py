@@ -3919,7 +3919,7 @@ def _palette_covers_cell_button(page, cell_x, cell_y):
     ))
 
 
-def _chosen_cells(reaction):
+def _reaction_chosen(reaction):
     chosen = []
     for item in reaction.get("chosen") or []:
         if isinstance(item, (list, tuple)) and len(item) == 2:
@@ -3959,7 +3959,7 @@ def _shift_selection_to_reachable_gold(page):
             if cover.get("foreignButton"):
                 continue
             tap_point(page, point["x"], point["y"])
-            chosen = _chosen_cells(read_reaction(page))
+            chosen = _reaction_chosen(read_reaction(page))
             if chosen == [(cell_x, cell_y)]:
                 return True
     return False
@@ -3980,7 +3980,7 @@ def _clear_cell_selection(page):
     if "場景 3" in (reaction.get("scene") or ""):
         dismiss_selection(page)
         reaction = read_reaction(page)
-    chosen = _chosen_cells(reaction)
+    chosen = _reaction_chosen(reaction)
     if chosen:
         try:
             press_cell(page, chosen[0][0], chosen[0][1], "Enter")
@@ -3988,13 +3988,13 @@ def _clear_cell_selection(page):
             pass
         _silence_toast(page)
         reaction = read_reaction(page)
-        chosen = _chosen_cells(reaction)
+        chosen = _reaction_chosen(reaction)
     if chosen and "場景 3" not in (reaction.get("scene") or ""):
         if _shift_selection_to_reachable_gold(page):
             dismiss_selection(page)
             _silence_toast(page)
             reaction = read_reaction(page)
-            chosen = _chosen_cells(reaction)
+            chosen = _reaction_chosen(reaction)
     if chosen or "場景 3" in (reaction.get("scene") or ""):
         return f"selection remained after clear: {reaction.get('chosen')}"
     return None
