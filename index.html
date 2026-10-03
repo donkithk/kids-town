@@ -5953,12 +5953,19 @@ function closeModal() {
 
 function showToast(msg, type) {
   const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = type === 'error' ? 'error' : (type === 'info' ? 'info' : '');
-  el.style.display = 'block';
-  el.style.animation = 'none';
-  void el.offsetHeight;
-  el.style.animation = 'fadeInOut 2s ease';
+  if (!el) return;
+  const text = String(msg);
+  const visible = el.style.display === 'block';
+  const same = visible && el.textContent === text;
+  const nextClass = type === 'error' ? 'error' : (type === 'info' ? 'info' : '');
+  if (el.className !== nextClass) el.className = nextClass;
+  if (!same) {
+    el.textContent = text;
+    el.style.display = 'block';
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = 'fadeInOut 2s ease';
+  }
   if (el._hideTimer) clearTimeout(el._hideTimer);
   el._hideTimer = setTimeout(() => { el.style.display = 'none'; }, 2000);
 }
