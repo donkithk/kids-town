@@ -78,6 +78,7 @@ from datetime import date
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tests.town_tap import tap_cell_centre, tap_labeled_button  # noqa: E402
 from tests.factories import (  # noqa: E402
     TEST_KID_PIN,
     TEST_PARENT_PASSWORD,
@@ -1788,7 +1789,7 @@ def _pick_pad_and_unbuilt(page):
     empty = page.get_by_role("button", name=re.compile(r"空地"))
     if empty.count() == 0:
         _town_ux_fail("TC-FE-TOWN-UX-02", "Scene 2 has no empty-pad button (accessible name contains 空地).")
-    empty.first.click()
+    tap_labeled_button(page, empty.first)
     _open_building_list(page)
     gym = page.get_by_role("button", name=re.compile(rf"{TOWN_UX_UNBUILT}"))
     picked = None
@@ -1912,7 +1913,7 @@ def test_town_ux_scene1_map_cta_and_empty_pad_does_not_spend(
             f"Missing: {', '.join(missing)}.",
         )
     before = _hud_snapshot(page)
-    page.get_by_role("button", name=re.compile(r"空地")).first.click()
+    tap_labeled_button(page, page.get_by_role("button", name=re.compile(r"空地")).first)
     page.wait_for_timeout(600)
     _assert_hud_equal(
         before,
@@ -1983,7 +1984,7 @@ def test_town_ux_scene3_cancel_does_not_deduct(
         label = btn.get_attribute("aria-label") or ""
         if "預覽" in label or not btn.is_visible():
             continue
-        btn.click()
+        tap_labeled_button(page, btn)
         moved = True
         break
     assert moved, "TC-FE-TOWN-UX-03: scene 3 must allow moving the preview onto another empty pad."
@@ -1993,7 +1994,7 @@ def test_town_ux_scene3_cancel_does_not_deduct(
         "button", name=re.compile(r"圖書館")
     )
     assert occupied.count() > 0, "TC-FE-TOWN-UX-03: occupied 圖書館 pad must be tappable in scene 3."
-    occupied.first.click()
+    tap_labeled_button(page, occupied.first)
     page.wait_for_timeout(400)
     blocked = _toast_text(page)
     assert (
@@ -2246,9 +2247,7 @@ def test_town_ux_letterbox_pad_hit_alignment(page, base_url, test_db_path, fe_id
         label = target.get_attribute("aria-label") or ""
         match = _PAD_LABEL.search(label)
         assert match, f"TC-FE-TOWN-HIT-02: empty pad label missing 欄/行 at {width}×{height}: {label!r}"
-        box = target.bounding_box()
-        assert box, f"TC-FE-TOWN-HIT-02: empty pad has no box at {width}×{height}"
-        page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        tap_labeled_button(page, target)
         chosen = page.get_by_role(
             "button",
             name=re.compile(
@@ -2760,7 +2759,7 @@ def _select_empty_pad(page, col_1, row_1):
             target = item
             break
     assert target is not None, f"pad 第 {col_1} 欄第 {row_1} 行 is not visible"
-    target.click()
+    tap_cell_centre(page, col_1 - 1, row_1 - 1)
     return col_1 - 1, row_1 - 1
 
 
@@ -3252,7 +3251,7 @@ def _unstore_from_card(page, card, cell_x, cell_y):
     if pad.count() == 0:
         problems.append(f"missing pad 第 {col} 欄第 {row} 行")
         return problems
-    pad.first.click()
+    tap_cell_centre(page, cell_x, cell_y)
     advance = page.locator("#btnToScene3")
     try:
         if advance.count() and advance.first.is_visible() and advance.first.is_enabled():
@@ -4276,7 +4275,7 @@ def _open_scene4_sheet(page, case_id, name):
             f"Scene 1 has no tappable pad for placed {name}. "
             "Design mock 3b4671d: tap the building to open #actionSheet.",
         )
-    pad.first.click()
+    tap_labeled_button(page, pad.first)
     sheet = page.locator("#actionSheet")
     try:
         sheet.wait_for(state="visible", timeout=8000)
@@ -4696,7 +4695,7 @@ def _open_placed_building_sheet(page, case_id, name, fail_fn=None):
             case_id,
             f"Scene 1 has no tappable pad for placed {name}.",
         )
-    pad.first.click()
+    tap_labeled_button(page, pad.first)
     sheet = page.locator("#actionSheet")
     try:
         sheet.wait_for(state="visible", timeout=8000)

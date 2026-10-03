@@ -36,7 +36,7 @@
 ## 案例
 
 API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。  
-介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`，以及同一 API 檔內讀取已提供頁面的 `TC-FE-WAREHOUSE-GRID`（後者屬 API 套件，因為它只 GET 靜態檔）。
+介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`、`TC-FE-TAP-OFFCENTER`、`TC-FE-CELL-ARIA-MATCH`、`TC-FE-TAP-BAR-NOTHROUGH`，以及畫面那一半的 `TC-API-AUTOPLACE-FORMAL`。API 檔另有 `TC-API-AUTOPLACE-FORMAL`，還有只 GET 靜態檔的 `TC-FE-WAREHOUSE-GRID`。
 
 下表「main」是在 `5bfe76d` 加上這些測試後的結果。紅測的斷言訊息寫明預期與實際。綠測是回歸鎖，不是本缺陷。
 
@@ -293,6 +293,63 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 3. `none-built`：沒有已放置。清單是存倉然後未建，沒有已興建那一組。
 
 預期順序在測試裡用當下的目錄陣列和這個小朋友的行算出來。只鎖順序，不鎖半張卡片露出，也不鎖底部漸層。
+
+## 偏離中心的點格（TC-FE-TAP-OFFCENTER）
+
+視窗 1100×800 與 390×844。菱形來自畫面上的地磚（`#townMap .pad > .slab` 的外框）：四個頂點是四邊的中點。不是格子按鈕的外框。每一格點九下，都用 `page.mouse`：中心、朝四個頂點、朝四條邊的中點。後八點在中心到該目標的 35%，所以嚴格在菱形裡面。
+
+點下去必須作用在含有這個點的那一格：選中這一格、這一格的提示，或預覽在這一格。三種狀態：
+
+1. 新建造、還沒選建築。64×9 = 576 點都算。被建築蓋住的格提示「這個位置已經有建築物。」最小足跡放不進地圖的格提示「這個位置放不下這座建築物。」其餘空格選中這一格。這一狀態不把「空但與已放置建築重疊」當成放不下；那條由 `TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP` 鎖。
+2. 新建造、已選一座 2×2。打開的清單面板會蓋住左側一些格（大約 `(0,5)` 到 `(2,7)`，以面板畫出來的矩形為準，不寫死格子）。落在面板矩形裡的點從分母拿掉，分母等於露在外面的點。另外斷言：面板矩形裡的任何一下都不得選中格子（面板要吃掉點擊，不能穿透）。露在外面的點必須全部打中。
+3. 取出、存倉裡有一座建築。同樣 576 點；若有面板或其他蓋住格子的層，用同一條排除規則。不得跳進場景 3 卻把預覽放在別的格子上。
+
+分母規則：點落在蓋住格子的層的畫面上矩形裡，就從分母移除。清單面板另計「面板內選中 0 格」。底欄、清單按鈕這類會吃掉點擊的層也從分母移除，避免把點在底欄上當成打錯格。
+
+精靈：前面有一座高的建築圖、後面有一格空地時，空地菱形裡又疊在那張圖上的點必須打中空地，不是建築那一格。種子是商店 `(0,0)`、農場 `(4,3)`，至少要有一個這樣的點，而且單獨斷言。
+
+打錯的訊息要寫出格子與點的名字。
+
+既有測試若用 `locator.click()` 點格子按鈕，按鈕不再是指標命中目標之後會壞。格子的指標點改走 `tests/town_tap.py` 的 `tap_cell_centre`（菱形視覺中心）。鍵盤仍點那個按鈕。`TC-FE-WAREHOUSE-COPY-FORMAL` 仍鎖清單與地圖上的「商店，已興建」「空地，點選即可選擇」，那是文案鎖，不是這條的提示用字。`a871b1b` 上連菱形中心也會打到隔壁格，所以原本靠點格的 8 條介面測試在這個版本轉紅；`8940905` 上仍有 6 條轉紅（中心點落到動作列，或點到的格沒有給出該測試要的提示）。
+
+## 格子無障礙字與提示一致（TC-FE-CELL-ARIA-MATCH）
+
+新建造（已選 2×2）與取出，每一格都查。無障礙字必須含有提示那一句，逐字相同。前面可以有座標，但那一句本身不能改。
+
+- 被建築蓋住，原點與非原點都是「這個位置已經有建築物。」。種子裡商店在 `(0,0)`，所以 `(0,0)` 是原點、`(1,0)` 是非原點。不得含「已興建」，也不得含「這個位置放不下這座建築物。」
+- 空的，但足跡重疊或伸出地圖 →「這個位置放不下這座建築物。」。不得含「已興建」，也不得含「這個位置已經有建築物。」
+- 金色可選 → 可選的字（「點選即可選擇」「已選此格」「可以放置」），而且不得用上面兩句拒絕句。
+
+每一格仍有一顆可聚焦的按鈕，而且帶 aria-label。在那顆按鈕上按 Enter 和 Space，效果與點這一格相同（選中、提示，或預覽在這一格）。這條用鍵盤啟動，所以量的是這一格自己的按鈕，不是偏離中心的指標命中。
+
+## 實心介面不穿透（TC-FE-TAP-BAR-NOTHROUGH）
+
+實心介面要吃掉點擊，底下的格子選中數是 0，而且 `document.elementFromPoint` 落在那塊介面、不是地圖格子。背景格點（避開按鈕）蓋住：動作列 `#readyBar`、清單面板 `#palette`、頂部 HUD（`.gh`）、`#ktFooter`、以及打開的 `#actionSheet`。
+
+動作列的每一顆按鈕，以及頁尾的每一個分頁，在中心和每條邊往內 8px 的位置，`elementFromPoint` 必須是那顆按鈕（或其子元素），不能是地圖格子。點頁尾的任務、遠征、城鎮分頁，仍要切到對應畫面。
+
+相反，提示和放置特效不得吃點擊：`#toast`（info 與成功）和 `.fx-burst` 的 `pointer-events` 是 `none`。提示還顯示時，菱形中心落在提示矩形裡的金色格，用 `tap_cell_centre` 同一套中心點下去，必須選中那一格。測試會先挑一個提示真的壓到金色格中心的版面（1280×720），並斷言有這個重疊。
+
+## 自動放置的書面語（TC-API-AUTOPLACE-FORMAL）
+
+省略座標的 POST `/api/kids/<id>/buildings`（只帶 `def_id`），當這種建築已經放置，回 400，`error` 正好是「你已經興建了這種建築物。」。不得是「你已經興建咗呢種建築物」。已放置的那一行不變，不扣費。
+
+畫面若顯示這句（`showBuildFailure` 把伺服器錯誤放進 `#toast`），提示裡也要有這一句書面語，不得出現口語那句。其他後端口語句子不在這條範圍。
+
+## 這一輪在三個版本上的結果
+
+分母會先拿掉頁尾、頂部 HUD、動作列、工具列蓋住的菱形點，所以露出的點比「348」少。打錯格只算選中或預覽到另一格。
+
+`a871b1b`：
+
+- `TC-FE-TAP-OFFCENTER` 紅。1100×800 已選 2×2：露出 193，打錯格 65，清單矩形裡 15 點有 4 下選中了格子。390×844 已選 2×2：打錯格 98。空地 `(3,2)` 疊在農場圖上的那一點沒有選中 `(3,2)`。
+- `TC-FE-CELL-ARIA-MATCH` 紅。新建造與取出都是無障礙字 28 格不合（原點 2、非原點 6），鍵盤 0。原點寫「已興建」，非原點只寫「放不下」，都沒有提示那一整句。
+- `TC-FE-TAP-BAR-NOTHROUGH` 紅。動作列背景 162 點有 71 下選中格子（`elementFromPoint` 仍在動作列）。清單背景 40 點有 6 下選中。頂部 HUD 272 點、頁尾 150 點、打開的面板 896 點都是 0。動作列按鈕 10 個探測點、頁尾分頁 25 個探測點都沒有被格子蓋住，三個分頁點下去仍會切畫面。提示 `pointer-events` 是 `auto`。1280×720 下金色格 `(4,5)` 的菱形中心落在提示裡，點下去沒有選中。`.fx-burst` 是 `none`。
+- `TC-API-AUTOPLACE-FORMAL` 紅。省略座標回 400，`error` 是「你已經興建咗呢種建築物」。畫面提示是「❌ 你已經興建咗呢種建築物」。
+
+`8940905`：已選 2×2 的打錯格是 0（1100×800 與 390×844）。沒選建築時 1100×800 仍有 5 下打到別格，另有 12 下沒有反應。清單矩形 15 點有 4 下選中格子。動作列同樣 71/162 選中格子。無障礙字同樣 28 格不合，而且 Enter／Space 128 下都沒有點到該格。自動放置仍是口語那句。
+
+`main` `5bfe76d`：取出進不去。新建造無障礙字 64 格都不含那兩句提示。動作列背景 170 點有 141 下選中格子，另有 24 下 `elementFromPoint` 落到地圖格子。省略座標回 `def_id, cell_x, cell_y required`，不是書面語那句。
 
 ## 地圖橫向不裁切（TC-FE-TOWN-MAP-FIT）
 

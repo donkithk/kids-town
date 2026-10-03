@@ -23,6 +23,20 @@ import zlib
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tests.town_tap import (  # noqa: E402
+    cell_access,
+    cell_points,
+    dismiss_selection,
+    element_at,
+    overlay_rects,
+    point_in_rect,
+    press_cell,
+    read_reaction,
+    sprite_overlap_point,
+    tap_cell_centre,
+    tap_labeled_button,
+    tap_point,
+)
 from tests.factories import (  # noqa: E402
     TEST_KID_PIN,
     connect_db,
@@ -640,7 +654,7 @@ def test_storage_takeout_places_on_8x8_and_persists(page, base_url, warehouse_db
         "TC-FE-WAREHOUSE-UNSTORE: the tap target must be a cell on the visible #townMap. "
         f"pad={pad_box} map={map_box}."
     )
-    pad.first.click()
+    tap_cell_centre(page, CELL_X, CELL_Y)
     _assert_pick_surface(page, "while picking the cell")
     _assert_footer_pixels(footer_before, _footer_png(page), "while picking a cell")
     advance = page.locator("#btnToScene3")
@@ -986,6 +1000,7 @@ def _gold_cells(page):
 
 
 def _click_cell(page, cell_x, cell_y, timeout=None):
+    """Pointer-tap the cell's visual diamond centre, not the button box."""
     col = cell_x + 1
     row = cell_y + 1
     pad = page.locator("#townMap").get_by_role(
@@ -993,10 +1008,7 @@ def _click_cell(page, cell_x, cell_y, timeout=None):
         name=re.compile(rf"第\s*{col}\s*欄第\s*{row}\s*行"),
     )
     assert pad.count() > 0, f"missing pad 第 {col} 欄第 {row} 行"
-    if timeout is None:
-        pad.first.click()
-    else:
-        pad.first.click(timeout=timeout)
+    tap_cell_centre(page, cell_x, cell_y, timeout=timeout)
 
 
 def _enter_new_build_scene2(page):
@@ -1494,9 +1506,7 @@ def test_formal_placement_copy(page, base_url, warehouse_db, warehouse_ids):
         if needle not in text:
             problems.append(f"{filename} is missing the new fallback {needle}")
 
-    page.locator("#townMap").get_by_role(
-        "button", name=re.compile(r"第\s*1\s*欄第\s*1\s*行"),
-    ).first.click()
+    tap_cell_centre(page, 0, 0)
     scene1_toast = _wait_toast(page)
     if scene1_toast.get("text") != "想在這裏興建？請先按「我要起屋」。":
         problems.append(
@@ -1590,7 +1600,7 @@ def test_formal_placement_copy(page, base_url, warehouse_db, warehouse_ids):
                 problems.append("scene 3 aria still has the old move/blocked wording")
             shop_pad = page.locator("#townMap").get_by_role("button", name=re.compile(r"商店"))
             if shop_pad.count():
-                shop_pad.first.click()
+                tap_labeled_button(page, shop_pad.first)
                 occupied = _wait_toast(page)
                 if occupied.get("text") != "這裏已有「商店」，不能放置。":
                     problems.append(
@@ -3479,3 +3489,813 @@ def test_palette_group_order(page, base_url, warehouse_db, warehouse_ids, layout
     if layout == "no-stored" and kinds and kinds[0] != "unbuilt":
         problems.append(f"list starts with {kinds[0]!r}, expected unbuilt")
     assert not problems, "TC-FE-PAL-ORDER " + layout + ": " + " | ".join(problems)
+
+
+_SAMPLE_NAMES = (
+    "centre",
+    "vertex-top",
+    "vertex-right",
+    "vertex-bottom",
+    "vertex-left",
+    "edge-top-right",
+    "edge-bottom-right",
+    "edge-bottom-left",
+    "edge-top-left",
+)
+_SELECTABLE_ARIA = ("點選即可選擇", "已選此格", "可以放置")
+_TAP_VIEWPORTS = ((1100, 800), (390, 844))
+
+
+def _strictly_inside(data, point):
+    half_w = data["hw"]
+    half_h = data["hh"]
+    if half_w <= 0 or half_h <= 0:
+        return False
+    span = abs(point["x"] - data["cx"]) / half_w + abs(point["y"] - data["cy"]) / half_h
+    return span < 1 - 1e-6
+
+
+def _tap_kind(cell, blocks, size, bare):
+    """occupied, unfit, or select. bare skips footprint-overlap rejects."""
+    x, y = cell
+    for ox, oy, side, _name in blocks:
+        if ox <= x < ox + side and oy <= y < oy + side:
+            return "occupied"
+    if x + size > MAP_N or y + size > MAP_N:
+        return "unfit"
+    if bare:
+        return "select"
+    for ox, oy, side, _name in blocks:
+        if not (x + size <= ox or ox + side <= x or y + size <= oy or oy + side <= y):
+            return "unfit"
+    return "select"
+
+
+def _acted_cell(reaction):
+    preview = [tuple(item) for item in reaction.get("preview") or []]
+    chosen = [tuple(item) for item in reaction.get("chosen") or []]
+    if len(preview) == 1:
+        return preview[0]
+    if len(preview) > 1:
+        return preview
+    if len(chosen) == 1:
+        return chosen[0]
+    if chosen:
+        return chosen
+    return None
+
+
+def _reaction_blame(cell, kind, reaction, unstore):
+    """Return (bucket, detail). bucket is neighbor, reaction, or None."""
+    acted = _acted_cell(reaction)
+    scene = reaction.get("scene") or ""
+    toast = reaction.get("toast") or ""
+    if isinstance(acted, tuple) and acted != cell:
+        where = "preview" if "場景 3" in scene else "selected"
+        return "neighbor", f"{where} {acted}"
+    if isinstance(acted, list):
+        return "neighbor", f"several cells {acted}"
+    if kind == "select":
+        if unstore:
+            if "場景 3" not in scene:
+                return "reaction", f"scene {scene!r} toast {toast!r}"
+            if acted != cell:
+                return "reaction", f"scene 3 preview {acted}"
+            return None, ""
+        if "場景 3" in scene:
+            return "neighbor", f"scene 3 preview {acted}"
+        if acted != cell:
+            return "reaction", f"selected {reaction.get('chosen')} toast {toast!r}"
+        return None, ""
+    if acted is not None:
+        return "neighbor", f"selected {acted}"
+    expected = OCCUPIED_TOAST if kind == "occupied" else CANNOT_FIT_TOAST
+    if toast != expected:
+        return "reaction", f"toast {toast!r}, expected {expected!r}"
+    if "場景 3" in scene:
+        return "neighbor", "scene 3"
+    return None, ""
+
+
+def _palette_pressed(page, name):
+    btn = page.locator("#palette").get_by_role("button", name=re.compile(re.escape(name)))
+    if btn.count() == 0:
+        return False
+    try:
+        return btn.first.is_visible() and btn.first.get_attribute("aria-pressed") == "true"
+    except Exception:
+        return False
+
+
+def _ensure_picked_build(page, name):
+    """Back to new-build scene 2 with `name` pressed and no cell selected."""
+    _close_sheet(page)
+    scene = _scene_aria(page)
+    hint = (_hint(page).get("ready") or "")
+    palette_open = False
+    try:
+        palette_open = page.locator("#palette").is_visible()
+    except Exception:
+        palette_open = False
+    if "場景 2" not in scene or "放回" in hint or not palette_open:
+        if "場景 1" not in scene:
+            back = page.locator("#btnUxBack")
+            try:
+                if back.count() and back.first.is_visible():
+                    back.first.click()
+            except Exception:
+                pass
+        _enter_new_build_scene2(page)
+        _pick_unbuilt(page, name)
+    elif not _palette_pressed(page, name):
+        btn = page.locator("#palette").get_by_role("button", name=re.compile(re.escape(name)))
+        if btn.count():
+            btn.first.click()
+        else:
+            _pick_unbuilt(page, name)
+    dismiss_selection(page)
+
+
+def _aria_wording_problem(aria, kind):
+    """Covered and unfit labels must contain the toast sentence verbatim."""
+    text = aria or ""
+    if kind == "occupied":
+        problems = []
+        if OCCUPIED_TOAST not in text:
+            problems.append(f"missing exact {OCCUPIED_TOAST!r}")
+        if "已興建" in text:
+            problems.append("contains 已興建")
+        if CANNOT_FIT_TOAST in text:
+            problems.append(f"contains {CANNOT_FIT_TOAST!r}")
+        if problems:
+            return f"aria {text!r}: " + "; ".join(problems)
+        return None
+    if kind == "unfit":
+        problems = []
+        if CANNOT_FIT_TOAST not in text:
+            problems.append(f"missing exact {CANNOT_FIT_TOAST!r}")
+        if "已興建" in text:
+            problems.append("contains 已興建")
+        if OCCUPIED_TOAST in text:
+            problems.append(f"contains {OCCUPIED_TOAST!r}")
+        if problems:
+            return f"aria {text!r}: " + "; ".join(problems)
+        return None
+    if OCCUPIED_TOAST in text or CANNOT_FIT_TOAST in text or "已興建" in text:
+        return f"gold aria {text!r} uses a reject sentence"
+    if not any(bit in text for bit in _SELECTABLE_ARIA):
+        return f"gold aria {text!r} missing selectable wording"
+    return None
+
+
+@pytest.mark.case_id("TC-FE-TAP-OFFCENTER")
+def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-TAP-OFFCENTER 菱形內偏離中心的點必須打中那一格。
+
+    Samples come from the ground slab's box, not the cell button. Each of
+    nine points is the centre or 35% of the way toward a vertex or an edge
+    midpoint. Points inside the open palette rect are left out of the
+    denominator and must not select a cell.
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[
+            {"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0},
+            {"name": "農場", "level": 1, "stored": 0, "cell_x": 4, "cell_y": 3},
+            {"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12},
+        ],
+    )
+    catalog = _catalog_defs(base_url)
+    blocks = _placed_blocks(_kid_rows(warehouse_db, kid_id), catalog)
+    min_fp = min((_square_side(item) for item in catalog), default=2)
+    picked_size = _square_side(next(item for item in catalog if item.get("name") == "健身室"))
+    stored_size = _square_side(next(item for item in catalog if item.get("name") == BUILDING_NAME))
+    _login(page, base_url)
+    problems = []
+    summaries = []
+
+    def _setup(mode, width, height):
+        _relogin(page, base_url)
+        page.set_viewport_size({"width": width, "height": height})
+        if mode == "unstore":
+            opened = _open_takeout_scene2(page)
+            assert opened is None, f"TC-FE-TAP-OFFCENTER unstore: {opened}"
+        elif mode == "picked":
+            _enter_new_build_scene2(page)
+            picked = _pick_unbuilt(page, "健身室")
+            assert picked, "TC-FE-TAP-OFFCENTER: 健身室 was not in the palette"
+            assert page.locator("#palette").is_visible(), "palette closed after picking 健身室"
+        else:
+            _enter_new_build_scene2(page)
+        page.locator("#townMap .pad > .slab").first.wait_for(state="attached", timeout=8000)
+
+    def _sweep(mode, width, height):
+        bare = mode == "bare"
+        unstore = mode == "unstore"
+        size = min_fp if bare else (stored_size if unstore else picked_size)
+        neighbor = reaction = panel_hits = chrome_skipped = exposed = geometry = 0
+        examples = []
+        panel_examples = []
+        for y in range(MAP_N):
+            for x in range(MAP_N):
+                cell = (x, y)
+                kind = _tap_kind(cell, blocks, size, bare)
+                data = cell_points(page, x, y)
+                overlays = overlay_rects(page)
+                panels = [rect for rect in overlays if rect.get("role") == "panel"]
+                chrome = [rect for rect in overlays if rect.get("role") != "panel"]
+                for name in _SAMPLE_NAMES:
+                    point = data["points"][name]
+                    if not _strictly_inside(data, point):
+                        geometry += 1
+                        problems.append(
+                            f"{mode} {width}x{height} {cell} {name} is not strictly inside the slab diamond"
+                        )
+                        continue
+                    if any(point_in_rect(point, rect) for rect in chrome):
+                        chrome_skipped += 1
+                        continue
+                    top = element_at(page, point["x"], point["y"])
+                    if not top or not top.get("inMap"):
+                        chrome_skipped += 1
+                        continue
+                    if any(point_in_rect(point, rect) for rect in panels):
+                        dismiss_selection(page)
+                        tap_point(page, point["x"], point["y"])
+                        hit = read_reaction(page)
+                        acted = _acted_cell(hit)
+                        if acted is not None or "場景 3" in (hit.get("scene") or ""):
+                            panel_hits += 1
+                            if len(panel_examples) < 8:
+                                panel_examples.append(
+                                    f"panel {cell} {name} ({point['x']:.0f},{point['y']:.0f}) "
+                                    f"selected {acted} scene {hit.get('scene')!r}"
+                                )
+                        if mode == "picked":
+                            _ensure_picked_build(page, "健身室")
+                        else:
+                            dismiss_selection(page)
+                        continue
+                    exposed += 1
+                    dismiss_selection(page)
+                    tap_point(page, point["x"], point["y"])
+                    hit = read_reaction(page)
+                    bucket, detail = _reaction_blame(cell, kind, hit, unstore)
+                    if bucket == "neighbor":
+                        neighbor += 1
+                    elif bucket == "reaction":
+                        reaction += 1
+                    if bucket and len(examples) < 10:
+                        examples.append(
+                            f"{cell} {name} ({point['x']:.0f},{point['y']:.0f}) "
+                            f"kind {kind}: {detail}"
+                        )
+        return {
+            "exposed": exposed,
+            "neighbor": neighbor,
+            "reaction": reaction,
+            "panel": panel_hits,
+            "chrome": chrome_skipped,
+            "geometry": geometry,
+            "examples": examples,
+            "panel_examples": panel_examples,
+        }
+
+    for width, height in _TAP_VIEWPORTS:
+        _setup("bare", width, height)
+        probe = sprite_overlap_point(page)
+        if probe:
+            cell_points(page, probe["c"], probe["r"])
+            probe = sprite_overlap_point(page)
+        if not probe:
+            problems.append(
+                f"{width}x{height} sprite: no empty back-cell diamond overlaps a front sprite. "
+                "Seed is 商店 (0,0) and 農場 (4,3)."
+            )
+            summaries.append(f"sprite {width}x{height}: no overlap point")
+        else:
+            back = (probe["c"], probe["r"])
+            front = (probe["frontC"], probe["frontR"])
+            dismiss_selection(page)
+            tap_point(page, probe["x"], probe["y"])
+            hit = read_reaction(page)
+            kind = _tap_kind(back, blocks, min_fp, True)
+            bucket, detail = _reaction_blame(back, kind, hit, False)
+            acted = _acted_cell(hit)
+            sprite_bad = bucket is not None or acted == front
+            if sprite_bad:
+                problems.append(
+                    f"{width}x{height} sprite: tap inside empty {back} over "
+                    f"{probe.get('frontLabel')!r} {front} at ({probe['x']:.0f},{probe['y']:.0f}) "
+                    f"-> {detail or acted}"
+                )
+            summaries.append(
+                f"sprite {width}x{height}: empty {back} over {front} "
+                + ("FAIL" if sprite_bad else "ok")
+            )
+
+        for mode in ("bare", "picked", "unstore"):
+            _setup(mode, width, height)
+            counts = _sweep(mode, width, height)
+            panel_points = 576 - counts["exposed"] - counts["chrome"] - counts["geometry"]
+            correct = counts["exposed"] - counts["neighbor"] - counts["reaction"]
+            summary = (
+                f"{mode} {width}x{height}: {correct}/{counts['exposed']} exposed, "
+                f"panel-excluded {panel_points}, chrome-excluded {counts['chrome']}, "
+                f"neighbor-mis {counts['neighbor']}, reaction-mis {counts['reaction']}, "
+                f"panel-selections {counts['panel']}, geometry {counts['geometry']}"
+            )
+            summaries.append(summary)
+            if panel_points + counts["exposed"] + counts["chrome"] + counts["geometry"] != 576:
+                problems.append(f"{summary} did not account for 576 points")
+            if counts["neighbor"] or counts["reaction"]:
+                problems.append(summary + " | " + " | ".join(counts["examples"]))
+            if counts["panel"]:
+                problems.append(
+                    summary + " panel ate a cell: " + " | ".join(counts["panel_examples"])
+                )
+            if mode == "picked" and panel_points == 0:
+                problems.append(f"{mode} {width}x{height}: open palette covered no sample points")
+            if mode == "bare" and panel_points:
+                problems.append(
+                    f"{mode} {width}x{height}: palette was closed but excluded {panel_points} points"
+                )
+
+    print("TC-FE-TAP-OFFCENTER " + " || ".join(summaries))
+    assert not problems, "TC-FE-TAP-OFFCENTER: " + " || ".join(problems[:12])
+
+
+@pytest.mark.case_id("TC-FE-CELL-ARIA-MATCH")
+@pytest.mark.parametrize("mode", ["picked", "unstore"])
+def test_cell_aria_matches_tap(page, base_url, warehouse_db, warehouse_ids, mode):
+    """TC-FE-CELL-ARIA-MATCH 格子的無障礙字要和點下去的提示同一類。
+
+    Covered cells, including non-anchors such as (1,0), say 已經有建築物.
+    Empty cells that overlap or leave the grid say 放不下. Gold cells say
+    they can be chosen. Every cell keeps a focusable button; Enter and
+    Space on it do what a tap on that cell does.
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[
+            {"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0},
+            {"name": "農場", "level": 1, "stored": 0, "cell_x": 4, "cell_y": 3},
+            {"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12},
+        ],
+    )
+    catalog = _catalog_defs(base_url)
+    blocks = _placed_blocks(_kid_rows(warehouse_db, kid_id), catalog)
+    size = _square_side(
+        next(item for item in catalog if item.get("name") == ("健身室" if mode == "picked" else BUILDING_NAME))
+    )
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    if mode == "unstore":
+        opened = _open_takeout_scene2(page)
+        assert opened is None, "TC-FE-CELL-ARIA-MATCH: " + opened
+    else:
+        _enter_new_build_scene2(page)
+        assert _pick_unbuilt(page, "健身室"), "健身室 missing from the palette"
+    if _tap_kind((1, 0), blocks, size, False) != "occupied":
+        raise AssertionError("seed must cover non-anchor (1,0); 商店 is at (0,0)")
+    anchors = {(ox, oy) for ox, oy, _side, _name in blocks}
+    access = { (item["c"], item["r"]): item for item in cell_access(page) }
+    problems = []
+    aria_miss = key_miss = anchor_miss = nonanchor_miss = 0
+    for y in range(MAP_N):
+        for x in range(MAP_N):
+            cell = (x, y)
+            kind = _tap_kind(cell, blocks, size, False)
+            item = access.get(cell)
+            if item is None or not item.get("present") or not item.get("aria"):
+                problems.append(f"{cell} has no focusable button with an aria-label")
+                aria_miss += 1
+                continue
+            if item.get("disabled") or item.get("tabIndex", -1) < 0:
+                problems.append(
+                    f"{cell} button is not focusable "
+                    f"(disabled={item.get('disabled')} tabIndex={item.get('tabIndex')})"
+                )
+            wording = _aria_wording_problem(item.get("aria") or "", kind)
+            if wording:
+                aria_miss += 1
+                if kind == "occupied" and cell in anchors:
+                    anchor_miss += 1
+                    role = "anchor "
+                elif kind == "occupied":
+                    nonanchor_miss += 1
+                    role = "non-anchor "
+                else:
+                    role = ""
+                if len(problems) < 16:
+                    problems.append(f"{role}{cell} {kind}: {wording}")
+            for key in ("Enter", "Space"):
+                dismiss_selection(page)
+                try:
+                    press_cell(page, x, y, key)
+                except AssertionError as exc:
+                    key_miss += 1
+                    if len(problems) < 16:
+                        problems.append(f"{cell} {key}: {exc}")
+                    continue
+                hit = read_reaction(page)
+                bucket, detail = _reaction_blame(cell, kind, hit, mode == "unstore")
+                if bucket:
+                    key_miss += 1
+                    if len(problems) < 16:
+                        problems.append(f"{cell} {key} {kind}: {detail}")
+    summary = (
+        f"{mode}: aria-mismatches {aria_miss} "
+        f"(anchor {anchor_miss}, non-anchor {nonanchor_miss}), "
+        f"key-mismatches {key_miss}"
+    )
+    print("TC-FE-CELL-ARIA-MATCH " + summary)
+    assert not problems, "TC-FE-CELL-ARIA-MATCH " + summary + ": " + " | ".join(problems[:16])
+
+
+_OWNED_FORMAL = "你已經興建了這種建築物。"
+_OWNED_COLLOQUIAL = "你已經興建咗呢種建築物"
+
+
+def _surface_box(page, selector):
+    return page.evaluate(
+        """(sel) => {
+          const el = document.querySelector(sel);
+          if (!el || el.hidden) return null;
+          const cs = getComputedStyle(el);
+          if (cs.display === 'none' || cs.visibility === 'hidden') return null;
+          const box = el.getBoundingClientRect();
+          if (box.width < 2 || box.height < 2) return null;
+          return {left: box.left, top: box.top, right: box.right, bottom: box.bottom};
+        }""",
+        selector,
+    )
+
+
+def _control_boxes(page, selector):
+    return page.evaluate(
+        """(sel) => {
+          const root = document.querySelector(sel);
+          if (!root) return [];
+          return [...root.querySelectorAll('button, a, input, [role="button"]')].map((el) => {
+            const box = el.getBoundingClientRect();
+            return {left: box.left, top: box.top, right: box.right, bottom: box.bottom};
+          }).filter((box) => box.right - box.left > 2 && box.bottom - box.top > 2);
+        }""",
+        selector,
+    )
+
+
+def _background_grid(rect, holes, step=16):
+    points = []
+    y = rect["top"] + 6
+    while y < rect["bottom"] - 3:
+        x = rect["left"] + 6
+        while x < rect["right"] - 3:
+            point = {"x": x, "y": y}
+            if not any(point_in_rect(point, hole) for hole in holes):
+                points.append(point)
+            x += step
+        y += step
+    return points
+
+
+def _hit_owner(page, x, y, selector):
+    return page.evaluate(
+        """([x, y, sel]) => {
+          const el = document.elementFromPoint(x, y);
+          const root = document.querySelector(sel);
+          const cell = el && el.closest && el.closest(
+            '#townMap .cell-btn, #townMap .hit-sliver, #village .cell-btn'
+          );
+          return {
+            inside: !!(el && root && (el === root || root.contains(el))),
+            cell: !!cell,
+            got: el ? (el.id || el.getAttribute('aria-label') || el.className || el.tagName) : null
+          };
+        }""",
+        [x, y, selector],
+    )
+
+
+def _inset_points(box):
+    cx = box["x"] + box["width"] / 2
+    cy = box["y"] + box["height"] / 2
+    points = [("centre", cx, cy)]
+    if box["width"] > 20:
+        points.append(("left", box["x"] + 8, cy))
+        points.append(("right", box["x"] + box["width"] - 8, cy))
+    if box["height"] > 20:
+        points.append(("top", cx, box["y"] + 8))
+        points.append(("bottom", cx, box["y"] + box["height"] - 8))
+    return points
+
+
+@pytest.mark.case_id("TC-FE-TAP-BAR-NOTHROUGH")
+def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-TAP-BAR-NOTHROUGH 實心介面要吃掉點擊，格子不能被選中。
+
+    動作列、清單面板、頂部 HUD、頁尾，以及打開的面板，背景格點的
+    elementFromPoint 必須落在該介面，而且點下去不得選中格子。
+    info／成功提示和放置特效是 pointer-events:none。提示還顯示時，
+    壓在提示底下的金色格仍要用菱形中心點中。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[
+            {"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0},
+            {"name": "農場", "level": 1, "stored": 0, "cell_x": 4, "cell_y": 3},
+            {"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12},
+        ],
+    )
+    catalog = _catalog_defs(base_url)
+    blocks = _placed_blocks(_kid_rows(warehouse_db, kid_id), catalog)
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1100, "height": 800})
+    _enter_new_build_scene2(page)
+    assert _pick_unbuilt(page, "健身室"), "健身室 missing"
+    problems = []
+    summaries = []
+
+    def _grid_surface(name, selector):
+        rect = _surface_box(page, selector)
+        if not rect:
+            problems.append(f"{name} has no rendered box")
+            summaries.append(f"{name}: missing")
+            return
+        holes = _control_boxes(page, selector)
+        points = _background_grid(rect, holes)
+        selected = stolen = 0
+        examples = []
+        for point in points:
+            owner = _hit_owner(page, point["x"], point["y"], selector)
+            if not owner or not owner.get("inside") or owner.get("cell"):
+                stolen += 1
+                if len(examples) < 4:
+                    examples.append(
+                        f"hit ({point['x']:.0f},{point['y']:.0f}) -> {owner}"
+                    )
+            dismiss_selection(page)
+            tap_point(page, point["x"], point["y"])
+            hit = read_reaction(page)
+            if _acted_cell(hit) is not None or "場景 3" in (hit.get("scene") or ""):
+                selected += 1
+                if len(examples) < 6:
+                    examples.append(
+                        f"tap ({point['x']:.0f},{point['y']:.0f}) selected {_acted_cell(hit)}"
+                    )
+            dismiss_selection(page)
+        summaries.append(
+            f"{name}: background {len(points)}, selected {selected}, hit-stolen {stolen}"
+        )
+        if not points:
+            problems.append(f"{name} background grid was empty")
+        if selected or stolen:
+            problems.append(
+                f"{name}: selected {selected}, hit-stolen {stolen} of {len(points)} | "
+                + " | ".join(examples)
+            )
+
+    for selector, label in (
+        ("#readyBar button", "action-bar button"),
+        ("#ktFooter .kt-footer-tab", "footer tab"),
+    ):
+        nodes = page.locator(selector)
+        stolen = 0
+        checked = 0
+        sample = []
+        for index in range(nodes.count()):
+            node = nodes.nth(index)
+            box = node.bounding_box()
+            if not box or box["width"] < 8 or box["height"] < 8:
+                continue
+            ident = (
+                node.get_attribute("data-kt-nav")
+                or node.get_attribute("id")
+                or node.inner_text()
+                or str(index)
+            ).strip().split("\n")[0][:24]
+            for edge, x, y in _inset_points(box):
+                checked += 1
+                owner = page.evaluate(
+                    """([x, y]) => {
+                      const el = document.elementFromPoint(x, y);
+                      if (!el) return {ok: false, cell: false, got: null};
+                      const cell = el.closest && el.closest(
+                        '#townMap .cell-btn, #townMap .hit-sliver, #village .cell-btn'
+                      );
+                      return {
+                        ok: !cell,
+                        cell: !!cell,
+                        got: el.id || el.getAttribute('data-kt-nav') || el.className || el.tagName
+                      };
+                    }""",
+                    [x, y],
+                )
+                target = page.evaluate(
+                    """([x, y, sx, sy, sw, sh]) => {
+                      const el = document.elementFromPoint(x, y);
+                      if (!el) return false;
+                      const stack = document.elementsFromPoint
+                        ? document.elementsFromPoint(x, y)
+                        : [el];
+                      return stack.some((node) => {
+                        const box = node.getBoundingClientRect();
+                        return Math.abs(box.left - sx) < 1.5 && Math.abs(box.top - sy) < 1.5
+                          && Math.abs(box.width - sw) < 1.5 && Math.abs(box.height - sh) < 1.5
+                          && (node === el || node.contains(el));
+                      });
+                    }""",
+                    [x, y, box["x"], box["y"], box["width"], box["height"]],
+                )
+                if owner.get("cell") or not target:
+                    stolen += 1
+                    if len(sample) < 6:
+                        sample.append(f"{label} {ident} {edge} -> {owner.get('got')!r}")
+        summaries.append(f"{label}: probed {checked}, stolen {stolen}")
+        if stolen:
+            problems.append(f"{label} hit stolen {stolen}/{checked} | " + " | ".join(sample))
+
+    shop = page.locator("#palette").get_by_role("button", name=re.compile("商店"))
+    if shop.count() == 0:
+        problems.append("palette has no 商店 button to open the sheet")
+    else:
+        shop.first.focus()
+        page.keyboard.press("Enter")
+        page.wait_for_timeout(200)
+    sheet = page.locator("#actionSheet")
+    sheet_open = False
+    try:
+        sheet_open = sheet.count() and sheet.first.is_visible()
+    except Exception:
+        sheet_open = False
+    if not sheet_open:
+        problems.append("placed 商店 did not open #actionSheet")
+        summaries.append("sheet: not open")
+    else:
+        _grid_surface("sheet", "#actionSheet")
+        _close_sheet(page)
+
+    _grid_surface("action-bar", "#readyBar")
+    _grid_surface("palette", "#palette")
+    _grid_surface("hud", "#app .gh")
+    _grid_surface("footer", "#ktFooter")
+
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _relogin(page, base_url)
+    _enter_new_build_scene2(page)
+    _pick_unbuilt(page, "健身室")
+    dismiss_selection(page)
+    tap_cell_centre(page, 0, 0)
+    toast_box = _surface_box(page, "#toast")
+    toast_state = page.evaluate(
+        """() => {
+          const el = document.getElementById('toast');
+          if (!el) return {missing: true};
+          const cs = getComputedStyle(el);
+          const burst = document.createElement('div');
+          burst.className = 'fx-burst';
+          (document.getElementById('townMap') || document.body).appendChild(burst);
+          const burstPe = getComputedStyle(burst).pointerEvents;
+          burst.remove();
+          return {
+            text: el.textContent || '',
+            className: el.className || '',
+            display: el.style.display || '',
+            pointerEvents: cs.pointerEvents,
+            burst: burstPe
+          };
+        }"""
+    )
+    if toast_state.get("pointerEvents") != "none":
+        problems.append(
+            f"info/toast pointer-events is {toast_state.get('pointerEvents')!r}, expected none"
+        )
+    if toast_state.get("burst") != "none":
+        problems.append(
+            f"placement .fx-burst pointer-events is {toast_state.get('burst')!r}, expected none"
+        )
+    page.evaluate("() => { if (typeof showToast === 'function') showToast('放置完成'); }")
+    success_pe = page.evaluate(
+        """() => {
+          const el = document.getElementById('toast');
+          return el ? getComputedStyle(el).pointerEvents : 'missing';
+        }"""
+    )
+    if success_pe != "none":
+        problems.append(f"success toast pointer-events is {success_pe!r}, expected none")
+    # The success toast replaced the info toast. Show the occupied toast again
+    # and immediately search for a gold centre underneath it.
+    dismiss_selection(page)
+    press_cell(page, 0, 0, "Enter")
+    toast_box = _surface_box(page, "#toast")
+    overlapped = None
+    if toast_box:
+        for y in range(MAP_N):
+            for x in range(MAP_N):
+                if _tap_kind((x, y), blocks, 2, False) != "select":
+                    continue
+                centre = cell_points(page, x, y)["points"]["centre"]
+                if point_in_rect(centre, toast_box):
+                    overlapped = ((x, y), centre)
+                    break
+            if overlapped:
+                break
+    if not overlapped:
+        problems.append(
+            "toast does not overlap any gold cell diamond centre "
+            f"(toast box {toast_box}, text {toast_state.get('text')!r})"
+        )
+        summaries.append("toast-gold: no overlap")
+    else:
+        cell, centre = overlapped
+        tap_point(page, centre["x"], centre["y"])
+        hit = read_reaction(page)
+        acted = _acted_cell(hit)
+        ok = acted == cell and "場景 3" not in (hit.get("scene") or "")
+        summaries.append(f"toast-gold: {cell} -> {acted}")
+        if not ok:
+            problems.append(
+                f"gold {cell} under the visible toast was not selected (got {acted}, "
+                f"toast {hit.get('toast')!r})"
+            )
+    summaries.append(
+        f"toast pointer-events {toast_state.get('pointerEvents')!r} "
+        f"burst {toast_state.get('burst')!r}"
+    )
+
+    for nav, tab_id in (("tasks", "tab-tasks"), ("expedition", "tab-expedition"), ("town", "tab-town")):
+        tab = page.locator(f'#ktFooter [data-kt-nav="{nav}"]')
+        box = tab.bounding_box() if tab.count() else None
+        if not box:
+            problems.append(f"footer tab {nav} has no box")
+            continue
+        tap_point(page, box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        page.wait_for_timeout(200)
+        active = page.locator(f"#{tab_id}.active").count() > 0
+        summaries.append(f"footer-nav {nav}: {'ok' if active else 'FAIL'}")
+        if not active:
+            problems.append(f"tapping footer tab {nav} did not show #{tab_id}")
+
+    print("TC-FE-TAP-BAR-NOTHROUGH " + " || ".join(summaries))
+    assert not problems, "TC-FE-TAP-BAR-NOTHROUGH: " + " || ".join(problems[:10])
+
+
+@pytest.mark.case_id("TC-API-AUTOPLACE-FORMAL")
+def test_autoplace_formal_shown(page, base_url, warehouse_db, warehouse_ids):
+    """TC-API-AUTOPLACE-FORMAL 省略座標的自動放置，已放置時用書面語。
+
+    錯誤句必須正好是「你已經興建了這種建築物。」。畫面若把這句顯示出來
+    （showBuildFailure），不得改回「你已經興建咗呢種建築物」。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[{"name": BUILDING_NAME, "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0}],
+    )
+    def_id = _def_id_by_name(warehouse_db, BUILDING_NAME)["id"]
+    _login(page, base_url)
+    shown = page.evaluate(
+        """async ({defId, kidId}) => {
+          const res = await fetch('/api/kids/' + kidId + '/buildings', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({def_id: defId})
+          });
+          let data = {};
+          try { data = await res.json(); } catch (err) { data = {}; }
+          const message = (data && data.error) || '';
+          if (typeof showBuildFailure === 'function') showBuildFailure(message);
+          const toast = document.getElementById('toast');
+          return {
+            status: res.status,
+            error: message,
+            toast: toast ? (toast.textContent || '') : ''
+          };
+        }""",
+        {"defId": def_id, "kidId": kid_id},
+    )
+    problems = []
+    if shown.get("status") != 400:
+        problems.append(f"HTTP {shown.get('status')}, expected 400")
+    if shown.get("error") != _OWNED_FORMAL:
+        problems.append(f"error {shown.get('error')!r}, expected {_OWNED_FORMAL!r}")
+    if _OWNED_COLLOQUIAL in (shown.get("error") or ""):
+        problems.append("response still uses 你已經興建咗呢種建築物")
+    if _OWNED_FORMAL not in (shown.get("toast") or ""):
+        problems.append(f"toast {shown.get('toast')!r} does not show {_OWNED_FORMAL!r}")
+    if _OWNED_COLLOQUIAL in (shown.get("toast") or ""):
+        problems.append("toast still shows 你已經興建咗呢種建築物")
+    assert not problems, "TC-API-AUTOPLACE-FORMAL: " + " | ".join(problems)
