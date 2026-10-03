@@ -985,7 +985,7 @@ def _gold_cells(page):
     return sorted((item[0], item[1]) for item in raw)
 
 
-def _click_cell(page, cell_x, cell_y):
+def _click_cell(page, cell_x, cell_y, timeout=None):
     col = cell_x + 1
     row = cell_y + 1
     pad = page.locator("#townMap").get_by_role(
@@ -993,7 +993,10 @@ def _click_cell(page, cell_x, cell_y):
         name=re.compile(rf"第\s*{col}\s*欄第\s*{row}\s*行"),
     )
     assert pad.count() > 0, f"missing pad 第 {col} 欄第 {row} 行"
-    pad.first.click()
+    if timeout is None:
+        pad.first.click()
+    else:
+        pad.first.click(timeout=timeout)
 
 
 def _enter_new_build_scene2(page):
@@ -1882,10 +1885,11 @@ def test_offgrid_cell_uses_cannot_fit_toast(page, base_url, warehouse_db, wareho
     _click_cell(page, *target)
     toast = _wait_toast(page)
     problems.extend(_toast_info_problems(toast, CANNOT_FIT_TOAST))
+    # (1,0) is inside the gym footprint at (0,0). It is covered, not an empty overlap.
     _click_cell(page, 1, 0)
-    collide = _wait_toast(page)
+    covered = _wait_toast(page)
     problems.extend(
-        [f"collision (1,0): {item}" for item in _toast_info_problems(collide, CANNOT_FIT_TOAST)]
+        [f"covered (1,0): {item}" for item in _toast_info_problems(covered, OCCUPIED_TOAST)]
     )
     _click_cell(page, 0, 0)
     occupied = _wait_toast(page)
@@ -2305,6 +2309,157 @@ def _go_disabled(page):
     return go.first.is_disabled(), (go.first.inner_text() or "").strip()
 
 
+def _clear_toast(page):
+    page.evaluate(
+        """() => {
+          const el = document.getElementById('toast');
+          if (!el) return;
+          el.style.display = 'none';
+          el.textContent = '';
+          el.className = '';
+        }"""
+    )
+
+
+def _chosen_cells(page):
+    return page.evaluate(
+        """() => {
+          const hits = [];
+          for (const pad of document.querySelectorAll('#townMap .pad')) {
+            const btn = pad.querySelector('.cell-btn');
+            const label = btn ? (btn.getAttribute('aria-label') || '') : '';
+            const badge = pad.querySelector(':scope > .badge');
+            let badgeText = '';
+            if (badge && !badge.hidden) {
+              const cs = getComputedStyle(badge);
+              const box = badge.getBoundingClientRect();
+              if (cs.display !== 'none' && cs.visibility !== 'hidden' && box.width > 1) {
+                badgeText = (badge.textContent || '').trim();
+              }
+            }
+            const chosen = pad.classList.contains('is-chosen')
+              || label.includes('已選此格') || label.includes('已揀呢格')
+              || badgeText === '此格' || badgeText === '呢格';
+            if (chosen) hits.push(label || badgeText || '?');
+          }
+          return hits;
+        }"""
+    )
+
+
+def _visible_errors(page):
+    return page.evaluate(
+        """() => [...document.querySelectorAll('.error')].filter((el) => {
+          const cs = getComputedStyle(el);
+          const box = el.getBoundingClientRect();
+          return cs.display !== 'none' && cs.visibility !== 'hidden'
+            && box.width > 1 && (el.textContent || '').trim();
+        }).map((el) => (el.textContent || '').trim().slice(0, 80))"""
+    )
+
+
+def _reject_ui_problems(page, toast, mode, building_name, forbidden):
+    """Scene 3 confirm failed closed: info toast, Scene 2, selection cleared."""
+    problems = list(_toast_info_problems(toast, CANNOT_FIT_TOAST))
+    scene = _scene_aria(page)
+    if "場景 2" not in scene:
+        problems.append(f"scene {scene!r}, expected 場景 2")
+    if "場景 3" in scene:
+        problems.append(f"still in 場景 3 ({scene!r})")
+    chosen = _chosen_cells(page)
+    if chosen:
+        problems.append(f"cell still chosen: {chosen[:4]}")
+    disabled, label = _go_disabled(page)
+    if not disabled:
+        problems.append(f"「選擇位置」 enabled (button {label!r})")
+    hint = _hint(page)["ready"]
+    if mode == "unstore":
+        expected = f"請點選空地，放回「{building_name}」。不扣除金幣和材料。"
+        if hint != expected:
+            problems.append(f"hint {hint!r}, expected {expected!r}")
+    else:
+        if not str(hint).startswith("請點選金色空地"):
+            problems.append(f"hint {hint!r} should start with 請點選金色空地")
+        pressed = False
+        btn = page.locator("#palette").get_by_role(
+            "button", name=re.compile(re.escape(building_name))
+        )
+        if btn.count() and btn.first.get_attribute("aria-pressed") == "true":
+            pressed = True
+        if building_name not in (hint or "") and not pressed:
+            problems.append(f"building {building_name} was cleared. hint={hint!r}")
+    toast_text = toast.get("text") or ""
+    body = page.locator("body").inner_text() if any(len(phrase) > 2 for phrase in forbidden) else ""
+    for phrase in forbidden:
+        if not phrase:
+            continue
+        if phrase in toast_text:
+            problems.append(f"toast contains {phrase!r}")
+        if len(phrase) > 2 and phrase in body:
+            problems.append(f"page contains {phrase!r}")
+    errors = _visible_errors(page)
+    if errors:
+        problems.append(f"visible .error {errors[:3]}")
+    return problems
+
+
+def _catalog_defs(base_url):
+    """Live `/api/building-defs` order. That array is the catalog order."""
+    import urllib.request
+
+    with urllib.request.urlopen(base_url + "/api/building-defs", timeout=15) as resp:
+        data = json.loads(resp.read().decode())
+    assert isinstance(data, list) and data, f"/api/building-defs returned {data!r}"
+    return data
+
+
+def _square_side(item):
+    if not isinstance(item, dict) or item.get("footprint") in (None, ""):
+        return 2
+    try:
+        size = int(item.get("footprint"))
+    except (TypeError, ValueError):
+        return 2
+    return size if size >= 1 else 2
+
+
+def _sw_facts():
+    path = os.path.join(REPO, "service-worker.js")
+    text = open(path, encoding="utf-8").read()
+    cache = re.search(r"const\s+CACHE_NAME\s*=\s*['\"]([^'\"]+)['\"]", text)
+    static = re.search(r"const\s+STATIC_CACHE\s*=\s*['\"]([^'\"]+)['\"]", text)
+    block = re.search(r"const\s+PRECACHE_URLS\s*=\s*\[(.*?)\]", text, re.S)
+    assert cache and static and block, "service-worker.js is missing cache constants"
+    urls = re.findall(r"['\"]([^'\"]+)['\"]", block.group(1))
+    return cache.group(1), static.group(1), urls
+
+
+def _wait_active_worker(page, timeout=10000):
+    """Poll until getRegistration() has an active worker.
+
+    A Promise is truthy, so the predicate must return a boolean. Returning
+    the registration promise would make wait_for_function succeed immediately.
+    """
+    try:
+        page.wait_for_function(
+            """() => {
+              const slot = window.__ktSw || (window.__ktSw = { pending: false, active: false });
+              if (!slot.pending) {
+                slot.pending = true;
+                navigator.serviceWorker.getRegistration().then((reg) => {
+                  slot.active = !!(reg && reg.active);
+                  slot.pending = false;
+                }).catch(() => { slot.pending = false; });
+              }
+              return slot.active === true;
+            }""",
+            timeout=timeout,
+        )
+        return True
+    except Exception:
+        return False
+
+
 def _install_min_footprint_catalog(page):
     """GET /api/building-defs gains footprint. Existing rows are 2; one new row is 1.
 
@@ -2465,7 +2620,7 @@ def test_unfit_cell_is_not_preselected(page, base_url, warehouse_db, warehouse_i
 @pytest.mark.case_id("TC-FE-BUILD-UNFIT-PRESELECT")
 @pytest.mark.parametrize("mode", ["new-build", "unstore"])
 def test_confirm_400_returns_to_scene2(page, base_url, warehouse_db, warehouse_ids, mode):
-    """TC-FE-BUILD-UNFIT-PRESELECT (c) 伺服器 400 時回到場景 2，不顯示原始錯誤。"""
+    """TC-FE-BUILD-UNFIT-PRESELECT (c) 伺服器 400 回到場景 2，清掉選格，按鈕停用。"""
     kid_id = warehouse_ids["kid_id"]
     if mode == "unstore":
         _reset_kid(
@@ -2502,17 +2657,8 @@ def test_confirm_400_returns_to_scene2(page, base_url, warehouse_db, warehouse_i
     _force_confirm_400(page, mode)
     page.locator("#btnUxConfirm").click()
     toast = _wait_toast(page)
-    problems = _toast_info_problems(toast, CANNOT_FIT_TOAST)
-    text = toast.get("text") or ""
-    if RANGE_ERROR in text or "位置超出" in text:
-        problems.append(f"toast showed the raw server error {text!r}")
-    if "error" in set((toast.get("className") or "").split()):
-        problems.append(f"toast used .error {toast.get('className')!r}")
-    scene = _scene_aria(page)
-    if "場景 2" not in scene:
-        problems.append(f"stayed on {scene!r}, expected 場景 2")
-    if "場景 3" in scene:
-        problems.append("still stuck in Scene 3")
+    building = BUILDING_NAME if mode == "unstore" else "健身室"
+    problems = _reject_ui_problems(page, toast, mode, building, [RANGE_ERROR, "Request failed"])
     if not _resources_same(warehouse_db, kid_id, before_points, before_items):
         problems.append("resources changed")
     if _kid_rows(warehouse_db, kid_id) != before_rows:
@@ -2658,3 +2804,678 @@ def test_palette_buttons_do_not_clip(page, base_url, warehouse_db, warehouse_ids
     if not saw_unbuilt:
         problems.append("no unbuilt palette row (price)")
     assert not problems, "TC-FE-PAL-BTN-NOCLIP: " + " | ".join(problems)
+
+
+def _open_scene3(page, mode):
+    if mode == "unstore":
+        opened = _open_takeout_scene2(page)
+        assert opened is None, "TC-FE-CONFIRM: " + opened
+        _click_cell(page, 0, 0)
+    else:
+        _enter_new_build_scene2(page)
+        _click_cell(page, 0, 0)
+        _pick_unbuilt(page, "健身室")
+    advance = page.locator("#btnToScene3")
+    if advance.count() and advance.first.is_visible() and advance.first.is_enabled():
+        advance.first.click()
+    page.locator("#btnUxConfirm").wait_for(state="visible", timeout=8000)
+
+
+def _force_confirm_response(page, mode, status, body, content_type):
+    def handle(route):
+        request = route.request
+        if request.method != "POST":
+            route.continue_()
+            return
+        url = request.url
+        unstore = "/unstored" in url
+        build = (
+            "/buildings" in url
+            and not unstore
+            and "/move" not in url
+            and "/store" not in url
+            and "/upgrade" not in url
+        )
+        if (mode == "unstore" and unstore) or (mode == "new-build" and build):
+            route.fulfill(status=status, content_type=content_type, body=body)
+            return
+        route.continue_()
+
+    page.route("**/api/kids/**", handle)
+
+
+_GENERIC_BODIES = (
+    ("plain", 400, "text/plain", "Bad Request", ("Bad Request", "Request failed")),
+    ("detail", 400, "application/json", json.dumps({"detail": "x"}), ("Request failed", '{"detail":"x"}')),
+    (
+        "occupied",
+        409,
+        "application/json",
+        json.dumps({"error": OCCUPIED_RED}, ensure_ascii=False),
+        (OCCUPIED_RED, "Request failed"),
+    ),
+    ("empty", 422, "text/plain", "", ("Request failed",)),
+)
+
+
+@pytest.mark.case_id("TC-FE-CONFIRM-GENERIC-4XX")
+@pytest.mark.parametrize("mode", ["new-build", "unstore"])
+@pytest.mark.parametrize(
+    "label,status,content_type,body,forbidden",
+    _GENERIC_BODIES,
+    ids=[item[0] for item in _GENERIC_BODIES],
+)
+def test_confirm_generic_4xx(
+    page, base_url, warehouse_db, warehouse_ids, mode, label, status, content_type, body, forbidden
+):
+    """TC-FE-CONFIRM-GENERIC-4XX 確認 POST 的未知 4xx 也回到場景 2。"""
+    kid_id = warehouse_ids["kid_id"]
+    if mode == "unstore":
+        _reset_kid(
+            warehouse_db,
+            kid_id,
+            points=800,
+            buildings=[{"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12}],
+        )
+    else:
+        _reset_kid(
+            warehouse_db,
+            kid_id,
+            points=800,
+            items={"wood": 40, "brick": 20},
+            buildings=[],
+        )
+    before_points = get_kid_points(warehouse_db, kid_id)
+    before_items = inventory_map(warehouse_db, kid_id)
+    before_rows = _kid_rows(warehouse_db, kid_id)
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _open_scene3(page, mode)
+    _force_confirm_response(page, mode, status, body, content_type)
+    page.locator("#btnUxConfirm").click()
+    toast = _wait_toast(page)
+    building = BUILDING_NAME if mode == "unstore" else "健身室"
+    problems = _reject_ui_problems(page, toast, mode, building, list(forbidden))
+    if not _resources_same(warehouse_db, kid_id, before_points, before_items):
+        problems.append("resources changed")
+    if _kid_rows(warehouse_db, kid_id) != before_rows:
+        problems.append("rows changed")
+    assert not problems, (
+        f"TC-FE-CONFIRM-GENERIC-4XX {mode} {label} HTTP {status}: " + " | ".join(problems)
+    )
+
+
+def _close_sheet(page):
+    sheet = page.locator("#actionSheet")
+    close = page.locator("#btnCloseSheet")
+    if sheet.count() and close.count():
+        try:
+            if sheet.first.is_visible() and close.first.is_visible():
+                close.first.click(timeout=2000)
+                page.wait_for_timeout(150)
+        except Exception:
+            pass
+
+
+def _placed_blocks(rows, catalog):
+    by_name = {item.get("name"): _square_side(item) for item in catalog}
+    blocks = []
+    for row in rows:
+        if row.get("stored"):
+            continue
+        blocks.append((row["cell_x"], row["cell_y"], by_name.get(row["name"], 2), row["name"]))
+    return blocks
+
+
+def _cell_classes(blocks, catalog):
+    """Gold, covered, and empty-unfit cells for the min catalog footprint."""
+    sides = [_square_side(item) for item in catalog] or [2]
+    min_fp = min(sides)
+    gold, covered, empty_unfit = [], [], []
+    for y in range(MAP_N):
+        for x in range(MAP_N):
+            hit = None
+            for ox, oy, size, name in blocks:
+                if ox <= x < ox + size and oy <= y < oy + size:
+                    hit = name
+                    break
+            if hit:
+                covered.append((x, y))
+                continue
+            fits = x + min_fp <= MAP_N and y + min_fp <= MAP_N
+            overlap = False
+            if fits:
+                for ox, oy, size, _name in blocks:
+                    if not (
+                        x + min_fp <= ox
+                        or ox + size <= x
+                        or y + min_fp <= oy
+                        or oy + size <= y
+                    ):
+                        overlap = True
+                        break
+            if fits and not overlap:
+                gold.append((x, y))
+            else:
+                empty_unfit.append((x, y))
+    return gold, covered, empty_unfit, min_fp
+
+
+@pytest.mark.case_id("TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP")
+def test_unfit_preselect_overlap(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP 未選建築時，空但重疊的格不能選。"""
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[
+            {"name": "健身室", "level": 1, "stored": 0, "cell_x": 3, "cell_y": 0},
+            {"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 6},
+        ],
+    )
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _enter_new_build_scene2(page)
+    catalog = _catalog_defs(base_url)
+    blocks = _placed_blocks(_kid_rows(warehouse_db, kid_id), catalog)
+    gold, covered, _empty, min_fp = _cell_classes(blocks, catalog)
+    problems = []
+    rendered = set(_mark_gold_cells(page))
+    if (2, 0) in rendered or (2, 0) in set(gold):
+        problems.append(f"(2,0) is gold. rendered={sorted(rendered)[:8]} min_fp={min_fp}")
+    before_rows = _kid_rows(warehouse_db, kid_id)
+    before_hint = _hint(page)["ready"]
+    _clear_toast(page)
+    _click_cell(page, 2, 0)
+    toast = _wait_toast(page)
+    problems.extend(
+        [f"(2,0): {item}" for item in _toast_info_problems(toast, CANNOT_FIT_TOAST)]
+    )
+    problems.extend(_selected_cell_problems(_cell_choice(page, 2, 0), (2, 0), False))
+    after_hint = _hint(page)["ready"]
+    if after_hint != before_hint:
+        problems.append(f"hint changed from {before_hint!r} to {after_hint!r}")
+    if "已選擇空地" in (after_hint or "") or "已揀空地" in (after_hint or ""):
+        problems.append(f"hint looks selected: {after_hint!r}")
+    disabled, label = _go_disabled(page)
+    if not disabled:
+        problems.append(f"「選擇位置」 enabled after (2,0) (button {label!r})")
+
+    _relogin(page, base_url)
+    _enter_new_build_scene2(page)
+    rendered = set(_mark_gold_cells(page))
+    gold, covered, empty_unfit, min_fp = _cell_classes(blocks, catalog)
+    gold_set, covered_set = set(gold), set(covered)
+    if rendered != gold_set:
+        problems.append(
+            f"rendered gold != computed gold (min footprint {min_fp}). "
+            f"extra={sorted(rendered - gold_set)[:12]} missing={sorted(gold_set - rendered)[:12]}"
+        )
+    selectable = []
+    for y in range(MAP_N):
+        for x in range(MAP_N):
+            cell = (x, y)
+            _close_sheet(page)
+            _clear_toast(page)
+            try:
+                _click_cell(page, x, y, timeout=3000)
+            except Exception as exc:
+                problems.append(f"{cell} click failed: {type(exc).__name__}: {exc}")
+                _close_sheet(page)
+                continue
+            if cell in gold_set:
+                choice = _cell_choice(page, x, y)
+                if choice.get("chosen"):
+                    selectable.append(cell)
+                    _click_cell(page, x, y)
+                    if _cell_choice(page, x, y).get("chosen"):
+                        problems.append(f"{cell} stayed selected after the second tap")
+                else:
+                    problems.append(
+                        f"gold {cell} was not selected. aria={choice.get('label')!r}"
+                    )
+                continue
+            toast = _wait_toast(page, timeout=900)
+            expected = OCCUPIED_TOAST if cell in covered_set else CANNOT_FIT_TOAST
+            kind = "covered" if cell in covered_set else "empty-unfit"
+            problems.extend(
+                [f"{kind} {cell}: {item}" for item in _toast_info_problems(toast, expected)]
+            )
+            problems.extend(_selected_cell_problems(_cell_choice(page, x, y), cell, False))
+            _close_sheet(page)
+    if set(selectable) != rendered:
+        problems.append(
+            f"selectable {sorted(selectable)[:12]} != rendered gold {sorted(rendered)[:12]}"
+        )
+    if set(selectable) != gold_set:
+        problems.append(
+            f"selectable != computed gold. extra={sorted(set(selectable) - gold_set)[:8]} "
+            f"missing={sorted(gold_set - set(selectable))[:8]}"
+        )
+    if _kid_rows(warehouse_db, kid_id) != before_rows:
+        problems.append("rows changed")
+    assert not problems, (
+        "TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP: " + " | ".join(problems[:24])
+        + (f" | ... {len(problems) - 24} more" if len(problems) > 24 else "")
+    )
+
+
+def _remember_pageerrors(page):
+    found = []
+
+    def _keep(exc):
+        found.append(str(exc))
+
+    page.on("pageerror", _keep)
+    return found
+
+
+@pytest.mark.case_id("TC-FE-SW-AUTOREG")
+def test_sw_autoregisters_without_pageerror(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-SW-AUTOREG 頁面自己註冊 service worker，而且沒有 pageerror。"""
+    kid_id = warehouse_ids["kid_id"]
+    catalog = _catalog_defs(base_url)
+    farm = next((item for item in catalog if "農" in (item.get("name") or "")), None)
+    assert farm, "catalog has no building whose name contains 農"
+    cache_name, _static_name, _urls = _sw_facts()
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[{"name": farm["name"], "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0}],
+    )
+    errors = _remember_pageerrors(page)
+    page.goto(f"{base_url}/kids/")
+    active = _wait_active_worker(page, timeout=10000)
+    keys = page.evaluate("() => caches.keys()")
+    _submit_login(page)
+    page.locator("#village .cell-btn").first.wait_for(state="attached", timeout=8000)
+    sweep = []
+    try:
+        scene = _scene_aria(page)
+        if "場景 1" not in scene:
+            sweep.append(f"scene 1 aria {scene!r}")
+        _enter_new_build_scene2(page)
+        page.locator("#listLauncher").click()
+        page.locator("#palette").wait_for(state="visible", timeout=8000)
+        page.locator("#ktFooter").get_by_role("button", name=re.compile("任務板")).click()
+        page.wait_for_timeout(300)
+        drawer = page.locator("#dr")
+        if not drawer.evaluate("el => el.classList.contains('o')"):
+            page.get_by_role("button", name="☰").click()
+            page.locator("#dr.o").wait_for(state="visible", timeout=8000)
+        page.locator("#dr").get_by_role("button", name=re.compile("儲蓄目標")).click()
+        page.wait_for_timeout(300)
+        page.locator("#ktFooter").get_by_role("button", name=re.compile("城鎮")).click()
+        page.locator("#townMap").wait_for(state="visible", timeout=8000)
+        _click_cell(page, 0, 0)
+        page.wait_for_timeout(300)
+    except Exception as exc:
+        sweep.append(f"sweep stopped: {type(exc).__name__}: {exc}")
+    problems = list(sweep)
+    if not active:
+        reg = page.evaluate(
+            """() => navigator.serviceWorker.getRegistration().then((reg) => {
+              if (!reg) return { registration: false };
+              return {
+                registration: true,
+                active: !!(reg.active),
+                state: reg.active ? reg.active.state : (reg.installing && reg.installing.state) || ''
+              };
+            })"""
+        )
+        problems.append(f"no active service worker. registration={reg}")
+    if cache_name not in (keys or []):
+        problems.append(f"caches.keys() {keys} does not include {cache_name}")
+    if errors:
+        problems.append("pageerror: " + " || ".join(errors))
+    assert not problems, "TC-FE-SW-AUTOREG: " + " | ".join(problems)
+
+
+def _cache_urls(page, cache_name):
+    return page.evaluate(
+        """async (name) => {
+          const keys = await caches.keys();
+          if (!keys.includes(name)) return { missing: true, keys };
+          const cache = await caches.open(name);
+          const reqs = await cache.keys();
+          return { missing: false, keys, urls: reqs.map((req) => req.url) };
+        }""",
+        cache_name,
+    )
+
+
+def _scene1_layout(page):
+    return page.evaluate(
+        """() => {
+          const map = document.getElementById('townMap');
+          const village = document.querySelector('#townMap .village.is-iso');
+          const parent = map ? map.parentElement : null;
+          const tab = document.querySelector('#ktFooter .kt-footer-tab');
+          const mapBox = map ? map.getBoundingClientRect() : null;
+          const parentBox = parent ? parent.getBoundingClientRect() : null;
+          const vcs = village ? getComputedStyle(village) : null;
+          const shown = (el) => {
+            if (!el) return false;
+            const cs = getComputedStyle(el);
+            const box = el.getBoundingClientRect();
+            return cs.display !== 'none' && cs.visibility !== 'hidden' && box.width > 1 && box.height > 1;
+          };
+          return {
+            aria: map ? (map.getAttribute('aria-label') || '') : '',
+            mapShown: shown(map),
+            s: vcs ? (vcs.getPropertyValue('--s') || '').trim() : '',
+            left: mapBox && parentBox ? mapBox.left - parentBox.left : null,
+            right: mapBox && parentBox ? parentBox.right - mapBox.right : null,
+            parentClass: parent ? (parent.className || '') : '',
+            nowrap: tab ? getComputedStyle(tab).whiteSpace : ''
+          };
+        }"""
+    )
+
+
+@pytest.mark.case_id("TC-FE-SW-PRECACHE")
+def test_sw_precache_includes_four_scene(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-SW-PRECACHE 目前的 cache 含四場景 css/js，離線仍是場景 1。"""
+    cache_name, _static_name, urls = _sw_facts()
+    problems = []
+    for needle in ("town-four-scene.css", "town-four-scene.js"):
+        if not any(needle in url for url in urls):
+            problems.append(f"PRECACHE_URLS missing {needle}. urls={urls}")
+    if not any(url.rstrip("/").endswith("index.html") or url.rstrip("/").endswith("/kids") for url in urls):
+        problems.append(f"PRECACHE_URLS missing index.html. urls={urls}")
+    page.goto(f"{base_url}/kids/")
+    active = _wait_active_worker(page, timeout=10000)
+    if not active:
+        keys = page.evaluate("() => caches.keys()")
+        problems.append(f"service worker did not become active. caches.keys()={keys}")
+    else:
+        cached = _cache_urls(page, cache_name)
+        if cached.get("missing"):
+            problems.append(f"cache {cache_name} is absent. keys={cached.get('keys')}")
+        else:
+            found = " ".join(cached.get("urls") or [])
+            for needle in ("town-four-scene.css", "town-four-scene.js", "index.html"):
+                if needle not in found:
+                    problems.append(
+                        f"cache {cache_name} missing {needle}. urls={cached.get('urls')}"
+                    )
+    try:
+        _submit_login(page)
+        page.locator("#townMap").wait_for(state="visible", timeout=8000)
+        page.context.set_offline(True)
+        page.reload(timeout=8000, wait_until="domcontentloaded")
+        page.locator("#townMap").wait_for(state="visible", timeout=8000)
+        layout = _scene1_layout(page)
+        if "場景 1" not in (layout.get("aria") or "") or not layout.get("mapShown"):
+            problems.append(f"offline Scene 1 not shown. layout={layout}")
+        try:
+            scale = float(layout.get("s") or "nan")
+        except ValueError:
+            scale = float("nan")
+        if abs(scale - 0.85) > 0.001:
+            problems.append(f"--s is {layout.get('s')!r}, expected 0.85")
+        left, right = layout.get("left"), layout.get("right")
+        if left is None or right is None or abs(left - right) > 1:
+            problems.append(
+                f"#townMap gaps vs .{layout.get('parentClass')} left={left} right={right}, expected equal ±1px"
+            )
+        if layout.get("nowrap") != "nowrap":
+            problems.append(f"footer tab white-space {layout.get('nowrap')!r}, expected nowrap")
+    except Exception as exc:
+        problems.append(f"offline Scene 1 did not render: {type(exc).__name__}: {exc}")
+    finally:
+        try:
+            page.context.set_offline(False)
+        except Exception:
+            pass
+    assert not problems, "TC-FE-SW-PRECACHE: " + " | ".join(problems)
+
+
+def _install_stale_sw(page, cache_name, static_name):
+    source = open(os.path.join(REPO, "service-worker.js"), encoding="utf-8").read()
+    stale_cache = cache_name + "-test"
+    stale_static = static_name + "-test"
+    script = re.sub(
+        r"const\s+CACHE_NAME\s*=\s*['\"][^'\"]+['\"]",
+        f"const CACHE_NAME = '{stale_cache}'",
+        source,
+        count=1,
+    )
+    script = re.sub(
+        r"const\s+STATIC_CACHE\s*=\s*['\"][^'\"]+['\"]",
+        f"const STATIC_CACHE = '{stale_static}'",
+        script,
+        count=1,
+    )
+
+    def serve_sw(route):
+        route.fulfill(status=200, content_type="application/javascript", body=script)
+
+    def serve_doc(route):
+        if route.request.resource_type != "document":
+            route.fallback()
+            return
+        response = route.fetch()
+        html = response.text()
+        if "<body" in html:
+            html = html.replace("<body", '<body data-sw-stale="1"', 1)
+        route.fulfill(status=response.status, content_type="text/html", body=html)
+
+    page.route("**/kids/**", serve_doc)
+    page.route("**/service-worker.js", serve_sw)
+    return serve_doc, serve_sw, stale_cache, stale_static
+
+
+@pytest.mark.case_id("TC-FE-SW-UPGRADE-CLEANUP")
+def test_sw_upgrade_drops_old_kids_town_cache(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-SW-UPGRADE-CLEANUP 新的 worker 清掉舊 kids-town cache，留著別的 cache。"""
+    cache_name, static_name, _urls = _sw_facts()
+    serve_doc, serve_sw, stale_cache, stale_static = _install_stale_sw(page, cache_name, static_name)
+    problems = []
+    page.goto(f"{base_url}/kids/", wait_until="domcontentloaded")
+    old_active = _wait_active_worker(page, timeout=10000)
+    if not old_active:
+        keys = page.evaluate("() => caches.keys()")
+        problems.append(f"stale worker {stale_cache} did not activate. caches.keys()={keys}")
+    page.evaluate(
+        """async () => {
+          const cache = await caches.open('other-app-cache');
+          await cache.put('/other-app-marker', new Response('keep'));
+        }"""
+    )
+    page.unroute("**/service-worker.js", serve_sw)
+    page.unroute("**/kids/**", serve_doc)
+    controlled = {"controlled": False}
+    for _turn in range(2):
+        page.reload(wait_until="domcontentloaded", timeout=15000)
+        page.wait_for_timeout(400)
+        controlled = page.evaluate(
+            """() => {
+              const worker = navigator.serviceWorker.controller;
+              if (!worker) return { controlled: false };
+              return { controlled: true, scriptURL: worker.scriptURL || '', state: worker.state || '' };
+            }"""
+        )
+        keys = page.evaluate("() => caches.keys()")
+        kids = [name for name in keys if name.startswith("kids-town-v")]
+        if (
+            controlled.get("controlled")
+            and "service-worker.js" in (controlled.get("scriptURL") or "")
+            and kids == [cache_name]
+            and stale_cache not in keys
+        ):
+            break
+    try:
+        login = page.locator("#loginScreen")
+        if login.count() and login.is_visible():
+            _submit_login(page)
+        page.locator("#townMap").wait_for(state="visible", timeout=8000)
+    except Exception as exc:
+        problems.append(f"town did not render after upgrade: {type(exc).__name__}: {exc}")
+    keys = page.evaluate("() => caches.keys()")
+    kids = [name for name in keys if name.startswith("kids-town-v")]
+    script = controlled.get("scriptURL") or ""
+    if not controlled.get("controlled") or "service-worker.js" not in script:
+        problems.append(f"controller {controlled!r}, expected an activated /service-worker.js")
+    elif controlled.get("state") not in ("activated", ""):
+        problems.append(f"controller state {controlled.get('state')!r}, expected activated")
+    if kids != [cache_name]:
+        problems.append(
+            f"kids-town-v caches {kids}, expected only {cache_name}. all keys={keys}"
+        )
+    if stale_cache in keys or stale_static in keys or any(name.endswith("-test") for name in keys):
+        problems.append(f"old test cache still present. keys={keys}")
+    if "other-app-cache" not in keys:
+        problems.append(f"other-app-cache was deleted. keys={keys}")
+    stale_attr = page.evaluate("() => document.body.getAttribute('data-sw-stale')")
+    if stale_attr:
+        problems.append(f"body still has data-sw-stale={stale_attr!r}")
+    layout = _scene1_layout(page)
+    if layout.get("aria") != "場景 1 · 查看地圖":
+        problems.append(f"aria {layout.get('aria')!r}, expected 場景 1 · 查看地圖")
+    try:
+        scale = float(layout.get("s") or "nan")
+    except ValueError:
+        scale = float("nan")
+    if abs(scale - 0.85) > 0.001:
+        problems.append(f"--s is {layout.get('s')!r}, expected 0.85")
+    assert not problems, "TC-FE-SW-UPGRADE-CLEANUP: " + " | ".join(problems)
+
+
+_PAL_ORDER_JS = r"""
+() => {
+  const grid = document.getElementById('paletteGrid');
+  if (!grid) return { missing: true, children: [], rows: [] };
+  const children = [...grid.children];
+  return {
+    missing: false,
+    strangers: children.filter((el) => !el.classList.contains('pal-btn')).map((el) =>
+      (el.tagName || '') + (el.className ? '.' + el.className : '') + ' ' + (el.textContent || '').trim().slice(0, 40)
+    ),
+    rows: children.filter((el) => el.classList.contains('pal-btn')).map((btn) => {
+      const box = btn.getBoundingClientRect();
+      const name = btn.querySelector('.pal-name');
+      const cost = btn.querySelector('.pal-cost');
+      return {
+        name: name ? (name.textContent || '').trim() : '',
+        cost: (cost ? cost.textContent : '').trim(),
+        className: btn.className || '',
+        top: box.top,
+        left: box.left
+      };
+    })
+  };
+}
+"""
+
+
+def _palette_kind(row):
+    cost = row.get("cost") or ""
+    kind = row.get("className") or ""
+    if "is-placed" in kind or cost in ("已興建", "已起"):
+        return "built"
+    if "is-stored" in kind or cost == "存倉":
+        return "stored"
+    if "💰" in cost:
+        return "unbuilt"
+    return "other"
+
+
+def _expected_palette(catalog, rows):
+    """Stored, then unbuilt, then built. Each group keeps `/api/building-defs` order."""
+    placed = {row["def_id"] for row in rows if not row.get("stored")}
+    stored = {row["def_id"] for row in rows if row.get("stored") and row["def_id"] not in placed}
+    groups = {"stored": [], "unbuilt": [], "built": []}
+    for item in catalog:
+        def_id = item.get("id")
+        if def_id in placed:
+            groups["built"].append(item)
+        elif def_id in stored:
+            groups["stored"].append(item)
+        else:
+            groups["unbuilt"].append(item)
+    ordered = groups["stored"] + groups["unbuilt"] + groups["built"]
+    return ordered, groups
+
+
+@pytest.mark.case_id("TC-FE-PAL-ORDER")
+@pytest.mark.parametrize("layout", ["mixed", "no-stored", "none-built"])
+def test_palette_group_order(page, base_url, warehouse_db, warehouse_ids, layout):
+    """TC-FE-PAL-ORDER 建築清單依存倉、未建、已興建分組，組內保持目錄順序。"""
+    kid_id = warehouse_ids["kid_id"]
+    catalog = _catalog_defs(base_url)
+    assert len(catalog) >= 6, f"catalog has {len(catalog)} defs"
+    if layout == "mixed":
+        stored_at = (1, 4)
+        built_at = (0, 2)
+    elif layout == "no-stored":
+        stored_at = ()
+        built_at = (0, 3)
+    else:
+        stored_at = (2, 5)
+        built_at = ()
+    buildings = []
+    origins = ((0, 0), (4, 0), (0, 4))
+    for index in stored_at:
+        buildings.append({
+            "name": catalog[index]["name"],
+            "level": 1,
+            "stored": 1,
+            "cell_x": 20 + index,
+            "cell_y": 12,
+        })
+    for slot, index in enumerate(built_at):
+        origin = origins[slot]
+        buildings.append({
+            "name": catalog[index]["name"],
+            "level": 1,
+            "stored": 0,
+            "cell_x": origin[0],
+            "cell_y": origin[1],
+        })
+    _reset_kid(warehouse_db, kid_id, points=800, buildings=buildings)
+    fresh = _catalog_defs(base_url)
+    expected, groups = _expected_palette(fresh, _kid_rows(warehouse_db, kid_id))
+    expected_names = [item.get("name") for item in expected]
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _enter_new_build_scene2(page)
+    page.locator("#listLauncher").click()
+    page.locator("#paletteGrid .pal-btn").first.wait_for(state="visible", timeout=8000)
+    snapshot = page.evaluate(_PAL_ORDER_JS)
+    problems = []
+    if snapshot.get("missing"):
+        problems.append("#paletteGrid is missing")
+    strangers = snapshot.get("strangers") or []
+    if strangers:
+        problems.append(f"palette grid has non-button children {strangers}")
+    rows = snapshot.get("rows") or []
+    dom_names = [row.get("name") for row in rows]
+    visual = sorted(rows, key=lambda row: (row.get("top") or 0, row.get("left") or 0))
+    visual_names = [row.get("name") for row in visual]
+    if dom_names != expected_names:
+        problems.append(f"DOM order {dom_names} != grouped catalog order {expected_names}")
+    if visual_names != expected_names:
+        problems.append(f"visual top-to-bottom {visual_names} != {expected_names}")
+    for index in range(1, len(rows)):
+        if (rows[index].get("top") or 0) + 0.5 < (rows[index - 1].get("top") or 0):
+            problems.append(
+                f"DOM neighbour tops go backwards at {rows[index].get('name')!r}"
+            )
+            break
+    kinds = [_palette_kind(row) for row in rows]
+    expected_kinds = (["stored"] * len(groups["stored"])) + (["unbuilt"] * len(groups["unbuilt"])) + (
+        ["built"] * len(groups["built"])
+    )
+    if kinds != expected_kinds:
+        problems.append(f"group markers {kinds} != {expected_kinds}")
+    present = [name for name in expected_kinds]
+    if layout == "no-stored" and "stored" in present:
+        problems.append("stored group should be absent")
+    if layout == "none-built" and "built" in present:
+        problems.append("built group should be absent")
+    if layout == "no-stored" and kinds and kinds[0] != "unbuilt":
+        problems.append(f"list starts with {kinds[0]!r}, expected unbuilt")
+    assert not problems, "TC-FE-PAL-ORDER " + layout + ": " + " | ".join(problems)

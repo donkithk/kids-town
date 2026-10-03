@@ -36,7 +36,7 @@
 ## 案例
 
 API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。  
-介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`，以及同一 API 檔內讀取已提供頁面的 `TC-FE-WAREHOUSE-GRID`（後者屬 API 套件，因為它只 GET 靜態檔）。
+介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`，以及同一 API 檔內讀取已提供頁面的 `TC-FE-WAREHOUSE-GRID`（後者屬 API 套件，因為它只 GET 靜態檔）。
 
 下表「main」是在 `5bfe76d` 加上這些測試後的結果。紅測的斷言訊息寫明預期與實際。綠測是回歸鎖，不是本缺陷。
 
@@ -192,7 +192,7 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 
 健身室放在 `(0,0)`，圖書館存倉。取出場景 2 與新建造場景 2 都測。新建造先在清單選醫院，讓場景知道要放哪一座。
 
-點放不下的空格，`#toast.info` 的文字必須正好是「這個位置放不下這座建築物。」不是「這個位置已經有建築物。」兩種放不下都要點：第 8 欄第 1 行（索引 7，足跡伸出地圖），以及與健身室 2×2 重疊的空格 `(1,0)`。再點真正被健身室佔住的 `(0,0)`，提示必須正好是「這個位置已經有建築物。」，同樣是 `info`。金幣、材料與行都不變。
+點放不下的空格，`#toast.info` 的文字必須正好是「這個位置放不下這座建築物。」第 8 欄第 1 行（索引 7，足跡伸出地圖）是這種空格。`(1,0)` 落在健身室 `(0,0)` 的 2×2 裡面，是被蓋住的格，不是「空但會重疊」。它的提示必須正好是「這個位置已經有建築物。」原點 `(0,0)` 也是這句。空而會重疊的例子（健身室在 `(3,0)`、點 `(2,0)`）由 `TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP` 鎖。金幣、材料與行都不變。
 
 8×8 的格子都可以點。若第 8 欄不存在，測試改點 `(1,0)`，並且不會只因為改點而失敗。這一輪兩端都有第 8 欄，沒有改點。
 
@@ -232,7 +232,7 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 
 (b) `TC-FE-BUILD-UNFIT-PRESELECT-MINFP`：攔截 `GET /api/building-defs`，既有列加 `footprint: 2`，並加一座 `footprint: 1` 的郵箱。未選建築時 `(5,7)` 必須是金格而且可以選。再選 2×2 的工坊：清掉這格、`#toast.info`「這個位置放不下這座建築物。」、工坊仍選中、提示以「請點選金色空地」開頭（或含工坊與「金色空地」）、`#btnToScene3` 保持停用，直到再點一個 2×2 金格。選完工坊之後 `(5,7)` 不再是金。`ba93ca9` 的目錄物件沒有 `footprint` / `width` / `height`，`town-four-scene.js` 寫死 `FOOTPRINT = 2`。
 
-(c) 新建造與取出都進到場景 3 的合法格，再用 `page.route` 把確定的 POST 回 400，正文 `{"error":"位置超出地圖範圍（0 至 7）"}`。畫面必須 `#toast.info`「這個位置放不下這座建築物。」回到場景 2，不出現紅色 `.error`，也不顯示伺服器原文。金幣、材料與行不變。
+(c) 新建造與取出都進到場景 3 的合法格，再用 `page.route` 把確定的 POST 回 400，正文 `{"error":"位置超出地圖範圍（0 至 7）"}`。畫面必須 `#toast.info`「這個位置放不下這座建築物。」回到場景 2，不出現紅色 `.error`，也不顯示伺服器原文或 `Request failed`。被拒的那一格要清掉（沒有「已選此格」、沒有「此格」徽章）。「選擇位置」停用。新建造的提示以「請點選金色空地」開頭，而且健身室仍選中。取出的提示回到「請點選空地，放回「圖書館」。不扣除金幣和材料。」金幣、材料與行不變。未知正文的 4xx 由 `TC-FE-CONFIRM-GENERIC-4XX` 鎖，規則相同。
 
 ## 建築清單按鈕不裁切（TC-FE-PAL-BTN-NOCLIP）
 
@@ -242,6 +242,57 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 - 第二行（`.pal-cost`：存倉、已興建或已起、💰 價錢）的 `getBoundingClientRect().bottom` 必須比按鈕內底邊至少高 4px。內底邊是按鈕矩形的 `bottom` 減去 `border-bottom-width`。
 
 1280×720。三種列都要出現，否則案例失敗。
+
+## 空但重疊的格不能預選（TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP）
+
+新建造場景 2，還沒選建築物。健身室放在 `(3,0)`（足跡蓋住 `(3,0)`、`(4,0)`、`(3,1)`、`(4,1)`），商店放在 `(0,6)`。`(2,0)` 本身是空的，但一座最小足跡從這裡放下會壓到健身室。它不是金格。點下去不得選中，`#toast.info` 正好是「這個位置放不下這座建築物。」提示維持點之前那句，不得變成「已選擇空地…」或「已揀空地…」。「選擇位置」停用。
+
+然後重新進入場景 2，再掃全部 64 格。測試用當下的 `GET /api/building-defs` 算最小足跡（缺了或不是正整數就當 2），再跟已放置的足跡算：
+
+- 金格：最小足跡放得下、在地圖內、不與已放置建築重疊。點下去必須選中，再點一次清掉。可選格的集合必須等於畫面上的金格，也等於算出來的金格。
+- 空而非金：不得選中，`#toast.info`「這個位置放不下這座建築物。」
+- 落在某座已放置足跡裡（含原點）：不得選中，`#toast.info`「這個位置已經有建築物。」
+
+不查半張卡片露出，也不查底部漸層。
+
+`TC-FE-WAREHOUSE-OFFGRID-TOAST` 的 `(1,0)` 是健身室 `(0,0)` 蓋住的格，提示是「這個位置已經有建築物。」那條是已經選了建築之後。這一條是還沒選建築。
+
+## 確認時的未知 4xx（TC-FE-CONFIRM-GENERIC-4XX）
+
+新建造與取出各進場景 3，在按下確定之前用 `page.route` 攔截那個 POST。四種正文都要測：
+
+| 標籤 | 狀態 | 正文 |
+|------|------|------|
+| plain | 400 | `text/plain` 的 `Bad Request` |
+| detail | 400 | `{"detail":"x"}` |
+| occupied | 409 | `{"error":"該位置已被建築物佔用"}` |
+| empty | 422 | 空正文 |
+
+每一種都要：`#toast.info`「這個位置放不下這座建築物。」、沒有紅色 `.error`、畫面上不出現原始正文或 `Request failed`、回到場景 2、選格清掉、「選擇位置」停用。新建造的提示以「請點選金色空地」開頭且建築仍選中。取出的提示是「請點選空地，放回「圖書館」。不扣除金幣和材料。」金幣、材料與行不變。不在整頁裡搜尋單一個 `x`。
+
+## 服務工作自行註冊（TC-FE-SW-AUTOREG）
+
+新的瀏覽器上下文，測試不呼叫 `navigator.serviceWorker.register`。打開 `/kids/`，必要時登入，最多等 10 秒：`getRegistration()` 要有 active worker，`caches.keys()` 含 `service-worker.js` 裡的 `CACHE_NAME`（不寫死版號）。`pageerror` 不得含 `buildingImage`，而且整個流程都不得有任何 pageerror。流程再走場景 1、建築清單、任務板、儲蓄目標，以及一座名稱含「農」的已放置建築。`tests/test_skill_menu_e2e.py` 只記錄 pageerror，不把它當成允許，也不自己註冊 service worker。
+
+## 預快取四場景檔（TC-FE-SW-PRECACHE）
+
+`PRECACHE_URLS` 必須含 `town-four-scene.css` 與 `town-four-scene.js`（版號從 `service-worker.js` 讀）。新上下文裡 worker 變成 active 之後、進入城鎮之前，名為 `CACHE_NAME` 的 cache 要含這兩個檔和 `index.html`。名字不在 `caches.keys()` 裡時不得 `caches.open`。然後在線上登入，`context.setOffline(true)` 再重新載入：場景 1 用四場景版面，`#townMap .village.is-iso` 的 `--s` 是 0.85，`#townMap` 相對 `.mp` 左右留白相差不超過 1px，`#ktFooter .kt-footer-tab` 的 `white-space` 是 `nowrap`。
+
+## 升級時清掉舊 cache（TC-FE-SW-UPGRADE-CLEANUP）
+
+先用 `page.route` 把 `service-worker.js` 的 `CACHE_NAME` 與 `STATIC_CACHE` 改成原名加 `-test`，文件回應的 `<body` 加上 `data-sw-stale="1"`。等這個舊 worker 安裝並寫入那個 cache，再種一個 `other-app-cache`。然後拿掉 route，最多重新載入兩次。新的 worker 要變成 controller（`scriptURL` 含 `service-worker.js`、state 為 activated）。`caches.keys()` 裡符合 `kids-town-v` 前綴的只剩現在的 `CACHE_NAME`。`-test` 的 cache 要消失。`other-app-cache` 要留下。頁面不得再帶 `data-sw-stale`。`#townMap` 的 aria 是「場景 1 · 查看地圖」，`--s` 是 0.85。
+
+## 建築清單分組順序（TC-FE-PAL-ORDER）
+
+新建造場景 2 的 `#paletteGrid`。`.pal-btn` 的 DOM 順序，以及由上到下的視覺順序（`getBoundingClientRect().top`，同一高度再比 left），都必須是：存倉（第二行「存倉」）→ 未建（第二行有 💰）→ 已興建（「已興建」或仍寫「已起」）。每一組裡面保持 `GET /api/building-defs` 回傳的順序，不按價錢或名稱重排。空的組整組不出現：沒有標題、沒有佔位元素，`#paletteGrid` 的子節點全部是 `.pal-btn`。同一種建築若又放置又存倉，放置贏，算已興建。
+
+三個合成小朋友，建築從目錄的位置挑，不斷言寫死名稱：
+
+1. `mixed`：目錄第 2、5 項存倉，第 1、3 項已放置，其餘未建。三組都在。
+2. `no-stored`：沒有存倉。清單從第一個未建開始，然後才是已興建。
+3. `none-built`：沒有已放置。清單是存倉然後未建，沒有已興建那一組。
+
+預期順序在測試裡用當下的目錄陣列和這個小朋友的行算出來。只鎖順序，不鎖半張卡片露出，也不鎖底部漸層。
 
 ## 地圖橫向不裁切（TC-FE-TOWN-MAP-FIT）
 
@@ -361,3 +412,22 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 | TC-FE-WAREHOUSE-COPY-FORMAL | FAIL。畫面與原始碼仍是舊口語，含「睇地圖」「確定收起呢棟建築物」。 | FAIL。只剩這兩句：`#townMap` aria 是「場景 1」，不是「場景 1 · 查看地圖」。`index.html` 仍有「睇地圖」與「確定收起呢棟」。收起對話框是「📦 確定收起呢棟建築物？」。 |
 
 整套：`pytest -m "not frontend"` main 17 failed、361 passed、108 deselected；`ba93ca9` 378 passed、108 deselected。`pytest -m frontend` main 37 failed、71 passed、378 deselected（比上一輪多 5 條失敗，就是未預選、400 回場景 2 的兩條、最小足跡、清單裁切；通過數仍是 71）。`ba93ca9` 7 failed、101 passed、378 deselected。這 7 條是：書面語剩下的「睇地圖／確定收起呢棟」、底欄高度、未預選、400 回場景 2 的兩條、最小足跡、清單裁切。上一輪在 `25b959a` 失敗的返回地圖、滿圖、金色格、放不下、取消底色、地圖橫向、`UX-02`、`NOREGRESS` 在 `ba93ca9` 通過。
+
+## 對照 `8940905`
+
+產品是 `89409051b1b85181fac5731f2cd4f8e964db9ba6` 的暫用工作樹 `/tmp/kt-green-8940905`，測試是本紅測分支。沒有提交、沒有推上建造分支。`renderPalette` 仍按 `defs()`（`/api/building-defs` 的陣列順序）逐個加 `.pal-btn`，沒有把存倉、未建、已興建分成三組。`showUnfit` 回到場景 2 並顯示放不下的 info 提示，但不清 `state.pad`。`onCell` 在還沒選建築時，被足跡蓋住的格與放不下最小足跡的格會擋下；空但與已放置建築重疊的原點仍會選中。`index.html` 裡 `window.buildingImage = buildingImage` 在 `buildingImage` 還沒宣告時就丟出 `ReferenceError`，同一個 script 後面的 `serviceWorker.register` 不會跑。`PRECACHE_URLS` 沒有 `town-four-scene.css` / `town-four-scene.js`。
+
+`TC-FE-WAREHOUSE-OFFGRID-TOAST` 的 `(1,0)` 改為已選建築之後的「被蓋住」格，預期「這個位置已經有建築物。」`(c)` 加上清掉選格、「選擇位置」停用、提示回到該場景的原句。`tests/test_skill_menu_e2e.py` 不呼叫 `serviceWorker.register`，也不再把 `buildingImage is not defined` 當成允許的 pageerror。沒有別的測試把選格留在 4xx 之後、或把紅色原始錯誤當成成功。
+
+| ID | main `5bfe76d` | `8940905` |
+|----|----------------|-----------|
+| TC-FE-WAREHOUSE-OFFGRID-TOAST | FAIL。取出沒有「取出」。新建造點 `(7,0)`、`(1,0)`、`(0,0)` 都沒有提示。 | FAIL。只剩 `(1,0)`：建築已選時，被蓋住的非原點提示是「這個位置放不下這座建築物。」，預期「這個位置已經有建築物。」`(7,0)` 與原點 `(0,0)` 通過。新建造與取出相同。 |
+| TC-FE-BUILD-UNFIT-PRESELECT (c) | FAIL。新建造停在場景 3，紅色 `.error` 是「位置超出地圖範圍（0 至 7）」。取出沒有「取出」。 | FAIL。info 提示與回到場景 2 已通過。`(0,0)` 仍是「第 1 欄第 1 行，已選此格」，「選擇位置」仍可按。新建造提示停在「已選擇「健身室」和這個位置。」取出提示已是放回那句，失敗在選格與按鈕。 |
+| TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP | FAIL。`(2,0)` 是金格，點下去選中（「已揀呢格」、徽章「呢格」），提示變成「已揀空地…」，沒有 info。掃格時被蓋住的格也沒有「這個位置已經有建築物。」 | FAIL。算出來的金格與畫面上的金格一致，被蓋住的格有「這個位置已經有建築物。」空但重疊的 `(2,0)`、`(2,1)`、`(0,5)`、`(1,5)` 被選中（aria「已選此格」），沒有提示，提示變成「已選擇空地。請打開清單，選擇要興建的建築物。」第一次點 `(2,0)` 時「選擇位置」仍是停用。 |
+| TC-FE-CONFIRM-GENERIC-4XX | FAIL。取出沒有「取出」。新建造的 plain、detail、empty 都停在場景 3，紅色 `.error` 是 `Request failed`。occupied 的紅色 `.error` 是「該位置已被建築物佔用」。 | FAIL。plain、detail、empty：兩種場景都停在場景 3，紅色 `.error`「Request failed」。occupied：回到場景 2 且 info 提示通過，但格子仍選中、「選擇位置」仍可按；新建造提示仍是「已選擇「健身室」和這個位置。」 |
+| TC-FE-SW-AUTOREG | FAIL。`getRegistration()` 沒有 registration。`caches.keys()` 是 `[]`，沒有 `kids-town-v18`。唯一的 pageerror 是 `buildingImage is not defined`。場景 1、清單、任務板、儲蓄、農場都走完，沒有第二種 pageerror。 | FAIL。同一件事，cache 名是 `kids-town-v27`。pageerror 同樣只有 `buildingImage is not defined`。 |
+| TC-FE-SW-PRECACHE | FAIL。`PRECACHE_URLS` 沒有這兩個四場景檔。worker 沒有 active，cache 不存在。離線重新載入是 `net::ERR_INTERNET_DISCONNECTED`。 | FAIL。同一組：預快取清單沒有這兩個檔，worker 沒有 active，`caches.keys()` 是 `[]`，離線重新載入斷線。 |
+| TC-FE-SW-UPGRADE-CLEANUP | FAIL。`kids-town-v18-test` 沒有安裝。重新載入後沒有 controller。`caches.keys()` 只有種下去的 `other-app-cache`。aria 是「場景 1」，`--s` 是 `1`。 | FAIL。`kids-town-v27-test` 沒有安裝，沒有 controller，keys 只有 `other-app-cache`。aria「場景 1 · 查看地圖」與 `--s` 0.85 在頁面自己的 script 跑起來之後已經對，這兩項沒有失敗。 |
+| TC-FE-PAL-ORDER | FAIL。三種佈局的 DOM 與由上到下都是目錄順序：圖書館、探險公會、健身室、農場、工坊、醫院、商店、銀行、燈塔、競技場、天文台。`mixed` 預期探險公會、工坊在最前，圖書館與健身室在最後。`no-stored` 實際從已建的圖書館開始。`none-built` 的存倉列夾在未建列中間。沒有多出來的標題或佔位節點。 | FAIL。同一組順序。第二行的存倉／💰／已興建分得出來，但沒有依組排。 |
+
+整套：`pytest -m "not frontend"` main 17 failed、361 passed、123 deselected；`8940905` 378 passed、123 deselected。`pytest -m frontend` main 52 failed、71 passed、378 deselected（比上一輪多 15 條，就是這輪新案例；通過數仍是 71，因為收緊的放不下與 400 在 main 本來就失敗）。`8940905` 19 failed、104 passed、378 deselected。這 19 條就是上表：收緊的放不下兩條、收緊的 400 兩條、未知 4xx 八條、重疊預選、三條 service worker、清單順序三條。上一輪在 `8940905` 通過的 108 條裡，除了這四條被收緊的，其餘仍然通過。

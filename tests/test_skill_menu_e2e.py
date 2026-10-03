@@ -91,8 +91,9 @@ MENU_KID13 = "test_menu_kid13"
 MENU_KID22 = "test_menu_kid22"
 STAGE_W = 1280
 STAGE_H = 720
-# Known page error on current main. Recorded, not asserted.
-KNOWN_PAGEERROR = "buildingImage is not defined"
+# `buildingImage is not defined` aborts index.html before service-worker
+# registration. This file does not call navigator.serviceWorker.register and
+# does not treat that pageerror as allowed. TC-FE-SW-AUTOREG is the assertion.
 
 # Buildings that teach exactly these skills at the given levels.
 # Guild Lv1 teaches nothing (偵察 needs Lv2) but battle-start requires it.
