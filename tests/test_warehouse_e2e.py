@@ -24,6 +24,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tests.town_tap import (  # noqa: E402
+    _activate_point,
+    _scroll_cell_into_view,
     cell_access,
     cell_points,
     dismiss_selection,
@@ -1430,6 +1432,71 @@ _MARK_GOLD_JS = r"""
 def _mark_gold_cells(page):
     raw = page.evaluate(_MARK_GOLD_JS)
     return [(item[0], item[1]) for item in raw]
+
+
+_RENDERED_PADS_JS = r"""
+() => {
+  const cells = [];
+  for (const pad of document.querySelectorAll('#townMap .pad')) {
+    const cs = getComputedStyle(pad);
+    const c = parseInt(cs.getPropertyValue('--c'), 10);
+    const r = parseInt(cs.getPropertyValue('--r'), 10);
+    if (!Number.isFinite(c) || !Number.isFinite(r)) continue;
+    const sprite = pad.querySelector(':scope > img.sprite, :scope > .sprite');
+    const cap = pad.querySelector(':scope > .cap');
+    let name = '';
+    if (sprite && !sprite.hidden) {
+      const scs = getComputedStyle(sprite);
+      const box = sprite.getBoundingClientRect();
+      if (scs.display !== 'none' && scs.visibility !== 'hidden' && box.width > 2 && box.height > 2) {
+        name = (sprite.getAttribute('alt') || '').trim();
+      }
+    }
+    if (!name && cap && !cap.hidden) {
+      const ccs = getComputedStyle(cap);
+      if (ccs.display !== 'none' && ccs.visibility !== 'hidden') {
+        name = (cap.textContent || '').trim();
+      }
+    }
+    cells.push({c, r, name});
+  }
+  return cells;
+}
+"""
+
+
+def _rendered_tap_kinds(page, catalog):
+    """select, occupied, or unfit from the painted map.
+
+    Gold is the rendered gold-mark set. Covered cells are the footprints of
+    the buildings whose sprites are actually on the map (catalog side, default
+    2). A gold cell is selectable even if a footprint also lists it. Every
+    other empty cell, overlap or out of the grid, is unfit.
+    """
+    gold = set(_mark_gold_cells(page))
+    by_name = {item.get("name"): _square_side(item) for item in catalog}
+    covered = set()
+    for fact in page.evaluate(_RENDERED_PADS_JS):
+        name = fact.get("name") or ""
+        if not name:
+            continue
+        side = by_name.get(name, 2)
+        for dy in range(side):
+            for dx in range(side):
+                cell = (fact["c"] + dx, fact["r"] + dy)
+                if 0 <= cell[0] < MAP_N and 0 <= cell[1] < MAP_N:
+                    covered.add(cell)
+    kinds = {}
+    for y in range(MAP_N):
+        for x in range(MAP_N):
+            cell = (x, y)
+            if cell in gold:
+                kinds[cell] = "select"
+            elif cell in covered:
+                kinds[cell] = "occupied"
+            else:
+                kinds[cell] = "unfit"
+    return kinds
 
 
 def _scene_aria(page):
@@ -3514,22 +3581,6 @@ def _strictly_inside(data, point):
     return span < 1 - 1e-6
 
 
-def _tap_kind(cell, blocks, size, bare):
-    """occupied, unfit, or select. bare skips footprint-overlap rejects."""
-    x, y = cell
-    for ox, oy, side, _name in blocks:
-        if ox <= x < ox + side and oy <= y < oy + side:
-            return "occupied"
-    if x + size > MAP_N or y + size > MAP_N:
-        return "unfit"
-    if bare:
-        return "select"
-    for ox, oy, side, _name in blocks:
-        if not (x + size <= ox or ox + side <= x or y + size <= oy or oy + side <= y):
-            return "unfit"
-    return "select"
-
-
 def _acted_cell(reaction):
     preview = [tuple(item) for item in reaction.get("preview") or []]
     chosen = [tuple(item) for item in reaction.get("chosen") or []]
@@ -3567,6 +3618,9 @@ def _reaction_blame(cell, kind, reaction, unstore):
             return "reaction", f"selected {reaction.get('chosen')} toast {toast!r}"
         return None, ""
     if acted is not None:
+        expected = OCCUPIED_TOAST if kind == "occupied" else CANNOT_FIT_TOAST
+        if isinstance(acted, tuple) and acted == cell:
+            return "reaction", f"selected {acted}, expected {expected!r}, got {toast!r}"
         return "neighbor", f"selected {acted}"
     expected = OCCUPIED_TOAST if kind == "occupied" else CANNOT_FIT_TOAST
     if toast != expected:
@@ -3653,8 +3707,11 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
 
     Samples come from the ground slab's box, not the cell button. Each of
     nine points is the centre or 35% of the way toward a vertex or an edge
-    midpoint. Points inside the open palette rect are left out of the
-    denominator and must not select a cell.
+    midpoint. The expected reaction is the rendered state of the cell that
+    contains the point: gold selects it, a building footprint toasts
+    已經有建築物, and any other empty cell toasts 放不下. Points that
+    elementFromPoint puts on the open palette are left out of the denominator
+    and must not select a cell.
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(
@@ -3668,10 +3725,6 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
         ],
     )
     catalog = _catalog_defs(base_url)
-    blocks = _placed_blocks(_kid_rows(warehouse_db, kid_id), catalog)
-    min_fp = min((_square_side(item) for item in catalog), default=2)
-    picked_size = _square_side(next(item for item in catalog if item.get("name") == "健身室"))
-    stored_size = _square_side(next(item for item in catalog if item.get("name") == BUILDING_NAME))
     _login(page, base_url)
     problems = []
     summaries = []
@@ -3692,16 +3745,15 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
         page.locator("#townMap .pad > .slab").first.wait_for(state="attached", timeout=8000)
 
     def _sweep(mode, width, height):
-        bare = mode == "bare"
         unstore = mode == "unstore"
-        size = min_fp if bare else (stored_size if unstore else picked_size)
+        kinds = _rendered_tap_kinds(page, catalog)
         neighbor = reaction = panel_hits = chrome_skipped = exposed = geometry = 0
         examples = []
         panel_examples = []
         for y in range(MAP_N):
             for x in range(MAP_N):
                 cell = (x, y)
-                kind = _tap_kind(cell, blocks, size, bare)
+                kind = kinds[cell]
                 data = cell_points(page, x, y)
                 # Diamond vertices are the slab box's edge midpoints. A drift
                 # here is the helper, not the product hit-test.
@@ -3790,21 +3842,22 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
         else:
             back = (probe["c"], probe["r"])
             front = (probe["frontC"], probe["frontR"])
+            kinds = _rendered_tap_kinds(page, catalog)
+            kind = kinds.get(back, "unfit")
             dismiss_selection(page)
             tap_point(page, probe["x"], probe["y"])
             hit = read_reaction(page)
-            kind = _tap_kind(back, blocks, min_fp, True)
             bucket, detail = _reaction_blame(back, kind, hit, False)
             acted = _acted_cell(hit)
             sprite_bad = bucket is not None or acted == front
             if sprite_bad:
                 problems.append(
-                    f"{width}x{height} sprite: tap inside empty {back} over "
+                    f"{width}x{height} sprite: tap inside {kind} {back} over "
                     f"{probe.get('frontLabel')!r} {front} at ({probe['x']:.0f},{probe['y']:.0f}) "
                     f"-> {detail or acted}"
                 )
             summaries.append(
-                f"sprite {width}x{height}: empty {back} over {front} "
+                f"sprite {width}x{height}: {kind} {back} over {front} "
                 + ("FAIL" if sprite_bad else "ok")
             )
 
@@ -3846,8 +3899,9 @@ def test_cell_aria_matches_tap(page, base_url, warehouse_db, warehouse_ids, mode
 
     Covered cells, including non-anchors such as (1,0), say 已經有建築物.
     Empty cells that overlap or leave the grid say 放不下. Gold cells say
-    they can be chosen. Every cell keeps a focusable button; Enter and
-    Space on it do what a tap on that cell does.
+    they can be chosen. Kinds come from the rendered gold marks and sprites,
+    the same split as the off-centre sweep. Every cell keeps a focusable
+    button; Enter and Space on it do what a tap on that cell does.
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(
@@ -3861,10 +3915,6 @@ def test_cell_aria_matches_tap(page, base_url, warehouse_db, warehouse_ids, mode
         ],
     )
     catalog = _catalog_defs(base_url)
-    blocks = _placed_blocks(_kid_rows(warehouse_db, kid_id), catalog)
-    size = _square_side(
-        next(item for item in catalog if item.get("name") == ("健身室" if mode == "picked" else BUILDING_NAME))
-    )
     _login(page, base_url)
     page.set_viewport_size({"width": 1280, "height": 720})
     if mode == "unstore":
@@ -3873,16 +3923,24 @@ def test_cell_aria_matches_tap(page, base_url, warehouse_db, warehouse_ids, mode
     else:
         _enter_new_build_scene2(page)
         assert _pick_unbuilt(page, "健身室"), "健身室 missing from the palette"
-    if _tap_kind((1, 0), blocks, size, False) != "occupied":
-        raise AssertionError("seed must cover non-anchor (1,0); 商店 is at (0,0)")
-    anchors = {(ox, oy) for ox, oy, _side, _name in blocks}
+    kinds = _rendered_tap_kinds(page, catalog)
+    sprite_origins = {
+        (fact["c"], fact["r"])
+        for fact in page.evaluate(_RENDERED_PADS_JS)
+        if fact.get("name")
+    }
     access = { (item["c"], item["r"]): item for item in cell_access(page) }
     problems = []
+    if kinds.get((1, 0)) != "occupied":
+        problems.append(
+            "rendered map does not class non-anchor (1,0) as covered "
+            f"(kind={kinds.get((1, 0))!r}); 商店 sprite should occupy it and it should not be gold"
+        )
     aria_miss = key_miss = anchor_miss = nonanchor_miss = 0
     for y in range(MAP_N):
         for x in range(MAP_N):
             cell = (x, y)
-            kind = _tap_kind(cell, blocks, size, False)
+            kind = kinds[cell]
             item = access.get(cell)
             if item is None or not item.get("present") or not item.get("aria"):
                 problems.append(f"{cell} has no focusable button with an aria-label")
@@ -3896,7 +3954,7 @@ def test_cell_aria_matches_tap(page, base_url, warehouse_db, warehouse_ids, mode
             wording = _aria_wording_problem(item.get("aria") or "", kind)
             if wording:
                 aria_miss += 1
-                if kind == "occupied" and cell in anchors:
+                if kind == "occupied" and cell in sprite_origins:
                     anchor_miss += 1
                     role = "anchor "
                 elif kind == "occupied":
@@ -4204,8 +4262,15 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
             f"placement .fx-burst pointer-events is {toast_state.get('burst')!r}, expected none"
         )
     # 1280×720 puts the fixed bottom toast over gold (4,5)'s diamond centre.
-    # Assert that cover explicitly, then tap the centre while the toast is up.
+    # The cell has to be in the rendered gold set; a non-gold cell must toast
+    # instead of selecting, so it cannot be the overlap target.
     gold = (4, 5)
+    rendered_gold = set(_mark_gold_cells(page))
+    if gold not in rendered_gold:
+        problems.append(
+            f"{gold} is not in the rendered gold set; the toast-overlap tap "
+            "only applies to a gold cell"
+        )
     centre = cell_points(page, gold[0], gold[1])["points"]["centre"]
     covers = bool(toast_box) and point_in_rect(centre, toast_box)
     if not covers:
@@ -4254,6 +4319,257 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
 
     print("TC-FE-TAP-BAR-NOTHROUGH " + " || ".join(summaries))
     assert not problems, "TC-FE-TAP-BAR-NOTHROUGH: " + " || ".join(problems[:10])
+
+
+_TOAST_PROBE_START_JS = r"""
+() => {
+  const toast = document.getElementById('toast');
+  const samples = [];
+  const anims = [];
+  const node = toast;
+  const onAnim = (event) => {
+    const target = event.target;
+    if (!toast || (target !== toast && !toast.contains(target))) return;
+    anims.push({
+      t: performance.now(),
+      name: event.animationName || '',
+      onToast: target === toast
+    });
+  };
+  document.addEventListener('animationstart', onAnim, true);
+  const tick = () => {
+    const el = document.getElementById('toast');
+    const cs = el ? getComputedStyle(el) : null;
+    const opacity = cs ? parseFloat(cs.opacity) : 0;
+    samples.push({
+      t: performance.now(),
+      display: el ? (el.style.display || '') : 'missing',
+      visibility: cs ? cs.visibility : 'missing',
+      opacity: Number.isFinite(opacity) ? opacity : 0,
+      text: el ? (el.textContent || '') : '',
+      sameNode: el === node && !!el
+    });
+    window.__toastProbeFrame = requestAnimationFrame(tick);
+  };
+  window.__toastProbeFrame = requestAnimationFrame(tick);
+  window.__toastProbe = { samples, anims, stop() {
+    cancelAnimationFrame(window.__toastProbeFrame);
+    document.removeEventListener('animationstart', onAnim, true);
+  } };
+  return true;
+}
+"""
+
+
+def _now_ms(page):
+    return page.evaluate("() => performance.now()")
+
+
+def _silence_toast(page):
+    page.evaluate(
+        """() => {
+          const el = document.getElementById('toast');
+          if (!el) return;
+          el.style.display = 'none';
+          el.style.animation = 'none';
+          el.textContent = '';
+        }"""
+    )
+
+
+def _toast_pair_problems(page, first, second, expected_first, expected_second, same_text):
+    """Two real taps, then rAF samples of #toast. Returns problem strings."""
+    _scroll_cell_into_view(page, *first)
+    _scroll_cell_into_view(page, *second)
+    point_a = _activate_point(page, first[0], first[1], cell_points(page, *first))
+    point_b = _activate_point(page, second[0], second[1], cell_points(page, *second))
+    dismiss_selection(page)
+    _silence_toast(page)
+    page.evaluate(_TOAST_PROBE_START_JS)
+    before1 = _now_ms(page)
+    tap_point(page, point_a["x"], point_a["y"])
+    after1 = _now_ms(page)
+    page.wait_for_timeout(420)
+    before2 = _now_ms(page)
+    tap_point(page, point_b["x"], point_b["y"])
+    after2 = _now_ms(page)
+    page.wait_for_timeout(3100)
+    payload = page.evaluate(
+        """() => {
+          const probe = window.__toastProbe;
+          if (!probe) return null;
+          probe.stop();
+          return { samples: probe.samples, anims: probe.anims };
+        }"""
+    )
+    label = "same" if same_text else "different"
+    if not payload:
+        return [f"{label}: probe did not start"]
+    samples = payload["samples"]
+    anims = payload["anims"]
+    problems = []
+    gap = before2 - after1
+    if gap < 280 or gap > 700:
+        problems.append(f"{label}: taps were {gap:.0f}ms apart, want about 300-500")
+    if not samples:
+        return problems + [f"{label}: no rAF samples"]
+    if any(not item.get("sameNode") for item in samples):
+        problems.append(f"{label}: #toast node was replaced")
+
+    def _shown(item):
+        return item.get("display") == "block" and item.get("visibility") != "hidden"
+
+    visible = [item for item in samples if _shown(item)]
+    if not any(after1 - 30 <= item["t"] <= after1 + 200 and _shown(item) for item in samples):
+        problems.append(
+            f"{label}: toast was not shown within 200ms of the first tap "
+            f"(text {samples[-1].get('text')!r})"
+        )
+    hold_until = after2 + 1900
+    dropped = [
+        item for item in samples
+        if after1 <= item["t"] <= hold_until and not _shown(item)
+    ]
+    # Ignore samples from before the toast has appeared.
+    appeared = [item["t"] for item in samples if item["t"] >= before1 and _shown(item)]
+    if appeared:
+        first_on = appeared[0]
+        dropped = [item for item in dropped if item["t"] >= first_on]
+    if dropped:
+        early = dropped[0]
+        problems.append(
+            f"{label}: toast hid {(early['t'] - after2):.0f}ms after the second tap "
+            f"(display {early.get('display')!r}); it must stay up until 1.9s"
+        )
+    elif not any(hold_until - 150 <= item["t"] <= hold_until + 80 and _shown(item) for item in samples):
+        problems.append(f"{label}: no sample still showing the toast at ~1.9s after the second tap")
+    late = [item for item in samples if item["t"] >= after2 + 2700]
+    if not late:
+        problems.append(f"{label}: sampling stopped before 2.7s after the second tap")
+    elif any(_shown(item) for item in late):
+        problems.append(f"{label}: toast still shown at ~2.8s after the second tap")
+
+    if same_text:
+        opaque = [item for item in samples if item["t"] >= after1 and item.get("opacity", 0) >= 0.9]
+        if not opaque:
+            problems.append(f"{label}: opacity never reached 0.9")
+        else:
+            rose = opaque[0]["t"]
+            dipped = [
+                item for item in samples
+                if rose <= item["t"] <= before2 and item.get("opacity", 0) < 0.9
+            ]
+            if dipped:
+                problems.append(
+                    f"{label}: opacity dipped to {dipped[0].get('opacity'):.2f} between taps"
+                )
+            replay_dip = [
+                item for item in samples
+                if after2 <= item["t"] <= after2 + 350 and item.get("opacity", 0) < 0.9
+            ]
+            if replay_dip:
+                problems.append(
+                    f"{label}: opacity dipped to {replay_dip[0].get('opacity'):.2f} "
+                    "just after the second tap"
+                )
+        replayed = [
+            item for item in anims
+            if before2 - 5 <= item["t"] <= after2 + 40
+        ]
+        if replayed:
+            problems.append(
+                f"{label}: animationstart replayed on the second tap "
+                f"({replayed[0].get('name')!r})"
+            )
+        opened = [item for item in anims if before1 - 20 <= item["t"] <= after1 + 80]
+        if not opened:
+            problems.append(f"{label}: first tap did not fire animationstart")
+        wrong_text = [
+            item for item in visible
+            if expected_first not in (item.get("text") or "")
+        ]
+        if wrong_text:
+            problems.append(f"{label}: text {wrong_text[0].get('text')!r}")
+    else:
+        switched = [
+            item for item in samples
+            if item["t"] >= before2 and expected_second in (item.get("text") or "")
+        ]
+        if not switched:
+            problems.append(
+                f"{label}: text never became {expected_second!r} "
+                f"(last {samples[-1].get('text')!r})"
+            )
+        elif switched[0]["t"] - before2 > 250:
+            problems.append(
+                f"{label}: text switched {(switched[0]['t'] - before2):.0f}ms "
+                "after the second tap, want within ~150ms"
+            )
+        stale = [
+            item for item in visible
+            if item["t"] >= before2 + 200 and expected_second not in (item.get("text") or "")
+        ]
+        if stale:
+            problems.append(f"{label}: text left the second sentence ({stale[0].get('text')!r})")
+    return problems
+
+
+@pytest.mark.case_id("TC-FE-TOAST-TIMER-RESET")
+def test_toast_timer_resets(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-TOAST-TIMER-RESET 連續兩個提示要從第二下重新計時。
+
+    兩下真實點擊大約相隔 420ms。用 rAF 抽 #toast 的 display、opacity、
+    文字和節點，並聽 animationstart。同一句（放不下點兩次）不得重播
+    進場動畫，而且要維持到第二下之後至少 1.9 秒、約 2.8 秒前消失。
+    換句（放不下然後已經有）要在約 150ms 內改文字，計時同樣從第二下算。
+    同一條裡各跑 3 次。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[{"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0}],
+    )
+    catalog = _catalog_defs(base_url)
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1100, "height": 800})
+    _enter_new_build_scene2(page)
+    kinds = _rendered_tap_kinds(page, catalog)
+    unfit = next(
+        (cell for cell in ((7, 0), (5, 7), (7, 7)) if kinds.get(cell) == "unfit"),
+        (7, 0),
+    )
+    occupied = next(
+        (cell for cell in ((0, 0), (1, 0)) if kinds.get(cell) == "occupied"),
+        None,
+    )
+    if occupied is None:
+        sprites = [fact for fact in page.evaluate(_RENDERED_PADS_JS) if fact.get("name")]
+        if sprites:
+            occupied = (sprites[0]["c"], sprites[0]["r"])
+    assert occupied is not None, (
+        "TC-FE-TOAST-TIMER-RESET needs a rendered building sprite to toast 已經有建築物"
+    )
+    problems = []
+    for trial in (1, 2, 3):
+        _relogin(page, base_url)
+        page.set_viewport_size({"width": 1100, "height": 800})
+        _enter_new_build_scene2(page)
+        dismiss_selection(page)
+        for same, second, expected_second in (
+            (True, unfit, CANNOT_FIT_TOAST),
+            (False, occupied, OCCUPIED_TOAST),
+        ):
+            found = _toast_pair_problems(
+                page, unfit, second, CANNOT_FIT_TOAST, expected_second, same
+            )
+            problems.extend(f"trial {trial}: {item}" for item in found)
+    print(
+        "TC-FE-TOAST-TIMER-RESET "
+        + (f"{len(problems)} problems" if problems else "same 3/3, different 3/3")
+    )
+    assert not problems, "TC-FE-TOAST-TIMER-RESET: " + " | ".join(problems[:12])
 
 
 @pytest.mark.case_id("TC-API-AUTOPLACE-FORMAL")
