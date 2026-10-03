@@ -1944,7 +1944,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
     <span>📍 點擊地圖上空地放置建築</span>
     <button class="cancel-place" onclick="cancelPlacement()">✕ 取消</button>
   </div>
-  <section class="map is-scene-1" id="townMap" aria-label="場景 1 · 睇地圖">
+  <section class="map is-scene-1" id="townMap" aria-label="場景 1 · 查看地圖">
     <div class="village is-iso" id="village"></div>
     <button class="cta" id="btnBuild" type="button">我要起屋</button>
     <div class="tools">
@@ -3372,7 +3372,7 @@ async function confirmMoveBuilding() {
 
 // ═══ STORE BUILDING ═══
 async function storeBuilding(bId) {
-  if (!confirm('📦 確定收起呢棟建築物？')) return;
+  if (!confirm('📦 確定收起這座建築物？')) return;
   try {
     closeModal();
     await fetchAPI('/api/kids/' + currentKidId + '/buildings/' + bId + '/store', {method:'POST'});
