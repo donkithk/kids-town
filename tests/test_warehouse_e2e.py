@@ -5050,6 +5050,8 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
     problems.extend(rect_problems)
     summaries.extend(rect_summaries)
     edge_problems, edge_summaries = _bar_border_leaks(page, base_url)
+    for item in edge_problems:
+        print("NOTHROUGH-PROBLEM " + item, flush=True)
     problems.extend(edge_problems)
     summaries.extend(edge_summaries)
     guard_problems, guard_summaries = _bar_guard_checks(page, base_url)
