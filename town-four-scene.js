@@ -8,9 +8,11 @@
   var MOTION_KEY = "ktTownMotion";
   var MARK_VALID = ASSET + "cell-valid.svg";
   var MARK_CHOSEN = "data:image/svg+xml," + encodeURIComponent(
-    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='-84 -50 168 120'>" +
-    "<polygon points='0,-50 84,0 0,50 -84,0' fill='#fff3c4' fill-opacity='.62' " +
-    "stroke='#7c2d12' stroke-width='3' stroke-linejoin='round'/></svg>"
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='-100 -66 200 152'>" +
+    "<polygon points='0,-50 84,0 0,50 -84,0' fill='#7c2d12' " +
+    "stroke='#7c2d12' stroke-width='3' stroke-linejoin='round'/>" +
+    "<polygon points='0,-50 84,0 0,50 -84,0' fill='none' " +
+    "stroke='#7c2d12' stroke-width='28' stroke-linejoin='round'/></svg>"
   );
 
   var ASSET_ID = {
@@ -1100,38 +1102,86 @@
     var k = 1 + gap / ap;
     var ringW = 2 * k * halfW;
     var ringH = 2 * k * halfH;
-    var outerStroke = 2 / scale;
-    var innerStroke = 3 / scale;
-    var pad = Math.max(outerStroke, innerStroke);
+    /* Width 3 is scaled to about 2px so the centreline stays readable on a
+       sprite. The matte sits on the solid line and covers inner stroke ink. */
+    var unit = 2 / (3 * scale);
+    var pad = 2 / scale;
     var boxW = ringW + pad * 2;
     var boxH = ringH + pad * 2;
     var cx = boxW / 2;
     var cy = boxH / 2;
-    var outerHx = ringW / 2;
-    var outerHy = ringH / 2;
-    var cellAp = (halfW * halfH) / Math.sqrt(halfW * halfW + halfH * halfH);
-    var safeK = 1 + (2.2 / scale) / cellAp;
-    var outerPts = diamondPoints(cx, cy, outerHx, outerHy);
-    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " +
-      boxW.toFixed(2) + " " + boxH.toFixed(2) + "'>" +
-      "<polygon pathLength='100' fill='none' stroke='#6b4f2a' stroke-width='" +
-      outerStroke.toFixed(3) + "' stroke-linejoin='round' stroke-dasharray='6 3.5' points='" +
-      outerPts + "'/>" +
-      "<polygon pathLength='100' fill='none' stroke='#fff8e7' stroke-width='" +
-      innerStroke.toFixed(3) + "' stroke-linejoin='round' stroke-dasharray='6 3.5' points='" +
-      outerPts + "'/>" +
-      "</svg>";
-    var mask = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " +
-      boxW.toFixed(2) + " " + boxH.toFixed(2) + "'>" +
-      "<rect width='100%' height='100%' fill='#fff'/>" +
-      "<polygon fill='#000' points='" + diamondPoints(cx, cy, halfW * safeK, halfH * safeK) + "'/>" +
+    var outerPts = diamondPoints(cx / unit, cy / unit, (ringW / 2) / unit, (ringH / 2) / unit);
+    var cover = 2.6;
+    var kCover = 1 + cover / ap;
+    var coverPts = diamondPoints(
+      cx / unit, cy / unit,
+      (ringW / 2) * (kCover / k) / unit,
+      (ringH / 2) * (kCover / k) / unit
+    );
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='none' " +
+      "shape-rendering='geometricPrecision' width='" + boxW.toFixed(2) + "' height='" + boxH.toFixed(2) + "' " +
+      "viewBox='0 0 " + (boxW / unit).toFixed(2) + " " + (boxH / unit).toFixed(2) + "'>" +
+      "<polygon pathLength='100' fill='none' stroke='#6b4f2a' stroke-width='2' " +
+      "stroke-linejoin='round' stroke-dasharray='6 0.8' points='" + outerPts + "'/>" +
+      "<polygon pathLength='100' fill='none' stroke='#fff8e7' stroke-width='3' " +
+      "stroke-linejoin='round' stroke-dasharray='6 0.8' points='" + outerPts + "'/>" +
+      "<polygon fill='#7c2d12' stroke='none' points='" + coverPts + "'/>" +
       "</svg>";
     map.style.setProperty("--ring-x", (btn.offsetWidth / 2 - boxW / 2).toFixed(3) + "px");
     map.style.setProperty("--ring-y", (btn.offsetHeight / 2 - boxH / 2).toFixed(3) + "px");
     map.style.setProperty("--ring-w", boxW.toFixed(3) + "px");
     map.style.setProperty("--ring-h", boxH.toFixed(3) + "px");
     map.style.setProperty("--ring-image", "url(\"data:image/svg+xml," + encodeURIComponent(svg) + "\")");
-    map.style.setProperty("--ring-mask", "url(\"data:image/svg+xml," + encodeURIComponent(mask) + "\")");
+    placeFocusRing();
+  }
+
+  /* The artboard transform rasters a pseudo-element background off the pixel
+     grid, so the dashed stroke bleeds onto the cell. A fixed box uses the
+     same image and the focused button's on-screen rectangle. */
+  function placeFocusRing() {
+    var ring = document.getElementById("focusRingPaint");
+    if (!ring) {
+      ring = document.createElement("div");
+      ring.id = "focusRingPaint";
+      ring.hidden = true;
+      ring.setAttribute("aria-hidden", "true");
+      document.body.appendChild(ring);
+    }
+    var btn = document.querySelector("#townMap .cell-btn:focus-visible");
+    var map = $("townMap");
+    if (!btn || !map) {
+      ring.hidden = true;
+      return;
+    }
+    var box = btn.getBoundingClientRect();
+    var scaleX = btn.offsetWidth ? box.width / btn.offsetWidth : 1;
+    var scaleY = btn.offsetHeight ? box.height / btn.offsetHeight : 1;
+    var cs = getComputedStyle(map);
+    var x = parseFloat(cs.getPropertyValue("--ring-x")) || 0;
+    var y = parseFloat(cs.getPropertyValue("--ring-y")) || 0;
+    var w = parseFloat(cs.getPropertyValue("--ring-w")) || 0;
+    var h = parseFloat(cs.getPropertyValue("--ring-h")) || 0;
+    if (!(w > 2) || !(h > 2)) {
+      ring.hidden = true;
+      return;
+    }
+    var left = box.left + x * scaleX;
+    var top = box.top + y * scaleY;
+    var width = w * scaleX;
+    var height = h * scaleY;
+    ring.hidden = false;
+    ring.style.left = left + "px";
+    ring.style.top = top + "px";
+    ring.style.width = width + "px";
+    ring.style.height = height + "px";
+    ring.style.backgroundImage = cs.getPropertyValue("--ring-image");
+    var village = map.querySelector(".village");
+    var bounds = village ? village.getBoundingClientRect() : map.getBoundingClientRect();
+    ring.style.clipPath = "inset(" +
+      Math.max(0, bounds.top - top).toFixed(2) + "px " +
+      Math.max(0, (left + width) - bounds.right).toFixed(2) + "px " +
+      Math.max(0, (top + height) - bounds.bottom).toFixed(2) + "px " +
+      Math.max(0, bounds.left - left).toFixed(2) + "px)";
   }
 
   function render() {
@@ -1481,6 +1531,9 @@
     if (!map || map.dataset.wired === "1") return;
     map.dataset.wired = "1";
     window.addEventListener("resize", syncFocusRing);
+    document.addEventListener("focusin", placeFocusRing, true);
+    document.addEventListener("focusout", placeFocusRing, true);
+    document.addEventListener("scroll", placeFocusRing, true);
     map.addEventListener("click", function (event) {
       var target = event.target;
       var btn = target.closest && target.closest("button");
