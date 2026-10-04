@@ -3619,9 +3619,39 @@ def _strictly_inside(data, point):
     return span < 1 - 1e-6
 
 
-def _acted_cell(reaction):
-    preview = [tuple(item) for item in reaction.get("preview") or []]
-    chosen = [tuple(item) for item in reaction.get("chosen") or []]
+def _as_cells(value):
+    """Turn a cell, a pair, or a list of pairs into a list of (c, r)."""
+    if value is None or value == "" or value == []:
+        return []
+    if isinstance(value, tuple) and len(value) == 2 and not isinstance(value[0], (list, tuple)):
+        return [(int(value[0]), int(value[1]))]
+    if (
+        isinstance(value, list)
+        and len(value) == 2
+        and not isinstance(value[0], (list, tuple))
+        and all(isinstance(item, (int, float)) for item in value)
+    ):
+        return [(int(value[0]), int(value[1]))]
+    cells = []
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            if isinstance(item, (list, tuple)) and len(item) == 2:
+                cells.append((int(item[0]), int(item[1])))
+    return cells
+
+
+def selection_of(reaction):
+    """The cell a reaction dict recorded, from preview, chosen, or acted.
+
+    Raw ``read_reaction`` dicts carry ``chosen`` and ``preview``. Probe
+    dicts from ``_map_reaction`` carry the same cell under ``acted`` and
+    may omit the other keys. Either shape must yield the cell, never None
+    when one of those fields is set.
+    """
+    if not reaction:
+        return None
+    preview = _as_cells(reaction.get("preview"))
+    chosen = _as_cells(reaction.get("chosen"))
     if len(preview) == 1:
         return preview[0]
     if len(preview) > 1:
@@ -3630,12 +3660,48 @@ def _acted_cell(reaction):
         return chosen[0]
     if chosen:
         return chosen
+    if "acted" not in reaction or reaction.get("acted") is None:
+        return None
+    acted = _as_cells(reaction.get("acted"))
+    if len(acted) == 1:
+        return acted[0]
+    if acted:
+        return acted
     return None
+
+
+def reaction_happened(reaction, ready=None, ignore_toast=None):
+    """True when the dict records a selection, a toast, or an open sheet.
+
+    Selection counts from ``acted``, ``chosen``, or ``preview``. A scene-3
+    jump and the 「已選擇空地」 status count too: both are reactions even
+    when the cell list is empty. ``ignore_toast`` drops a toast that was
+    already on screen before the tap.
+    """
+    if not reaction:
+        return False
+    if ready is None:
+        ready = reaction.get("ready") or ""
+    toast = reaction.get("toast") or ""
+    if ignore_toast is not None and toast == ignore_toast:
+        toast = ""
+    scene = reaction.get("scene") or ""
+    return bool(
+        selection_of(reaction) is not None
+        or toast
+        or reaction.get("sheet")
+        or "場景 3" in scene
+        or "已選擇空地" in (ready or "")
+    )
+
+
+def _acted_cell(reaction):
+    return selection_of(reaction)
 
 
 def _reaction_blame(cell, kind, reaction, unstore):
     """Return (bucket, detail). bucket is neighbor, reaction, or None."""
-    acted = _acted_cell(reaction)
+    acted = selection_of(reaction)
     scene = reaction.get("scene") or ""
     toast = reaction.get("toast") or ""
     if isinstance(acted, tuple) and acted != cell:
@@ -3653,7 +3719,7 @@ def _reaction_blame(cell, kind, reaction, unstore):
         if "場景 3" in scene:
             return "neighbor", f"scene 3 preview {acted}"
         if acted != cell:
-            return "reaction", f"selected {reaction.get('chosen')} toast {toast!r}"
+            return "reaction", f"selected {acted} toast {toast!r}"
         return None, ""
     if acted is not None:
         expected = OCCUPIED_TOAST if kind == "occupied" else CANNOT_FIT_TOAST
@@ -3791,6 +3857,9 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
         village = village_box(page)
         if not village:
             problems.append(f"{mode} {width}x{height}: #village box missing")
+        sanity = _require_helper_sees_selection(page, f"offcenter {mode} {width}x{height}")
+        if sanity:
+            problems.append(sanity)
         neighbor = reaction = panel_hits = chrome_skipped = exposed = geometry = 0
         fall = fall_hits = outside = outside_hits = 0
         examples = []
@@ -3837,14 +3906,11 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
                         _silence_toast(page)
                         tap_point(page, point["x"], point["y"])
                         hit = read_reaction(page)
-                        acted = _acted_cell(hit)
+                        acted = selection_of(hit)
                         ready = (_hint(page).get("ready") or "")
-                        if (
-                            acted is not None
-                            or "場景 3" in (hit.get("scene") or "")
-                            or hit.get("toast")
-                            or "已選擇空地" in ready
-                        ):
+                        observed = dict(hit)
+                        observed["ready"] = ready
+                        if reaction_happened(observed):
                             fall_hits += 1
                             if len(fall_examples) < 8:
                                 fall_examples.append(
@@ -3863,8 +3929,8 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
                         dismiss_selection(page)
                         tap_point(page, point["x"], point["y"])
                         hit = read_reaction(page)
-                        acted = _acted_cell(hit)
-                        if acted is not None or "場景 3" in (hit.get("scene") or ""):
+                        acted = selection_of(hit)
+                        if reaction_happened(hit):
                             panel_hits += 1
                             if len(panel_examples) < 8:
                                 panel_examples.append(
@@ -3894,16 +3960,13 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
                             _close_sheet(page)
                         tap_point(page, point["x"], point["y"])
                         hit = read_reaction(page)
-                        acted = _acted_cell(hit)
+                        acted = selection_of(hit)
                         ready = (_hint(page).get("ready") or "")
                         sheet = _sheet_open(page)
-                        if (
-                            acted is not None
-                            or hit.get("toast")
-                            or sheet
-                            or "場景 3" in (hit.get("scene") or "")
-                            or "已選擇空地" in ready
-                        ):
+                        observed = dict(hit)
+                        observed["ready"] = ready
+                        observed["sheet"] = sheet
+                        if reaction_happened(observed):
                             outside_hits += 1
                             if len(outside_examples) < 8:
                                 outside_examples.append(
@@ -4362,14 +4425,11 @@ def _ensure_town_map(page):
 def _selection_leaked(page):
     hit = read_reaction(page)
     ready = (_hint(page).get("ready") or "")
-    acted = _acted_cell(hit)
-    leaked = bool(
-        acted is not None
-        or "場景 3" in (hit.get("scene") or "")
-        or hit.get("toast")
-        or "已選擇空地" in ready
-    )
-    return leaked, acted, hit, ready
+    observed = dict(hit)
+    observed["ready"] = ready
+    observed["sheet"] = _sheet_open(page)
+    acted = selection_of(observed)
+    return reaction_happened(observed), acted, hit, ready
 
 
 def _scene2_tap_mode(page, mode, build_name):
@@ -4454,6 +4514,9 @@ def _bar_rect_leaks(page, base_url):
             _enter_new_build_scene2(page)
             if mode == "picked":
                 assert _pick_unbuilt(page, "工坊"), f"{width}x{height}: 工坊 missing"
+            sanity = _require_helper_sees_selection(page, f"rect {mode} {width}x{height}")
+            if sanity:
+                problems.append(sanity)
             seen = set()
             sheet_opened = False
             for scroll in (0, 300, 366, "max"):
@@ -4542,7 +4605,7 @@ def _tap_visible_gold(page, point):
     _silence_toast(page)
     tap_point(page, point["x"], point["y"])
     hit = read_reaction(page)
-    acted = _acted_cell(hit)
+    acted = selection_of(hit)
     want = (point["c"], point["r"])
     ok = acted == want and "場景 3" not in (hit.get("scene") or "")
     return ok, acted, hit
@@ -4571,6 +4634,9 @@ def _bar_guard_checks(page, base_url):
     _relogin(page, base_url)
     page.set_viewport_size({"width": 1280, "height": 720})
     _enter_new_build_scene2(page)
+    sanity = _require_helper_sees_selection(page, "guard")
+    if sanity:
+        problems.append(sanity)
     launcher = page.locator("#listLauncher")
     if launcher.count() and launcher.first.is_visible():
         launcher.first.click()
@@ -4842,11 +4908,12 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
             dismiss_selection(page)
             tap_point(page, point["x"], point["y"])
             hit = read_reaction(page)
-            if _acted_cell(hit) is not None or "場景 3" in (hit.get("scene") or ""):
+            if reaction_happened(hit):
                 selected += 1
                 if len(examples) < 6:
                     examples.append(
-                        f"tap ({point['x']:.0f},{point['y']:.0f}) selected {_acted_cell(hit)}"
+                        f"tap ({point['x']:.0f},{point['y']:.0f}) "
+                        f"selected {selection_of(hit)} toast {hit.get('toast')!r}"
                     )
             dismiss_selection(page)
         summaries.append(
@@ -4989,7 +5056,7 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
         dismiss_selection(page)
         tap_point(page, overlap["x"], overlap["y"])
         hit = read_reaction(page)
-        acted = _acted_cell(hit)
+        acted = selection_of(hit)
         ok = acted == want and "場景 3" not in (hit.get("scene") or "")
         summaries.append(f"toast-gold: visible {want} -> {acted}")
         if not ok:
@@ -5539,6 +5606,11 @@ def test_tap_visible_only(page, base_url, warehouse_db, warehouse_ids):
                 assert _pick_unbuilt(page, "工坊"), "工坊 missing from the palette"
             else:
                 _enter_new_build_scene2(page)
+            sanity = _require_helper_sees_selection(
+                page, f"visible-only {mode} {width}x{height}"
+            )
+            if sanity:
+                problems.append(sanity)
             for scroll in (0, "max"):
                 set_village_scroll(page, scroll)
                 probes = off_visible_probes(page)
@@ -5595,13 +5667,12 @@ def test_tap_visible_only(page, base_url, warehouse_db, warehouse_ids):
                     tap_point(page, point["x"], point["y"])
                     hit = read_reaction(page)
                     ready = (_hint(page).get("ready") or "")
-                    acted = _acted_cell(hit)
+                    acted = selection_of(hit)
                     # The toast was already showing, so its text is not a new leak.
-                    leaked = (
-                        acted is not None
-                        or "場景 3" in (hit.get("scene") or "")
-                        or "已選擇空地" in ready
-                    )
+                    observed = dict(hit)
+                    observed["toast"] = ""
+                    observed["ready"] = ready
+                    leaked = reaction_happened(observed)
                     if leaked and len(toast_leaks) < 4:
                         toast_leaks.append(
                             f"{point['why']} ({point['x']:.0f},{point['y']:.0f}) "
@@ -5630,14 +5701,11 @@ def test_tap_visible_only(page, base_url, warehouse_db, warehouse_ids):
                     tap_point(page, point["x"], point["y"])
                     hit = read_reaction(page)
                     ready = (_hint(page).get("ready") or "")
-                    acted = _acted_cell(hit)
+                    acted = selection_of(hit)
                     toast_text = hit.get("toast") or ""
-                    leaked = bool(
-                        acted is not None
-                        or "場景 3" in (hit.get("scene") or "")
-                        or "已選擇空地" in ready
-                        or (toast_text and toast_text != "探針")
-                    )
+                    observed = dict(hit)
+                    observed["ready"] = ready
+                    leaked = reaction_happened(observed, ignore_toast="探針")
                     if point["why"] == "regress" and leaked:
                         regress_leaks += 1
                     if leaked and len(band_leaks) < 6:
@@ -5987,7 +6055,12 @@ def _sheet_open(page):
 
 
 def _map_reaction(page, x, y):
-    """One real mouse click. A leak is a selection, a toast, a sheet, or scene 3."""
+    """One real mouse click, read by ``reaction_happened``.
+
+    The returned dict keeps ``chosen`` and ``preview`` from the page and
+    also stores that cell under ``acted``, so a later reader that looks at
+    only one of those keys still sees the selection.
+    """
     dismiss_selection(page)
     _silence_toast(page)
     if _sheet_open(page):
@@ -5996,23 +6069,78 @@ def _map_reaction(page, x, y):
     hit = read_reaction(page)
     sheet = _sheet_open(page)
     ready = (_hint(page).get("ready") or "")
-    acted = _acted_cell(hit)
-    toast = hit.get("toast") or ""
-    leaked = bool(
-        acted is not None
-        or toast
-        or sheet
-        or "場景 3" in (hit.get("scene") or "")
-        or "已選擇空地" in ready
-    )
+    observed = dict(hit)
+    observed["sheet"] = sheet
+    observed["ready"] = ready
+    acted = selection_of(observed)
+    observed["acted"] = acted
+    leaked = reaction_happened(observed)
     return {
         "leaked": leaked,
+        "reacted": leaked,
         "acted": acted,
-        "toast": toast,
+        "chosen": hit.get("chosen") or [],
+        "preview": hit.get("preview") or [],
+        "toast": hit.get("toast") or "",
         "sheet": sheet,
         "scene": hit.get("scene") or "",
         "ready": ready,
     }
+
+
+def _cancel_scene3(page):
+    if "場景 3" not in _scene_aria(page):
+        return
+    cancel = page.locator("#btnUxCancel")
+    try:
+        if cancel.count() and cancel.first.is_visible():
+            cancel.first.click(timeout=2000)
+            page.wait_for_timeout(150)
+    except Exception:
+        pass
+    _silence_toast(page)
+
+
+def _require_helper_sees_selection(page, label):
+    """Tap a visible gold cell through ``_map_reaction`` and ``_reaction_blame``.
+
+    The helper must report that cell. A miss here means the reader is blind,
+    so the test fails instead of treating a real selection as no reaction.
+    Scene 3 is cancelled afterwards so the following probes stay put.
+    """
+    if "場景 2" not in _scene_aria(page) and "場景 3" not in _scene_aria(page):
+        return f"{label}: helper sanity needs scene 2, got {_scene_aria(page)!r}"
+    points = visible_gold_points(page, 6) or []
+    if not points:
+        return f"{label}: helper sanity found no visible gold cell"
+    unstore = "放回" in ((_hint(page).get("ready") or ""))
+    last = "no tap"
+    for point in points:
+        cell = (int(point["c"]), int(point["r"]))
+        reaction = _map_reaction(page, point["x"], point["y"])
+        seen = selection_of(reaction)
+        if unstore:
+            if seen == cell and "場景 3" in (reaction.get("scene") or ""):
+                _cancel_scene3(page)
+                return None
+        else:
+            bucket, detail = _reaction_blame(cell, "select", reaction, False)
+            if seen == cell and not bucket and "場景 3" not in (reaction.get("scene") or ""):
+                dismiss_selection(page)
+                _silence_toast(page)
+                return None
+            last = (
+                f"saw {seen} blame {detail!r} toast {reaction.get('toast')!r} "
+                f"scene {reaction.get('scene')!r}"
+            )
+        if "場景 3" in _scene_aria(page):
+            _cancel_scene3(page)
+        if unstore:
+            last = (
+                f"saw {seen} toast {reaction.get('toast')!r} "
+                f"scene {reaction.get('scene')!r}"
+            )
+    return f"{label}: helper sanity did not report the tapped cell ({last})"
 
 
 def _restore_scene1(page):
@@ -6090,6 +6218,10 @@ def test_tap_bar_gap_band(page, base_url, warehouse_db, warehouse_ids):
                     points.append({"x": x, "y": y, "why": "grok"})
             leaks = []
             grok_hits = []
+            sanity = _require_helper_sees_selection(page, f"gap {mode} {width}x{height}")
+            if sanity:
+                problems.append(sanity)
+            set_village_scroll(page, 0)
             for point in points:
                 reaction = _map_reaction(page, point["x"], point["y"])
                 visible = None
@@ -6099,7 +6231,9 @@ def test_tap_bar_gap_band(page, base_url, warehouse_db, warehouse_ids):
                     vis = cell_visibility(page, acted[0], acted[1], point["x"], point["y"]) or {}
                     visible = vis.get("visible")
                     on_visible = vis.get("pointOnVisible")
-                bad = reaction["leaked"] or (acted is not None and (not visible or not on_visible))
+                bad = reaction_happened(reaction) or (
+                    acted is not None and (not visible or not on_visible)
+                )
                 if bad:
                     leaks.append(point["why"])
                     if len(leaks) <= 6 or point["why"] == "grok":
@@ -6209,6 +6343,10 @@ def test_tap_scene_grass_edge(page, base_url, warehouse_db, warehouse_ids):
         _reset_kid(warehouse_db, kid_id, points=800, buildings=buildings)
         _relogin(page, base_url)
         page.set_viewport_size({"width": 1280, "height": 720})
+        _enter_new_build_scene2(page)
+        sanity = _require_helper_sees_selection(page, f"grass {label}")
+        if sanity:
+            problems.append(sanity)
         _restore_scene1(page)
         set_village_scroll(page, 0)
         band = cell_clip_band(page)
@@ -6226,7 +6364,7 @@ def test_tap_scene_grass_edge(page, base_url, warehouse_db, warehouse_ids):
         grok_hits = []
         for point in points:
             reaction = _map_reaction(page, point["x"], point["y"])
-            if reaction["leaked"] or "場景 1" not in (reaction["scene"] or _scene_aria(page)):
+            if reaction_happened(reaction) or "場景 1" not in (reaction["scene"] or _scene_aria(page)):
                 if len(leaks) < 8 or point["why"] == "grok":
                     leaks.append(
                         f"{point['why']} ({point['x']:.1f},{point['y']:.1f}) "
@@ -6234,7 +6372,9 @@ def test_tap_scene_grass_edge(page, base_url, warehouse_db, warehouse_ids):
                         f"sheet {reaction['sheet']} scene {reaction['scene']!r}"
                     )
             if point["why"] == "grok":
-                grok_hits.append(leaks[-1] if reaction["leaked"] else f"({point['x']:.1f},{point['y']:.1f}) quiet")
+                grok_hits.append(
+                    leaks[-1] if reaction_happened(reaction) else f"({point['x']:.1f},{point['y']:.1f}) quiet"
+                )
             _restore_scene1(page)
             set_village_scroll(page, 0)
         summaries.append(
@@ -6253,7 +6393,7 @@ def _probe_blocked(page, x, y, width, height):
     if x < 1 or y < 1 or x >= width - 1 or y >= height - 1:
         return None
     reaction = _map_reaction(page, x, y)
-    if not reaction["leaked"]:
+    if not reaction_happened(reaction):
         return None
     return (
         f"({x:.1f},{y:.1f}) cell {reaction['acted']} "
@@ -6318,7 +6458,7 @@ def _probe_reverse(page, x, y, width, height, kinds, expect_cell=None):
             f"scene {reaction['scene']!r} target {_point_target(page, x, y)}"
         )
     if cell is None:
-        if reaction["leaked"]:
+        if reaction_happened(reaction):
             return "leak", (
                 f"({int(x)},{int(y)}) no visible cell but "
                 f"cell {reaction['acted']} toast {reaction['toast']!r} "
@@ -6404,6 +6544,9 @@ def _bar_border_leaks(page, base_url):
         page.set_viewport_size({"width": width, "height": height})
         _enter_new_build_scene2(page)
         assert _pick_unbuilt(page, "工坊"), f"{width}x{height}: 工坊 missing"
+        sanity = _require_helper_sees_selection(page, f"border {width}x{height}")
+        if sanity:
+            problems.append(sanity)
         kinds = _rendered_tap_kinds(page, catalog)
         seen = set()
         for scroll in _BORDER_SCROLLS:
@@ -6495,6 +6638,13 @@ def _bar_border_leaks(page, base_url):
                 status, detail = _probe_reverse(
                     page, point["x"], point["y"], width, height, kinds
                 )
+                if str(point.get("name") or "").startswith("top-"):
+                    print(
+                        f"NOTHROUGH-TOP {width}x{height} scroll {scroll} "
+                        f"{point.get('who')} {point.get('name')} "
+                        f"({int(point['x'])},{int(point['y'])}) {detail}",
+                        flush=True,
+                    )
                 if status:
                     if len(reverse_miss) < 6:
                         reverse_miss.append(f"{point['who']} {point['name']} {detail}")
