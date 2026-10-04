@@ -227,13 +227,13 @@ body.kt-artstage #tab-town .mp { position: relative; }
 
 #focusRingPaint[hidden],
 #chosenMarkPaint[hidden],
-#ringUnderBar[hidden] {
+#townMap .ring-under-bar[hidden] {
   display: none !important;
 }
 
-/* Cream the bar covers. It lives in the bar, under the sentence, so the
-   scrolling map can stay clipped by the bar. */
-#townMap .place-bar > #ringUnderBar {
+/* Cream the showing bar covers. It sits in that bar, under the sentence,
+   in a colour the bar fill does not share, so the stroke does not end early. */
+#townMap .place-bar > .ring-under-bar {
   position: absolute;
   z-index: 0;
   pointer-events: none;
