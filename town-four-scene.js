@@ -1230,38 +1230,60 @@
 
   function hideRing(ring) {
     hidePaint(ring || document.getElementById("focusRingPaint"));
-    hidePaint(document.getElementById("ringUnderBar"));
+    var extras = document.querySelectorAll("#townMap .ring-under-bar");
+    for (var i = 0; i < extras.length; i += 1) hidePaint(extras[i]);
   }
 
   function hideLine(paint) {
     hidePaint(paint || document.getElementById("chosenMarkPaint"));
   }
 
-  /* Bars cover the scrolling map. The ring's own layer stops at a bar.
-     Cream that would have fallen inside the bar is painted into the bar,
-     in a cream the bar's wood and fill do not share, so the stroke does
-     not stop early. */
-  function barRects() {
-    var ids = ["readyBar", "uxPlaceBar"];
+  /* Scene 2 and scene 3 each show one bar, and the palette may be open.
+     The box is the live border of whatever is actually showing. */
+  function shownBoxes(selector) {
+    var nodes = document.querySelectorAll(selector);
     var rects = [];
-    for (var i = 0; i < ids.length; i += 1) {
-      var el = document.getElementById(ids[i]);
-      if (!el) continue;
+    for (var i = 0; i < nodes.length; i += 1) {
+      var el = nodes[i];
+      if (!el || el.hidden) continue;
       var cs = getComputedStyle(el);
       if (cs.display === "none" || cs.visibility === "hidden") continue;
       var box = el.getBoundingClientRect();
       if (box.width < 2 || box.height < 2) continue;
-      rects.push({ el: el, left: box.left, top: box.top, right: box.right, bottom: box.bottom });
+      rects.push({
+        el: el,
+        left: box.left,
+        top: box.top,
+        right: box.right,
+        bottom: box.bottom
+      });
     }
     return rects;
   }
 
-  function meetsBar(rects, x0, y0, x1, y1) {
+  function coverRects() {
+    return shownBoxes("#townMap .place-bar").concat(shownBoxes("#townMap .palette"));
+  }
+
+  function ensureBarPaint(host) {
+    var ns = "http://www.w3.org/2000/svg";
+    var paint = host.querySelector(":scope > svg.ring-under-bar");
+    if (!paint) {
+      paint = document.createElementNS(ns, "svg");
+      paint.setAttribute("class", "ring-under-bar");
+      paint.setAttribute("aria-hidden", "true");
+      paint.setAttribute("preserveAspectRatio", "none");
+      host.appendChild(paint);
+    }
+    return paint;
+  }
+
+  function hitsCover(rects, x0, y0, x1, y1) {
     for (var i = 0; i < rects.length; i += 1) {
       var r = rects[i];
-      if (x0 < r.right && x1 > r.left && y0 < r.bottom && y1 > r.top) return r;
+      if (x0 < r.right && x1 > r.left && y0 < r.bottom && y1 > r.top) return true;
     }
-    return null;
+    return false;
   }
 
   /* Cell-sized SVG. ViewBox units are screen px, so one device pixel is
@@ -1518,7 +1540,8 @@
         }
       }
     }
-    var bars = barRects();
+    var bars = shownBoxes("#townMap .place-bar");
+    var covers = bars.concat(shownBoxes("#townMap .palette"));
     var barEl = null;
     for (var b = 0; b < bars.length; b += 1) {
       var box = bars[b];
@@ -1528,11 +1551,13 @@
         break;
       }
     }
-    var barPaint = barEl ? ensurePaintSvg("ringUnderBar", barEl) : null;
+    var barPaint = barEl ? ensureBarPaint(barEl) : null;
     var barMounted = barPaint
       ? mountDeviceSvg(barPaint, barEl, screenLeft, screenTop, screenW, screenH)
       : null;
     var barPixels = 0;
+    /* Inside the bar this reads as the ring's cream band, and it stays off
+       the bar's own ink colours. */
     var barCream = "#fffec5";
     var mapBox = map.getBoundingClientRect();
     var slack = 2;
@@ -1552,7 +1577,8 @@
         var onMap = x0 < mapBox.right + slack && x0 + step > mapBox.left - slack
           && y0 < mapBox.bottom + slack && y0 + step > mapBox.top - slack;
         if (ix < bw && onMap) {
-          var covered = meetsBar(bars, x0, y0, x0 + step, y0 + step);
+          var covered = hitsCover(covers, x0, y0, x0 + step, y0 + step);
+          var inBar = hitsCover(bars, x0, y0, x0 + step, y0 + step);
           var mid = atCentre(x0 + step * 0.5, y0 + step * 0.5);
           var centreOut = outsideAt(x0 + step * 0.5, y0 + step * 0.5);
           var nearest = outsideAt(x0, y0);
@@ -1568,7 +1594,7 @@
           if (!hold && mid && centreOut >= minOut && centreOut < minOut + cream + brown
               && (!inward || nearest >= minOut)) {
             var ink = centreOut < minOut + cream ? "#fff8e7" : "#6b4f2a";
-            if (covered && barMounted && ink === "#fff8e7") onBar = barCream;
+            if (inBar && barMounted && ink === "#fff8e7") onBar = barCream;
             else if (!covered) color = ink;
           }
         }
@@ -1635,7 +1661,7 @@
       var span = Math.abs(x - face.cx) / face.halfW + Math.abs(y - face.cy) / face.halfH;
       return (span - 1) * ap;
     }
-    var bars = barRects();
+    var covers = coverRects();
     var boundX = face.cx - face.halfW;
     var boundY = face.cy - face.halfH;
     var cssOffX = (boundX - Math.floor(boundX) + 0.5) % 1;
@@ -1656,7 +1682,7 @@
         if (ix < bw) {
           var x0 = screenLeft + ix * step;
           var x1 = x0 + step;
-          if (!meetsBar(bars, x0, y0, x1, y1)) {
+          if (!hitsCover(covers, x0, y0, x1, y1)) {
             var maxO = outsideAt(x0, y0);
             var c1 = outsideAt(x1, y0);
             var c2 = outsideAt(x0, y1);
