@@ -1267,120 +1267,102 @@ def village_box(page):
 
 
 def cell_under_point(page, x, y):
-    """Front-most top-face diamond under (x, y), or None.
+    """Cell the iso hit-test would choose, or None.
 
-    The point has to sit inside the `#village` border box. Later pads win,
-    matching paint order. The diamond is the slab's top face.
+    The point has to sit inside the `#village` border box. The cell is the
+    same rounding the map uses (half a step from the grid origin), so a
+    point the map itself would miss is not a visible cell.
     """
     return page.evaluate(
         """([px, py]) => {
           const village = document.getElementById('village');
-          if (!village) return null;
+          const pad = document.querySelector('#townMap .pad');
+          if (!village || !pad) return null;
           const v = village.getBoundingClientRect();
           if (px < v.left || px > v.right || py < v.top || py > v.bottom) return null;
-          let hit = null;
-          for (const pad of document.querySelectorAll('#townMap .pad')) {
-            const slab = pad.querySelector(':scope > .slab');
-            if (!slab) continue;
-            const box = slab.getBoundingClientRect();
-            const cx = box.left + box.width / 2;
-            const cy = box.top + box.height * (50 / 120);
-            const hw = box.width / 2;
-            const hh = box.height * (50 / 120);
-            if (hw < 2 || hh < 2) continue;
-            if (Math.abs(px - cx) / hw + Math.abs(py - cy) / hh > 1) continue;
-            const cs = getComputedStyle(pad);
-            hit = {
-              c: parseInt(cs.getPropertyValue('--c'), 10),
-              r: parseInt(cs.getPropertyValue('--r'), 10)
-            };
-          }
-          return hit;
+          if (v.width < 1 || v.height < 1 || pad.offsetWidth < 1) return null;
+          const scaleX = v.width / village.offsetWidth || 1;
+          const scaleY = v.height / village.offsetHeight || 1;
+          const local = {
+            x: (px - v.left) / scaleX + village.scrollLeft,
+            y: (py - v.top) / scaleY + village.scrollTop
+          };
+          const s = pad.offsetWidth / 160;
+          const stepX = 84 * s;
+          const stepY = 50 * s;
+          if (!stepX || !stepY) return null;
+          const originX = pad.offsetLeft + 80 * s;
+          const originY = pad.offsetTop + 121 * s;
+          const dx = local.x - originX;
+          const dy = local.y - originY;
+          const cf = 0.5 * (dx / stepX + dy / stepY);
+          const rf = 0.5 * (dy / stepY - dx / stepX);
+          const c = Math.round(cf);
+          const r = Math.round(rf);
+          if (Math.abs(cf - c) > 0.501 || Math.abs(rf - r) > 0.501) return null;
+          if (c < 0 || r < 0 || c >= 8 || r >= 8) return null;
+          return {c, r};
         }""",
         [x, y],
     )
 
 
 def scroll_for_cell_point(page, x, y, cell_x, cell_y):
-    """Scroll `#village` so (x, y) lies on that cell's top face, if possible.
+    """Scroll `#village` so the iso hit-test maps (x, y) to that cell.
 
-    Leaves the scroll on the fitted value when one exists.
+    The point also has to stay inside the village border box. Leaves the
+    scroll on the fitted value when one exists.
     """
     return page.evaluate(
-        """([px, py, c, r]) => {
+        """([px, py, wantC, wantR]) => {
           const village = document.getElementById('village');
-          const pad = [...document.querySelectorAll('#townMap .pad')].find((el) => {
-            const cs = getComputedStyle(el);
-            return parseInt(cs.getPropertyValue('--c'), 10) === c
-              && parseInt(cs.getPropertyValue('--r'), 10) === r;
-          });
-          const slab = pad && pad.querySelector(':scope > .slab');
-          if (!village || !slab) return {ok: false, reason: 'missing'};
+          const pad = document.querySelector('#townMap .pad');
+          if (!village || !pad) return {ok: false, reason: 'missing'};
           const max = Math.max(0, village.scrollHeight - village.clientHeight);
           const saved = village.scrollTop;
-          function measure() {
-            const box = slab.getBoundingClientRect();
+          function hit() {
             const v = village.getBoundingClientRect();
-            return {
-              cx: box.left + box.width / 2,
-              cy: box.top + box.height * (50 / 120),
-              hw: box.width / 2,
-              hh: box.height * (50 / 120),
-              left: v.left, top: v.top, right: v.right, bottom: v.bottom
-            };
-          }
-          function slack(d) {
-            if (!d || d.hw < 2 || d.hh < 2) return -1;
-            if (px < d.left || px > d.right || py < d.top || py > d.bottom) return -1;
-            const span = Math.abs(px - d.cx) / d.hw + Math.abs(py - d.cy) / d.hh;
-            return span <= 1 ? 1 - span : -1;
-          }
-          village.scrollTop = 0;
-          const at0 = measure();
-          village.scrollTop = max;
-          const atMax = measure();
-          const span = atMax.cy - at0.cy;
-          let guess = saved;
-          if (at0.hw >= 2 && at0.hh >= 2 && Math.abs(px - at0.cx) / at0.hw < 1) {
-            const room = (1 - Math.abs(px - at0.cx) / at0.hw) * at0.hh;
-            if (Math.abs(span) < 0.5) {
-              guess = 0;
-            } else {
-              const sLo = (py - room - at0.cy) * max / span;
-              const sHi = (py + room - at0.cy) * max / span;
-              const lo = Math.max(0, Math.min(sLo, sHi));
-              const hi = Math.min(max, Math.max(sLo, sHi));
-              if (lo <= hi) guess = (lo + hi) / 2;
-            }
+            if (px < v.left || px > v.right || py < v.top || py > v.bottom) return null;
+            if (v.width < 1 || pad.offsetWidth < 1) return null;
+            const scaleX = v.width / village.offsetWidth || 1;
+            const scaleY = v.height / village.offsetHeight || 1;
+            const localY = (py - v.top) / scaleY + village.scrollTop;
+            const localX = (px - v.left) / scaleX + village.scrollLeft;
+            const s = pad.offsetWidth / 160;
+            const stepX = 84 * s;
+            const stepY = 50 * s;
+            const dx = localX - (pad.offsetLeft + 80 * s);
+            const dy = localY - (pad.offsetTop + 121 * s);
+            const cf = 0.5 * (dx / stepX + dy / stepY);
+            const rf = 0.5 * (dy / stepY - dx / stepX);
+            const c = Math.round(cf);
+            const r = Math.round(rf);
+            if (Math.abs(cf - c) > 0.501 || Math.abs(rf - r) > 0.501) return null;
+            if (c !== wantC || r !== wantR) return null;
+            return 0.501 - Math.max(Math.abs(cf - c), Math.abs(rf - r));
           }
           let best = null;
           let bestSlack = -1;
-          const start = Math.max(0, Math.floor(guess) - 40);
-          const end = Math.min(max, Math.ceil(guess) + 40);
-          for (let s = start; s <= end; s += 1) {
+          for (let s = 0; s <= max; s += 1) {
             village.scrollTop = s;
-            const got = slack(measure());
-            if (got > bestSlack) {
-              bestSlack = got;
+            const slack = hit();
+            if (slack != null && slack > bestSlack) {
+              bestSlack = slack;
               best = s;
             }
           }
           if (best == null) {
             village.scrollTop = saved;
-            return {ok: false, max, scroll: saved, cx: at0.cx, cy: at0.cy};
+            return {ok: false, max, scroll: saved};
           }
           village.scrollTop = best;
-          const now = measure();
+          const v = village.getBoundingClientRect();
           return {
             ok: true,
             max,
             scroll: village.scrollTop,
             slack: bestSlack,
-            cx: now.cx,
-            cy: now.cy,
-            hw: now.hw,
-            hh: now.hh,
-            villageBottom: now.bottom
+            villageBottom: v.bottom
           };
         }""",
         [x, y, cell_x, cell_y],

@@ -4373,7 +4373,20 @@ def _selection_leaked(page):
 
 def _scene2_tap_mode(page, mode, build_name):
     """Scene 2 with the palette open (picked) or closed (bare)."""
+    _close_sheet(page)
     scene = _scene_aria(page)
+    # Scene 3 hides #readyBar, so #btnUxBack is not visible. Cancel returns
+    # to scene 2; #btnBuild itself is only visible in scene 1.
+    if "場景 3" in scene:
+        cancel = page.locator("#btnUxCancel")
+        try:
+            if cancel.count() and cancel.first.is_visible():
+                cancel.first.click(timeout=2000)
+                page.wait_for_timeout(150)
+        except Exception:
+            pass
+        _silence_toast(page)
+        scene = _scene_aria(page)
     hint = (_hint(page).get("ready") or "")
     if "場景 2" not in scene or "放回" in hint:
         back = page.locator("#btnUxBack")
@@ -6525,9 +6538,18 @@ def _bar_border_leaks(page, base_url):
                 )
         for scroll in _BORDER_SCROLLS:
             opened = _enter_scene3(page, scroll)
+            print(
+                f"NOTHROUGH-PLACE {width}x{height} scroll {scroll} "
+                f"{opened or 'open'}",
+                flush=True,
+            )
             if opened:
                 problems.append(
                     f"place bar {width}x{height} scroll {scroll}: {opened}"
+                )
+                summaries.append(
+                    f"place-bar reverse {width}x{height} scroll {scroll}: "
+                    f"not opened ({opened})"
                 )
                 continue
             place = surface_rect(page, "#uxPlaceBar")
