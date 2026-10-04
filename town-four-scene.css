@@ -175,6 +175,10 @@ body.kt-artstage #tab-town .mp { position: relative; }
   outline: none;
 }
 
+#townMap .pad:focus-within {
+  z-index: 8;
+}
+
 #townMap .cell-btn:focus-visible {
   z-index: 10;
 }
@@ -192,6 +196,14 @@ body.kt-artstage #tab-town .mp { position: relative; }
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;
+  -webkit-mask-image: var(--ring-mask);
+  mask-image: var(--ring-mask);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
 }
 
 #townMap .badge {

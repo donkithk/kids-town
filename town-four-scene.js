@@ -797,7 +797,9 @@
         if (!solidUiOpen(el)) continue;
         var box = el.getBoundingClientRect();
         if (!rectsOverlap(box, mapBox)) continue;
-        if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) return true;
+        /* A click on a fractional edge is delivered on the whole pixel that
+           contains it, which can sit just outside the border box. */
+        if (x >= box.left - 1 && x <= box.right + 1 && y >= box.top - 1 && y <= box.bottom + 1) return true;
       }
     }
     return false;
@@ -1107,29 +1109,29 @@
     var cy = boxH / 2;
     var outerHx = ringW / 2;
     var outerHy = ringH / 2;
-    var outerAp = (outerHx * outerHy) / Math.sqrt(outerHx * outerHx + outerHy * outerHy);
-    var inset = outerStroke / 2;
-    var innerK = outerAp > inset ? 1 - inset / outerAp : 1;
     var cellAp = (halfW * halfH) / Math.sqrt(halfW * halfW + halfH * halfH);
-    var safeK = 1 + (1.8 / scale) / cellAp;
+    var safeK = 1 + (2.2 / scale) / cellAp;
+    var outerPts = diamondPoints(cx, cy, outerHx, outerHy);
     var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " +
       boxW.toFixed(2) + " " + boxH.toFixed(2) + "'>" +
-      "<polygon mask='url(#ktRingCut)' pathLength='100' fill='none' stroke='#6b4f2a' stroke-width='" +
+      "<polygon pathLength='100' fill='none' stroke='#6b4f2a' stroke-width='" +
       outerStroke.toFixed(3) + "' stroke-linejoin='round' stroke-dasharray='6 3.5' points='" +
-      diamondPoints(cx, cy, outerHx, outerHy) + "'/>" +
-      "<polygon mask='url(#ktRingCut)' pathLength='100' fill='none' stroke='#fff8e7' stroke-width='" +
+      outerPts + "'/>" +
+      "<polygon pathLength='100' fill='none' stroke='#fff8e7' stroke-width='" +
       innerStroke.toFixed(3) + "' stroke-linejoin='round' stroke-dasharray='6 3.5' points='" +
-      diamondPoints(cx, cy, outerHx * innerK, outerHy * innerK) + "'/>" +
-      "<mask id='ktRingCut' maskUnits='userSpaceOnUse' x='0' y='0' width='" +
-      boxW.toFixed(2) + "' height='" + boxH.toFixed(2) + "'>" +
-      "<rect x='0' y='0' width='" + boxW.toFixed(2) + "' height='" + boxH.toFixed(2) + "' fill='#fff'/>" +
+      outerPts + "'/>" +
+      "</svg>";
+    var mask = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " +
+      boxW.toFixed(2) + " " + boxH.toFixed(2) + "'>" +
+      "<rect width='100%' height='100%' fill='#fff'/>" +
       "<polygon fill='#000' points='" + diamondPoints(cx, cy, halfW * safeK, halfH * safeK) + "'/>" +
-      "</mask></svg>";
+      "</svg>";
     map.style.setProperty("--ring-x", (btn.offsetWidth / 2 - boxW / 2).toFixed(3) + "px");
     map.style.setProperty("--ring-y", (btn.offsetHeight / 2 - boxH / 2).toFixed(3) + "px");
     map.style.setProperty("--ring-w", boxW.toFixed(3) + "px");
     map.style.setProperty("--ring-h", boxH.toFixed(3) + "px");
     map.style.setProperty("--ring-image", "url(\"data:image/svg+xml," + encodeURIComponent(svg) + "\")");
+    map.style.setProperty("--ring-mask", "url(\"data:image/svg+xml," + encodeURIComponent(mask) + "\")");
   }
 
   function render() {
