@@ -5313,14 +5313,112 @@ def _parse_css_rgb(text):
     return tuple(int(match.group(i)) for i in range(1, 4))
 
 
+# regress-61-003b81f.md, scrollTop 0, toast visible. These viewport points
+# sit on the toast/footer band and select an off-screen cell.
+_REGRESS_TOAST_FOOTER = {
+    (1280, 720): (
+        (640.0, 618.4),
+        (640.0, 630.2),
+        (640.0, 642.1),
+        (640.0, 640.0),
+    ),
+    (1100, 800): (
+        (550.0, 697.3),
+        (550.0, 709.1),
+        (550.0, 721.0),
+    ),
+}
+
+
+def _show_probe_toast(page):
+    """Make #toast display:block the way the regress probe did, before the click."""
+    page.evaluate(
+        """() => {
+          if (typeof showToast === 'function') showToast('探針', 'info');
+        }"""
+    )
+
+
+def _toast_footer_layout(page):
+    return page.evaluate(
+        """() => {
+          function box(el) {
+            if (!el) return null;
+            const b = el.getBoundingClientRect();
+            return {left: b.left, top: b.top, right: b.right, bottom: b.bottom};
+          }
+          const toast = document.getElementById('toast');
+          return {
+            toast: box(toast),
+            footer: box(document.getElementById('ktFooter')),
+            map: box(document.getElementById('townMap')),
+            display: toast ? toast.style.display : 'missing'
+          };
+        }"""
+    ) or {}
+
+
+def _inside(box, x, y):
+    if not box:
+        return False
+    return box["left"] <= x <= box["right"] and box["top"] <= y <= box["bottom"]
+
+
+def _regress_toast_footer_points(page, width, height):
+    """Exact regress clicks, an 8px grid around them, and the footer overlap.
+
+    The overlap is the 8px where the toast covers #ktFooter, plus points just
+    below the map's visible bottom edge that still sit in the footer.
+    """
+    exact = _REGRESS_TOAST_FOOTER[(width, height)]
+    points = [{"x": x, "y": y, "why": "regress"} for x, y in exact]
+    for x, y in exact:
+        for dx, dy in ((-8, 0), (8, 0), (0, -8), (0, 8), (-8, -8), (8, 8), (-8, 8), (8, -8)):
+            points.append({"x": x + dx, "y": y + dy, "why": "regress-grid"})
+    layout = _toast_footer_layout(page)
+    toast = layout.get("toast") or {}
+    footer = layout.get("footer") or {}
+    map_box = layout.get("map") or {}
+    center_x = exact[0][0]
+    if toast and footer:
+        top = max(toast["top"], footer["top"])
+        bottom = min(toast["bottom"], footer["top"] + 8, footer["bottom"])
+        y = top
+        guard = 0
+        while y <= bottom + 0.1 and guard < 6:
+            for x in (center_x - 16, center_x, center_x + 16):
+                points.append({"x": x, "y": y, "why": "toast-footer-8"})
+            y += 4
+            guard += 1
+    if map_box and footer:
+        edge = min(map_box["bottom"], footer["top"])
+        for dy in (2, 6, 8):
+            py = edge + dy
+            if footer["top"] - 1 <= py <= footer["bottom"]:
+                points.append({"x": center_x, "y": py, "why": "below-map-in-footer"})
+    kept = []
+    seen = set()
+    for point in points:
+        x, y = point["x"], point["y"]
+        if x < 1 or y < 1 or x >= width - 1 or y >= height - 1:
+            continue
+        key = (round(x, 1), round(y, 1))
+        if key in seen:
+            continue
+        seen.add(key)
+        kept.append(point)
+    return kept, layout
+
+
 @pytest.mark.case_id("TC-FE-TAP-VISIBLE-ONLY")
 def test_tap_visible_only(page, base_url, warehouse_db, warehouse_ids):
     """TC-FE-TAP-VISIBLE-ONLY 看不見的地圖範圍不得選格，也不得出提示。
 
     點必須落在 #townMap 四邊都被捲動區、動作列、頁尾和視窗裁過的可見矩形裡，
     而且落在菱形看得見的那一段。可見矩形外面的點，包括動作列上方的窄條、
-    捲下去之後的上緣、下緣、頁尾後面，以及 1280×720 提示下方 8px，
+    捲下去之後的上緣、下緣、頁尾後面，以及提示蓋住頁尾的那一帶，
     都不得選格、不得把 #readyStatus 改成已選擇空地、不得新出提示。
+    1280×720 與 1100×800 在捲動 0、提示已顯示時，要點回歸報告的頁尾座標。
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(
@@ -5425,6 +5523,55 @@ def test_tap_visible_only(page, base_url, warehouse_db, warehouse_ids):
                 if toast_leaks:
                     problems.append(
                         f"{mode} 1280x720 toast strip: " + " | ".join(toast_leaks)
+                    )
+            if (width, height) in _REGRESS_TOAST_FOOTER and mode in ("bare", "picked"):
+                set_village_scroll(page, 0)
+                dismiss_selection(page)
+                _show_probe_toast(page)
+                band, layout = _regress_toast_footer_points(page, width, height)
+                band_leaks = []
+                regress_leaks = 0
+                for point in band:
+                    dismiss_selection(page)
+                    _show_probe_toast(page)
+                    tap_point(page, point["x"], point["y"])
+                    hit = read_reaction(page)
+                    ready = (_hint(page).get("ready") or "")
+                    acted = _acted_cell(hit)
+                    toast_text = hit.get("toast") or ""
+                    leaked = bool(
+                        acted is not None
+                        or "場景 3" in (hit.get("scene") or "")
+                        or "已選擇空地" in ready
+                        or (toast_text and toast_text != "探針")
+                    )
+                    if point["why"] == "regress" and leaked:
+                        regress_leaks += 1
+                    if leaked and len(band_leaks) < 6:
+                        band_leaks.append(
+                            f"{point['why']} ({point['x']:.1f},{point['y']:.1f}) "
+                            f"selected {acted} toast {toast_text!r} ready {ready!r}"
+                        )
+                    elif leaked:
+                        band_leaks.append("more")
+                    _ensure_town_map(page)
+                    if "場景 2" not in _scene_aria(page) and mode != "unstore":
+                        _scene2_tap_mode(page, mode, "工坊")
+                        set_village_scroll(page, 0)
+                real_band = [item for item in band_leaks if item != "more"]
+                toast_box = layout.get("toast")
+                summaries.append(
+                    f"{mode} {width}x{height} toast-footer: points {len(band)}, "
+                    f"leaks {len(band_leaks)}, regress-leaks {regress_leaks}/"
+                    f"{len(_REGRESS_TOAST_FOOTER[(width, height)])} "
+                    f"toast-box {toast_box}"
+                )
+                if not band:
+                    problems.append(f"{mode} {width}x{height}: toast-footer band was empty")
+                if real_band:
+                    problems.insert(
+                        0,
+                        f"{mode} {width}x{height} toast-footer: " + " | ".join(real_band),
                     )
     print("TC-FE-TAP-VISIBLE-ONLY " + " || ".join(summaries))
     assert not problems, "TC-FE-TAP-VISIBLE-ONLY: " + " || ".join(problems[:8])
