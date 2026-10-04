@@ -2227,31 +2227,47 @@ def ring_layer_pixels(page):
     """
     return page.evaluate(
         r"""() => {
-          const ring = document.getElementById('focusRingPaint');
-          if (!ring) return {pixels: 0, display: 'none', tag: null};
-          const cs = getComputedStyle(ring);
-          const box = ring.getBoundingClientRect();
-          const gone = cs.display === 'none' || cs.visibility === 'hidden'
-            || box.width < 1 || box.height < 1;
-          if (gone) return {pixels: 0, display: cs.display, tag: ring.tagName, hidden: ring.hasAttribute('hidden')};
-          if (ring.tagName === 'CANVAS' && ring.width > 0 && ring.height > 0) {
-            let pixels = 0;
-            try {
-              const data = ring.getContext('2d').getImageData(0, 0, ring.width, ring.height).data;
-              for (let i = 3; i < data.length; i += 4) {
-                if (data[i] >= 128) pixels += 1;
-              }
-            } catch (err) {
-              return {pixels: -1, display: cs.display, tag: ring.tagName, error: String(err)};
+          function layerPixels(el) {
+            if (!el) return {pixels: 0, display: 'none', tag: null, hidden: true};
+            const cs = getComputedStyle(el);
+            const box = el.getBoundingClientRect();
+            const gone = cs.display === 'none' || cs.visibility === 'hidden'
+              || box.width < 1 || box.height < 1;
+            if (gone) {
+              return {pixels: 0, display: cs.display, tag: el.tagName, hidden: el.hasAttribute('hidden')};
             }
-            return {pixels, display: cs.display, tag: 'CANVAS', width: box.width, height: box.height};
+            if (el.tagName === 'CANVAS' && el.width > 0 && el.height > 0) {
+              let pixels = 0;
+              try {
+                const data = el.getContext('2d').getImageData(0, 0, el.width, el.height).data;
+                for (let i = 3; i < data.length; i += 4) {
+                  if (data[i] >= 128) pixels += 1;
+                }
+              } catch (err) {
+                return {pixels: -1, display: cs.display, tag: el.tagName, error: String(err)};
+              }
+              return {pixels, display: cs.display, tag: 'CANVAS', width: box.width, height: box.height};
+            }
+            return {
+              pixels: Math.round(box.width * box.height),
+              display: cs.display,
+              tag: el.tagName,
+              width: box.width,
+              height: box.height,
+              hidden: el.hasAttribute('hidden')
+            };
           }
+          const ring = layerPixels(document.getElementById('focusRingPaint'));
+          const lift = layerPixels(document.getElementById('focusRingLift'));
           return {
-            pixels: Math.round(box.width * box.height),
-            display: cs.display,
-            tag: ring.tagName,
-            width: box.width,
-            height: box.height
+            pixels: (ring.pixels || 0) + (lift.pixels || 0),
+            display: ring.display,
+            tag: ring.tag,
+            hidden: ring.hidden,
+            width: ring.width,
+            height: ring.height,
+            lift: lift.pixels || 0,
+            liftDisplay: lift.display
           };
         }"""
     )
@@ -2352,6 +2368,19 @@ def _clip_pixel(rows, clip, x, y):
     return rows[iy][ix]
 
 
+def _device_at(rows, clip, x, y, dpr):
+    """Colour of the device pixel that contains a CSS point, and that pixel's centre."""
+    if not rows or dpr <= 0:
+        return None, None, None
+    ix = int(math.floor((x - clip["x"]) * dpr))
+    iy = int(math.floor((y - clip["y"]) * dpr))
+    if iy < 0 or iy >= len(rows) or ix < 0 or ix >= len(rows[0]):
+        return None, None, None
+    centre_x = clip["x"] + (ix + 0.5) / dpr
+    centre_y = clip["y"] + (iy + 0.5) / dpr
+    return rows[iy][ix], centre_x, centre_y
+
+
 def ring_inner_gaps(png_before, png_after, face, clip, vertex_clear=3.0, samples=24):
     """Inner gap of the painted ring, in screen px, on each edge.
 
@@ -2414,6 +2443,246 @@ def ring_inner_gaps(png_before, png_after, face, clip, vertex_clear=3.0, samples
             "stations": count,
         }
     return report
+
+
+def ring_device_gaps(png_before, png_after, face, clip, dpr=1, samples=24):
+    """Inner cream edge in screen px, read at device-pixel centres.
+
+    At least 24 stations per edge. Each station is at least 3 screen px
+    clear of the corner opening (the unpainted 10% plus 3px). The walk is
+    0.1 screen px. The gap is the outside distance of the device-pixel
+    centre where three consecutive steps are cream. Min must be ≥2 and
+    max ≤4.
+    """
+    _bw, _bh, before_rows = png_rgb(png_before)
+    _aw, _ah, after_rows = png_rgb(png_after)
+    dpr = dpr or 1
+    report = {}
+    if not before_rows or not after_rows or len(before_rows) != len(after_rows):
+        return {slot["name"]: {"min": None, "max": None, "samples": 0, "stations": 0}
+                for slot in _edge_slots(face)}
+    for slot in _edge_slots(face):
+        length = slot["length"]
+        clear = max(3.0, length * 0.10 + 3.0)
+        span = length - 2 * clear
+        gaps = []
+        count = max(samples, 24)
+        if span <= 1:
+            report[slot["name"]] = {"min": None, "max": None, "samples": 0, "stations": count}
+            continue
+        for index in range(count):
+            along = clear + span * (index + 0.5) / count
+            t = along / length
+            ox = slot["sx"] + slot["dx"] * t
+            oy = slot["sy"] + slot["dy"] * t
+
+            def _cream_centre(dist, _ox=ox, _oy=oy):
+                x = _ox + slot["nx"] * dist
+                y = _oy + slot["ny"] * dist
+                after, cx, cy = _device_at(after_rows, clip, x, y, dpr)
+                before, _bx, _by = _device_at(before_rows, clip, x, y, dpr)
+                if not after or not before or not _ring_cream(after):
+                    return None
+                if _rgb_dist(before, after) <= _UNCHANGED_DIST:
+                    return None
+                # The gap is the device-pixel centre, not the walk step.
+                outside = _diamond_outside(face, cx, cy)
+                if outside is None:
+                    return None
+                return outside
+
+            gap = None
+            steps = int(_RING_OUTSIDE_BAND / 0.1)
+            run = []
+            for step in range(1, steps + 1):
+                dist = round(step * 0.1, 1)
+                outside = _cream_centre(dist)
+                if outside is None:
+                    run = []
+                    continue
+                run.append(outside)
+                if len(run) < 3:
+                    continue
+                # Half-up to 0.1px so 1.75 reports as 1.8, not banker's 1.8/1.2.
+                gap = math.floor(run[0] * 10 + 0.5) / 10
+                break
+            if gap is not None:
+                gaps.append(gap)
+        ordered = sorted(gaps)
+        median = None
+        if ordered:
+            mid = len(ordered) // 2
+            median = ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2
+        report[slot["name"]] = {
+            "min": None if not gaps else min(gaps),
+            "max": None if not gaps else max(gaps),
+            "median": None if median is None else round(median, 2),
+            "samples": len(gaps),
+            "stations": count,
+        }
+    return report
+
+
+def _round_pt(value):
+    return round(value, 2)
+
+
+def ring_vertex_gaps(png_before, png_after, face, clip, dpr=1):
+    """Straight-line gap between the inner ends of the two cream bands at a tip.
+
+    The gap is not the distance from the tip to a band. Each edge's solid
+    run is the cream pixels along that edge. The vertex gap is the screen
+    distance between the two run-ends that meet there. Solid fraction is
+    the run length divided by the on-screen edge.
+    """
+    _bw, _bh, before_rows = png_rgb(png_before)
+    _aw, _ah, after_rows = png_rgb(png_after)
+    dpr = dpr or 1
+    empty = {
+        "length": None,
+        "edges": {},
+        "vertices": {},
+        "error": "clip size changed",
+    }
+    if not before_rows or not after_rows or len(before_rows) != len(after_rows):
+        return empty
+    slots = _edge_slots(face)
+    edges = {}
+    for slot in slots:
+        length = slot["length"]
+        step = 0.25
+        hits = []
+        along = 0.0
+        while along <= length:
+            t = along / length if length else 0
+            bx = slot["sx"] + slot["dx"] * t
+            by = slot["sy"] + slot["dy"] * t
+            found = None
+            offset = 1.5
+            while offset <= 6.5:
+                x = bx + slot["nx"] * offset
+                y = by + slot["ny"] * offset
+                after, cx, cy = _device_at(after_rows, clip, x, y, dpr)
+                before, _bx, _by = _device_at(before_rows, clip, x, y, dpr)
+                if (
+                    after and before
+                    and _rgb_dist(before, after) > _UNCHANGED_DIST
+                    and _ring_cream(after)
+                ):
+                    found = (cx, cy, along)
+                    break
+                offset += 0.5
+            if found:
+                hits.append(found)
+            along += step
+        if hits:
+            start = min(hits, key=lambda item: item[2])
+            end = max(hits, key=lambda item: item[2])
+            solid = (end[2] - start[2]) / length if length else 0
+        else:
+            start = end = None
+            solid = 0
+        edges[slot["name"]] = {
+            "length": _round_pt(length),
+            "solid": round(solid, 3),
+            "start": None if not start else {"x": _round_pt(start[0]), "y": _round_pt(start[1])},
+            "end": None if not end else {"x": _round_pt(end[0]), "y": _round_pt(end[1])},
+        }
+    # NE starts at N and ends at E. SE starts at E and ends at S.
+    # SW starts at S and ends at W. NW starts at W and ends at N.
+    pairs = {
+        "N": ("NW", "end", "NE", "start"),
+        "E": ("NE", "end", "SE", "start"),
+        "S": ("SE", "end", "SW", "start"),
+        "W": ("SW", "end", "NW", "start"),
+    }
+    vertices = {}
+    for name, (edge_a, side_a, edge_b, side_b) in pairs.items():
+        a = (edges.get(edge_a) or {}).get(side_a)
+        b = (edges.get(edge_b) or {}).get(side_b)
+        gap = None
+        if a and b:
+            gap = math.hypot(a["x"] - b["x"], a["y"] - b["y"])
+        vertices[name] = {
+            "gap": None if gap is None else round(gap, 2),
+            "a": a,
+            "b": b,
+            "a_edge": edge_a,
+            "b_edge": edge_b,
+        }
+    length = slots[0]["length"] if slots else None
+    return {
+        "length": None if length is None else _round_pt(length),
+        "edges": edges,
+        "vertices": vertices,
+    }
+
+
+def stroke_outer_rays(png_bytes, face, clip):
+    """Painted outer boundary of ``#7c2d12`` on each edge, in screen px.
+
+    Each station walks out along the normal in 0.02 screen px steps. The
+    outer edge is the last step that is still the stroke. That is the
+    boundary of the painted pixel, past the pixel centre.
+    """
+    _width, _height, rows = png_rgb(png_bytes)
+    report = {}
+    for slot in _edge_slots(face):
+        length = slot["length"]
+        clear = max(3.0, length * 0.12)
+        span = length - 2 * clear
+        exits = []
+        if span <= 1 or not rows:
+            report[slot["name"]] = {"outer": None, "samples": 0}
+            continue
+        for index in range(24):
+            along = clear + span * (index + 0.5) / 24
+            t = along / length
+            ox = slot["sx"] + slot["dx"] * t
+            oy = slot["sy"] + slot["dy"] * t
+            last = None
+            for step in range(0, 160):
+                dist = step * 0.02
+                x = ox + slot["nx"] * dist
+                y = oy + slot["ny"] * dist
+                pixel = _clip_pixel(rows, clip, x, y)
+                if pixel and _rgb_dist(pixel, REQUIRED_STROKE) <= _STROKE_COUNT_TOL:
+                    last = dist
+                elif last is not None and dist > last + 0.4:
+                    break
+            if last is not None:
+                exits.append(last)
+        report[slot["name"]] = {
+            "outer": None if not exits else round(max(exits), 2),
+            "samples": len(exits),
+        }
+    return report
+
+
+def bar_ink_count(png_bytes, shot_clip, guard):
+    """Selected-line, ring-cream, and ring-brown pixels inside ``guard``.
+
+    Tolerances stay inside the bar fill (``#faf6ef``) and the wood text
+    (``#8b5e3c``), so a status-sentence change is not ink.
+    """
+    _width, _height, rows = png_rgb(png_bytes)
+    if not rows:
+        return 0
+    count = 0
+    y = guard["y"]
+    while y < guard["y"] + guard["height"]:
+        x = guard["x"]
+        while x < guard["x"] + guard["width"]:
+            pixel = _clip_pixel(rows, shot_clip, x + 0.5, y + 0.5)
+            if pixel:
+                stroke = _rgb_dist(pixel, REQUIRED_STROKE) <= _STROKE_COUNT_TOL
+                cream = _rgb_dist(pixel, RING_CREAM) <= 5 * 5
+                brown = _rgb_dist(pixel, RING_BROWN) <= 12 * 12
+                if stroke or cream or brown:
+                    count += 1
+            x += 1
+        y += 1
+    return count
 
 
 def paint_overlay_count(png_before, png_after, shot_clip, guard):

@@ -36,7 +36,7 @@
 ## 案例
 
 API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。  
-介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`、`TC-FE-TAP-OFFCENTER`、`TC-FE-CELL-ARIA-MATCH`、`TC-FE-TAP-BAR-NOTHROUGH`、`TC-FE-TAP-VISIBLE-ONLY`、`TC-FE-SELECTED-CONTRAST`、`TC-FE-FOCUS-RING-CENTRE`、`TC-FE-HIDDEN-INERT`、`TC-FE-TAP-BAR-GAP-BAND`、`TC-FE-TAP-SCENE-GRASS-EDGE`、`TC-FE-SELECTED-OVER-GOLD`、`TC-FE-FOCUS-RING-SHAPE`、`TC-FE-FOCUS-RING-ABOVE-SPRITE`、`TC-FE-PLACE-SERVER-MSG`、`TC-FE-SELECTED-NO-FILL`、`TC-FE-FOCUS-RING-NO-FILL`、`TC-FE-TAP-VILLAGE-HALFPX`、`TC-FE-MARK-CLEARED`、`TC-FE-MARK-KEPT-READYBAR`、`TC-FE-MARK-RESTORE-AFTER-SHEET`、`TC-FE-RING-CLEARED`、`TC-FE-MARK-FOLLOWS-SCROLL`、`TC-FE-PAINT-UNDER-UI`、`TC-FE-NATIVE-FOCUS`、`TC-FE-RING-EDGE`，以及畫面那一半的 `TC-API-AUTOPLACE-FORMAL` 和 `TC-API-PLACE-OWNED-FORMAL`。API 檔另有 `TC-API-AUTOPLACE-FORMAL`、`TC-API-PLACE-OWNED-FORMAL`、`TC-API-PLACE-DETAIL-FORMAL`，還有只 GET 靜態檔的 `TC-FE-WAREHOUSE-GRID`。
+介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`、`TC-FE-TAP-OFFCENTER`、`TC-FE-CELL-ARIA-MATCH`、`TC-FE-TAP-BAR-NOTHROUGH`、`TC-FE-TAP-VISIBLE-ONLY`、`TC-FE-SELECTED-CONTRAST`、`TC-FE-FOCUS-RING-CENTRE`、`TC-FE-HIDDEN-INERT`、`TC-FE-TAP-BAR-GAP-BAND`、`TC-FE-TAP-SCENE-GRASS-EDGE`、`TC-FE-SELECTED-OVER-GOLD`、`TC-FE-FOCUS-RING-SHAPE`、`TC-FE-FOCUS-RING-ABOVE-SPRITE`、`TC-FE-PLACE-SERVER-MSG`、`TC-FE-SELECTED-NO-FILL`、`TC-FE-FOCUS-RING-NO-FILL`、`TC-FE-TAP-VILLAGE-HALFPX`、`TC-FE-MARK-CLEARED`、`TC-FE-MARK-KEPT-READYBAR`、`TC-FE-MARK-RESTORE-AFTER-SHEET`、`TC-FE-RING-CLEARED`、`TC-FE-MARK-FOLLOWS-SCROLL`、`TC-FE-PAINT-UNDER-UI`、`TC-FE-NATIVE-FOCUS`、`TC-FE-RING-EDGE`、`TC-FE-RING-VERTEX-GAP`，以及畫面那一半的 `TC-API-AUTOPLACE-FORMAL` 和 `TC-API-PLACE-OWNED-FORMAL`。API 檔另有 `TC-API-AUTOPLACE-FORMAL`、`TC-API-PLACE-OWNED-FORMAL`、`TC-API-PLACE-DETAIL-FORMAL`，還有只 GET 靜態檔的 `TC-FE-WAREHOUSE-GRID`。
 
 下表「main」是在 `5bfe76d` 加上這些測試後的結果。紅測的斷言訊息寫明預期與實際。綠測是回歸鎖，不是本缺陷。
 
@@ -398,7 +398,7 @@ POST `/api/kids/<id>/buildings` 帶 `def_id`、`cell_x`、`cell_y`，這種建�
 
 ## 焦點環的形狀（TC-FE-FOCUS-RING-SHAPE）
 
-焦點環是格子頂面菱形繞自己的中心均勻放大。四個尖角沿各自的軸在格子尖角外面 2–4px（橫向因為同一比例可以到大約 8px）。每條邊在格子邊外面 2–4px。環的寬高比和格子相差不超過 2%。1280 的 `(3,3)` 大約 150–157 × 89–93。中心仍在 ±1px（`TC-FE-FOCUS-RING-CENTRE` 照舊，不改成鎖舊尺寸）。顏色照舊：內層 `#fff8e7`、外層 `#6b4f2a`，虛線。不鎖線寬。環的內緣大約在格子外 2px，不得壓到選中褐線。選中又聚焦時，重疊只數格子多邊形外面、離邊大約 8px 以內、而且相對未聚焦底圖有變化的環色像素；格子裡面的徽章和地面不算。視窗 1280×720、1100×800、390×844，各量一格邊緣格 `(6,0)` 和一格內部格 `(3,3)`。另外用螢幕像素（不是舞台像素）量畫出來的環：每條邊至少 20 個樣本，離尖角至少 3px，內緣最小值要 ≥2.0 而且落在 2–4。`deviceScaleFactor` 1 和 2 都量。390 的西北內緣若只有大約 1.8px，這條要紅。
+焦點環是格子頂面菱形繞自己的中心均勻放大。四個尖角沿各自的軸在格子尖角外面 2–4px（橫向因為同一比例可以到大約 8px）。每條邊在格子邊外面 2–4px。環的寬高比和格子相差不超過 2%。1280 的 `(3,3)` 大約 150–157 × 89–93。中心仍在 ±1px（`TC-FE-FOCUS-RING-CENTRE` 照舊，不改成鎖舊尺寸）。顏色照舊：內層 `#fff8e7`、外層 `#6b4f2a`，虛線。不鎖線寬。環的內緣大約在格子外 2px，不得壓到選中褐線。選中又聚焦時，重疊只數格子多邊形外面、離邊大約 8px 以內、而且相對未聚焦底圖有變化的環色像素；格子裡面的徽章和地面不算。視窗 1280×720、1100×800、390×844，各量一格邊緣格 `(6,0)` 和一格內部格 `(3,3)`。畫出來的內緣用裝置像素的中心，不是舞台像素，也不是把一整個 CSS 像素取整。每條邊至少 24 站，步進 0.1 螢幕 px，連續 3 個奶油樣本才算帶的起點，而且離尖角開口至少 3px。每條邊的最小值 ≥2.0、最大值 ≤4.0。視窗 1280×720、1100×800、390×844，捲動 0 和 366，`deviceScaleFactor` 1 和 2。`deviceScaleFactor` 2 時 1280 的西南、西北會落到 1.8，1100 捲動 366 的西北會落到 1.5，390 捲動 366 的東南、西南會落到 1.6–1.7；那些都要紅。
 
 ## 焦點環在建築圖上面（TC-FE-FOCUS-RING-ABOVE-SPRITE）
 
@@ -418,7 +418,7 @@ POST `/api/kids/<id>/buildings` 帶 `def_id`、`cell_x`、`cell_y`，這種建�
 
 ## 選中格不填色（TC-FE-SELECTED-NO-FILL）
 
-選中標記是貼着格子頂面的實線，不是填滿的菱形。線是 `#7c2d12`，約 3px。中線內縮 0.5–1.5px，以外緣在格子外 0–1px 來判斷，線寬 2–4px。格子中心，以及每條邊向內至少 8px 的點，要和同一捲動、同一視窗、提示收起時的未選中未聚焦截圖一致（只容抗鋸齒）；選中時「此格」徽章蓋住的區域除外，徽章本身要有看得見的像素。中心不得是 `#7c2d12`。東南、西南兩條邊，若外側鄰格是金格，邊帶上的像素要是 `#7c2d12`，不能是金色虛線 `#d4a017`。像素從截圖讀，不讀標記自己的 SVG。拍底圖之前，全畫面 `#7c2d12` 必須是 0，焦點環層也必須是 0 像素，避免上一格沒清掉的線污染底圖。視窗 1280×720、1100×800、390×844，各量內部金格和邊緣金格。
+選中標記是貼着格子頂面的實線，不是填滿的菱形。線是 `#7c2d12`，約 3px。中線內縮用外緣判斷：外緣在格子外 0–1.5 螢幕 px，線寬 2–4px。外緣是沿邊的法線走出格子、最後仍落在 `#7c2d12` 像素裡的那一點（0.02 螢幕 px 一步），不是整數偏移，也不是只取像素中心。1100×800、`deviceScaleFactor` 1 的 `(0,0)` 也要量；那一格東南外緣超過 1.5px（先前量到約 1.62px）時，這條要紅。格子中心，以及每條邊向內至少 8px 的點，要和同一捲動、同一視窗、提示收起時的未選中未聚焦截圖一致（只容抗鋸齒）；選中時「此格」徽章蓋住的區域除外，徽章本身要有看得見的像素。中心不得是 `#7c2d12`。東南、西南兩條邊，若外側鄰格是金格，邊帶上的像素要是 `#7c2d12`，不能是金色虛線 `#d4a017`。像素從截圖讀，不讀標記自己的 SVG。拍底圖之前，全畫面 `#7c2d12` 必須是 0，焦點環層也必須是 0 像素，避免上一格沒清掉的線污染底圖。視窗 1280×720、1100×800、390×844，各量內部金格和邊緣金格。
 
 ## 焦點環不填色（TC-FE-FOCUS-RING-NO-FILL）
 
@@ -452,9 +452,15 @@ POST `/api/kids/<id>/buildings` 帶 `def_id`、`cell_x`、`cell_y`，這種建�
 
 基準是清單打開、沒有選中、沒有焦點、同一個捲動。選中 `(0,6)`，以及另外只聚焦 `(0,6)`，清單活矩形裡面的像素差必須是 0。捲動 366、清單打開，再做一次。鍵盤打開銀行面板、而且有一格正聚焦時，面板活矩形裡面的差也是 0。`#readyBar` 和抽屜是 guard：差必須仍是 0。
 
+底尖靠近確認欄的格子另測。1280×720 是 `(3,4)` 和 `(2,5)`。1100×800 和 390×844 用當時的活矩形挑南尖離 `#readyBar` 上緣最近的兩格，並寫明是哪兩格。聚焦，以及另外選中，看當時出現的 `#readyBar` 或 `#uxPlaceBar` 活矩形：裡面的墨水必須是 0。墨水是 `#7c2d12`、環奶油 `#fff8e7`、環褐 `#6b4f2a`。狀態句子造成的像素差不算。確認欄矩形上的 `elementsFromPoint` 不得讓 `#focusRingLift` 或 `#focusRingPaint` 排在確認欄上面。環層若是 `pointer-events: none`，`elementsFromPoint` 會跳過它，所以另外用層疊判斷：環元素顯示中、z-index 不低於確認欄、而且活矩形相交，也算畫在確認欄上面。1100 和 390 跳過已經有建築的格子，在空地裡挑南尖最近的兩格。每次拍底圖之前，全畫面 `#7c2d12` 是 0，環層收起。
+
 ## 不要改掉原生 focus（TC-FE-NATIVE-FOCUS）
 
 `HTMLElement.prototype.focus.toString()` 和 `blur` 的字串都要含 `[native code]`。產品的 `town-four-scene.js`、`audio.js`、`service-worker.js`、`check_js.js` 不得指派 `HTMLElement.prototype.focus`。
+
+## 尖角開口是兩條帶的內端（TC-FE-RING-VERTEX-GAP）
+
+四個尖角各量一次。開口是兩條實線奶油帶在這個尖角相會的那兩個內端，之間的直線距離（螢幕 px），不是尖角到帶的距離。每個開口 4–10px。對角相差不超過 2px：北對南、東對西。邊上實線長度除以該邊螢幕長度 ≥0.80，只在邊長 ≥40px 時要求；短邊不鎖這個比例。視窗 1280×720、1100×800、390×844、橫向 844×390，`deviceScaleFactor` 1 和 2。失敗時寫出每個尖角兩個端點的座標。規格上的目標是邊長 ≥40px 時間距 6px、短邊 4.5px（由活菱形的角度算出）；測試只鎖 4–10、相差 ≤2、長邊實線 ≥0.80。拍底圖之前畫面要乾淨。
 
 ## 角落的焦點環不要被村子裁進地圖裡（TC-FE-RING-EDGE）
 
