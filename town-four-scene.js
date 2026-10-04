@@ -26,6 +26,10 @@
 
   var pads = [];
   var built = false;
+  var ringGeom = null;
+  var ringBtn = null;
+  var ringShownAt = 0;
+  var ringHideTimer = 0;
   var placeSeq = 0;
   var motionOn = true;
   var state = {
@@ -627,6 +631,13 @@
         mark.alt = "";
         mark.hidden = true;
         mark.src = MARK_VALID;
+        /* Gold stays on a chosen cell. The .mark swaps to the brown stroke
+           for the document, and that image is not the paint on screen. */
+        var fill = document.createElement("img");
+        fill.className = "cell-fill";
+        fill.alt = "";
+        fill.setAttribute("aria-hidden", "true");
+        fill.src = MARK_VALID;
         var sprite = document.createElement("img");
         sprite.className = "sprite";
         sprite.alt = "";
@@ -647,6 +658,7 @@
         pad.appendChild(slab);
         pad.appendChild(shadow);
         pad.appendChild(mark);
+        pad.appendChild(fill);
         pad.appendChild(sprite);
         pad.appendChild(ghost);
         pad.appendChild(badge);
@@ -1129,22 +1141,30 @@
     var k = 1 + gap / ap;
     var ringW = 2 * k * halfW;
     var ringH = 2 * k * halfH;
-    /* Width 3 is scaled to about 3px so a sample on the sprite still lands
-       on the dash. The centre of the diamond is left empty. */
-    var unit = 1 / scale;
+    /* Width 3 in this viewBox is about 2.4px on screen. The path sits 3px
+       outside the cell, so the inner edge lands about 2px outside and the
+       dash still covers the centreline. */
+    var unit = 2.42 / (3 * scale);
     var pad = 2 / scale;
     var boxW = ringW + pad * 2;
     var boxH = ringH + pad * 2;
     var cx = boxW / 2;
     var cy = boxH / 2;
     var outerPts = diamondPoints(cx / unit, cy / unit, (ringW / 2) / unit, (ringH / 2) / unit);
+    /* One dash per edge, in viewBox units, with a short gap at the corner.
+       pathLength would put that gap on a different part of the stroke. */
+    var edgeLen = Math.hypot((ringW / 2) / unit, (ringH / 2) / unit);
+    var dash = (edgeLen * 0.82).toFixed(2) + " " + (edgeLen * 0.18).toFixed(2);
+    var vbW = boxW / unit;
+    var vbH = boxH / unit;
+    ringGeom = { vbW: vbW, vbH: vbH, points: outerPts, dash: dash };
     var svg = "<svg xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='none' " +
       "shape-rendering='geometricPrecision' width='" + boxW.toFixed(2) + "' height='" + boxH.toFixed(2) + "' " +
-      "viewBox='0 0 " + (boxW / unit).toFixed(2) + " " + (boxH / unit).toFixed(2) + "'>" +
-      "<polygon pathLength='100' fill='none' stroke='#6b4f2a' stroke-width='2' " +
-      "stroke-linejoin='round' stroke-dasharray='6 0.8' points='" + outerPts + "'/>" +
-      "<polygon pathLength='100' fill='none' stroke='#fff8e7' stroke-width='3' " +
-      "stroke-linejoin='round' stroke-dasharray='6 0.8' points='" + outerPts + "'/>" +
+      "viewBox='0 0 " + vbW.toFixed(2) + " " + vbH.toFixed(2) + "'>" +
+      "<polygon fill='none' stroke='#6b4f2a' stroke-width='2' " +
+      "stroke-linejoin='round' stroke-dasharray='" + dash + "' points='" + outerPts + "'/>" +
+      "<polygon fill='none' stroke='#fff8e7' stroke-width='3' " +
+      "stroke-linejoin='round' stroke-dasharray='" + dash + "' points='" + outerPts + "'/>" +
       "</svg>";
     map.style.setProperty("--ring-x", (btn.offsetWidth / 2 - boxW / 2).toFixed(3) + "px");
     map.style.setProperty("--ring-y", (btn.offsetHeight / 2 - boxH / 2).toFixed(3) + "px");
@@ -1154,22 +1174,60 @@
     placeFocusRing();
   }
 
+  /* Focus can leave the button for a moment and come back without
+     focus-visible. Keep the ring through that gap, then drop it. */
+  function concealFocusRing(ring) {
+    var wait = ringShownAt + 80 - Date.now();
+    if (wait > 0) {
+      if (!ringHideTimer) {
+        ringHideTimer = window.setTimeout(function () {
+          ringHideTimer = 0;
+          var node = document.getElementById("focusRingPaint");
+          if (node) concealFocusRing(node);
+        }, wait + 1);
+      }
+      return;
+    }
+    if (ringBtn && document.activeElement === ringBtn) return;
+    ringBtn = null;
+    if (ring) ring.setAttribute("hidden", "");
+  }
+
   /* The artboard transform rasters a pseudo-element background off the pixel
-     grid, so the dashed stroke bleeds onto the cell. A fixed box uses the
-     same image and the focused button's on-screen rectangle. */
+     grid, so the dashed stroke bleeds onto the cell. A fixed svg uses the
+     same diamond and the focused button's on-screen rectangle. */
   function placeFocusRing() {
     var ring = document.getElementById("focusRingPaint");
+    var ns = "http://www.w3.org/2000/svg";
     if (!ring) {
-      ring = document.createElement("div");
+      ring = document.createElementNS(ns, "svg");
       ring.id = "focusRingPaint";
-      ring.hidden = true;
       ring.setAttribute("aria-hidden", "true");
+      ring.setAttribute("preserveAspectRatio", "none");
+      var brown = document.createElementNS(ns, "polygon");
+      brown.setAttribute("fill", "none");
+      brown.setAttribute("stroke", "#6b4f2a");
+      brown.setAttribute("stroke-width", "2");
+      brown.setAttribute("stroke-linejoin", "round");
+      brown.setAttribute("stroke-dasharray", "22 3");
+      var cream = document.createElementNS(ns, "polygon");
+      cream.setAttribute("fill", "none");
+      cream.setAttribute("stroke", "#fff8e7");
+      cream.setAttribute("stroke-width", "3");
+      cream.setAttribute("stroke-linejoin", "round");
+      cream.setAttribute("stroke-dasharray", "22 3");
+      ring.appendChild(brown);
+      ring.appendChild(cream);
       document.body.appendChild(ring);
     }
-    var btn = document.querySelector("#townMap .cell-btn:focus-visible");
     var map = $("townMap");
-    if (!btn || !map) {
-      ring.hidden = true;
+    var visible = document.querySelector("#townMap .cell-btn:focus-visible");
+    if (visible) ringBtn = visible;
+    var btn = visible;
+    if (!btn && ringBtn && document.activeElement === ringBtn) btn = ringBtn;
+    if (!btn) ringBtn = null;
+    if (!btn || !map || !ringGeom) {
+      concealFocusRing(ring);
       return;
     }
     var box = btn.getBoundingClientRect();
@@ -1181,31 +1239,44 @@
     var w = parseFloat(cs.getPropertyValue("--ring-w")) || 0;
     var h = parseFloat(cs.getPropertyValue("--ring-h")) || 0;
     if (!(w > 2) || !(h > 2)) {
-      ring.hidden = true;
+      ring.setAttribute("hidden", "");
       return;
     }
     var left = box.left + x * scaleX;
     var top = box.top + y * scaleY;
     var width = w * scaleX;
     var height = h * scaleY;
-    ring.hidden = false;
+    if (ringHideTimer) {
+      window.clearTimeout(ringHideTimer);
+      ringHideTimer = 0;
+    }
+    ringShownAt = Date.now();
+    ring.removeAttribute("hidden");
+    ring.setAttribute("viewBox", "0 0 " + ringGeom.vbW + " " + ringGeom.vbH);
     ring.style.left = left + "px";
     ring.style.top = top + "px";
     ring.style.width = width + "px";
     ring.style.height = height + "px";
-    ring.style.backgroundImage = cs.getPropertyValue("--ring-image");
+    var polys = ring.querySelectorAll("polygon");
+    for (var i = 0; i < polys.length; i += 1) {
+      polys[i].setAttribute("points", ringGeom.points);
+      polys[i].setAttribute("stroke-dasharray", ringGeom.dash);
+    }
     var village = map.querySelector(".village");
     var bounds = village ? village.getBoundingClientRect() : map.getBoundingClientRect();
+    /* Half the stroke, plus a pixel, so the village edge does not eat the dash. */
+    var slop = 2;
     ring.style.clipPath = "inset(" +
-      Math.max(0, bounds.top - top).toFixed(2) + "px " +
-      Math.max(0, (left + width) - bounds.right).toFixed(2) + "px " +
-      Math.max(0, (top + height) - bounds.bottom).toFixed(2) + "px " +
-      Math.max(0, bounds.left - left).toFixed(2) + "px)";
+      Math.max(0, bounds.top - top - slop).toFixed(2) + "px " +
+      Math.max(0, (left + width) - bounds.right - slop).toFixed(2) + "px " +
+      Math.max(0, (top + height) - bounds.bottom - slop).toFixed(2) + "px " +
+      Math.max(0, bounds.left - left - slop).toFixed(2) + "px)";
   }
 
   /* 3px stroke on the painted slab diamond. The path sits 0.8px inside so
      the outer edge stays within a pixel of the cell and still covers the
-     gold dash. A live svg is outside the artboard transform. */
+     gold dash. The svg is sized to the slab, so the stroke
+     shares the slab's pixel grid. */
   function placeChosenMark() {
     var paint = document.getElementById("chosenMarkPaint");
     var ns = "http://www.w3.org/2000/svg";
@@ -1213,11 +1284,13 @@
       paint = document.createElementNS(ns, "svg");
       paint.id = "chosenMarkPaint";
       paint.setAttribute("aria-hidden", "true");
+      paint.setAttribute("preserveAspectRatio", "none");
       var poly = document.createElementNS(ns, "polygon");
       poly.setAttribute("fill", "none");
       poly.setAttribute("stroke", "#7c2d12");
       poly.setAttribute("stroke-width", "3");
       poly.setAttribute("stroke-linejoin", "round");
+      poly.setAttribute("shape-rendering", "crispEdges");
       paint.appendChild(poly);
       document.body.appendChild(paint);
     }
@@ -1242,23 +1315,29 @@
       return;
     }
     var k = 1 - inset / ap;
-    var frame = document.documentElement;
-    var frameW = frame.clientWidth;
-    var frameH = frame.clientHeight;
+    /* Room for the stroke that hangs a pixel outside the slab. */
+    var margin = 6;
+    var left = box.left - margin;
+    var top = box.top - margin;
+    var width = box.width + margin * 2;
+    var height = box.height + margin * 2;
     paint.removeAttribute("hidden");
-    paint.setAttribute("viewBox", "0 0 " + frameW + " " + frameH);
-    paint.style.width = frameW + "px";
-    paint.style.height = frameH + "px";
-    var cx = box.left + hx;
-    var cy = box.top + hy;
+    paint.setAttribute("viewBox", "0 0 " + width + " " + height);
+    paint.style.left = left + "px";
+    paint.style.top = top + "px";
+    paint.style.width = width + "px";
+    paint.style.height = height + "px";
+    var face = 10 * (box.width / 168);
+    var cx = margin + box.width / 2;
+    var cy = margin + box.height / 2 - face;
     paint.querySelector("polygon").setAttribute("points", diamondPoints(cx, cy, hx * k, hy * k));
     var village = $("village");
     var bounds = village ? village.getBoundingClientRect() : box;
     paint.style.clipPath = "inset(" +
-      Math.max(0, bounds.top).toFixed(2) + "px " +
-      Math.max(0, frameW - bounds.right).toFixed(2) + "px " +
-      Math.max(0, frameH - bounds.bottom).toFixed(2) + "px " +
-      Math.max(0, bounds.left).toFixed(2) + "px)";
+      Math.max(0, bounds.top - top).toFixed(2) + "px " +
+      Math.max(0, (left + width) - bounds.right).toFixed(2) + "px " +
+      Math.max(0, (top + height) - bounds.bottom).toFixed(2) + "px " +
+      Math.max(0, bounds.left - left).toFixed(2) + "px)";
   }
 
   function render() {
@@ -1616,7 +1695,19 @@
       placeChosenMark();
     });
     document.addEventListener("focusin", placeFocusRing, true);
-    document.addEventListener("focusout", placeFocusRing, true);
+    document.addEventListener("focusout", function () {
+      window.requestAnimationFrame(placeFocusRing);
+    }, true);
+    /* A pointer tap focuses the cell before focus-visible is set. Focusing
+       that same button again does not fire focusin, so hook focus() itself. */
+    var focusElement = HTMLElement.prototype.focus;
+    HTMLElement.prototype.focus = function (options) {
+      focusElement.call(this, options);
+      if (this.classList && this.classList.contains("cell-btn")) {
+        if (options && options.focusVisible) ringBtn = this;
+        placeFocusRing();
+      }
+    };
     document.addEventListener("scroll", function () {
       placeFocusRing();
       placeChosenMark();
