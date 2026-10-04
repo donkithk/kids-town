@@ -698,13 +698,38 @@
     return !!rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
   }
 
-  /* Scrollport of the map: viewport ∩ #townMap ∩ #village, all four edges. */
+  function layoutFrame() {
+    var root = document.documentElement;
+    return { left: 0, top: 0, right: root.clientWidth, bottom: root.clientHeight };
+  }
+
+  /* On-screen part of #townMap. The scrollport cuts the top and the sides.
+     The bottom stays the map edge so a diamond that sticks out of the
+     scrollport can still be tapped. */
   function visibleMapClip() {
     var map = $("townMap");
     var village = $("village");
     if (!map || !village) return null;
-    var viewport = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
-    return intersectRect(intersectRect(viewport, clientContentBox(map)), clientContentBox(village));
+    var mapBox = clientContentBox(map);
+    var villageBox = clientContentBox(village);
+    return intersectRect(layoutFrame(), {
+      left: Math.max(mapBox.left, villageBox.left),
+      top: Math.max(mapBox.top, villageBox.top),
+      right: Math.min(mapBox.right, villageBox.right),
+      bottom: mapBox.bottom
+    });
+  }
+
+  /* The message sits above the margin around the scrollport. It must not
+     turn that margin into a cell, and it must not eat a tap on the scrollport. */
+  function marginUnderToast(x, y) {
+    var toast = document.getElementById("toast");
+    if (!toast || toast.style.display !== "block") return false;
+    var box = toast.getBoundingClientRect();
+    if (x < box.left || x > box.right || y < box.top || y > box.bottom) return false;
+    var village = $("village");
+    if (!village) return true;
+    return !pointInRect(x, y, clientContentBox(village));
   }
 
   var SOLID_UI = [
@@ -732,7 +757,7 @@
     var map = $("townMap");
     if (!map) return false;
     var mapBox = map.getBoundingClientRect();
-    var view = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+    var frame = layoutFrame();
     for (var i = 0; i < SOLID_UI.length; i += 1) {
       var nodes = document.querySelectorAll(SOLID_UI[i]);
       for (var n = 0; n < nodes.length; n += 1) {
@@ -740,9 +765,11 @@
         if (elementConcealed(el)) continue;
         var box = el.getBoundingClientRect();
         if (box.width < 2 || box.height < 2) continue;
-        if (!rectsOverlap(box, view)) continue;
+        if (!rectsOverlap(box, frame)) continue;
         if (!rectsOverlap(box, mapBox)) continue;
-        if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) return true;
+        /* A whole-pixel click can sit a fraction inside a fractional edge.
+           Corners further in still belong to the control. */
+        if (x >= box.left + 1 && x <= box.right - 1 && y >= box.top + 1 && y <= box.bottom - 1) return true;
       }
     }
     return false;
@@ -775,6 +802,7 @@
     if (!village || !pads.length) return null;
     var clip = visibleMapClip();
     if (!pointInRect(clientX, clientY, clip)) return null;
+    if (marginUnderToast(clientX, clientY)) return null;
     var rect = village.getBoundingClientRect();
     if (rect.width < 1 || rect.height < 1) return null;
     var point = localPoint(village, clientX, clientY);
@@ -1354,10 +1382,24 @@
       var target = event.target;
       var btn = target.closest && target.closest("button");
       var cellBtn = btn && btn.classList.contains("cell-btn") ? btn : null;
+      /* Enter and Space activate the focused cell button even when a bar
+         covers that button. A pointer tap still has to miss solid UI. */
+      var fromKey = event.detail === 0 && event.clientX === 0 && event.clientY === 0;
+      if (cellBtn && fromKey) {
+        var keyPad = cellBtn.closest(".pad");
+        if (keyPad) {
+          var kc = parseInt(keyPad.style.getPropertyValue("--c"), 10);
+          var kr = parseInt(keyPad.style.getPropertyValue("--r"), 10);
+          if (isFinite(kc) && isFinite(kr)) {
+            onCell(kc, kr);
+            return;
+          }
+        }
+      }
       var point = activationPoint(event, cellBtn);
       if (solidUiCovers(point.x, point.y)) return;
       if (!pointInRect(point.x, point.y, visibleMapClip())) return;
-      /* Enter and Space activate the cell button. That is the same onCell a tap uses. */
+      if (marginUnderToast(point.x, point.y)) return;
       if (cellBtn) {
         var pad = cellBtn.closest(".pad");
         if (pad) {
