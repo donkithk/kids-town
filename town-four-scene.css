@@ -111,9 +111,14 @@ body.kt-artstage #tab-town .mp { position: relative; }
   filter: drop-shadow(0 0 4px rgba(212, 160, 23, 0.95));
 }
 
-/* Chosen outline paints above neighbouring gold dashes and above the sprite. */
+/* Chosen outline paints above neighbouring gold dashes and above the sprite.
+   The box is padded so the stroke is not clipped by the SVG view. */
 #townMap .pad.is-chosen > .mark {
   z-index: 9;
+  width: calc(var(--s, 1) * 200px);
+  height: calc(var(--s, 1) * 152px);
+  left: calc(var(--s, 1) * -20px);
+  top: calc(var(--s, 1) * 55px);
 }
 
 #townMap .pad > .sprite,
@@ -196,14 +201,18 @@ body.kt-artstage #tab-town .mp { position: relative; }
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;
-  -webkit-mask-image: var(--ring-mask);
-  mask-image: var(--ring-mask);
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
+  opacity: 0;
+}
+
+/* Painted outside the artboard transform so the stroke stays on the pixel
+   grid. The pseudo-element still carries the geometry. */
+#focusRingPaint {
+  position: fixed;
+  z-index: 80;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
 }
 
 #townMap .badge {
