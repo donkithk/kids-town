@@ -1644,3 +1644,284 @@ def test_served_frontend_placement_grid_is_8x8(client):
             "A 24×16 grid is the legacy limit and must not remain on the build/unstore path."
         )
     assert not problems, "TC-FE-WAREHOUSE-GRID: " + " | ".join(problems)
+
+
+# User-facing place sentences must not use these colloquial characters.
+# English tokens (region_locked, field names) are not Chinese copy.
+PLACE_COLLOQUIAL = ("咩", "呢", "唔", "嘅", "㗎")
+
+
+def _wipe_place(test_db, kid_id):
+    db = connect_db(test_db)
+    db.execute("DELETE FROM buildings WHERE kid_id=?", (kid_id,))
+    db.execute("DELETE FROM town_tiles WHERE kid_id=?", (kid_id,))
+    db.commit()
+    db.close()
+
+
+def _fill_tiles(test_db, kid_id):
+    db = connect_db(test_db)
+    for y in range(8):
+        for x in range(8):
+            db.execute(
+                "INSERT INTO town_tiles (kid_id, cell_x, cell_y, tile_type) VALUES (?, ?, ?, ?)",
+                (kid_id, x, y, "tree"),
+            )
+    db.commit()
+    db.close()
+
+
+def _clear_inventory(test_db, kid_id):
+    db = connect_db(test_db)
+    db.execute("DELETE FROM inventory WHERE kid_id=?", (kid_id,))
+    db.commit()
+    db.close()
+
+
+def _delete_kid_row(test_db, kid_id):
+    """Remove the kids row while the session still names that id.
+
+    The auth gate compares session ids and does not re-read kids, so the
+    place handler can still reach its own 'Kid not found' branch.
+    """
+    db = connect_db(test_db)
+    db.execute("PRAGMA foreign_keys=OFF")
+    db.execute("DELETE FROM kids WHERE id=?", (kid_id,))
+    db.commit()
+    db.close()
+
+
+def _place_strings(response):
+    payload = response.get_json(silent=True)
+    texts = []
+    if isinstance(payload, dict):
+        if isinstance(payload.get("detail"), str):
+            texts.append(("detail", payload["detail"]))
+        if isinstance(payload.get("error"), str):
+            texts.append(("error", payload["error"]))
+    return texts
+
+
+def _colloquial_hits(texts):
+    hits = []
+    for field, text in texts:
+        found = [char for char in PLACE_COLLOQUIAL if char in text]
+        if found:
+            hits.append(f"{field} {text!r} has {''.join(found)}")
+    return hits
+
+
+@pytest.mark.case_id("TC-API-PLACE-DETAIL-FORMAL")
+def test_place_detail_formal(client, family, test_db):
+    """TC-API-PLACE-DETAIL-FORMAL 放置接口每一條 4xx 的字串不得含口語字。
+
+    只打 POST /api/kids/<id>/buildings。移動、收倉、取出不在範圍。
+    字串 `detail` 與字串 `error`（產品而家把句子放在 error）都不得含
+    咩、呢、唔、嘅、㗎。英文代號不是中文句子。
+
+    路徑（backend_v2.py，3625974）：
+    - 3460 缺 def_id：'def_id, cell_x, cell_y required'
+    - 3465→1730–1745 省略座標、區域未解鎖：region_locked／unlock_region
+    - 3473 省略座標、已經放置：ALREADY_BUILT_ERROR（1770）
+    - 3480 省略座標、沒有空位：TOWN_FULL_ERROR（1768）
+    - 3483 只帶一個座標：同一句 required
+    - 3486→1684–1696 座標不是整數：'座標不正確'
+    - 3491 足跡伸出或格外（含負數）：'位置超出地圖範圍（0 至 7）'
+      鎖區建築在 3488 先回 1730，不會落到這句
+    - 3499 指定格子、已經放置：ALREADY_BUILT_ERROR
+    - 3505→1826 足跡重疊：'該位置已被建築物佔用'
+    - 3505→1834 裝飾佔用：'該位置已被裝飾佔用'
+    - 3506–3513 存倉列放回是 200，不是 4xx
+    - 3517 沒有這種定義：'Building definition not found'
+    - 3521 合法格、區域內容鎖定：region_locked
+    - 3523 合法格、區域未探索：unlock_region
+    - 3527 小朋友列已不在：'Kid not found'（閘門只對 session id，刪列後仍進到這裡）
+    - 3530 金幣不夠：'Insufficient resources'
+    - 3541 材料不夠：'Insufficient resources'
+    已知定義、小朋友還沒有，是 201，不是 4xx。
+    """
+    kid_id = family.kid_a.id
+    library = def_id(test_db, "library")
+    gym = def_id(test_db, "gym")
+    shop = def_id(test_db, "shop")
+    lighthouse = def_id(test_db, "lighthouse")
+    arena = def_id(test_db, "arena")
+    login_kid(client, family)
+    reds = []
+    missed = []
+
+    def drive(name, cite, call):
+        response = call()
+        texts = _place_strings(response)
+        hits = _colloquial_hits(texts)
+        shown = ", ".join(f"{field}={text!r}" for field, text in texts) or "(no string detail/error)"
+        status = "RED" if hits else "GREEN"
+        print(
+            f"TC-API-PLACE-DETAIL-FORMAL {name} {cite} "
+            f"HTTP {response.status_code} {shown} {status}"
+        )
+        if response.status_code < 400 or response.status_code >= 500:
+            missed.append(f"{name} HTTP {response.status_code} {shown}")
+        if hits:
+            reds.append(f"{name} {cite}: " + " | ".join(hits))
+
+    _rich(test_db, kid_id)
+    _wipe_place(test_db, kid_id)
+    drive(
+        "missing-def-id",
+        "backend_v2.py:3460",
+        lambda: client.post(f"/api/kids/{kid_id}/buildings", json={"cell_x": 0, "cell_y": 0}),
+    )
+    drive(
+        "autoplace-region-locked",
+        "backend_v2.py:3465→1742",
+        lambda: _place(client, kid_id, arena, omit=True),
+    )
+    drive(
+        "autoplace-unlock-region",
+        "backend_v2.py:3465→1744",
+        lambda: _place(client, kid_id, lighthouse, omit=True),
+    )
+
+    _wipe_place(test_db, kid_id)
+    insert_building(test_db, kid_id, library, level=1, stored=0, cell_x=0, cell_y=0)
+    drive(
+        "autoplace-already-owned",
+        "backend_v2.py:3473",
+        lambda: _place(client, kid_id, library, omit=True),
+    )
+
+    _wipe_place(test_db, kid_id)
+    _fill_tiles(test_db, kid_id)
+    drive(
+        "autoplace-town-full",
+        "backend_v2.py:3480",
+        lambda: _place(client, kid_id, library, omit=True),
+    )
+
+    _wipe_place(test_db, kid_id)
+    drive(
+        "one-coordinate",
+        "backend_v2.py:3483",
+        lambda: client.post(
+            f"/api/kids/{kid_id}/buildings",
+            json={"def_id": library, "cell_x": 0},
+        ),
+    )
+    drive(
+        "invalid-cell-bool",
+        "backend_v2.py:3486→1686",
+        lambda: _place(client, kid_id, library, True, 0),
+    )
+    drive(
+        "invalid-cell-float",
+        "backend_v2.py:3486→1693",
+        lambda: _place(client, kid_id, library, 1.5, 0),
+    )
+    drive(
+        "invalid-cell-text",
+        "backend_v2.py:3486→1691",
+        lambda: _place(client, kid_id, library, "nope", 0),
+    )
+    for label, cell in (
+        ("out-of-grid-footprint", (7, 0)),
+        ("out-of-grid-outside", (8, 0)),
+        ("out-of-grid-negative", (-1, 0)),
+    ):
+        drive(
+            label,
+            "backend_v2.py:3491",
+            lambda cell=cell: _place(client, kid_id, library, cell[0], cell[1]),
+        )
+    drive(
+        "out-of-grid-locked",
+        "backend_v2.py:3488→1742",
+        lambda: _place(client, kid_id, arena, 8, 0),
+    )
+    drive(
+        "out-of-grid-unlock",
+        "backend_v2.py:3488→1744",
+        lambda: _place(client, kid_id, lighthouse, 8, 0),
+    )
+
+    _wipe_place(test_db, kid_id)
+    insert_building(test_db, kid_id, library, level=1, stored=0, cell_x=0, cell_y=0)
+    drive(
+        "explicit-already-owned",
+        "backend_v2.py:3499",
+        lambda: _place(client, kid_id, library, 4, 4),
+    )
+
+    _wipe_place(test_db, kid_id)
+    insert_building(test_db, kid_id, shop, level=1, stored=0, cell_x=0, cell_y=0)
+    drive(
+        "occupied-overlap",
+        "backend_v2.py:3505→1826",
+        lambda: _place(client, kid_id, gym, 1, 0),
+    )
+
+    _wipe_place(test_db, kid_id)
+    db = connect_db(test_db)
+    db.execute(
+        "INSERT INTO town_tiles (kid_id, cell_x, cell_y, tile_type) VALUES (?, ?, ?, ?)",
+        (kid_id, 4, 4, "tree"),
+    )
+    db.commit()
+    db.close()
+    drive(
+        "occupied-tile",
+        "backend_v2.py:3505→1834",
+        lambda: _place(client, kid_id, library, 4, 4),
+    )
+
+    _wipe_place(test_db, kid_id)
+    drive(
+        "unknown-building",
+        "backend_v2.py:3517",
+        lambda: _place(client, kid_id, 999999, 0, 0),
+    )
+    drive(
+        "region-locked",
+        "backend_v2.py:3521",
+        lambda: _place(client, kid_id, arena, 0, 0),
+    )
+    drive(
+        "unlock-region",
+        "backend_v2.py:3523",
+        lambda: _place(client, kid_id, lighthouse, 0, 0),
+    )
+
+    _wipe_place(test_db, kid_id)
+    set_kid_points(test_db, kid_id, 0)
+    grant_inventory(test_db, kid_id, {"wood": 80, "brick": 80, "gear": 40, "gem": 10, "glass": 20})
+    drive(
+        "insufficient-gold",
+        "backend_v2.py:3530",
+        lambda: _place(client, kid_id, library, 0, 0),
+    )
+
+    _rich(test_db, kid_id)
+    _clear_inventory(test_db, kid_id)
+    drive(
+        "insufficient-materials",
+        "backend_v2.py:3541",
+        lambda: _place(client, kid_id, library, 2, 2),
+    )
+
+    _wipe_place(test_db, kid_id)
+    _delete_kid_row(test_db, kid_id)
+    drive(
+        "kid-not-found",
+        "backend_v2.py:3527",
+        lambda: _place(client, kid_id, library, 0, 0),
+    )
+
+    print(
+        "TC-API-PLACE-DETAIL-FORMAL "
+        f"green-or-missed paths checked; red {len(reds)} missed {len(missed)}. "
+        "Stored-row reuse is HTTP 200 at backend_v2.py:3506-3513, not a 4xx. "
+        "A known definition the kid does not own places (201), not a 4xx."
+    )
+    problems = [f"colloquial: {item}" for item in reds]
+    problems.extend(f"not 4xx: {item}" for item in missed)
+    assert not problems, "TC-API-PLACE-DETAIL-FORMAL: " + " | ".join(problems)

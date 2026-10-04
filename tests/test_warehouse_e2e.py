@@ -28,18 +28,27 @@ from tests.qc6_checks import (  # noqa: E402
     GOLD_STROKE,
     REQUIRED_STROKE,
     any_visible_gold_point,
+    bar_gap_band,
+    border_edge_points,
+    cell_clip_band,
+    cell_visibility,
     chosen_mark_paint,
     contrast_ratio,
     corner_insets,
     focus_ring_delta,
+    focus_ring_shape,
     gold_point_inside,
     hex_of,
     hidden_tab_state,
+    integer_border_row,
     map_hit_at,
     off_visible_probes,
     open_solid_rects,
     parse_hex,
+    point_is_ring_ink,
+    ring_pixel_report,
     sample_line_backgrounds,
+    sample_selected_edges,
     selected_mark_geometry,
     set_village_scroll,
     solid_selector,
@@ -4961,6 +4970,9 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
     rect_problems, rect_summaries = _bar_rect_leaks(page, base_url)
     problems.extend(rect_problems)
     summaries.extend(rect_summaries)
+    edge_problems, edge_summaries = _bar_border_leaks(page, base_url)
+    problems.extend(edge_problems)
+    summaries.extend(edge_summaries)
     guard_problems, guard_summaries = _bar_guard_checks(page, base_url)
     problems.extend(guard_problems)
     summaries.extend(guard_summaries)
@@ -5883,3 +5895,840 @@ def test_place_owned_formal_shown(page, base_url, warehouse_db, warehouse_ids):
     if _OWNED_COLLOQUIAL in (shown.get("toast") or ""):
         problems.append("toast still shows 你已經興建咗呢種建築物")
     assert not problems, "TC-API-PLACE-OWNED-FORMAL: " + " | ".join(problems)
+
+
+def _sheet_open(page):
+    sheet = page.locator("#actionSheet")
+    try:
+        return bool(sheet.count() and sheet.first.is_visible())
+    except Exception:
+        return False
+
+
+def _map_reaction(page, x, y):
+    """One real mouse click. A leak is a selection, a toast, a sheet, or scene 3."""
+    dismiss_selection(page)
+    _silence_toast(page)
+    if _sheet_open(page):
+        _close_sheet(page)
+    tap_point(page, x, y)
+    hit = read_reaction(page)
+    sheet = _sheet_open(page)
+    ready = (_hint(page).get("ready") or "")
+    acted = _acted_cell(hit)
+    toast = hit.get("toast") or ""
+    leaked = bool(
+        acted is not None
+        or toast
+        or sheet
+        or "場景 3" in (hit.get("scene") or "")
+        or "已選擇空地" in ready
+    )
+    return {
+        "leaked": leaked,
+        "acted": acted,
+        "toast": toast,
+        "sheet": sheet,
+        "scene": hit.get("scene") or "",
+        "ready": ready,
+    }
+
+
+def _restore_scene1(page):
+    if "場景 1" in _scene_aria(page):
+        _close_sheet(page)
+        return
+    back = page.locator("#btnUxBack")
+    try:
+        if back.count() and back.first.is_visible():
+            back.first.click()
+            page.wait_for_timeout(150)
+    except Exception:
+        pass
+    _close_sheet(page)
+
+
+_GROK_GAP = ((640.0, 609.0), (930.5, 609.0), (404.4, 609.0))
+_GROK_GRASS = ((349.5, 577.0), (155.8, 544.0), (219.0, 544.0))
+_GROK_BORDER = (
+    (1280, 720, 300, 294.5, 163.5, "palette-tr"),
+    (1280, 720, 366, 294.5, 163.5, "palette-tr"),
+    (1280, 720, 366, 177.0, 163.5, "palette"),
+    (1280, 720, 366, 1135.0, 154.5, "tools"),
+    (1100, 844, 366, 976.5, 244.3, "tools"),
+    (1100, 800, 0, 976.5, 222.3, "tools"),
+    (1100, 800, 300, 976.5, 222.3, "tools"),
+    (1100, 800, 366, 976.5, 222.3, "tools"),
+)
+
+
+def _gap_samples(band):
+    span = band["right"] - band["left"]
+    # Near the bar's lower edge, where the 1280 repro sits about 1px into the strip.
+    y = band["top"] + min(1.0, max(0.4, (band["bottom"] - band["top"]) * 0.35))
+    points = []
+    for index in range(11):
+        points.append({
+            "x": band["left"] + span * (index + 0.5) / 11,
+            "y": y,
+            "why": "band",
+        })
+    return points
+
+
+@pytest.mark.case_id("TC-FE-TAP-BAR-GAP-BAND")
+def test_tap_bar_gap_band(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-TAP-BAR-GAP-BAND 底欄和地圖下緣之間的窄條不得打中藏起來的格。
+
+    窄條的 y 用畫面矩形：底欄下緣到地圖下緣。1280×720 大約 8px，1100×800
+    大約 6.9px。一個點只有落在那一格看得見的部分（可見像素 > 0）才可以選格。
+    窄條上的格是 0px。1280 捲動 0 要點 (640,609)、(930.5,609)、(404.4,609)。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[
+            {"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0},
+            {"name": "農場", "level": 1, "stored": 0, "cell_x": 4, "cell_y": 3},
+            {"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12},
+        ],
+    )
+    _login(page, base_url)
+    problems = []
+    summaries = []
+    for width, height in ((1280, 720), (1100, 800)):
+        for mode in ("bare", "picked"):
+            _relogin(page, base_url)
+            page.set_viewport_size({"width": width, "height": height})
+            _enter_new_build_scene2(page)
+            if mode == "picked":
+                assert _pick_unbuilt(page, "工坊"), "工坊 missing"
+            set_village_scroll(page, 0)
+            band = bar_gap_band(page)
+            if not band or band.get("height", 0) < 2:
+                problems.append(f"{mode} {width}x{height}: gap band missing")
+                continue
+            points = _gap_samples(band)
+            if (width, height) == (1280, 720):
+                for x, y in _GROK_GAP:
+                    points.append({"x": x, "y": y, "why": "grok"})
+            leaks = []
+            grok_hits = []
+            for point in points:
+                reaction = _map_reaction(page, point["x"], point["y"])
+                visible = None
+                on_visible = None
+                acted = reaction["acted"] if isinstance(reaction["acted"], tuple) else None
+                if acted:
+                    vis = cell_visibility(page, acted[0], acted[1], point["x"], point["y"]) or {}
+                    visible = vis.get("visible")
+                    on_visible = vis.get("pointOnVisible")
+                bad = reaction["leaked"] or (acted is not None and (not visible or not on_visible))
+                if bad:
+                    leaks.append(point["why"])
+                    if len(leaks) <= 6 or point["why"] == "grok":
+                        leaks.append(
+                            f"{point['why']} ({point['x']:.1f},{point['y']:.1f}) "
+                            f"cell {acted} visible {visible} toast {reaction['toast']!r}"
+                        )
+                if point["why"] == "grok":
+                    grok_hits.append(
+                        f"({point['x']:.1f},{point['y']:.1f}) "
+                        f"{'LEAK' if bad else 'quiet'} cell {acted} visible {visible} "
+                        f"toast {reaction['toast']!r} sheet {reaction['sheet']}"
+                    )
+                _ensure_town_map(page)
+                if "場景 2" not in _scene_aria(page):
+                    _scene2_tap_mode(page, mode, "工坊")
+                    set_village_scroll(page, 0)
+            summaries.append(
+                f"{mode} {width}x{height} gap h={band['height']:.2f} "
+                f"points {len(points)} leaks {sum(1 for item in leaks if not item.startswith('band') and not item.startswith('grok') or ' ' in item)} "
+                f"grok {grok_hits}"
+            )
+            # Count real leak records (the ones with a space are the details).
+            details = [item for item in leaks if " " in item]
+            if details:
+                problems.insert(0, f"{mode} {width}x{height} gap: " + " | ".join(details[:6]))
+            elif not any(point["why"] == "band" for point in points):
+                problems.append(f"{mode} {width}x{height}: no band samples")
+    print("TC-FE-TAP-BAR-GAP-BAND " + " || ".join(summaries))
+    assert not problems, "TC-FE-TAP-BAR-GAP-BAND: " + " || ".join(problems[:8])
+
+
+def _ensure_bank_def(db_path):
+    db = connect_db(db_path)
+    row = db.execute("SELECT id FROM building_defs WHERE name=?", ("銀行",)).fetchone()
+    if not row:
+        db.execute(
+            """
+            INSERT INTO building_defs
+                (icon, name, cost_gold, materials, effect, buff_type, buff_vals, max_level)
+            VALUES ('🏦', '銀行', 150, '{}', '', 'ledger', '[1]', 5)
+            """
+        )
+        db.commit()
+        row = db.execute("SELECT id FROM building_defs WHERE name=?", ("銀行",)).fetchone()
+    db.close()
+    return row["id"]
+
+
+def _grass_samples(band):
+    points = []
+    columns, rows = 8, 4
+    width = band["right"] - band["left"]
+    height = band["bottom"] - band["top"]
+    for row in range(rows):
+        y = band["top"] + height * (row + 0.5) / rows
+        for col in range(columns):
+            x = band["left"] + width * (col + 0.5) / columns
+            points.append({"x": x, "y": y, "why": "grass"})
+    return points
+
+
+def _on_button(page, x, y):
+    return page.evaluate(
+        """([x, y]) => {
+          const el = document.elementFromPoint(x, y);
+          if (!el || !el.closest) return false;
+          return !!el.closest('button, a, [role="button"]');
+        }""",
+        [x, y],
+    )
+
+
+@pytest.mark.case_id("TC-FE-TAP-SCENE-GRASS-EDGE")
+def test_tap_scene_grass_edge(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-TAP-SCENE-GRASS-EDGE 場景 1 村子下面的草地不得選格、出提示或開面板。
+
+    草地的上緣是真正把格子裁掉的捲動區，不寫死是哪一個元素。1280×720 要點
+    (349.5,577)、(155.8,544)、(219,544)。少建築和滿鎮（含銀行）各跑一次。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _ensure_bank_def(warehouse_db)
+    few = [
+        {"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0},
+        {"name": "農場", "level": 1, "stored": 0, "cell_x": 4, "cell_y": 3},
+        {"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12},
+    ]
+    full_names = (
+        "商店", "農場", "圖書館", "健身室", "醫院", "探險公會",
+        "工坊", "燈塔", "競技場", "天文台", "銀行",
+    )
+    full = []
+    slot = 0
+    for name in full_names:
+        full.append({
+            "name": name,
+            "level": 1,
+            "stored": 0,
+            "cell_x": (slot % 4) * 2,
+            "cell_y": (slot // 4) * 2,
+        })
+        slot += 1
+    _login(page, base_url)
+    problems = []
+    summaries = []
+    for label, buildings in (("few", few), ("full", full)):
+        _reset_kid(warehouse_db, kid_id, points=800, buildings=buildings)
+        _relogin(page, base_url)
+        page.set_viewport_size({"width": 1280, "height": 720})
+        _restore_scene1(page)
+        set_village_scroll(page, 0)
+        band = cell_clip_band(page)
+        if not band:
+            problems.append(f"{label}: grass band missing")
+            continue
+        points = []
+        for point in _grass_samples(band):
+            if _on_button(page, point["x"], point["y"]):
+                continue
+            points.append(point)
+        for x, y in _GROK_GRASS:
+            points.append({"x": x, "y": y, "why": "grok"})
+        leaks = []
+        grok_hits = []
+        for point in points:
+            reaction = _map_reaction(page, point["x"], point["y"])
+            if reaction["leaked"] or "場景 1" not in (reaction["scene"] or _scene_aria(page)):
+                if len(leaks) < 8 or point["why"] == "grok":
+                    leaks.append(
+                        f"{point['why']} ({point['x']:.1f},{point['y']:.1f}) "
+                        f"cell {reaction['acted']} toast {reaction['toast']!r} "
+                        f"sheet {reaction['sheet']} scene {reaction['scene']!r}"
+                    )
+            if point["why"] == "grok":
+                grok_hits.append(leaks[-1] if reaction["leaked"] else f"({point['x']:.1f},{point['y']:.1f}) quiet")
+            _restore_scene1(page)
+            set_village_scroll(page, 0)
+        summaries.append(
+            f"{label} grass {band['top']:.1f}-{band['bottom']:.1f} "
+            f"points {len(points)} leaks {len(leaks)} grok {grok_hits}"
+        )
+        if leaks:
+            problems.insert(0, f"{label}: " + " | ".join(leaks[:6]))
+        if len(points) < 24:
+            problems.append(f"{label}: only {len(points)} grass points")
+    print("TC-FE-TAP-SCENE-GRASS-EDGE " + " || ".join(summaries))
+    assert not problems, "TC-FE-TAP-SCENE-GRASS-EDGE: " + " || ".join(problems[:8])
+
+
+def _probe_blocked(page, x, y, width, height):
+    if x < 1 or y < 1 or x >= width - 1 or y >= height - 1:
+        return None
+    reaction = _map_reaction(page, x, y)
+    if not reaction["leaked"]:
+        return None
+    return (
+        f"({x:.1f},{y:.1f}) cell {reaction['acted']} "
+        f"toast {reaction['toast']!r} sheet {reaction['sheet']}"
+    )
+
+
+def _bar_border_leaks(page, base_url):
+    """Border, 0.5px inside, 1.5px inside, plus the integer top row.
+
+    solid UI that insets 1px still lets an integer pixel on the border through.
+    Palette and the tool strip are measured from their live rects.
+    """
+    problems = []
+    summaries = []
+    viewports = ((1280, 720), (1100, 800), (1100, 844))
+    for width, height in viewports:
+        _relogin(page, base_url)
+        page.set_viewport_size({"width": width, "height": height})
+        _enter_new_build_scene2(page)
+        assert _pick_unbuilt(page, "工坊"), f"{width}x{height}: 工坊 missing"
+        seen = set()
+        for scroll in (0, 300, 366):
+            _scene2_tap_mode(page, "picked", "工坊")
+            placed = set_village_scroll(page, scroll)
+            actual = None if not placed else round(placed.get("scroll") or 0, 1)
+            points = []
+            for name, selector in (("palette", "#palette"), ("tools", "#townMap .tools")):
+                rect = surface_rect(page, selector)
+                if not rect:
+                    problems.append(f"{width}x{height} scroll {scroll}: {name} missing")
+                    continue
+                for point in border_edge_points(rect):
+                    point = dict(point)
+                    point["who"] = name
+                    points.append(point)
+            if width == 1280 and (scroll == 0 or actual not in seen):
+                for name, selector in (("bar", "#readyBar"), ("palette", "#palette")):
+                    rect = surface_rect(page, selector)
+                    if not rect:
+                        continue
+                    for point in integer_border_row(rect):
+                        point = dict(point)
+                        point["who"] = name + "-top"
+                        points.append(point)
+            for item in _GROK_BORDER:
+                gw, gh, gscroll, gx, gy, glabel = item
+                if (gw, gh, gscroll) == (width, height, scroll):
+                    points.append({"name": f"grok-{glabel}", "x": gx, "y": gy, "who": "grok"})
+            seen.add(actual)
+            print(
+                f"TC-FE-TAP-BAR-NOTHROUGH border {width}x{height} "
+                f"scroll {actual} points {len(points)}",
+                flush=True,
+            )
+            leaks = []
+            grok_leaks = []
+            for point in points:
+                detail = _probe_blocked(page, point["x"], point["y"], width, height)
+                if not detail:
+                    if point["who"] == "grok":
+                        grok_leaks.append(f"{point['name']} quiet")
+                    continue
+                if point["who"] == "grok" or len(leaks) < 6:
+                    leaks.append(f"{point['who']} {point['name']} {detail}")
+                else:
+                    leaks.append("more")
+                if point["who"] == "grok":
+                    grok_leaks.append(f"{point['name']} LEAK {detail}")
+                _ensure_town_map(page)
+                if "場景 2" not in _scene_aria(page):
+                    _scene2_tap_mode(page, "picked", "工坊")
+                    set_village_scroll(page, scroll)
+            real = [item for item in leaks if item != "more"]
+            summaries.append(
+                f"border {width}x{height} scroll {actual}: "
+                f"points {len(points)} leaks {len(leaks)} grok {grok_leaks}"
+            )
+            if real:
+                problems.append(
+                    f"border {width}x{height} scroll {actual}: " + " | ".join(real[:6])
+                )
+        _scene2_tap_mode(page, "picked", "工坊")
+        set_village_scroll(page, 0)
+        _click_cell(page, 2, 2)
+        advance = page.locator("#btnToScene3")
+        if advance.count() and advance.first.is_visible() and advance.first.is_enabled():
+            advance.first.click()
+            page.wait_for_timeout(200)
+        place = surface_rect(page, "#uxPlaceBar")
+        if width != 1280 or not place:
+            if width == 1280:
+                problems.append("place bar missing for the top-edge sweep")
+        else:
+            leaks = []
+            row = integer_border_row(place)
+            for point in row:
+                detail = _probe_blocked(page, point["x"], point["y"], width, height)
+                if detail and len(leaks) < 4:
+                    leaks.append(detail)
+                elif detail:
+                    leaks.append("more")
+            summaries.append(
+                f"place-bar top {width}x{height}: points {len(row)} leaks {len(leaks)}"
+            )
+            if leaks:
+                problems.append(
+                    "place-bar top: " + " | ".join(item for item in leaks if item != "more")
+                )
+    return problems, summaries
+
+
+def _ring_offsets(shape):
+    cell = shape["cell"]["tips"]
+    ring = shape["ring"]["tips"]
+    return {
+        "N": cell["N"]["y"] - ring["N"]["y"],
+        "S": ring["S"]["y"] - cell["S"]["y"],
+        "E": ring["E"]["x"] - cell["E"]["x"],
+        "W": cell["W"]["x"] - ring["W"]["x"],
+    }
+
+
+def _ring_gaps(shape):
+    center = {"x": shape["cell"]["cx"], "y": shape["cell"]["cy"]}
+    cell = shape["cell"]["tips"]
+    ring = shape["ring"]["tips"]
+    pairs = (("NE", "N", "E"), ("SE", "E", "S"), ("SW", "S", "W"), ("NW", "W", "N"))
+    gaps = {}
+    for name, a, b in pairs:
+        cell_a, cell_b = cell[a], cell[b]
+        ring_a, ring_b = ring[a], ring[b]
+        mx = (cell_a["x"] + cell_b["x"]) / 2
+        my = (cell_a["y"] + cell_b["y"]) / 2
+        rx = (ring_a["x"] + ring_b["x"]) / 2
+        ry = (ring_a["y"] + ring_b["y"]) / 2
+        dx = ring_b["x"] - ring_a["x"]
+        dy = ring_b["y"] - ring_a["y"]
+        length = (dx * dx + dy * dy) ** 0.5 or 1
+        dist = abs((mx - ring_a["x"]) * dy - (my - ring_a["y"]) * dx) / length
+        cell_r = ((mx - center["x"]) ** 2 + (my - center["y"]) ** 2) ** 0.5
+        ring_r = ((rx - center["x"]) ** 2 + (ry - center["y"]) ** 2) ** 0.5
+        gaps[name] = dist if ring_r + 0.2 >= cell_r else -dist
+    return gaps
+
+
+def _ring_clip(page, shape):
+    tips = list(shape["cell"]["tips"].values()) + list(shape["ring"]["tips"].values())
+    xs = [tip["x"] for tip in tips]
+    ys = [tip["y"] for tip in tips]
+    view = page.viewport_size
+    left = max(0, min(xs) - 12)
+    top = max(0, min(ys) - 12)
+    right = min(view["width"], max(xs) + 12)
+    bottom = min(view["height"], max(ys) + 12)
+    return {"x": left, "y": top, "width": max(1, right - left), "height": max(1, bottom - top)}
+
+
+@pytest.mark.case_id("TC-FE-FOCUS-RING-SHAPE")
+def test_focus_ring_shape(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-FOCUS-RING-SHAPE 焦點環是頂面菱形繞中心均勻放大。
+
+    四個尖角沿各自的軸在格子尖角外 2–4px（橫向因為比例可以到約 8px），
+    每條邊在格子邊外 2–4px，寬高比和格子相差不超過 2%。1280 的 (3,3)
+    大約 150–157 × 89–93。中心仍在 ±1px。選中又聚焦時，環不得壓到
+    #7c2d12 實線。不鎖線寬。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(warehouse_db, kid_id, points=800, buildings=[])
+    _login(page, base_url)
+    problems = []
+    summaries = []
+    cells = ((6, 0, "edge"), (3, 3, "interior"))
+    for width, height in ((1280, 720), (1100, 800), (390, 844)):
+        page.set_viewport_size({"width": width, "height": height})
+        if "場景 2" not in _scene_aria(page):
+            _enter_new_build_scene2(page)
+        for cell_x, cell_y, role in cells:
+            _scroll_cell_into_view(page, cell_x, cell_y)
+            dismiss_selection(page)
+            shape = focus_ring_shape(page, cell_x, cell_y) or {}
+            if shape.get("error") or not shape.get("ring"):
+                problems.append(f"{width}x{height} {role} {shape.get('error')}")
+                continue
+            offsets = _ring_offsets(shape)
+            gaps = _ring_gaps(shape)
+            cell = shape["cell"]
+            ring = shape["ring"]
+            cell_ratio = cell["width"] / cell["height"] if cell["height"] else 0
+            ring_ratio = ring["width"] / ring["height"] if ring["height"] else 0
+            aspect = abs(ring_ratio / cell_ratio - 1) if cell_ratio else 1
+            summaries.append(
+                f"{width}x{height} {role} {cell_x, cell_y} "
+                f"ring {ring['width']:.1f}x{ring['height']:.1f} "
+                f"cell {cell['width']:.1f}x{cell['height']:.1f} "
+                f"aspect {aspect:.1%} offsets { {k: round(v, 2) for k, v in offsets.items()} }"
+            )
+            dx, dy = shape.get("dx"), shape.get("dy")
+            if dx is None or abs(dx) > 1 or abs(dy) > 1:
+                problems.append(
+                    f"{width}x{height} {role}: centre ({dx},{dy}) is outside ±1px"
+                )
+            if aspect > 0.02:
+                problems.append(
+                    f"{width}x{height} {role}: ring aspect {ring_ratio:.3f} vs "
+                    f"cell {cell_ratio:.3f} ({aspect:.1%})"
+                )
+            for name, offset in offsets.items():
+                limit = 4 if name in ("N", "S") else 8
+                if offset < 2 or offset > limit:
+                    problems.append(
+                        f"{width}x{height} {role}: {name} tip is {offset:.2f}px "
+                        f"outside, want 2–{limit}"
+                    )
+            for name, gap in gaps.items():
+                if gap < 2 or gap > 4:
+                    problems.append(
+                        f"{width}x{height} {role}: {name} edge is {gap:.2f}px "
+                        "outside the cell, want 2–4"
+                    )
+            if width == 1280 and (cell_x, cell_y) == (3, 3):
+                if not (150 <= ring["width"] <= 157 and 89 <= ring["height"] <= 93):
+                    problems.append(
+                        f"1280 (3,3) ring {ring['width']:.1f}x{ring['height']:.1f}, "
+                        "want about 150–157 x 89–93"
+                    )
+            outer = shape.get("outer") or {}
+            inner = shape.get("inner") or {}
+            if (outer.get("stroke") or "").lower() != "6b4f2a":
+                problems.append(f"{width}x{height} {role}: outer stroke {outer.get('stroke')}")
+            if (inner.get("stroke") or "").lower() != "fff8e7":
+                problems.append(f"{width}x{height} {role}: inner stroke {inner.get('stroke')}")
+            if not outer.get("dashed") or not inner.get("dashed"):
+                problems.append(f"{width}x{height} {role}: focus ring is not dashed")
+            _select_cell(page, cell_x, cell_y)
+            _scroll_cell_into_view(page, cell_x, cell_y)
+            focused = focus_ring_shape(page, cell_x, cell_y) or {}
+            if not focused.get("ring"):
+                problems.append(f"{width}x{height} {role}: ring missing while selected")
+                continue
+            both = _ring_offsets(focused)
+            if both["E"] <= 1.5 or both["W"] <= 1.5:
+                problems.append(
+                    f"{width}x{height} {role}: E/W tips sit inside the solid line "
+                    f"(E {both['E']:.2f}, W {both['W']:.2f})"
+                )
+            clip = _ring_clip(page, focused)
+            png = page.screenshot(clip=clip, scale="css", type="png")
+            report = ring_pixel_report(png, focused["cell"], clip)
+            if report["overlap"]:
+                problems.append(
+                    f"{width}x{height} {role}: {report['overlap']} ring pixels "
+                    "lie on the selected line"
+                )
+            if report["solid"] < 8:
+                problems.append(
+                    f"{width}x{height} {role}: selected line #7c2d12 was not painted "
+                    f"(solid pixels {report['solid']})"
+                )
+    print("TC-FE-FOCUS-RING-SHAPE " + " || ".join(summaries))
+    assert not problems, "TC-FE-FOCUS-RING-SHAPE: " + " | ".join(problems[:12])
+
+
+@pytest.mark.case_id("TC-FE-SELECTED-OVER-GOLD")
+def test_selected_over_gold(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-SELECTED-OVER-GOLD 選中實線要畫在金色虛線上面。
+
+    (0,0) 和 (3,3) 的四條邊，每條邊中段 9 個點都要是 #7c2d12，不能是 #d4a017。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(warehouse_db, kid_id, points=800, buildings=[])
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _enter_new_build_scene2(page)
+    problems = []
+    summaries = []
+    for cell_x, cell_y in ((0, 0), (3, 3)):
+        _scroll_cell_into_view(page, cell_x, cell_y)
+        _select_cell(page, cell_x, cell_y)
+        geom = selected_mark_geometry(page)
+        if not geom or (geom.get("c"), geom.get("r")) != (cell_x, cell_y):
+            problems.append(f"({cell_x},{cell_y}) did not stay selected")
+            continue
+        clip = _clip_mark(page, geom, margin=8)
+        png = page.screenshot(clip=clip, scale="css", type="png")
+        edges = sample_selected_edges(png, geom, clip)
+        parts = []
+        for name, counts in edges.items():
+            parts.append(f"{name} {counts['brown']}/9 brown {counts['gold']}/9 gold")
+            if counts["brown"] < 9 or counts["gold"]:
+                problems.append(
+                    f"({cell_x},{cell_y}) {name} {counts['brown']}/9 visible as #7c2d12 "
+                    f"({counts['gold']} look like #d4a017)"
+                )
+        summaries.append(f"({cell_x},{cell_y}) " + ", ".join(parts))
+    print("TC-FE-SELECTED-OVER-GOLD " + " || ".join(summaries))
+    assert not problems, "TC-FE-SELECTED-OVER-GOLD: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-FE-FOCUS-RING-ABOVE-SPRITE")
+def test_focus_ring_above_sprite(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-FOCUS-RING-ABOVE-SPRITE 有建築的格子，焦點環要畫在建築圖上面。
+
+    沿四條邊、和建築圖重疊的位置抽樣。那些像素要是 #fff8e7 或 #6b4f2a。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[{"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0}],
+    )
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _scroll_cell_into_view(page, 0, 0)
+    shape = focus_ring_shape(page, 0, 0) or {}
+    problems = []
+    if not shape.get("ring"):
+        problems.append(f"focus ring missing ({shape.get('error')})")
+    else:
+        sprite = page.evaluate(
+            """([c, r]) => {
+              const pad = [...document.querySelectorAll('#townMap .pad')].find((el) => {
+                const cs = getComputedStyle(el);
+                return parseInt(cs.getPropertyValue('--c'), 10) === c
+                  && parseInt(cs.getPropertyValue('--r'), 10) === r;
+              });
+              const img = pad && pad.querySelector(':scope > .sprite');
+              if (!img || img.hidden) return null;
+              const box = img.getBoundingClientRect();
+              return {left: box.left, top: box.top, right: box.right, bottom: box.bottom};
+            }""",
+            [0, 0],
+        )
+        if not sprite:
+            problems.append("shop sprite is not visible")
+        else:
+            tips = shape["ring"]["tips"]
+            order = ("N", "E", "S", "W")
+            samples = []
+            for index, name in enumerate(("NE", "SE", "SW", "NW")):
+                start = tips[order[index]]
+                end = tips[order[(index + 1) % 4]]
+                for step_index in range(15):
+                    t = 0.12 + step_index * (0.76 / 14)
+                    x = start["x"] + (end["x"] - start["x"]) * t
+                    y = start["y"] + (end["y"] - start["y"]) * t
+                    if sprite["left"] <= x <= sprite["right"] and sprite["top"] <= y <= sprite["bottom"]:
+                        samples.append({"x": x, "y": y, "edge": name})
+            opaque = page.evaluate(
+                """([c, r, points]) => {
+                  const pad = [...document.querySelectorAll('#townMap .pad')].find((el) => {
+                    const cs = getComputedStyle(el);
+                    return parseInt(cs.getPropertyValue('--c'), 10) === c
+                      && parseInt(cs.getPropertyValue('--r'), 10) === r;
+                  });
+                  const img = pad && pad.querySelector(':scope > .sprite');
+                  if (!img || img.hidden) return {error: 'missing sprite'};
+                  const w = img.naturalWidth || 0;
+                  const h = img.naturalHeight || 0;
+                  if (w < 2 || h < 2) return {error: 'sprite not loaded'};
+                  const box = img.getBoundingClientRect();
+                  const canvas = document.createElement('canvas');
+                  canvas.width = w;
+                  canvas.height = h;
+                  const ctx = canvas.getContext('2d', {willReadFrequently: true});
+                  try {
+                    ctx.drawImage(img, 0, 0, w, h);
+                  } catch (err) {
+                    return {error: String(err)};
+                  }
+                  const pixels = [];
+                  for (const point of points) {
+                    if (point.x < box.left || point.x > box.right || point.y < box.top || point.y > box.bottom) {
+                      pixels.push({a: 0, r: 0, g: 0, b: 0});
+                      continue;
+                    }
+                    const ix = Math.max(0, Math.min(w - 1, Math.round((point.x - box.left) / box.width * (w - 1))));
+                    const iy = Math.max(0, Math.min(h - 1, Math.round((point.y - box.top) / box.height * (h - 1))));
+                    let data;
+                    try {
+                      data = ctx.getImageData(ix, iy, 1, 1).data;
+                    } catch (err) {
+                      return {error: String(err)};
+                    }
+                    pixels.push({a: data[3], r: data[0], g: data[1], b: data[2]});
+                  }
+                  return {pixels};
+                }""",
+                [0, 0, samples],
+            )
+            if not opaque or opaque.get("error"):
+                problems.append(f"sprite alpha {opaque}")
+            else:
+                covered = []
+                for sample, pixel in zip(samples, opaque.get("pixels") or []):
+                    if not pixel or pixel.get("a", 0) < 160:
+                        continue
+                    item = dict(sample)
+                    item.update(r=pixel["r"], g=pixel["g"], b=pixel["b"])
+                    covered.append(item)
+                if len(covered) < 8:
+                    problems.append(
+                        f"sprite covers only {len(covered)} ring-edge samples"
+                    )
+                else:
+                    clip = _ring_clip(page, shape)
+                    png = page.screenshot(clip=clip, scale="css", type="png")
+                    painted = point_is_ring_ink(png, covered, clip)
+                    by_edge = {}
+                    for item in painted:
+                        by_edge.setdefault(item["edge"], []).append(item)
+                    parts = []
+                    for name, items in by_edge.items():
+                        hit = sum(1 for item in items if item["ring"])
+                        parts.append(f"{name} {hit}/{len(items)}")
+                        if len(items) >= 3 and hit < 3:
+                            problems.append(
+                                f"{name}: {hit}/{len(items)} ring pixels above the sprite"
+                            )
+                    print("TC-FE-FOCUS-RING-ABOVE-SPRITE " + ", ".join(parts))
+    assert not problems, "TC-FE-FOCUS-RING-ABOVE-SPRITE: " + " | ".join(problems)
+
+
+_SERVER_FORMAL = "你已經興建了這種建築物。"
+_RAW_MARKERS = ("field required", "[", "{", "detail")
+
+
+def _toast_body(toast):
+    if isinstance(toast, dict):
+        return toast.get("text") or ""
+    return toast or ""
+
+
+def _toast_is_generic(text):
+    return CANNOT_FIT_TOAST in (text or "")
+
+
+def _raw_toast_problems(text):
+    problems = []
+    raw = text or ""
+    lowered = raw.lower()
+    for marker in _RAW_MARKERS:
+        if marker.lower() in lowered or marker in raw:
+            problems.append(f"toast contains {marker!r}")
+    letters = re.sub(r"[^A-Za-z]+", "", raw)
+    if letters and re.fullmatch(r"[ -~]+", raw.strip() or ""):
+        problems.append(f"toast is an ASCII message {raw!r}")
+    if not _toast_is_generic(raw):
+        problems.append(f"toast {raw!r} is not {_SERVER_FORMAL and CANNOT_FIT_TOAST!r}")
+    return problems
+
+
+@pytest.mark.case_id("TC-FE-PLACE-SERVER-MSG")
+def test_place_server_msg(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-PLACE-SERVER-MSG 確定放置要顯示伺服器的書面語，而不是改成放不下。
+
+    場景 3 還開著時，另一個請求先把同一種建築建好。確定之後提示必須正好是
+    伺服器那句「你已經興建了這種建築物。」。沒有可顯示的中文 detail 時
+    （陣列、沒有 detail、英文 detail）仍是「這個位置放不下這座建築物。」，
+    而且不得出現英文或 JSON。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=5000,
+        items={"wood": 80, "brick": 80, "glass": 20, "gear": 40, "gem": 10},
+        buildings=[],
+    )
+    workshop = _def_id_by_name(warehouse_db, "工坊")
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _enter_new_build_scene2(page)
+    assert _pick_unbuilt(page, "工坊"), "工坊 missing"
+    _click_cell(page, 2, 2)
+    advance = page.locator("#btnToScene3")
+    assert advance.count() and advance.first.is_enabled(), "cannot open scene 3"
+    advance.first.click()
+    page.locator("#btnUxConfirm").wait_for(state="visible", timeout=8000)
+    placed = page.evaluate(
+        """async ({kidId, defId}) => {
+          const res = await fetch('/api/kids/' + kidId + '/buildings', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({def_id: defId, cell_x: 4, cell_y: 4})
+          });
+          let data = {};
+          try { data = await res.json(); } catch (err) { data = {}; }
+          return {status: res.status, error: data.error || '', detail: data.detail || ''};
+        }""",
+        {"kidId": kid_id, "defId": workshop["id"]},
+    )
+    problems = []
+    if placed.get("status") not in (200, 201):
+        problems.append(f"background place HTTP {placed.get('status')} {placed.get('error')!r}")
+    _silence_toast(page)
+    page.locator("#btnUxConfirm").click()
+    toast = _toast_body(_wait_toast(page))
+    message = re.sub(r"^[❌\s]+", "", toast or "")
+    if message != _SERVER_FORMAL:
+        problems.append(
+            f"toast {toast!r} is not the server message {_SERVER_FORMAL!r}"
+        )
+    if CANNOT_FIT_TOAST in (toast or ""):
+        problems.append("toast rewrote the server message as 這個位置放不下這座建築物。")
+    print(
+        "TC-FE-PLACE-SERVER-MSG race "
+        f"background {placed.get('status')} {placed.get('error')!r} toast {toast!r}"
+    )
+
+    guards = (
+        (
+            "detail-array",
+            422,
+            json.dumps({
+                "detail": [{
+                    "loc": ["body", "def_id"],
+                    "msg": "field required",
+                    "type": "value_error.missing",
+                }]
+            }),
+        ),
+        ("no-detail", 400, json.dumps({"error": "nope"})),
+        ("english-detail", 400, json.dumps({"detail": "field required"})),
+    )
+    for label, status, body in guards:
+        _relogin(page, base_url)
+        page.set_viewport_size({"width": 1280, "height": 720})
+        _reset_kid(
+            warehouse_db,
+            kid_id,
+            points=5000,
+            items={"wood": 80, "brick": 80, "gear": 40},
+            buildings=[],
+        )
+        _enter_new_build_scene2(page)
+        assert _pick_unbuilt(page, "健身室"), "健身室 missing"
+        _click_cell(page, 2, 2)
+        page.locator("#btnToScene3").click()
+        page.locator("#btnUxConfirm").wait_for(state="visible", timeout=8000)
+        _force_confirm_response(page, "new-build", status, body, "application/json")
+        _silence_toast(page)
+        page.locator("#btnUxConfirm").click()
+        guard_toast = _toast_body(_wait_toast(page))
+        page.unroute("**/api/kids/**")
+        found = _raw_toast_problems(guard_toast)
+        print(f"TC-FE-PLACE-SERVER-MSG guard {label}: {guard_toast!r}")
+        if found:
+            problems.append(f"guard {label}: " + " | ".join(found))
+    assert not problems, "TC-FE-PLACE-SERVER-MSG: " + " | ".join(problems)

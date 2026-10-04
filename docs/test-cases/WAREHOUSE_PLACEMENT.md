@@ -36,7 +36,7 @@
 ## 案例
 
 API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。  
-介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`、`TC-FE-TAP-OFFCENTER`、`TC-FE-CELL-ARIA-MATCH`、`TC-FE-TAP-BAR-NOTHROUGH`、`TC-FE-TAP-VISIBLE-ONLY`、`TC-FE-SELECTED-CONTRAST`、`TC-FE-FOCUS-RING-CENTRE`、`TC-FE-HIDDEN-INERT`，以及畫面那一半的 `TC-API-AUTOPLACE-FORMAL` 和 `TC-API-PLACE-OWNED-FORMAL`。API 檔另有 `TC-API-AUTOPLACE-FORMAL`、`TC-API-PLACE-OWNED-FORMAL`，還有只 GET 靜態檔的 `TC-FE-WAREHOUSE-GRID`。
+介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`、`TC-FE-TAP-OFFCENTER`、`TC-FE-CELL-ARIA-MATCH`、`TC-FE-TAP-BAR-NOTHROUGH`、`TC-FE-TAP-VISIBLE-ONLY`、`TC-FE-SELECTED-CONTRAST`、`TC-FE-FOCUS-RING-CENTRE`、`TC-FE-HIDDEN-INERT`、`TC-FE-TAP-BAR-GAP-BAND`、`TC-FE-TAP-SCENE-GRASS-EDGE`、`TC-FE-SELECTED-OVER-GOLD`、`TC-FE-FOCUS-RING-SHAPE`、`TC-FE-FOCUS-RING-ABOVE-SPRITE`、`TC-FE-PLACE-SERVER-MSG`，以及畫面那一半的 `TC-API-AUTOPLACE-FORMAL` 和 `TC-API-PLACE-OWNED-FORMAL`。API 檔另有 `TC-API-AUTOPLACE-FORMAL`、`TC-API-PLACE-OWNED-FORMAL`、`TC-API-PLACE-DETAIL-FORMAL`，還有只 GET 靜態檔的 `TC-FE-WAREHOUSE-GRID`。
 
 下表「main」是在 `5bfe76d` 加上這些測試後的結果。紅測的斷言訊息寫明預期與實際。綠測是回歸鎖，不是本缺陷。
 
@@ -338,6 +338,8 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 
 圓角：清單面板、建築清單按鈕 `#listLauncher`、動作列、頂部 HUD、打開的面板，外框矩形的四個角都要測。角往內 3px、5px、7px（大約沿著對角線 4px、7px、10px）的點，包括圓角外面的透明區，都不得打中格子：選中數 0、提示 0，而且 `elementFromPoint` 不得是地圖格子或 `#townMap`。還沒選建築，以及已選 2×2 工坊，都要測。捲動是 `#village.scrollTop` 的 0、300、366 和最大值。視窗是 1280×720、1100×800、390×844。
 
+邊線：已選工坊。調色盤 `#palette` 和工具列 `#townMap .tools` 的外框，四角和四邊中點，各量貼邊、往內 0.5px、往內 1.5px。視窗是 1280×720、1100×800、1100×844，捲動 0、300、366。1280 再沿底欄 `#readyBar`、調色盤，以及場景 3 放置列 `#uxPlaceBar` 的上緣，每 1px 掃一整列整數像素（正好在邊框那一行）。點從畫面矩形算出來。工具列左緣可以是小數（大約 1134.55），所以 (1135, 154.5) 只在裡面不到 1px。這些字面座標都要點：1280×720 捲動 300 和 366 的 (294.5, 163.5)，捲動 366 的 (177, 163.5) 和 (1135, 154.5)，1100×844 捲動 366 的 (976.5, 244.3)，1100×800 的 (976.5, 222.3)。不得選格，不得出提示，不得打開面板。
+
 提示和放置特效不得吃點擊：`#toast`（info 與成功）和 `.fx-burst` 的 `pointer-events` 是 `none`。若有金色格的可見菱形真的落在提示底下，點那一塊要選中那一格。若沒有，點提示範圍（含 1280×720 提示下方、壓在頁尾上的那 8px）不得選格，也不得把狀態改成已選擇空地。不得為了通過而要求選中一格看不見的格子。提示蓋住頁尾時打中藏起來的格子，由 `TC-FE-TAP-VISIBLE-ONLY` 鎖。
 
 Guard（預期在目前產品上通過，不是新的紅測）：收起清單之後（返回地圖再按我要起屋；清單沒有就地關閉的按鈕），點原先清單矩形裡一格看得見的金格，必須選中它。收起的抽屜、關掉或沒打開的面板，以及 inert、`visibility:hidden`、opacity 0、`display:none`、移出畫面、沒跟 `#townMap` 相交的元素，都不得吃掉看得見的金格。提示和特效也不得吃掉看得見的金格。
@@ -379,6 +381,65 @@ Guard（預期通過，不是新的紅測）：`#ktRotate`（請轉橫向）在�
 POST `/api/kids/<id>/buildings` 帶 `def_id`、`cell_x`、`cell_y`，這種建築已經放置時，回 400，`error` 正好是「你已經興建了這種建築物。」。不得是「你已經興建咗呢種建築物」。已放置的那一行不變，不扣費。省略座標的自動放置仍由 `TC-API-AUTOPLACE-FORMAL` 鎖，那條在已經改成書面語的版本上通過。
 
 畫面若把這句放進 `#toast`（`showBuildFailure`），提示裡也要有書面語，不得出現口語那句。
+
+## 底欄和地圖之間的窄條（TC-FE-TAP-BAR-GAP-BAND）
+
+底欄下緣到 `#townMap` 下緣的窄條（1280×720 大約 8px，1100×800 大約 6.9px）不得打中藏起來的格。窄條的 y 用畫面矩形量，不寫死。一個點只有落在那一格看得見的部分（可見像素大於 0）才可以選格。視窗 1280×720 和 1100×800，還沒選建築以及已選工坊，捲動 0，窄條上橫向抽 11 點。1280 捲動 0 另外點 (640, 609)、(930.5, 609)、(404.4, 609)。不得選格，不得出提示，不得打開面板。
+
+## 場景 1 村子下面的草地（TC-FE-TAP-SCENE-GRASS-EDGE）
+
+場景 1、1280×720、捲動 0。真正把格子裁掉的捲動區下緣，到地圖（或頁尾，取較高的那一邊）之間的草地，不得選格、出提示或開面板。不寫死是哪一個元素在裁。草地裡大約 30 個點；落在按鈕上的點跳過，但字面座標仍要點：(349.5, 577)、(155.8, 544)、(219, 544)。少建築（商店、農場、存倉圖書館）和滿鎮（含銀行）各跑一次。種子沒有銀行時，測試在臨時庫補上定義，不改 `kids_town.db`。
+
+## 選中實線蓋過金色虛線（TC-FE-SELECTED-OVER-GOLD）
+
+1280×720，空鎮，選中 `(0,0)` 和 `(3,3)`。四條邊各在中段抽 9 點（避開角），線兩旁 ±1px。那些像素要是選中實線 `#7c2d12`，不能是金色虛線 `#d4a017`。
+
+## 焦點環的形狀（TC-FE-FOCUS-RING-SHAPE）
+
+焦點環是格子頂面菱形繞自己的中心均勻放大。四個尖角沿各自的軸在格子尖角外面 2–4px（橫向因為同一比例可以到大約 8px）。每條邊在格子邊外面 2–4px。環的寬高比和格子相差不超過 2%。1280 的 `(3,3)` 大約 150–157 × 89–93。中心仍在 ±1px（`TC-FE-FOCUS-RING-CENTRE` 照舊，不改成鎖舊尺寸）。顏色照舊：內層 `#fff8e7`、外層 `#6b4f2a`，虛線。不鎖線寬。選中又聚焦時，`#7c2d12` 實線在格子邊上，環整段在它外面，兩者不得重疊。視窗 1280×720、1100×800、390×844，各量一格邊緣格 `(6,0)` 和一格內部格 `(3,3)`。
+
+## 焦點環在建築圖上面（TC-FE-FOCUS-RING-ABOVE-SPRITE）
+
+有建築的格子（商店在 `(0,0)`），焦點環要畫在建築圖上面，跟選中實線一樣在最上層。沿四條邊、和建築圖重疊的位置抽樣，那些像素要是 `#fff8e7` 或 `#6b4f2a`，不能是建築圖的像素。1280×720。
+
+## 伺服器的放置句子（TC-FE-PLACE-SERVER-MSG）
+
+場景 3 已經為一種建築（工坊）打開確定，另一個請求先把這種建築建好。確定之後，提示必須正好是伺服器那句「你已經興建了這種建築物。」，不得改成「這個位置放不下這座建築物。」。
+
+只有伺服器回來的、給使用者看的中文字串 `detail` 才照字顯示。下面三條是 guard（預期顯示通用句，不是新的紅測），用 `page.route` 換成通用回應：
+
+- 422，`detail` 是陣列（FastAPI：`[{loc, msg:'field required', type:'value_error.missing'}]`）
+- 4xx，沒有 `detail`
+- 4xx，`detail` 是英文字串
+
+提示要含「這個位置放不下這座建築物。」，而且不得含 `field required`、`[`、`{`、`detail`，也不得是純 ASCII 的句子。
+
+## 放置接口的書面語（TC-API-PLACE-DETAIL-FORMAL）
+
+只打 `POST /api/kids/<id>/buildings`。每一條 4xx 的字串 `detail`，以及產品而家放句子的字串 `error`，都不得含「咩、呢、唔、嘅、㗎」。英文代號（`region_locked`、`Insufficient resources`）不是中文句子。移動、收倉、取出不在範圍。已知定義、小朋友還沒有，是成功放置，不是 4xx。存倉列放回是 200（`backend_v2.py:3506-3513`），也不是 4xx。
+
+路徑（`3625974` 的 `backend_v2.py`）：
+
+| 路徑 | 位置 | 句子 |
+|------|------|------|
+| 缺 `def_id` | 3460 | `def_id, cell_x, cell_y required` |
+| 省略座標、區域內容鎖定 | 3465 → 1730–1742 | `region_locked` |
+| 省略座標、區域未探索 | 3465 → 1744 | `unlock_region` |
+| 省略座標、已經放置 | 3473（句在 1770） | 「你已經興建了這種建築物。」 |
+| 省略座標、沒有空位 | 3480（句在 1768） | 「城鎮沒有空位，請先收起或移動其他建築。」 |
+| 只帶一個座標 | 3483 | 同一句 required |
+| 座標是布林、小數或文字 | 3486 → 1684–1696 | 「座標不正確」 |
+| 足跡伸出、格外、負數 | 3491 | 「位置超出地圖範圍（0 至 7）」 |
+| 格外、但是鎖區建築 | 3488 → 1730 | `region_locked` 或 `unlock_region`，先於上一句 |
+| 指定格子、已經放置 | 3499 | 「你已經興建了這種建築物。」 |
+| 足跡和建築重疊 | 3505 → 1826 | 「該位置已被建築物佔用」 |
+| 裝飾佔用 | 3505 → 1834 | 「該位置已被裝飾佔用」 |
+| 沒有這種定義 | 3517 | `Building definition not found` |
+| 合法格、區域內容鎖定 | 3521 | `region_locked` |
+| 合法格、區域未探索 | 3523 | `unlock_region` |
+| 小朋友列已不在 | 3527 | `Kid not found`（閘門只對 session id） |
+| 金幣不夠 | 3530 | `Insufficient resources` |
+| 材料不夠 | 3541 | `Insufficient resources` |
 
 ## 同一格狀態不得有兩套預期
 

@@ -10,6 +10,8 @@ import zlib
 
 REQUIRED_STROKE = (0x7C, 0x2D, 0x12)  # #7c2d12
 GOLD_STROKE = (0xD4, 0xA0, 0x17)  # #d4a017
+RING_CREAM = (0xFF, 0xF8, 0xE7)  # #fff8e7 inner focus stroke
+RING_BROWN = (0x6B, 0x4F, 0x2A)  # #6b4f2a outer focus stroke
 GRASS_FALLBACK = (0x7E, 0xAE, 0x52)  # #7eae52
 GOLD_FILL = (0xFF, 0xF3, 0xC4)  # #fff3c4
 GOLD_FILL_ALPHA = 0.62
@@ -1048,3 +1050,467 @@ def hidden_tab_state(page):
 }
 """
     )
+
+
+def border_edge_points(rect):
+    """Corners and edge midpoints: on the border, 0.5px inside, and 1.5px inside.
+
+    Inside is toward the rectangle centre, along both axes at a corner and
+    along the normal at an edge midpoint.
+    """
+    left = rect["left"]
+    top = rect["top"]
+    right = rect["right"]
+    bottom = rect["bottom"]
+    cx = (left + right) / 2
+    cy = (top + bottom) / 2
+    insets = (("edge", 0.0), ("in-0.5", 0.5), ("in-1.5", 1.5))
+    corners = (
+        ("top-left", left, top, 1, 1),
+        ("top-right", right, top, -1, 1),
+        ("bottom-left", left, bottom, 1, -1),
+        ("bottom-right", right, bottom, -1, -1),
+    )
+    edges = (
+        ("top", cx, top, 0, 1),
+        ("bottom", cx, bottom, 0, -1),
+        ("left", left, cy, 1, 0),
+        ("right", right, cy, -1, 0),
+    )
+    points = []
+    for name, x, y, ix, iy in corners + edges:
+        for label, dist in insets:
+            points.append({
+                "name": f"{name}-{label}",
+                "x": x + ix * dist,
+                "y": y + iy * dist,
+            })
+    return points
+
+
+def bar_gap_band(page):
+    """Strip between the bottom bar's lower edge and the map's bottom edge.
+
+    The height is the bar's bottom offset inside the map (about 8px before
+    the stage scale). It is not the village scrollport.
+    """
+    return page.evaluate(
+        r"""
+() => {
+  function shown(el) {
+    if (!el) return null;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return null;
+    if (Number(cs.opacity) === 0) return null;
+    const box = el.getBoundingClientRect();
+    if (box.width < 2 || box.height < 2) return null;
+    return box;
+  }
+  const map = shown(document.getElementById('townMap'));
+  const bar = shown(document.getElementById('readyBar'))
+    || shown(document.getElementById('uxPlaceBar'));
+  if (!map || !bar) return null;
+  const top = bar.bottom;
+  const bottom = map.bottom;
+  if (bottom - top < 2) return null;
+  return {
+    left: map.left,
+    right: map.right,
+    top,
+    bottom,
+    height: bottom - top,
+    barTop: bar.top,
+    barBottom: bar.bottom,
+    mapBottom: map.bottom
+  };
+}
+"""
+    )
+
+
+def cell_clip_band(page):
+    """Grass below the overflow that actually clips cells, down to the map.
+
+    The clip is whichever ancestor cuts the pads, discovered from computed
+    overflow. Callers must not treat a particular id as the clip.
+    """
+    return page.evaluate(
+        r"""
+() => {
+  const mapEl = document.getElementById('townMap');
+  const pad = document.querySelector('#townMap .pad');
+  if (!mapEl || !pad) return null;
+  const map = mapEl.getBoundingClientRect();
+  let clipBottom = null;
+  let clipLeft = map.left;
+  let clipRight = map.right;
+  for (let node = pad.parentElement; node && node !== document.body; node = node.parentElement) {
+    const cs = getComputedStyle(node);
+    const box = node.getBoundingClientRect();
+    const clipsY = cs.overflowY === 'hidden' || cs.overflowY === 'auto'
+      || cs.overflowY === 'scroll' || cs.overflowY === 'clip';
+    const clipsX = cs.overflowX === 'hidden' || cs.overflowX === 'auto'
+      || cs.overflowX === 'scroll' || cs.overflowX === 'clip';
+    if (clipsY && box.height > 2) {
+      clipBottom = clipBottom == null ? box.bottom : Math.min(clipBottom, box.bottom);
+    }
+    if (clipsX && box.width > 2) {
+      clipLeft = Math.max(clipLeft, box.left);
+      clipRight = Math.min(clipRight, box.right);
+    }
+  }
+  const footer = document.getElementById('ktFooter');
+  const footTop = footer ? footer.getBoundingClientRect().top : map.bottom;
+  if (clipBottom == null) return null;
+  const top = clipBottom;
+  const bottom = Math.min(map.bottom, footTop);
+  if (bottom - top < 8) return null;
+  return {
+    left: clipLeft,
+    right: clipRight,
+    top,
+    bottom,
+    clipBottom,
+    mapBottom: map.bottom
+  };
+}
+"""
+    )
+
+
+def cell_visibility(page, cell_x, cell_y, x=None, y=None):
+    """How many sampled pixels of a cell diamond sit inside the real clip.
+
+    The clip is the tightest overflow ancestor of the pads. A cell that is
+    entirely outside that clip has visible == 0. `pointOnVisible` is true
+    only when (x, y) lies on that visible fragment.
+    """
+    return page.evaluate(
+        r"""
+([c, r, px, py]) => {
+  const pad = [...document.querySelectorAll('#townMap .pad')].find((el) => {
+    const cs = getComputedStyle(el);
+    return parseInt(cs.getPropertyValue('--c'), 10) === c
+      && parseInt(cs.getPropertyValue('--r'), 10) === r;
+  });
+  if (!pad) return {error: 'missing pad', visible: 0, samples: 0, pointOnVisible: false};
+  const slab = pad.querySelector(':scope > .slab');
+  if (!slab) return {error: 'missing slab', visible: 0, samples: 0, pointOnVisible: false};
+  const box = slab.getBoundingClientRect();
+  const cx = box.left + box.width / 2;
+  const cy = box.top + box.height * (50 / 120);
+  const hw = box.width / 2;
+  const hh = box.height * (50 / 120);
+  let clip = null;
+  for (let node = pad.parentElement; node && node !== document.body; node = node.parentElement) {
+    const cs = getComputedStyle(node);
+    const b = node.getBoundingClientRect();
+    const clipsY = ['hidden', 'auto', 'scroll', 'clip'].includes(cs.overflowY);
+    const clipsX = ['hidden', 'auto', 'scroll', 'clip'].includes(cs.overflowX);
+    if (!clipsX && !clipsY) continue;
+    const next = {
+      left: clipsX ? b.left : -1e9,
+      right: clipsX ? b.right : 1e9,
+      top: clipsY ? b.top : -1e9,
+      bottom: clipsY ? b.bottom : 1e9
+    };
+    if (!clip) clip = next;
+    else {
+      clip = {
+        left: Math.max(clip.left, next.left),
+        right: Math.min(clip.right, next.right),
+        top: Math.max(clip.top, next.top),
+        bottom: Math.min(clip.bottom, next.bottom)
+      };
+    }
+  }
+  function insideClip(x, y) {
+    return !!clip && x >= clip.left && x <= clip.right && y >= clip.top && y <= clip.bottom;
+  }
+  function insideDiamond(x, y) {
+    if (hw < 2 || hh < 2) return false;
+    return Math.abs(x - cx) / hw + Math.abs(y - cy) / hh <= 1;
+  }
+  let samples = 0;
+  let visible = 0;
+  const step = 4;
+  for (let y = box.top; y <= box.top + box.height; y += step) {
+    for (let x = box.left; x <= box.left + box.width; x += step) {
+      if (!insideDiamond(x, y)) continue;
+      samples += 1;
+      if (insideClip(x, y)) visible += 1;
+    }
+  }
+  const pointOnVisible = px != null && py != null && insideDiamond(px, py) && insideClip(px, py);
+  return {visible, samples, pointOnVisible, clip};
+}
+""",
+        [cell_x, cell_y, x, y],
+    )
+
+
+def integer_border_row(rect):
+    """Integer-pixel points on the top border row of a live rect.
+
+    Clicks land on whole pixels. The row is the integer y that sits on the
+    top edge and still inside the 1px inset the hit test currently ignores.
+    """
+    top = rect["top"]
+    left = rect["left"]
+    right = rect["right"]
+    y = int(top) if abs(top - round(top)) < 1e-6 else int(top + 1 - 1e-9)
+    if y < top - 1e-6 or y >= top + 1:
+        y = int(round(top))
+    points = []
+    x = int(left) if abs(left - round(left)) < 1e-6 else int(left + 1 - 1e-9)
+    end = int(right)
+    while x <= end:
+        points.append({"name": f"top-int-{x}", "x": float(x), "y": float(y)})
+        x += 1
+    return points
+
+
+def focus_ring_shape(page, cell_x, cell_y):
+    """Cell top-face diamond and the painted focus diamond, in viewport pixels.
+
+    The ring diamond is the outer stroke path of the focus-visible ring.
+    A layout box that is only a clip is not the ring. The cell diamond is the
+    slab's top face: full slab width, 100/120 of the slab height, centred
+    10 viewBox units above the slab centre.
+    """
+    return page.evaluate(
+        r"""
+([c, r]) => {
+  const pad = [...document.querySelectorAll('#townMap .pad')].find((el) => {
+    const cs = getComputedStyle(el);
+    return parseInt(cs.getPropertyValue('--c'), 10) === c
+      && parseInt(cs.getPropertyValue('--r'), 10) === r;
+  });
+  if (!pad) return {error: 'missing pad'};
+  const slab = pad.querySelector(':scope > .slab');
+  const btn = pad.querySelector(':scope > .cell-btn');
+  if (!slab || !btn) return {error: 'missing slab or button'};
+  btn.focus({focusVisible: true});
+  const after = getComputedStyle(btn, '::after');
+  const painted = !!(after && after.content && after.content !== 'none' && after.content !== 'normal');
+  const btnBox = btn.getBoundingClientRect();
+  const slabBox = slab.getBoundingClientRect();
+  const scaleX = btn.offsetWidth > 0 ? btnBox.width / btn.offsetWidth : 1;
+  const scaleY = btn.offsetHeight > 0 ? btnBox.height / btn.offsetHeight : 1;
+  const ringLeft = btnBox.left + (parseFloat(after.left) || 0) * scaleX;
+  const ringTop = btnBox.top + (parseFloat(after.top) || 0) * scaleY;
+  const ringBoxW = (parseFloat(after.width) || 0) * scaleX;
+  const ringBoxH = (parseFloat(after.height) || 0) * scaleY;
+  const bg = (after && after.backgroundImage) || '';
+  let decoded = bg;
+  try { decoded = decodeURIComponent(bg); } catch (err) { decoded = bg; }
+  const vb = /viewBox=['"]\s*0\s+0\s+([0-9.]+)\s+([0-9.]+)/.exec(decoded);
+  const vbW = vb ? Number(vb[1]) : ringBoxW;
+  const vbH = vb ? Number(vb[2]) : ringBoxH;
+  function mapPoint(px, py) {
+    return {
+      x: ringLeft + (vbW ? (px / vbW) * ringBoxW : px),
+      y: ringTop + (vbH ? (py / vbH) * ringBoxH : py)
+    };
+  }
+  const polyRe = /<polygon\b([^>]*)>/g;
+  const polys = [];
+  let match;
+  while ((match = polyRe.exec(decoded))) {
+    const attrs = match[1];
+    const points = /points=['"]([^'"]+)['"]/.exec(attrs);
+    if (!points) continue;
+    const nums = points[1].trim().split(/[\s,]+/).map(Number);
+    const pts = [];
+    for (let i = 0; i + 1 < nums.length; i += 2) {
+      if (Number.isFinite(nums[i]) && Number.isFinite(nums[i + 1])) {
+        pts.push(mapPoint(nums[i], nums[i + 1]));
+      }
+    }
+    const stroke = /stroke=['"]#([0-9a-fA-F]{6})['"]/.exec(attrs);
+    const width = /stroke-width=['"]([0-9.]+)['"]/.exec(attrs);
+    polys.push({
+      pts,
+      stroke: stroke ? stroke[1].toLowerCase() : null,
+      width: width ? Number(width[1]) : null,
+      dashed: /stroke-dasharray=/.test(attrs)
+    });
+  }
+  function tipsFrom(pts) {
+    if (!pts || pts.length < 4) return null;
+    const north = pts.reduce((a, b) => (b.y < a.y ? b : a));
+    const south = pts.reduce((a, b) => (b.y > a.y ? b : a));
+    const east = pts.reduce((a, b) => (b.x > a.x ? b : a));
+    const west = pts.reduce((a, b) => (b.x < a.x ? b : a));
+    return {N: north, E: east, S: south, W: west};
+  }
+  let ringTips = tipsFrom(polys.length ? polys[0].pts : null);
+  if (!ringTips && ringBoxW > 2 && ringBoxH > 2) {
+    const rcx = ringLeft + ringBoxW / 2;
+    const rcy = ringTop + ringBoxH / 2;
+    ringTips = {
+      N: {x: rcx, y: ringTop},
+      E: {x: ringLeft + ringBoxW, y: rcy},
+      S: {x: rcx, y: ringTop + ringBoxH},
+      W: {x: ringLeft, y: rcy}
+    };
+  }
+  const face = 10 * (slabBox.width / 168);
+  const cx = slabBox.left + slabBox.width / 2;
+  const cy = slabBox.top + slabBox.height / 2 - face;
+  const halfW = slabBox.width / 2;
+  const halfH = slabBox.height * (50 / 120);
+  const cellTips = {
+    N: {x: cx, y: cy - halfH},
+    E: {x: cx + halfW, y: cy},
+    S: {x: cx, y: cy + halfH},
+    W: {x: cx - halfW, y: cy}
+  };
+  const ringCx = ringTips ? (ringTips.E.x + ringTips.W.x) / 2 : null;
+  const ringCy = ringTips ? (ringTips.N.y + ringTips.S.y) / 2 : null;
+  return {
+    painted,
+    error: ringTips ? null : 'focus ring diamond was not painted',
+    outer: polys[0] ? {stroke: polys[0].stroke, width: polys[0].width, dashed: polys[0].dashed} : null,
+    inner: polys[1] ? {stroke: polys[1].stroke, width: polys[1].width, dashed: polys[1].dashed} : null,
+    dx: ringCx == null ? null : ringCx - cx,
+    dy: ringCy == null ? null : ringCy - cy,
+    cell: {
+      cx, cy, halfW, halfH,
+      width: halfW * 2,
+      height: halfH * 2,
+      tips: cellTips
+    },
+    ring: ringTips ? {
+      cx: ringCx,
+      cy: ringCy,
+      width: ringTips.E.x - ringTips.W.x,
+      height: ringTips.S.y - ringTips.N.y,
+      tips: ringTips
+    } : null
+  };
+}
+""",
+        [cell_x, cell_y],
+    )
+
+
+def sample_selected_edges(png_bytes, geom, clip):
+    """Brown vs gold pixels along the middle of each selected-diamond edge.
+
+    Five samples per edge, away from the corners. Each sample looks 1px
+    either side of the centreline so a 3px stroke is hit, and a neighbour's
+    wider dash is not counted unless it covers that centreline.
+    """
+    width, height, rows = png_rgb(png_bytes)
+    origin_x = clip["x"]
+    origin_y = clip["y"]
+
+    def at(x, y):
+        ix = int(round(x - origin_x))
+        iy = int(round(y - origin_y))
+        if ix < 0 or iy < 0 or ix >= width or iy >= height:
+            return None
+        return rows[iy][ix]
+
+    verts = [(point["x"], point["y"]) for point in geom["verts"]]
+    names = ("NE", "SE", "SW", "NW")
+    found = {}
+    for index, name in enumerate(names):
+        start = verts[index]
+        end = verts[(index + 1) % 4]
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+        length = (dx * dx + dy * dy) ** 0.5 or 1.0
+        nx, ny = -dy / length, dx / length
+        brown = gold = other = 0
+        # Nine samples along the middle of the edge, clear of the corners.
+        for step_index in range(9):
+            step = 0.2 + step_index * (0.6 / 8)
+            x = start[0] + dx * step
+            y = start[1] + dy * step
+            best_brown = 10 ** 9
+            best_gold = 10 ** 9
+            for offset in (-1, 0, 1):
+                pixel = at(x + nx * offset, y + ny * offset)
+                if not pixel:
+                    continue
+                best_brown = min(best_brown, _rgb_dist(pixel, REQUIRED_STROKE))
+                best_gold = min(best_gold, _rgb_dist(pixel, GOLD_STROKE))
+            if best_brown <= 55 * 55 and best_brown <= best_gold:
+                brown += 1
+            elif best_gold <= 55 * 55:
+                gold += 1
+            else:
+                other += 1
+        found[name] = {"brown": brown, "gold": gold, "other": other}
+    return found
+
+
+def ring_pixel_report(png_bytes, cell, clip):
+    """Ring-coloured pixels inside the selected stroke, and whether both ring inks show.
+
+    The solid line is a 3px band centred on the cell diamond. A ring pixel
+    on or inside that band overlaps the selected outline.
+    """
+    width, height, rows = png_rgb(png_bytes)
+    half_w = cell.get("halfW") or 0
+    half_h = cell.get("halfH") or 0
+    if half_w < 2 or half_h < 2:
+        return {"cream": 0, "brown": 0, "overlap": 0, "solid": 0}
+    cx = cell["cx"]
+    cy = cell["cy"]
+    apothem = (half_w * half_h) / ((half_w * half_w + half_h * half_h) ** 0.5)
+    band = 1 + (1.5 / apothem if apothem else 0)
+    origin_x = clip["x"]
+    origin_y = clip["y"]
+    cream = brown = overlap = solid = 0
+    for iy, row in enumerate(rows):
+        for ix, pixel in enumerate(row):
+            x = origin_x + ix
+            y = origin_y + iy
+            span = abs(x - cx) / half_w + abs(y - cy) / half_h
+            dist_cream = _rgb_dist(pixel, RING_CREAM)
+            dist_brown = _rgb_dist(pixel, RING_BROWN)
+            dist_solid = _rgb_dist(pixel, REQUIRED_STROKE)
+            if dist_solid <= 55 * 55 and 0.82 <= span <= 1.18:
+                solid += 1
+            ringish = None
+            if dist_cream <= 40 * 40 and dist_cream <= dist_solid:
+                ringish = "cream"
+            elif dist_brown <= 45 * 45 and dist_brown <= dist_solid:
+                ringish = "brown"
+            if ringish == "cream":
+                cream += 1
+            elif ringish == "brown":
+                brown += 1
+            if ringish and span <= band:
+                overlap += 1
+    return {"cream": cream, "brown": brown, "overlap": overlap, "solid": solid}
+
+
+def point_is_ring_ink(png_bytes, points, clip):
+    """Whether each viewport point's pixel is focus-ring cream or brown."""
+    width, height, rows = png_rgb(png_bytes)
+    origin_x = clip["x"]
+    origin_y = clip["y"]
+    found = []
+    for point in points:
+        ix = int(round(point["x"] - origin_x))
+        iy = int(round(point["y"] - origin_y))
+        pixel = None
+        if 0 <= ix < width and 0 <= iy < height:
+            pixel = rows[iy][ix]
+        ring = False
+        if pixel:
+            cream = _rgb_dist(pixel, RING_CREAM)
+            brown = _rgb_dist(pixel, RING_BROWN)
+            near = cream <= 40 * 40 or brown <= 45 * 45
+            if "r" in point:
+                sprite = (int(point["r"]), int(point["g"]), int(point["b"]))
+                # A sprite that is already brown must not count as the ring.
+                ring = near and min(cream, brown) + 120 < _rgb_dist(pixel, sprite)
+            else:
+                ring = near
+        found.append({"ring": ring, "rgb": pixel, "x": point["x"], "y": point["y"], "edge": point.get("edge")})
+    return found
