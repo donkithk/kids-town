@@ -5,6 +5,7 @@ on the town map.
 """
 from __future__ import annotations
 
+import math
 import struct
 import zlib
 
@@ -1247,6 +1248,245 @@ def cell_visibility(page, cell_x, cell_y, x=None, y=None):
 """,
         [cell_x, cell_y, x, y],
     )
+
+
+def village_box(page):
+    """Border box of `#village`, the scrollport that clips cells."""
+    return page.evaluate(
+        """() => {
+          const el = document.getElementById('village');
+          if (!el) return null;
+          const box = el.getBoundingClientRect();
+          if (box.width < 2 || box.height < 2) return null;
+          return {
+            left: box.left, top: box.top, right: box.right, bottom: box.bottom,
+            width: box.width, height: box.height
+          };
+        }"""
+    )
+
+
+def cell_under_point(page, x, y):
+    """Front-most top-face diamond under (x, y), or None.
+
+    The point has to sit inside the `#village` border box. Later pads win,
+    matching paint order. The diamond is the slab's top face.
+    """
+    return page.evaluate(
+        """([px, py]) => {
+          const village = document.getElementById('village');
+          if (!village) return null;
+          const v = village.getBoundingClientRect();
+          if (px < v.left || px > v.right || py < v.top || py > v.bottom) return null;
+          let hit = null;
+          for (const pad of document.querySelectorAll('#townMap .pad')) {
+            const slab = pad.querySelector(':scope > .slab');
+            if (!slab) continue;
+            const box = slab.getBoundingClientRect();
+            const cx = box.left + box.width / 2;
+            const cy = box.top + box.height * (50 / 120);
+            const hw = box.width / 2;
+            const hh = box.height * (50 / 120);
+            if (hw < 2 || hh < 2) continue;
+            if (Math.abs(px - cx) / hw + Math.abs(py - cy) / hh > 1) continue;
+            const cs = getComputedStyle(pad);
+            hit = {
+              c: parseInt(cs.getPropertyValue('--c'), 10),
+              r: parseInt(cs.getPropertyValue('--r'), 10)
+            };
+          }
+          return hit;
+        }""",
+        [x, y],
+    )
+
+
+def scroll_for_cell_point(page, x, y, cell_x, cell_y):
+    """Scroll `#village` so (x, y) lies on that cell's top face, if possible.
+
+    Leaves the scroll on the fitted value when one exists.
+    """
+    return page.evaluate(
+        """([px, py, c, r]) => {
+          const village = document.getElementById('village');
+          const pad = [...document.querySelectorAll('#townMap .pad')].find((el) => {
+            const cs = getComputedStyle(el);
+            return parseInt(cs.getPropertyValue('--c'), 10) === c
+              && parseInt(cs.getPropertyValue('--r'), 10) === r;
+          });
+          const slab = pad && pad.querySelector(':scope > .slab');
+          if (!village || !slab) return {ok: false, reason: 'missing'};
+          const max = Math.max(0, village.scrollHeight - village.clientHeight);
+          const saved = village.scrollTop;
+          function measure() {
+            const box = slab.getBoundingClientRect();
+            const v = village.getBoundingClientRect();
+            return {
+              cx: box.left + box.width / 2,
+              cy: box.top + box.height * (50 / 120),
+              hw: box.width / 2,
+              hh: box.height * (50 / 120),
+              left: v.left, top: v.top, right: v.right, bottom: v.bottom
+            };
+          }
+          function slack(d) {
+            if (!d || d.hw < 2 || d.hh < 2) return -1;
+            if (px < d.left || px > d.right || py < d.top || py > d.bottom) return -1;
+            const span = Math.abs(px - d.cx) / d.hw + Math.abs(py - d.cy) / d.hh;
+            return span <= 1 ? 1 - span : -1;
+          }
+          village.scrollTop = 0;
+          const at0 = measure();
+          village.scrollTop = max;
+          const atMax = measure();
+          const span = atMax.cy - at0.cy;
+          let guess = saved;
+          if (at0.hw >= 2 && at0.hh >= 2 && Math.abs(px - at0.cx) / at0.hw < 1) {
+            const room = (1 - Math.abs(px - at0.cx) / at0.hw) * at0.hh;
+            if (Math.abs(span) < 0.5) {
+              guess = 0;
+            } else {
+              const sLo = (py - room - at0.cy) * max / span;
+              const sHi = (py + room - at0.cy) * max / span;
+              const lo = Math.max(0, Math.min(sLo, sHi));
+              const hi = Math.min(max, Math.max(sLo, sHi));
+              if (lo <= hi) guess = (lo + hi) / 2;
+            }
+          }
+          let best = null;
+          let bestSlack = -1;
+          const start = Math.max(0, Math.floor(guess) - 40);
+          const end = Math.min(max, Math.ceil(guess) + 40);
+          for (let s = start; s <= end; s += 1) {
+            village.scrollTop = s;
+            const got = slack(measure());
+            if (got > bestSlack) {
+              bestSlack = got;
+              best = s;
+            }
+          }
+          if (best == null) {
+            village.scrollTop = saved;
+            return {ok: false, max, scroll: saved, cx: at0.cx, cy: at0.cy};
+          }
+          village.scrollTop = best;
+          const now = measure();
+          return {
+            ok: true,
+            max,
+            scroll: village.scrollTop,
+            slack: bestSlack,
+            cx: now.cx,
+            cy: now.cy,
+            hw: now.hw,
+            hh: now.hh,
+            villageBottom: now.bottom
+          };
+        }""",
+        [x, y, cell_x, cell_y],
+    )
+
+
+def _inclusive_span(lo, hi):
+    """Integers ix with lo <= ix <= hi."""
+    first = math.ceil(lo - 1e-9)
+    last = math.floor(hi + 1e-9)
+    if first < lo:
+        first += 1
+    if last > hi:
+        last -= 1
+    if first > last:
+        return None
+    return first, last
+
+
+def _beyond(edge, direction, step):
+    """Integer at least `step` pixels past `edge`. direction +1 grows."""
+    if direction > 0:
+        value = math.ceil(edge + step - 1e-9)
+        if value < edge + step - 1e-6:
+            value += 1
+        return value
+    value = math.floor(edge - step + 1e-9)
+    if value > edge - step + 1e-6:
+        value -= 1
+    return value
+
+
+def inclusive_border_samples(rect):
+    """Integer pixels on the inclusive border: corners and edge midpoints.
+
+    A pixel is included only when it lies inside the border box, so the
+    edge row or column itself is blocked and a half-pixel outside is not.
+    """
+    span_x = _inclusive_span(rect["left"], rect["right"])
+    span_y = _inclusive_span(rect["top"], rect["bottom"])
+    if span_x is None or span_y is None:
+        return []
+    x0, x1 = span_x
+    y0, y1 = span_y
+    mx = (x0 + x1) // 2
+    my = (y0 + y1) // 2
+    specs = (
+        ("top", mx, y0),
+        ("bottom", mx, y1),
+        ("left", x0, my),
+        ("right", x1, my),
+        ("top-left", x0, y0),
+        ("top-right", x1, y0),
+        ("bottom-left", x0, y1),
+        ("bottom-right", x1, y1),
+    )
+    points = []
+    seen = set()
+    for name, x, y in specs:
+        if (x, y) in seen:
+            continue
+        if not (rect["left"] <= x <= rect["right"] and rect["top"] <= y <= rect["bottom"]):
+            continue
+        seen.add((x, y))
+        points.append({"name": name, "x": float(x), "y": float(y)})
+    return points
+
+
+def outside_edge_points(rect):
+    """1px and 2px outside each edge, at the integer midpoint.
+
+    A candidate closer than 1px (the fractional gap browsers round through)
+    is dropped. The sample stays on the edge's span, not past a corner.
+    """
+    span_x = _inclusive_span(rect["left"], rect["right"])
+    span_y = _inclusive_span(rect["top"], rect["bottom"])
+    if span_x is None or span_y is None:
+        return []
+    x0, x1 = span_x
+    y0, y1 = span_y
+    mx = (x0 + x1) // 2
+    my = (y0 + y1) // 2
+    points = []
+    for step in (1, 2):
+        candidates = (
+            (f"top-{step}", mx, _beyond(rect["top"], -1, step)),
+            (f"bottom-{step}", mx, _beyond(rect["bottom"], 1, step)),
+            (f"left-{step}", _beyond(rect["left"], -1, step), my),
+            (f"right-{step}", _beyond(rect["right"], 1, step), my),
+        )
+        for name, x, y in candidates:
+            outside_x = x < rect["left"] or x > rect["right"]
+            outside_y = y < rect["top"] or y > rect["bottom"]
+            if outside_x == outside_y:
+                continue
+            gap = (rect["left"] - x) if x < rect["left"] else (x - rect["right"]) if x > rect["right"] else 0
+            if not outside_x:
+                gap = (rect["top"] - y) if y < rect["top"] else (y - rect["bottom"])
+            if gap + 1e-6 < step:
+                continue
+            if outside_x and not (rect["top"] <= y <= rect["bottom"]):
+                continue
+            if outside_y and not (rect["left"] <= x <= rect["right"]):
+                continue
+            points.append({"name": name, "x": float(x), "y": float(y), "step": step})
+    return points
 
 
 def integer_border_row(rect):

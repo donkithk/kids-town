@@ -29,8 +29,8 @@ from tests.qc6_checks import (  # noqa: E402
     REQUIRED_STROKE,
     any_visible_gold_point,
     bar_gap_band,
-    border_edge_points,
     cell_clip_band,
+    cell_under_point,
     cell_visibility,
     chosen_mark_paint,
     contrast_ratio,
@@ -40,8 +40,10 @@ from tests.qc6_checks import (  # noqa: E402
     gold_point_inside,
     hex_of,
     hidden_tab_state,
+    inclusive_border_samples,
     integer_border_row,
     map_hit_at,
+    outside_edge_points,
     off_visible_probes,
     open_solid_rects,
     parse_hex,
@@ -50,9 +52,11 @@ from tests.qc6_checks import (  # noqa: E402
     sample_line_backgrounds,
     sample_selected_edges,
     selected_mark_geometry,
+    scroll_for_cell_point,
     set_village_scroll,
     solid_selector,
     surface_rect,
+    village_box,
     toast_off_visible_probes,
     visible_gold_under_toast,
 )
@@ -3740,12 +3744,12 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
 
     Samples come from the ground slab's box, not the cell button. Each of
     nine points is the centre or 35% of the way toward a vertex or an edge
-    midpoint. The expected reaction is the rendered state of the cell that
-    contains the point: gold selects it, a building footprint toasts
-    已經有建築物, and any other empty cell toasts 放不下. A point inside
-    the bounding rect of open, visible solid UI is not an exposed cell,
-    even when the rounded corner lets elementFromPoint fall through to the
-    map. Those points must not select a cell and must not toast.
+    midpoint. Exposed means the point lies inside the live `#village` border
+    box and outside every open solid UI rect. Those points must hit the cell
+    that contains them: gold selects it, a building footprint toasts
+    已經有建築物, and any other empty cell toasts 放不下. A point outside
+    `#village`, or inside an open solid UI rect, must not select, toast, or
+    open a sheet, even when elementFromPoint is still the map.
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(
@@ -3762,6 +3766,7 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
     _login(page, base_url)
     problems = []
     summaries = []
+    changes = []
 
     def _setup(mode, width, height):
         _relogin(page, base_url)
@@ -3782,11 +3787,15 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
         unstore = mode == "unstore"
         kinds = _rendered_tap_kinds(page, catalog)
         solid_rects = open_solid_rects(page)
+        village = village_box(page)
+        if not village:
+            problems.append(f"{mode} {width}x{height}: #village box missing")
         neighbor = reaction = panel_hits = chrome_skipped = exposed = geometry = 0
-        fall = fall_hits = 0
+        fall = fall_hits = outside = outside_hits = 0
         examples = []
         panel_examples = []
         fall_examples = []
+        outside_examples = []
         for y in range(MAP_N):
             for x in range(MAP_N):
                 cell = (x, y)
@@ -3869,6 +3878,46 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
                     if cover.get("kind") == "chrome" or not cover.get("inMap"):
                         chrome_skipped += 1
                         continue
+                    # The map still receives clicks below #village. Those
+                    # points are the gap and the grass, not exposed cells.
+                    if not village or not point_in_rect(point, village):
+                        outside += 1
+                        changes.append(
+                            f"{mode} {width}x{height} {cell} {name} "
+                            f"({point['x']:.1f},{point['y']:.1f}) "
+                            f"exposed {cell} → no reaction"
+                        )
+                        dismiss_selection(page)
+                        _silence_toast(page)
+                        if _sheet_open(page):
+                            _close_sheet(page)
+                        tap_point(page, point["x"], point["y"])
+                        hit = read_reaction(page)
+                        acted = _acted_cell(hit)
+                        ready = (_hint(page).get("ready") or "")
+                        sheet = _sheet_open(page)
+                        if (
+                            acted is not None
+                            or hit.get("toast")
+                            or sheet
+                            or "場景 3" in (hit.get("scene") or "")
+                            or "已選擇空地" in ready
+                        ):
+                            outside_hits += 1
+                            if len(outside_examples) < 8:
+                                outside_examples.append(
+                                    f"{cell} {name} ({point['x']:.0f},{point['y']:.0f}) "
+                                    f"selected {acted} toast {hit.get('toast')!r} "
+                                    f"sheet {sheet}"
+                                )
+                        if mode == "picked":
+                            _ensure_picked_build(page, "健身室")
+                        else:
+                            dismiss_selection(page)
+                            _silence_toast(page)
+                            if _sheet_open(page):
+                                _close_sheet(page)
+                        continue
                     exposed += 1
                     dismiss_selection(page)
                     tap_point(page, point["x"], point["y"])
@@ -3892,9 +3941,12 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
             "geometry": geometry,
             "fall": fall,
             "fall_hits": fall_hits,
+            "outside": outside,
+            "outside_hits": outside_hits,
             "examples": examples,
             "panel_examples": panel_examples,
             "fall_examples": fall_examples,
+            "outside_examples": outside_examples,
         }
 
     for width, height in _TAP_VIEWPORTS:
@@ -3940,14 +3992,17 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
                 - counts["chrome"]
                 - counts["geometry"]
                 - counts["fall"]
+                - counts["outside"]
             )
             correct = counts["exposed"] - counts["neighbor"] - counts["reaction"]
             summary = (
                 f"{mode} {width}x{height}: {correct}/{counts['exposed']} exposed, "
+                f"outside-village {counts['outside']}, "
                 f"panel-excluded {panel_points}, chrome-excluded {counts['chrome']}, "
                 f"rect-fallthrough {counts['fall']}, "
                 f"neighbor-mis {counts['neighbor']}, reaction-mis {counts['reaction']}, "
                 f"panel-selections {counts['panel']}, rect-selections {counts['fall_hits']}, "
+                f"outside-reactions {counts['outside_hits']}, "
                 f"geometry {counts['geometry']}"
             )
             summaries.append(summary)
@@ -3957,6 +4012,7 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
                 + counts["chrome"]
                 + counts["geometry"]
                 + counts["fall"]
+                + counts["outside"]
                 != 576
             ):
                 problems.append(f"{summary} did not account for 576 points")
@@ -3972,6 +4028,12 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
                     + " rounded-rect fallthrough selected or toasted: "
                     + " | ".join(counts["fall_examples"])
                 )
+            if counts["outside_hits"]:
+                problems.append(
+                    summary
+                    + " outside #village reacted: "
+                    + " | ".join(counts["outside_examples"])
+                )
             if mode == "picked" and panel_points == 0:
                 problems.append(f"{mode} {width}x{height}: open palette covered no sample points")
             if mode == "bare" and panel_points:
@@ -3979,6 +4041,9 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
                     f"{mode} {width}x{height}: palette was closed but excluded {panel_points} points"
                 )
 
+    print(f"TC-FE-TAP-OFFCENTER EXPECT-CHANGES {len(changes)}", flush=True)
+    for line in changes:
+        print("OFFCENTER-CHANGE " + line, flush=True)
     print("TC-FE-TAP-OFFCENTER " + " || ".join(summaries))
     assert not problems, "TC-FE-TAP-OFFCENTER: " + " || ".join(problems[:12])
 
@@ -5950,16 +6015,9 @@ def _restore_scene1(page):
 
 _GROK_GAP = ((640.0, 609.0), (930.5, 609.0), (404.4, 609.0))
 _GROK_GRASS = ((349.5, 577.0), (155.8, 544.0), (219.0, 544.0))
-_GROK_BORDER = (
-    (1280, 720, 300, 294.5, 163.5, "palette-tr"),
-    (1280, 720, 366, 294.5, 163.5, "palette-tr"),
-    (1280, 720, 366, 177.0, 163.5, "palette"),
-    (1280, 720, 366, 1135.0, 154.5, "tools"),
-    (1100, 844, 366, 976.5, 244.3, "tools"),
-    (1100, 800, 0, 976.5, 222.3, "tools"),
-    (1100, 800, 300, 976.5, 222.3, "tools"),
-    (1100, 800, 366, 976.5, 222.3, "tools"),
-)
+_BORDER_VIEWPORTS = ((1280, 720), (1100, 800), (1100, 844))
+_BORDER_SCROLLS = (0, 300, 366)
+_PALETTE_REVERSE = ((254, 490), (254, 505))
 
 
 def _gap_samples(band):
@@ -6187,80 +6245,256 @@ def _probe_blocked(page, x, y, width, height):
     )
 
 
-def _bar_border_leaks(page, base_url):
-    """Border, 0.5px inside, 1.5px inside, plus the integer top row.
+def _box_contains(rect, x, y):
+    return bool(
+        rect
+        and rect["left"] <= x <= rect["right"]
+        and rect["top"] <= y <= rect["bottom"]
+    )
 
-    solid UI that insets 1px still lets an integer pixel on the border through.
-    Palette and the tool strip are measured from their live rects.
+
+def _reverse_expectation(cell, kind):
+    if cell is None:
+        return "no reaction"
+    if kind == "select":
+        return f"selects {cell}"
+    return f"reaches {cell} ({kind})"
+
+
+def _probe_reverse(page, x, y, width, height, kinds, expect_cell=None):
+    """Map reach for a point at least 1px outside solid UI.
+
+    A visible cell (inside `#village` and on a top face) must receive the
+    tap: gold selects it, any other cell toasts that cell's sentence.
+    Silence there is over-blocking. No visible cell means no reaction.
+    `expect_cell` requires that exact cell to be selected.
     """
+    if x < 1 or y < 1 or x >= width - 1 or y >= height - 1:
+        return "outside-viewport", f"({int(x)},{int(y)}) outside the viewport"
+    live = cell_under_point(page, x, y)
+    cell = None if not live else (int(live["c"]), int(live["r"]))
+    if expect_cell is not None and cell != expect_cell:
+        return "geometry", f"({int(x)},{int(y)}) live {cell} != {expect_cell}"
+    reaction = _map_reaction(page, x, y)
+    if expect_cell is not None:
+        if reaction["acted"] == expect_cell and "場景 3" not in (reaction["scene"] or ""):
+            return None, f"selects {expect_cell}"
+        return "miss", (
+            f"({int(x)},{int(y)}) expected select {expect_cell}, "
+            f"got {reaction['acted']} toast {reaction['toast']!r} "
+            f"scene {reaction['scene']!r}"
+        )
+    if cell is None:
+        if reaction["leaked"]:
+            return "leak", (
+                f"({int(x)},{int(y)}) no visible cell but "
+                f"cell {reaction['acted']} toast {reaction['toast']!r} "
+                f"sheet {reaction['sheet']}"
+            )
+        return None, "no reaction"
+    kind = kinds.get(cell, "unfit")
+    bucket, detail = _reaction_blame(cell, kind, reaction, False)
+    if bucket:
+        reached = detail or "no reaction"
+        return "miss", f"({int(x)},{int(y)}) visible {cell} kind {kind}: {reached}"
+    return None, _reverse_expectation(cell, kind)
+
+
+def _restore_scene2(page, scroll):
+    _ensure_town_map(page)
+    if "場景 2" not in _scene_aria(page):
+        _scene2_tap_mode(page, "picked", "工坊")
+    set_village_scroll(page, scroll)
+
+
+def _enter_scene3(page, scroll):
+    _scene2_tap_mode(page, "picked", "工坊")
+    set_village_scroll(page, scroll)
+    gold = any_visible_gold_point(page)
+    if not gold:
+        return "no visible gold cell"
+    dismiss_selection(page)
+    _silence_toast(page)
+    tap_point(page, gold["x"], gold["y"])
+    page.wait_for_timeout(150)
+    advance = page.locator("#btnToScene3")
+    ready = advance.count() and advance.first.is_visible() and advance.first.is_enabled()
+    if not ready:
+        return "scene 3 control missing"
+    advance.first.click()
+    page.wait_for_timeout(200)
+    set_village_scroll(page, scroll)
+    if "場景 3" not in _scene_aria(page):
+        return f"still {_scene_aria(page)!r}"
+    return None
+
+
+def _bar_border_leaks(page, base_url):
+    """Integer border pixels, plus points 1px and 2px outside.
+
+    On the border box, including the edge row and column, the tap is blocked.
+    At least 1px outside, the tap must reach the visible cell under it.
+    Half-pixel samples are not used: browsers land clicks on whole pixels.
+    """
+    catalog = _catalog_defs(base_url)
     problems = []
     summaries = []
-    viewports = ((1280, 720), (1100, 800), (1100, 844))
-    for width, height in viewports:
+    changes = []
+    palette_hits = {point: [] for point in _PALETTE_REVERSE}
+    print(
+        "NOTHROUGH-DROP on-edge .5 samples are not asserted: "
+        "(294.5,163.5) at 1280 scroll 300 and 366; "
+        "(177,163.5) at 1280 scroll 366; "
+        "(976.5,244.3) at 1100x844 scroll 366; "
+        "(976.5,222.3) at 1100x800 scroll 0, 300, and 366",
+        flush=True,
+    )
+    for width, height in _BORDER_VIEWPORTS:
         _relogin(page, base_url)
         page.set_viewport_size({"width": width, "height": height})
         _enter_new_build_scene2(page)
         assert _pick_unbuilt(page, "工坊"), f"{width}x{height}: 工坊 missing"
+        kinds = _rendered_tap_kinds(page, catalog)
         seen = set()
-        for scroll in (0, 300, 366):
+        for scroll in _BORDER_SCROLLS:
             _scene2_tap_mode(page, "picked", "工坊")
             placed = set_village_scroll(page, scroll)
             actual = None if not placed else round(placed.get("scroll") or 0, 1)
-            points = []
-            for name, selector in (("palette", "#palette"), ("tools", "#townMap .tools")):
+            blocked = []
+            reverse = []
+            rects = {}
+            for name, selector in (
+                ("palette", "#palette"),
+                ("tools", "#townMap .tools"),
+                ("bar", "#readyBar"),
+            ):
                 rect = surface_rect(page, selector)
+                rects[name] = rect
                 if not rect:
                     problems.append(f"{width}x{height} scroll {scroll}: {name} missing")
                     continue
-                for point in border_edge_points(rect):
+                if name != "bar":
+                    for point in inclusive_border_samples(rect):
+                        point = dict(point)
+                        point["who"] = name
+                        blocked.append(point)
+                for point in outside_edge_points(rect):
                     point = dict(point)
                     point["who"] = name
-                    points.append(point)
+                    reverse.append(point)
+            if width == 1280 and scroll == 366:
+                tools = rects.get("tools") or {}
+                print(
+                    f"NOTHROUGH-TOOLS 1280 scroll {actual} "
+                    f"bottom {tools.get('bottom')} right {tools.get('right')} "
+                    f"left {tools.get('left')} top {tools.get('top')}",
+                    flush=True,
+                )
+                blocked.append({"name": "y153", "x": 1135.0, "y": 153.0, "who": "tools-edge"})
+                live = cell_under_point(page, 1135, 154)
+                cell = None if not live else (int(live["c"]), int(live["r"]))
+                kind = None if cell is None else kinds.get(cell, "unfit")
+                new = _reverse_expectation(cell, kind)
+                changes.append(
+                    f"(1280,720) scroll 366 (1135,154.5) blocked → (1135,154) {new}"
+                )
+                print("NOTHROUGH-CHANGE " + changes[-1], flush=True)
+                reverse.append({
+                    "name": "y154",
+                    "x": 1135.0,
+                    "y": 154.0,
+                    "who": "tools-outside",
+                    "literal": True,
+                })
             if width == 1280 and (scroll == 0 or actual not in seen):
                 for name, selector in (("bar", "#readyBar"), ("palette", "#palette")):
-                    rect = surface_rect(page, selector)
+                    rect = rects.get(name) or surface_rect(page, selector)
                     if not rect:
                         continue
                     for point in integer_border_row(rect):
                         point = dict(point)
                         point["who"] = name + "-top"
-                        points.append(point)
-            for item in _GROK_BORDER:
-                gw, gh, gscroll, gx, gy, glabel = item
-                if (gw, gh, gscroll) == (width, height, scroll):
-                    points.append({"name": f"grok-{glabel}", "x": gx, "y": gy, "who": "grok"})
+                        blocked.append(point)
             seen.add(actual)
+            solids = open_solid_rects(page)
             print(
                 f"TC-FE-TAP-BAR-NOTHROUGH border {width}x{height} "
-                f"scroll {actual} points {len(points)}",
+                f"scroll {actual} blocked {len(blocked)} reverse {len(reverse)}",
                 flush=True,
             )
             leaks = []
-            grok_leaks = []
-            for point in points:
+            reverse_miss = []
+            skipped = 0
+            for point in blocked:
                 detail = _probe_blocked(page, point["x"], point["y"], width, height)
                 if not detail:
-                    if point["who"] == "grok":
-                        grok_leaks.append(f"{point['name']} quiet")
                     continue
-                if point["who"] == "grok" or len(leaks) < 6:
+                if len(leaks) < 6:
                     leaks.append(f"{point['who']} {point['name']} {detail}")
                 else:
                     leaks.append("more")
-                if point["who"] == "grok":
-                    grok_leaks.append(f"{point['name']} LEAK {detail}")
-                _ensure_town_map(page)
-                if "場景 2" not in _scene_aria(page):
-                    _scene2_tap_mode(page, "picked", "工坊")
-                    set_village_scroll(page, scroll)
+                _restore_scene2(page, scroll)
+            for point in reverse:
+                covered = solid_selector(solids, point["x"], point["y"])
+                if covered and not point.get("literal"):
+                    skipped += 1
+                    continue
+                if covered and point.get("literal"):
+                    reverse_miss.append(f"{point['name']} covered by {covered}")
+                    continue
+                status, detail = _probe_reverse(
+                    page, point["x"], point["y"], width, height, kinds
+                )
+                if status:
+                    if len(reverse_miss) < 6:
+                        reverse_miss.append(f"{point['who']} {point['name']} {detail}")
+                    else:
+                        reverse_miss.append("more")
+                _restore_scene2(page, scroll)
             real = [item for item in leaks if item != "more"]
+            real_reverse = [item for item in reverse_miss if item != "more"]
             summaries.append(
                 f"border {width}x{height} scroll {actual}: "
-                f"points {len(points)} leaks {len(leaks)} grok {grok_leaks}"
+                f"blocked {len(blocked)} leaks {len(leaks)} "
+                f"reverse {len(reverse)} skipped {skipped} miss {len(reverse_miss)}"
             )
             if real:
                 problems.append(
                     f"border {width}x{height} scroll {actual}: " + " | ".join(real[:6])
+                )
+            if real_reverse:
+                problems.append(
+                    f"reverse {width}x{height} scroll {actual}: "
+                    + " | ".join(real_reverse[:6])
+                )
+        for px, py in _PALETTE_REVERSE:
+            _scene2_tap_mode(page, "picked", "工坊")
+            solved = scroll_for_cell_point(page, px, py, 0, 5)
+            palette = surface_rect(page, "#palette")
+            inside = _box_contains(palette, px, py)
+            print(
+                f"NOTHROUGH-PALETTE ({px},{py}) {width}x{height} "
+                f"solved {solved} palette-inside {inside} "
+                f"palette-right {(palette or {}).get('right')}",
+                flush=True,
+            )
+            if not solved or not solved.get("ok") or inside:
+                continue
+            palette_hits[(px, py)].append(
+                f"{width}x{height} scroll {solved.get('scroll')}"
+            )
+            status, detail = _probe_reverse(
+                page, px, py, width, height, kinds, expect_cell=(0, 5)
+            )
+            if status:
+                problems.append(
+                    f"palette reverse ({px},{py}) {width}x{height} "
+                    f"scroll {solved.get('scroll')}: {detail}"
+                )
+            else:
+                summaries.append(
+                    f"palette ({px},{py}) {width}x{height} "
+                    f"scroll {solved.get('scroll')} {detail}"
                 )
         _scene2_tap_mode(page, "picked", "工坊")
         set_village_scroll(page, 0)
@@ -6289,6 +6523,64 @@ def _bar_border_leaks(page, base_url):
                 problems.append(
                     "place-bar top: " + " | ".join(item for item in leaks if item != "more")
                 )
+        for scroll in _BORDER_SCROLLS:
+            opened = _enter_scene3(page, scroll)
+            if opened:
+                problems.append(
+                    f"place bar {width}x{height} scroll {scroll}: {opened}"
+                )
+                continue
+            place = surface_rect(page, "#uxPlaceBar")
+            if not place:
+                problems.append(f"place bar missing {width}x{height} scroll {scroll}")
+                continue
+            place_kinds = _rendered_tap_kinds(page, catalog)
+            solids = open_solid_rects(page)
+            outside = outside_edge_points(place)
+            misses = []
+            skipped = 0
+            for point in outside:
+                if solid_selector(solids, point["x"], point["y"]):
+                    skipped += 1
+                    continue
+                status, detail = _probe_reverse(
+                    page, point["x"], point["y"], width, height, place_kinds
+                )
+                if status:
+                    if len(misses) < 4:
+                        misses.append(f"{point['name']} {detail}")
+                    else:
+                        misses.append("more")
+                if "場景 3" not in _scene_aria(page):
+                    reopened = _enter_scene3(page, scroll)
+                    if reopened:
+                        misses.append(f"left scene 3 ({reopened})")
+                        break
+                    solids = open_solid_rects(page)
+            summaries.append(
+                f"place-bar reverse {width}x{height} scroll {scroll}: "
+                f"points {len(outside)} skipped {skipped} miss {len(misses)}"
+            )
+            real = [item for item in misses if item != "more"]
+            if real:
+                problems.append(
+                    f"place-bar reverse {width}x{height} scroll {scroll}: "
+                    + " | ".join(real[:4])
+                )
+    for px, py in _PALETTE_REVERSE:
+        where = palette_hits[(px, py)]
+        if not where:
+            problems.append(
+                f"({px},{py}) never landed on (0,5) outside the palette"
+            )
+        else:
+            print(
+                f"NOTHROUGH-REVERSE ({px},{py}) selects (0,5) at {where}",
+                flush=True,
+            )
+    print(f"TC-FE-TAP-BAR-NOTHROUGH EXPECT-CHANGES {len(changes)}", flush=True)
+    for line in changes:
+        print("NOTHROUGH-CHANGE " + line, flush=True)
     return problems, summaries
 
 
