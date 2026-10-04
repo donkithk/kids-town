@@ -1375,7 +1375,8 @@
   /* A child-facing sentence is written Chinese. English and JSON stay hidden. */
   function childFacing(err) {
     var msg = err && typeof err.message === "string" ? err.message.trim() : "";
-    if (msg && /[\u3400-\u9fff]/.test(msg)) return msg;
+    /* A fragment such as a range or occupancy note is not a sentence for the child. */
+    if (msg && /[\u3400-\u9fff]/.test(msg) && /[。！？]$/.test(msg)) return msg;
     return "";
   }
 
