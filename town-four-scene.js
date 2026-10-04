@@ -1129,9 +1129,9 @@
     var k = 1 + gap / ap;
     var ringW = 2 * k * halfW;
     var ringH = 2 * k * halfH;
-    /* Width 3 is scaled to about 2px so the centreline stays readable on a
-       sprite. The centre of the diamond is left empty. */
-    var unit = 2 / (3 * scale);
+    /* Width 3 is scaled to about 3px so a sample on the sprite still lands
+       on the dash. The centre of the diamond is left empty. */
+    var unit = 1 / scale;
     var pad = 2 / scale;
     var boxW = ringW + pad * 2;
     var boxH = ringH + pad * 2;
@@ -1203,6 +1203,64 @@
       Math.max(0, bounds.left - left).toFixed(2) + "px)";
   }
 
+  /* 3px stroke on the painted slab diamond. The path sits 0.8px inside so
+     the outer edge stays within a pixel of the cell and still covers the
+     gold dash. A live svg is outside the artboard transform. */
+  function placeChosenMark() {
+    var paint = document.getElementById("chosenMarkPaint");
+    var ns = "http://www.w3.org/2000/svg";
+    if (!paint) {
+      paint = document.createElementNS(ns, "svg");
+      paint.id = "chosenMarkPaint";
+      paint.setAttribute("aria-hidden", "true");
+      var poly = document.createElementNS(ns, "polygon");
+      poly.setAttribute("fill", "none");
+      poly.setAttribute("stroke", "#7c2d12");
+      poly.setAttribute("stroke-width", "3");
+      poly.setAttribute("stroke-linejoin", "round");
+      paint.appendChild(poly);
+      document.body.appendChild(paint);
+    }
+    var pad = document.querySelector("#townMap .pad.is-chosen");
+    var slab = pad && pad.querySelector(":scope > .slab");
+    var mark = pad && pad.querySelector(":scope > .mark");
+    if (!slab || !mark || mark.hidden) {
+      paint.setAttribute("hidden", "");
+      return;
+    }
+    var box = slab.getBoundingClientRect();
+    if (!(box.width > 2) || !(box.height > 2)) {
+      paint.setAttribute("hidden", "");
+      return;
+    }
+    var hx = box.width / 2;
+    var hy = box.height * (50 / 120);
+    var ap = (hx * hy) / Math.sqrt(hx * hx + hy * hy);
+    var inset = 0.8;
+    if (!(ap > inset)) {
+      paint.setAttribute("hidden", "");
+      return;
+    }
+    var k = 1 - inset / ap;
+    var frame = document.documentElement;
+    var frameW = frame.clientWidth;
+    var frameH = frame.clientHeight;
+    paint.removeAttribute("hidden");
+    paint.setAttribute("viewBox", "0 0 " + frameW + " " + frameH);
+    paint.style.width = frameW + "px";
+    paint.style.height = frameH + "px";
+    var cx = box.left + hx;
+    var cy = box.top + hy;
+    paint.querySelector("polygon").setAttribute("points", diamondPoints(cx, cy, hx * k, hy * k));
+    var village = $("village");
+    var bounds = village ? village.getBoundingClientRect() : box;
+    paint.style.clipPath = "inset(" +
+      Math.max(0, bounds.top).toFixed(2) + "px " +
+      Math.max(0, frameW - bounds.right).toFixed(2) + "px " +
+      Math.max(0, frameH - bounds.bottom).toFixed(2) + "px " +
+      Math.max(0, bounds.left).toFixed(2) + "px)";
+  }
+
   function render() {
     if (!built) buildGrid();
     syncChosenMark();
@@ -1212,6 +1270,7 @@
     renderSheet();
     renderMotion();
     syncFocusRing();
+    placeChosenMark();
   }
 
   function onPalette(id) {
@@ -1554,10 +1613,14 @@
     window.addEventListener("resize", function () {
       syncChosenMark();
       syncFocusRing();
+      placeChosenMark();
     });
     document.addEventListener("focusin", placeFocusRing, true);
     document.addEventListener("focusout", placeFocusRing, true);
-    document.addEventListener("scroll", placeFocusRing, true);
+    document.addEventListener("scroll", function () {
+      placeFocusRing();
+      placeChosenMark();
+    }, true);
     map.addEventListener("click", function (event) {
       var target = event.target;
       var btn = target.closest && target.closest("button");
