@@ -36,7 +36,7 @@
 ## 案例
 
 API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。  
-介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`、`TC-FE-TAP-OFFCENTER`、`TC-FE-CELL-ARIA-MATCH`、`TC-FE-TAP-BAR-NOTHROUGH`、`TC-FE-TAP-VISIBLE-ONLY`、`TC-FE-SELECTED-CONTRAST`、`TC-FE-FOCUS-RING-CENTRE`、`TC-FE-HIDDEN-INERT`、`TC-FE-TAP-BAR-GAP-BAND`、`TC-FE-TAP-SCENE-GRASS-EDGE`、`TC-FE-SELECTED-OVER-GOLD`、`TC-FE-FOCUS-RING-SHAPE`、`TC-FE-FOCUS-RING-ABOVE-SPRITE`、`TC-FE-PLACE-SERVER-MSG`，以及畫面那一半的 `TC-API-AUTOPLACE-FORMAL` 和 `TC-API-PLACE-OWNED-FORMAL`。API 檔另有 `TC-API-AUTOPLACE-FORMAL`、`TC-API-PLACE-OWNED-FORMAL`、`TC-API-PLACE-DETAIL-FORMAL`，還有只 GET 靜態檔的 `TC-FE-WAREHOUSE-GRID`。
+介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`、`TC-FE-TAP-OFFCENTER`、`TC-FE-CELL-ARIA-MATCH`、`TC-FE-TAP-BAR-NOTHROUGH`、`TC-FE-TAP-VISIBLE-ONLY`、`TC-FE-SELECTED-CONTRAST`、`TC-FE-FOCUS-RING-CENTRE`、`TC-FE-HIDDEN-INERT`、`TC-FE-TAP-BAR-GAP-BAND`、`TC-FE-TAP-SCENE-GRASS-EDGE`、`TC-FE-SELECTED-OVER-GOLD`、`TC-FE-FOCUS-RING-SHAPE`、`TC-FE-FOCUS-RING-ABOVE-SPRITE`、`TC-FE-PLACE-SERVER-MSG`、`TC-FE-SELECTED-NO-FILL`、`TC-FE-FOCUS-RING-NO-FILL`、`TC-FE-TAP-VILLAGE-HALFPX`，以及畫面那一半的 `TC-API-AUTOPLACE-FORMAL` 和 `TC-API-PLACE-OWNED-FORMAL`。API 檔另有 `TC-API-AUTOPLACE-FORMAL`、`TC-API-PLACE-OWNED-FORMAL`、`TC-API-PLACE-DETAIL-FORMAL`，還有只 GET 靜態檔的 `TC-FE-WAREHOUSE-GRID`。
 
 下表「main」是在 `5bfe76d` 加上這些測試後的結果。紅測的斷言訊息寫明預期與實際。綠測是回歸鎖，不是本缺陷。
 
@@ -415,6 +415,22 @@ POST `/api/kids/<id>/buildings` 帶 `def_id`、`cell_x`、`cell_y`，這種建�
 - 4xx，`detail` 是英文字串
 
 提示要含「這個位置放不下這座建築物。」，而且不得含 `field required`、`[`、`{`、`detail`，也不得是純 ASCII 的句子。
+
+## 選中格不填色（TC-FE-SELECTED-NO-FILL）
+
+選中標記是貼着格子頂面的實線，不是填滿的菱形。線是 `#7c2d12`，3px，畫在格子裡面（中線大約內縮 1.5px），外緣貼着格子邊，最多伸出 1px。沿每條邊的法線量到的褐線寬 2–4px。格子中心，以及每條邊向內 8px 的幾個點，要仍是原來的背景（空地 `#d5e6b4`、金色、或建築圖），不能是 `#7c2d12`。東南、西南兩條邊，若外側鄰格是金格，邊帶上的像素要是 `#7c2d12`，不能是金色虛線 `#d4a017`。「此格」徽章要有看得見的像素。像素從截圖讀，不讀標記自己的 SVG。視窗 1280×720、1100×800、390×844，各量內部金格和邊緣金格。
+
+## 焦點環不填色（TC-FE-FOCUS-RING-NO-FILL）
+
+焦點環只畫虛線：內層約 3px `#fff8e7`、外層約 2px `#6b4f2a`。環的內緣在格子外 2–4px，不壓到選中褐線，也不填 `#7c2d12`。空地、金格、以及邊緣有建築圖的格子（圖書館），中心和邊內 8px 要仍是背景或建築圖。選中又聚焦時，褐線在格子邊上（2–4px、伸出不超過 1px），環整段在它外面，格子裡面仍是背景。環的形狀仍由 `TC-FE-FOCUS-RING-SHAPE` 鎖。像素從截圖讀。
+
+## 村子下緣半像素（TC-FE-TAP-VILLAGE-HALFPX）
+
+場景 1、捲動 0。`#village` 外框 `bottom + 0.5` 那一列（1280 約 y=541.5，390 約 y=477.6，座標隨畫面矩形）不得選格、出提示或開面板。同一條案例的對照：外框 `bottom - 1.5`、落在一格看得見的金格上的點，仍要選中那一格。實心介面上的點跳過。視窗 1280×720 和 390×844。
+
+## 實心介面的邊用畫面矩形（TC-FE-TAP-BAR-NOTHROUGH）
+
+工具列、調色盤、底欄、放置列的邊都用 `getBoundingClientRect`。含邊的整數像素必須擋住。必須打到地圖的點是離外框至少 1px 的整數：`floor(top) - 1`、`ceil(bottom) + 1`、`floor(left) - 1`、`ceil(right) + 1`（再向外 1px 也測）。外框外 0–1px 的點不判斷：瀏覽器仍會點中控制項（1100×800 底欄 top 555.55 時 y=555 擋住、y=554 才到地圖；工具列 left 1134.55 時 `(1134,148)` 擋住）。那裡有看得見的格就要選中或走到該格；沒有格就不得有反應。不寫死 153、154 或 156。1280 捲動 366 的工具列若 bottom 是 155，`(1135,155)` 擋住，`(1135,156)` 要選到看得見的格。`(254,490)` 和 `(254,505)` 只在離調色盤至少 1px、而且該點下面真的看得見 `(0,5)` 時才要求選中 `(0,5)`；若這兩點落在 0–1px 帶，改用 `ceil(right) + 1` 的同一 y。捲動 366 沒有格，就不得有反應。點落在調色盤裡面則跳過。這條寬限只用於實心控制項外面的「必須打到地圖」，不放寬 `#village` 外面的半像素列。
 
 ## 放置接口的書面語（TC-API-PLACE-DETAIL-FORMAL）
 

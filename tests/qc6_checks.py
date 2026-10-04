@@ -1414,17 +1414,48 @@ def _inclusive_span(lo, hi):
     return first, last
 
 
-def _beyond(edge, direction, step):
-    """Integer at least `step` pixels past `edge`. direction +1 grows."""
-    if direction > 0:
-        value = math.ceil(edge + step - 1e-9)
-        if value < edge + step - 1e-6:
-            value += 1
-        return value
-    value = math.floor(edge - step + 1e-9)
-    if value > edge - step + 1e-6:
-        value -= 1
-    return value
+def _past_edge(edge, outward, pixels):
+    """Integer at least `pixels` px outside `edge`.
+
+    outward +1 grows (bottom, right): ``ceil(edge) + pixels``.
+    outward -1 shrinks (top, left): ``floor(edge) - pixels``.
+    ``pixels`` of 1 is the first coordinate a click can be required to
+    reach. The open interval (edge, that integer) is the 0–1px band
+    browsers still hit-test as the control, and is not a sample.
+    """
+    if pixels < 1:
+        raise ValueError(pixels)
+    if outward > 0:
+        return math.ceil(edge) + pixels
+    return math.floor(edge) - pixels
+
+
+def point_rect_gap(rect, x, y):
+    """Distance from a point to the closed border box. 0 when inside or on it."""
+    dx = 0.0
+    if x < rect["left"]:
+        dx = rect["left"] - x
+    elif x > rect["right"]:
+        dx = x - rect["right"]
+    dy = 0.0
+    if y < rect["top"]:
+        dy = rect["top"] - y
+    elif y > rect["bottom"]:
+        dy = y - rect["bottom"]
+    if dx == 0.0 and dy == 0.0:
+        return 0.0
+    return math.hypot(dx, dy)
+
+
+def in_fractional_outer_band(rect, x, y):
+    """True when the point is outside the rect by less than 1px.
+
+    Hit-testing still targets the control there (a bar top of 555.55 keeps
+    y=555, a tools left of 1134.55 keeps x=1134). Must-reach samples skip
+    this band. A point inside or on the rect is not in the band.
+    """
+    gap = point_rect_gap(rect, x, y)
+    return 0.0 < gap < 1.0
 
 
 def inclusive_border_samples(rect):
@@ -1464,10 +1495,12 @@ def inclusive_border_samples(rect):
 
 
 def outside_edge_points(rect):
-    """1px and 2px outside each edge, at the integer midpoint.
+    """Integers at least 1px outside each edge, at the integer midpoint.
 
-    A candidate closer than 1px (the fractional gap browsers round through)
-    is dropped. The sample stays on the edge's span, not past a corner.
+    The first sample on each side is ``floor(top) - 1``, ``ceil(bottom) + 1``,
+    ``floor(left) - 1``, or ``ceil(right) + 1``. A second sample is one pixel
+    further out. Nothing in the 0–1px band outside the rect is returned, and
+    the sample stays on the edge's span rather than past a corner.
     """
     span_x = _inclusive_span(rect["left"], rect["right"])
     span_y = _inclusive_span(rect["top"], rect["bottom"])
@@ -1478,28 +1511,27 @@ def outside_edge_points(rect):
     mx = (x0 + x1) // 2
     my = (y0 + y1) // 2
     points = []
-    for step in (1, 2):
+    for pixels in (1, 2):
         candidates = (
-            (f"top-{step}", mx, _beyond(rect["top"], -1, step)),
-            (f"bottom-{step}", mx, _beyond(rect["bottom"], 1, step)),
-            (f"left-{step}", _beyond(rect["left"], -1, step), my),
-            (f"right-{step}", _beyond(rect["right"], 1, step), my),
+            (f"top-{pixels}", mx, _past_edge(rect["top"], -1, pixels)),
+            (f"bottom-{pixels}", mx, _past_edge(rect["bottom"], 1, pixels)),
+            (f"left-{pixels}", _past_edge(rect["left"], -1, pixels), my),
+            (f"right-{pixels}", _past_edge(rect["right"], 1, pixels), my),
         )
         for name, x, y in candidates:
+            if in_fractional_outer_band(rect, x, y):
+                continue
+            if point_rect_gap(rect, x, y) + 1e-6 < pixels:
+                continue
             outside_x = x < rect["left"] or x > rect["right"]
             outside_y = y < rect["top"] or y > rect["bottom"]
             if outside_x == outside_y:
-                continue
-            gap = (rect["left"] - x) if x < rect["left"] else (x - rect["right"]) if x > rect["right"] else 0
-            if not outside_x:
-                gap = (rect["top"] - y) if y < rect["top"] else (y - rect["bottom"])
-            if gap + 1e-6 < step:
                 continue
             if outside_x and not (rect["top"] <= y <= rect["bottom"]):
                 continue
             if outside_y and not (rect["left"] <= x <= rect["right"]):
                 continue
-            points.append({"name": name, "x": float(x), "y": float(y), "step": step})
+            points.append({"name": name, "x": float(x), "y": float(y), "step": pixels})
     return points
 
 
@@ -1741,6 +1773,315 @@ def ring_pixel_report(png_bytes, cell, clip):
             if ringish and span <= band:
                 overlap += 1
     return {"cream": cream, "brown": brown, "overlap": overlap, "solid": solid}
+
+
+def cell_top_face(page, cell_x, cell_y):
+    """Slab top-face diamond in viewport pixels, plus the 「此格」 badge box.
+
+    The diamond is the cell, not the chosen-mark element. A padded mark box
+    is larger than the cell and must not be used as the edge.
+    """
+    return page.evaluate(
+        r"""
+([c, r]) => {
+  const pad = [...document.querySelectorAll('#townMap .pad')].find((el) => {
+    const cs = getComputedStyle(el);
+    return parseInt(cs.getPropertyValue('--c'), 10) === c
+      && parseInt(cs.getPropertyValue('--r'), 10) === r;
+  });
+  if (!pad) return {error: 'missing pad'};
+  const slab = pad.querySelector(':scope > .slab');
+  if (!slab) return {error: 'missing slab'};
+  const box = slab.getBoundingClientRect();
+  if (box.width < 2 || box.height < 2) return {error: 'empty slab'};
+  const face = 10 * (box.width / 168);
+  const cx = box.left + box.width / 2;
+  const cy = box.top + box.height / 2 - face;
+  const halfW = box.width / 2;
+  const halfH = box.height * (50 / 120);
+  const badge = pad.querySelector(':scope > .badge');
+  let badgeBox = null;
+  if (badge && !badge.hidden) {
+    const b = badge.getBoundingClientRect();
+    if (b.width > 2 && b.height > 2) {
+      badgeBox = {
+        left: b.left, top: b.top, right: b.right, bottom: b.bottom,
+        text: (badge.textContent || '').trim()
+      };
+    }
+  }
+  return {
+    c, r, cx, cy, halfW, halfH,
+    width: halfW * 2,
+    height: halfH * 2,
+    edge: c === 0 || r === 0 || c === 7 || r === 7,
+    gold: pad.classList.contains('is-empty-hot'),
+    chosen: pad.classList.contains('is-chosen'),
+    tips: {
+      N: {x: cx, y: cy - halfH},
+      E: {x: cx + halfW, y: cy},
+      S: {x: cx, y: cy + halfH},
+      W: {x: cx - halfW, y: cy}
+    },
+    badge: badgeBox
+  };
+}
+""",
+        [cell_x, cell_y],
+    )
+
+
+def _shot_pixel(rows, clip, x, y):
+    width = len(rows[0]) if rows else 0
+    height = len(rows)
+    ix = int(round(x - clip["x"]))
+    iy = int(round(y - clip["y"]))
+    if ix < 0 or iy < 0 or ix >= width or iy >= height:
+        return None
+    return rows[iy][ix]
+
+
+def _clear_brown(pixel):
+    return bool(pixel) and _rgb_dist(pixel, REQUIRED_STROKE) <= 40 * 40
+
+
+def _clear_gold(pixel):
+    if not pixel:
+        return False
+    gold = _rgb_dist(pixel, GOLD_STROKE)
+    brown = _rgb_dist(pixel, REQUIRED_STROKE)
+    return gold <= 42 * 42 and gold + 40 < brown
+
+
+def _ring_ink(pixel):
+    if not pixel or _clear_brown(pixel):
+        return False
+    cream = _rgb_dist(pixel, RING_CREAM)
+    brown = _rgb_dist(pixel, RING_BROWN)
+    if cream <= 40 * 40 and cream <= brown:
+        return True
+    return brown <= 42 * 42 and brown + 80 < _rgb_dist(pixel, REQUIRED_STROKE)
+
+
+def _face_edges(face):
+    """Five points along each diamond edge, with an outward unit normal."""
+    tips = face["tips"]
+    order = ("N", "E", "S", "W")
+    names = ("NE", "SE", "SW", "NW")
+    center = (face["cx"], face["cy"])
+    edges = []
+    for index, name in enumerate(names):
+        start = tips[order[index]]
+        end = tips[order[(index + 1) % 4]]
+        dx = end["x"] - start["x"]
+        dy = end["y"] - start["y"]
+        length = (dx * dx + dy * dy) ** 0.5 or 1.0
+        nx, ny = -dy / length, dx / length
+        mid_x = (start["x"] + end["x"]) / 2
+        mid_y = (start["y"] + end["y"]) / 2
+        if (mid_x + nx - center[0]) ** 2 + (mid_y + ny - center[1]) ** 2 < (
+            mid_x - nx - center[0]
+        ) ** 2 + (mid_y - ny - center[1]) ** 2:
+            nx, ny = -nx, -ny
+        points = []
+        for step in range(5):
+            t = 0.25 + step * 0.125
+            points.append((start["x"] + dx * t, start["y"] + dy * t))
+        edges.append({"name": name, "points": points, "nx": nx, "ny": ny})
+    return edges
+
+
+def edge_outward_points(face, distance):
+    """Midpoint of each edge, stepped outside the cell along the normal."""
+    points = []
+    for edge in _face_edges(face):
+        x, y = edge["points"][2]
+        points.append({
+            "name": edge["name"],
+            "x": x + edge["nx"] * distance,
+            "y": y + edge["ny"] * distance,
+        })
+    return points
+
+
+def _interior_points(face):
+    """Centre, and points 8px inside each edge."""
+    points = [{"name": "centre", "x": face["cx"], "y": face["cy"]}]
+    for edge in _face_edges(face):
+        x, y = edge["points"][2]
+        points.append({
+            "name": edge["name"],
+            "x": x - edge["nx"] * 8,
+            "y": y - edge["ny"] * 8,
+        })
+        x0, y0 = edge["points"][1]
+        x1, y1 = edge["points"][3]
+        for label, px, py in (("a", x0, y0), ("b", x1, y1)):
+            points.append({
+                "name": f"{edge['name']}-{label}",
+                "x": px - edge["nx"] * 8,
+                "y": py - edge["ny"] * 8,
+            })
+    return points
+
+
+def selection_pixel_report(png_before, png_after, face, clip):
+    """Interior, stroke width, and badge from two CSS-pixel screenshots.
+
+    Positive offsets are outside the cell edge. The 3px stroke is inside,
+    so brown may reach at most 1px outside and the run is 2–4px wide.
+    """
+    _bw, _bh, before_rows = png_rgb(png_before)
+    _aw, _ah, after_rows = png_rgb(png_after)
+    interior = []
+    for point in _interior_points(face):
+        after = _shot_pixel(after_rows, clip, point["x"], point["y"])
+        before = _shot_pixel(before_rows, clip, point["x"], point["y"])
+        near = bool(before and after) and _rgb_dist(before, after) <= 58 * 58
+        interior.append({
+            "name": point["name"],
+            "brown": _clear_brown(after),
+            "near": near,
+            "after": hex_of(after),
+            "before": hex_of(before),
+        })
+    edges = {}
+    for edge in _face_edges(face):
+        widths = []
+        outers = []
+        brown = gold = 0
+        for x, y in edge["points"]:
+            flags = []
+            for offset in range(-12, 13):
+                pixel = _shot_pixel(
+                    after_rows, clip,
+                    x + edge["nx"] * offset,
+                    y + edge["ny"] * offset,
+                )
+                flags.append(_clear_brown(pixel))
+            run = _run_touching_edge(flags, zero_index=12)
+            if run is None:
+                widths.append(0)
+                outers.append(None)
+            else:
+                start, end = run
+                widths.append(end - start + 1)
+                outers.append(end - 12)
+            best_brown = 10 ** 9
+            best_gold = 10 ** 9
+            for offset in (-2, -1, 0, 1):
+                pixel = _shot_pixel(
+                    after_rows, clip,
+                    x + edge["nx"] * offset,
+                    y + edge["ny"] * offset,
+                )
+                if not pixel:
+                    continue
+                best_brown = min(best_brown, _rgb_dist(pixel, REQUIRED_STROKE))
+                best_gold = min(best_gold, _rgb_dist(pixel, GOLD_STROKE))
+            if best_brown <= 42 * 42 and best_brown <= best_gold:
+                brown += 1
+            elif _clear_gold_dist(best_gold):
+                gold += 1
+        finite = [item for item in outers if item is not None]
+        edges[edge["name"]] = {
+            "width": max(widths) if widths else 0,
+            "outer": max(finite) if finite else None,
+            "brown": brown,
+            "gold": gold,
+            "samples": len(edge["points"]),
+        }
+    badge = {"present": False, "cream": 0, "brown": 0, "text": ""}
+    box = face.get("badge")
+    if box:
+        badge["present"] = True
+        badge["text"] = box.get("text") or ""
+        cream = (255, 246, 210)
+        y = box["top"]
+        while y <= box["bottom"]:
+            x = box["left"]
+            while x <= box["right"]:
+                pixel = _shot_pixel(after_rows, clip, x, y)
+                if _clear_brown(pixel):
+                    badge["brown"] += 1
+                elif pixel and _rgb_dist(pixel, cream) <= 48 * 48:
+                    badge["cream"] += 1
+                x += 1
+            y += 1
+    return {"interior": interior, "edges": edges, "badge": badge}
+
+
+def _clear_gold_dist(gold_dist):
+    return gold_dist <= 42 * 42
+
+
+def _run_touching_edge(flags, zero_index):
+    """Inclusive index run of brown pixels that contains the edge, or the nearest run."""
+    runs = []
+    start = None
+    for index, flag in enumerate(flags):
+        if flag and start is None:
+            start = index
+        elif not flag and start is not None:
+            runs.append((start, index - 1))
+            start = None
+    if start is not None:
+        runs.append((start, len(flags) - 1))
+    if not runs:
+        return None
+    for run in runs:
+        if run[0] <= zero_index <= run[1]:
+            return run
+    return min(runs, key=lambda run: min(abs(run[0] - zero_index), abs(run[1] - zero_index)))
+
+
+def focus_pixel_report(png_before, png_after, face, clip):
+    """Interior and the ring's inner edge from screenshots.
+
+    Ring ink is #fff8e7 or #6b4f2a. A #7c2d12 pixel more than 1px outside
+    the cell is the filled focus diamond, not the dashed ring.
+    """
+    _bw, _bh, before_rows = png_rgb(png_before)
+    _aw, _ah, after_rows = png_rgb(png_after)
+    interior = []
+    for point in _interior_points(face):
+        after = _shot_pixel(after_rows, clip, point["x"], point["y"])
+        before = _shot_pixel(before_rows, clip, point["x"], point["y"])
+        near = bool(before and after) and _rgb_dist(before, after) <= 58 * 58
+        interior.append({
+            "name": point["name"],
+            "brown": _clear_brown(after),
+            "near": near,
+            "after": hex_of(after),
+            "before": hex_of(before),
+        })
+    edges = {}
+    for edge in _face_edges(face):
+        firsts = []
+        brown_outside = 0
+        ink = 0
+        for x, y in edge["points"]:
+            first = None
+            for offset in range(0, 11):
+                pixel = _shot_pixel(
+                    after_rows, clip,
+                    x + edge["nx"] * offset,
+                    y + edge["ny"] * offset,
+                )
+                if offset >= 2 and _clear_brown(pixel):
+                    brown_outside += 1
+                if first is None and _ring_ink(pixel):
+                    first = offset
+            if first is not None:
+                ink += 1
+                firsts.append(first)
+        edges[edge["name"]] = {
+            "first": firsts,
+            "ink": ink,
+            "samples": len(edge["points"]),
+            "brown_outside": brown_outside,
+        }
+    return {"interior": interior, "edges": edges}
 
 
 def point_is_ring_ink(png_bytes, points, clip):

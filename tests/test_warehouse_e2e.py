@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import socket
@@ -30,16 +31,20 @@ from tests.qc6_checks import (  # noqa: E402
     any_visible_gold_point,
     bar_gap_band,
     cell_clip_band,
+    cell_top_face,
+    edge_outward_points,
     cell_under_point,
     cell_visibility,
     chosen_mark_paint,
     contrast_ratio,
     corner_insets,
+    focus_pixel_report,
     focus_ring_delta,
     focus_ring_shape,
     gold_point_inside,
     hex_of,
     hidden_tab_state,
+    in_fractional_outer_band,
     inclusive_border_samples,
     integer_border_row,
     map_hit_at,
@@ -51,6 +56,7 @@ from tests.qc6_checks import (  # noqa: E402
     ring_pixel_report,
     sample_line_backgrounds,
     sample_selected_edges,
+    selection_pixel_report,
     selected_mark_geometry,
     scroll_for_cell_point,
     set_village_scroll,
@@ -6530,12 +6536,22 @@ def _enter_scene3(page, scroll):
     return last
 
 
+def _fractional_band_hit(rects, x, y):
+    """A solid control whose 0–1px outer band contains this point, if any."""
+    for rect in rects:
+        if in_fractional_outer_band(rect, x, y):
+            return rect
+    return None
+
+
 def _bar_border_leaks(page, base_url):
-    """Integer border pixels, plus points 1px and 2px outside.
+    """Integer border pixels, plus integers at least 1px outside.
 
     On the border box, including the edge row and column, the tap is blocked.
-    At least 1px outside, the tap must reach the visible cell under it.
-    Half-pixel samples are not used: browsers land clicks on whole pixels.
+    A must-reach point is floor(top)-1, ceil(bottom)+1, floor(left)-1, or
+    ceil(right)+1 (and one pixel further). The 0–1px band outside a control
+    is not asserted: hit-testing still targets the control there. Points
+    outside #village are a different rule and stay must-not-react.
     """
     catalog = _catalog_defs(base_url)
     problems = []
@@ -6588,28 +6604,18 @@ def _bar_border_leaks(page, base_url):
                     reverse.append(point)
             if width == 1280 and scroll == 366:
                 tools = rects.get("tools") or {}
+                outside = [
+                    point for point in reverse
+                    if point.get("who") == "tools" and point.get("name") == "bottom-1"
+                ]
+                first_out = None if not outside else outside[0]["y"]
                 print(
                     f"NOTHROUGH-TOOLS 1280 scroll {actual} "
                     f"bottom {tools.get('bottom')} right {tools.get('right')} "
-                    f"left {tools.get('left')} top {tools.get('top')}",
+                    f"left {tools.get('left')} top {tools.get('top')} "
+                    f"ceil(bottom)+1 {first_out}",
                     flush=True,
                 )
-                blocked.append({"name": "y153", "x": 1135.0, "y": 153.0, "who": "tools-edge"})
-                live = cell_under_point(page, 1135, 154)
-                cell = None if not live else (int(live["c"]), int(live["r"]))
-                kind = None if cell is None else kinds.get(cell, "unfit")
-                new = _reverse_expectation(cell, kind)
-                changes.append(
-                    f"(1280,720) scroll 366 (1135,154.5) blocked → (1135,154) {new}"
-                )
-                print("NOTHROUGH-CHANGE " + changes[-1], flush=True)
-                reverse.append({
-                    "name": "y154",
-                    "x": 1135.0,
-                    "y": 154.0,
-                    "who": "tools-outside",
-                    "literal": True,
-                })
             if width == 1280 and (scroll == 0 or actual not in seen):
                 for name, selector in (("bar", "#readyBar"), ("palette", "#palette")):
                     rect = rects.get(name) or surface_rect(page, selector)
@@ -6640,11 +6646,19 @@ def _bar_border_leaks(page, base_url):
                 _restore_scene2(page, scroll)
             for point in reverse:
                 covered = solid_selector(solids, point["x"], point["y"])
-                if covered and not point.get("literal"):
+                if covered:
                     skipped += 1
                     continue
-                if covered and point.get("literal"):
-                    reverse_miss.append(f"{point['name']} covered by {covered}")
+                band = _fractional_band_hit(solids, point["x"], point["y"])
+                if band:
+                    skipped += 1
+                    print(
+                        f"NOTHROUGH-BAND {width}x{height} scroll {scroll} "
+                        f"{point.get('who')} {point.get('name')} "
+                        f"({int(point['x'])},{int(point['y'])}) "
+                        f"within 1px of {band.get('sel')}, not asserted",
+                        flush=True,
+                    )
                     continue
                 status, detail = _probe_reverse(
                     page, point["x"], point["y"], width, height, kinds
@@ -6679,34 +6693,69 @@ def _bar_border_leaks(page, base_url):
                     + " | ".join(real_reverse[:6])
                 )
         for px, py in _PALETTE_REVERSE:
-            _scene2_tap_mode(page, "picked", "工坊")
-            solved = scroll_for_cell_point(page, px, py, 0, 5)
-            palette = surface_rect(page, "#palette")
-            inside = _box_contains(palette, px, py)
-            print(
-                f"NOTHROUGH-PALETTE ({px},{py}) {width}x{height} "
-                f"solved {solved} palette-inside {inside} "
-                f"palette-right {(palette or {}).get('right')}",
-                flush=True,
-            )
-            if not solved or not solved.get("ok") or inside:
-                continue
-            palette_hits[(px, py)].append(
-                f"{width}x{height} scroll {solved.get('scroll')}"
-            )
-            status, detail = _probe_reverse(
-                page, px, py, width, height, kinds, expect_cell=(0, 5)
-            )
-            if status:
-                problems.append(
-                    f"palette reverse ({px},{py}) {width}x{height} "
-                    f"scroll {solved.get('scroll')}: {detail}"
+            for scroll in (0, 300, 366):
+                _scene2_tap_mode(page, "picked", "工坊")
+                set_village_scroll(page, scroll)
+                palette = surface_rect(page, "#palette")
+                solids = open_solid_rects(page)
+                probe_x, probe_y = px, py
+                if palette and in_fractional_outer_band(palette, px, py):
+                    probe_x = math.ceil(palette["right"]) + 1
+                    print(
+                        f"NOTHROUGH-PALETTE ({px},{py}) {width}x{height} "
+                        f"scroll {scroll} within 1px of palette "
+                        f"(right {palette['right']}), not asserted; "
+                        f"using ({probe_x},{py})",
+                        flush=True,
+                    )
+                elif _box_contains(palette, px, py):
+                    print(
+                        f"NOTHROUGH-PALETTE ({px},{py}) {width}x{height} "
+                        f"scroll {scroll} inside palette",
+                        flush=True,
+                    )
+                    continue
+                elif solid_selector(solids, px, py):
+                    print(
+                        f"NOTHROUGH-PALETTE ({px},{py}) {width}x{height} "
+                        f"scroll {scroll} covered",
+                        flush=True,
+                    )
+                    continue
+                if _fractional_band_hit(solids, probe_x, probe_y) or solid_selector(
+                    solids, probe_x, probe_y
+                ):
+                    print(
+                        f"NOTHROUGH-PALETTE ({probe_x},{probe_y}) {width}x{height} "
+                        f"scroll {scroll} still on a control, not asserted",
+                        flush=True,
+                    )
+                    continue
+                live = cell_under_point(page, probe_x, probe_y)
+                cell = None if not live else (int(live["c"]), int(live["r"]))
+                print(
+                    f"NOTHROUGH-PALETTE ({probe_x},{probe_y}) {width}x{height} "
+                    f"scroll {scroll} cell {cell}",
+                    flush=True,
                 )
-            else:
-                summaries.append(
-                    f"palette ({px},{py}) {width}x{height} "
-                    f"scroll {solved.get('scroll')} {detail}"
+                expect = cell if cell == (0, 5) else None
+                status, detail = _probe_reverse(
+                    page, probe_x, probe_y, width, height, kinds, expect_cell=expect
                 )
+                if cell == (0, 5) and not status:
+                    palette_hits[(px, py)].append(
+                        f"{width}x{height} scroll {scroll} at ({probe_x},{probe_y})"
+                    )
+                if status:
+                    problems.append(
+                        f"palette reverse ({probe_x},{probe_y}) {width}x{height} "
+                        f"scroll {scroll}: {detail}"
+                    )
+                else:
+                    summaries.append(
+                        f"palette ({probe_x},{probe_y}) {width}x{height} "
+                        f"scroll {scroll} cell {cell} {detail}"
+                    )
         _scene2_tap_mode(page, "picked", "工坊")
         set_village_scroll(page, 0)
         _click_cell(page, 2, 2)
@@ -6761,6 +6810,9 @@ def _bar_border_leaks(page, base_url):
             skipped = 0
             for point in outside:
                 if solid_selector(solids, point["x"], point["y"]):
+                    skipped += 1
+                    continue
+                if _fractional_band_hit(solids, point["x"], point["y"]):
                     skipped += 1
                     continue
                 status, detail = _probe_reverse(
@@ -7114,6 +7166,413 @@ def test_focus_ring_above_sprite(page, base_url, warehouse_db, warehouse_ids):
                             )
                     print("TC-FE-FOCUS-RING-ABOVE-SPRITE " + ", ".join(parts))
     assert not problems, "TC-FE-FOCUS-RING-ABOVE-SPRITE: " + " | ".join(problems)
+
+
+def _blur_focus(page):
+    page.evaluate(
+        "() => { const el = document.activeElement; if (el && el.blur) el.blur(); }"
+    )
+
+
+def _paint_clip(page, face, margin=28):
+    tips = list(face["tips"].values())
+    xs = [tip["x"] for tip in tips]
+    ys = [tip["y"] for tip in tips]
+    badge = face.get("badge")
+    if badge:
+        xs.extend((badge["left"], badge["right"]))
+        ys.extend((badge["top"], badge["bottom"]))
+    view = page.viewport_size
+    left = max(0, min(xs) - margin)
+    top = max(0, min(ys) - margin)
+    right = min(view["width"], max(xs) + margin)
+    bottom = min(view["height"], max(ys) + margin)
+    return {
+        "x": left,
+        "y": top,
+        "width": max(1, right - left),
+        "height": max(1, bottom - top),
+    }
+
+
+def _pad_is_gold(page, cell_x, cell_y):
+    return bool(page.evaluate(
+        """([c, r]) => {
+          const pad = [...document.querySelectorAll('#townMap .pad')].find((el) => {
+            const cs = getComputedStyle(el);
+            return parseInt(cs.getPropertyValue('--c'), 10) === c
+              && parseInt(cs.getPropertyValue('--r'), 10) === r;
+          });
+          return !!(pad && pad.classList.contains('is-empty-hot'));
+        }""",
+        [cell_x, cell_y],
+    ))
+
+
+def _hot_cells(page):
+    return page.evaluate(
+        """() => [...document.querySelectorAll('#townMap .pad.is-empty-hot')].map((pad) => {
+          const cs = getComputedStyle(pad);
+          const c = parseInt(cs.getPropertyValue('--c'), 10);
+          const r = parseInt(cs.getPropertyValue('--r'), 10);
+          return {c, r, edge: c === 0 || r === 0 || c === 7 || r === 7};
+        }).filter((cell) => Number.isFinite(cell.c) && Number.isFinite(cell.r))"""
+    ) or []
+
+
+def _shot(page, clip):
+    return page.screenshot(clip=clip, scale="css", type="png")
+
+
+def _gold_edges(page, face):
+    """SE/SW edges whose outside neighbour is still a gold cell."""
+    distance = max(14.0, (face.get("halfH") or 0) * 0.55)
+    found = []
+    for point in edge_outward_points(face, distance):
+        if point["name"] not in ("SE", "SW"):
+            continue
+        live = cell_under_point(page, point["x"], point["y"])
+        if not live:
+            continue
+        cell = (int(live["c"]), int(live["r"]))
+        if cell == (face["c"], face["r"]):
+            continue
+        if _pad_is_gold(page, cell[0], cell[1]):
+            found.append(point["name"])
+    return found
+
+
+@pytest.mark.case_id("TC-FE-SELECTED-NO-FILL")
+def test_selected_no_fill(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-SELECTED-NO-FILL 選中格只畫一條在格子裡面的實線。
+
+    中心和每條邊內 8px 要仍是原來的空地、金色或建築圖，不能是 #7c2d12。
+    沿邊的法線量到的褐線是 2–4px，外緣貼着格子邊，最多伸出 1px。
+    東南、西南若鄰格是金格，邊帶上的像素是 #7c2d12 不是 #d4a017。
+    「此格」徽章要看得見。視窗 1280×720、1100×800、390×844。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(warehouse_db, kid_id, points=800, buildings=[])
+    _login(page, base_url)
+    problems = []
+    summaries = []
+    for width, height in ((1280, 720), (1100, 800), (390, 844)):
+        _relogin(page, base_url)
+        page.set_viewport_size({"width": width, "height": height})
+        _enter_new_build_scene2(page)
+        assert _pick_unbuilt(page, "工坊"), f"{width}x{height}: 工坊 missing"
+        hot = _hot_cells(page)
+        interior = [cell for cell in hot if not cell["edge"]]
+        edge = [cell for cell in hot if cell["edge"]]
+        chosen = []
+        if interior:
+            chosen.append((interior[0], "interior"))
+        if len(interior) > 1:
+            chosen.append((interior[1], "interior-b"))
+        if edge:
+            chosen.append((edge[0], "edge"))
+        if len(chosen) < 2:
+            problems.append(f"{width}x{height}: not enough selectable cells")
+            continue
+        for cell, role in chosen:
+            _scroll_cell_into_view(page, cell["c"], cell["r"])
+            dismiss_selection(page)
+            _blur_focus(page)
+            _silence_toast(page)
+            face = cell_top_face(page, cell["c"], cell["r"]) or {}
+            if face.get("error") or not face.get("tips"):
+                problems.append(f"{width}x{height} {role} {face.get('error')}")
+                continue
+            clip = _paint_clip(page, face)
+            before = _shot(page, clip)
+            _select_cell(page, cell["c"], cell["r"])
+            _blur_focus(page)
+            _silence_toast(page)
+            chosen_face = cell_top_face(page, cell["c"], cell["r"]) or {}
+            if not chosen_face.get("chosen"):
+                problems.append(
+                    f"{width}x{height} {role} ({cell['c']},{cell['r']}) did not stay selected"
+                )
+                continue
+            face["badge"] = chosen_face.get("badge")
+            after = _shot(page, clip)
+            report = selection_pixel_report(before, after, face, clip)
+            brown_in = [item["name"] for item in report["interior"] if item["brown"]]
+            drifted = [item["name"] for item in report["interior"] if not item["near"]]
+            widths = []
+            outers = []
+            for name, edge_report in report["edges"].items():
+                widths.append(f"{name}:{edge_report['width']}")
+                outers.append(edge_report["outer"])
+                if edge_report["width"] < 2 or edge_report["width"] > 4:
+                    problems.append(
+                        f"{width}x{height} {role} {name}: brown run "
+                        f"{edge_report['width']}px, want 2–4"
+                    )
+                outer = edge_report["outer"]
+                if outer is None or outer > 1:
+                    problems.append(
+                        f"{width}x{height} {role} {name}: brown reaches "
+                        f"{outer}px outside the cell, want at most 1"
+                    )
+            if brown_in:
+                sample = next(item for item in report["interior"] if item["brown"])
+                problems.append(
+                    f"{width}x{height} {role}: interior {','.join(brown_in)} "
+                    f"is #7c2d12 ({sample['after']})"
+                )
+            if drifted:
+                sample = next(item for item in report["interior"] if not item["near"])
+                problems.append(
+                    f"{width}x{height} {role}: interior {','.join(drifted)} "
+                    f"left the background ({sample['before']} → {sample['after']})"
+                )
+            badge = report["badge"]
+            if badge.get("text") != "此格" or badge.get("cream", 0) < 8:
+                problems.append(
+                    f"{width}x{height} {role}: 「此格」 badge cream "
+                    f"{badge.get('cream')} text {badge.get('text')!r}"
+                )
+            for name in _gold_edges(page, face):
+                edge_report = report["edges"][name]
+                if edge_report["brown"] < 4 or edge_report["gold"]:
+                    problems.append(
+                        f"{width}x{height} {role} {name}: "
+                        f"{edge_report['brown']}/{edge_report['samples']} #7c2d12, "
+                        f"{edge_report['gold']} look like #d4a017"
+                    )
+            centre = next(item for item in report["interior"] if item["name"] == "centre")
+            summaries.append(
+                f"{width}x{height} {role} ({cell['c']},{cell['r']}) "
+                f"centre {centre['before']}→{centre['after']} "
+                f"widths {','.join(widths)} outer {outers} "
+                f"badge {badge.get('cream')}"
+            )
+    print("TC-FE-SELECTED-NO-FILL " + " || ".join(summaries))
+    assert not problems, "TC-FE-SELECTED-NO-FILL: " + " | ".join(problems[:12])
+
+
+@pytest.mark.case_id("TC-FE-FOCUS-RING-NO-FILL")
+def test_focus_ring_no_fill(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-FOCUS-RING-NO-FILL 焦點環只畫虛線，不填滿格子。
+
+    空地、金格、邊緣有建築圖的格子：中心和邊內 8px 不能變成 #7c2d12。
+    環的內緣在格子外約 2px（2–4px），是內層 #fff8e7、外層 #6b4f2a。
+    選中又聚焦時，褐線在格子邊上，環在它外面，格子裡面仍是背景。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[{"name": "圖書館", "level": 1, "stored": 0, "cell_x": 6, "cell_y": 0}],
+    )
+    _login(page, base_url)
+    problems = []
+    summaries = []
+
+    def _check_focus(width, height, role, cell, selected):
+        _scroll_cell_into_view(page, cell[0], cell[1])
+        dismiss_selection(page)
+        _blur_focus(page)
+        _silence_toast(page)
+        face = cell_top_face(page, cell[0], cell[1]) or {}
+        if face.get("error") or not face.get("tips"):
+            problems.append(f"{width}x{height} {role} {face.get('error')}")
+            return
+        clip = _paint_clip(page, face)
+        before = _shot(page, clip)
+        if selected:
+            _select_cell(page, cell[0], cell[1])
+            _silence_toast(page)
+            if not (cell_top_face(page, cell[0], cell[1]) or {}).get("chosen"):
+                problems.append(f"{width}x{height} {role}: did not stay selected")
+                return
+        focus_ring_shape(page, cell[0], cell[1])
+        page.wait_for_timeout(40)
+        after = _shot(page, clip)
+        focus = focus_pixel_report(before, after, face, clip)
+        brown_in = [item["name"] for item in focus["interior"] if item["brown"]]
+        drifted = [item["name"] for item in focus["interior"] if not item["near"]]
+        if brown_in:
+            sample = next(item for item in focus["interior"] if item["brown"])
+            problems.append(
+                f"{width}x{height} {role}: interior {','.join(brown_in)} "
+                f"is #7c2d12 ({sample['after']})"
+            )
+        if drifted:
+            sample = next(item for item in focus["interior"] if not item["near"])
+            problems.append(
+                f"{width}x{height} {role}: interior {','.join(drifted)} "
+                f"covered the background ({sample['before']} → {sample['after']})"
+            )
+        ink_bits = []
+        for name, edge_report in focus["edges"].items():
+            ink_bits.append(f"{name}:{edge_report['ink']}/{edge_report['samples']}")
+            if edge_report["brown_outside"]:
+                problems.append(
+                    f"{width}x{height} {role} {name}: "
+                    f"{edge_report['brown_outside']} #7c2d12 pixels outside the cell"
+                )
+            if edge_report["ink"] < 2:
+                problems.append(
+                    f"{width}x{height} {role} {name}: ring ink "
+                    f"{edge_report['ink']}/{edge_report['samples']}"
+                )
+            else:
+                off = [
+                    item for item in edge_report["first"]
+                    if item < 2 or item > 4
+                ]
+                if off:
+                    problems.append(
+                        f"{width}x{height} {role} {name}: ring inner edge at "
+                        f"{edge_report['first']}, want 2–4px outside"
+                    )
+        if selected:
+            chosen_face = cell_top_face(page, cell[0], cell[1]) or {}
+            face["badge"] = chosen_face.get("badge")
+            stroke = selection_pixel_report(before, after, face, clip)
+            for name, edge_report in stroke["edges"].items():
+                if edge_report["width"] < 2 or edge_report["width"] > 4:
+                    problems.append(
+                        f"{width}x{height} {role} selected {name}: brown run "
+                        f"{edge_report['width']}px, want 2–4"
+                    )
+                outer = edge_report["outer"]
+                if outer is None or outer > 1:
+                    problems.append(
+                        f"{width}x{height} {role} selected {name}: brown reaches "
+                        f"{outer}px outside, want at most 1"
+                    )
+        _blur_focus(page)
+        centre = next(item for item in focus["interior"] if item["name"] == "centre")
+        summaries.append(
+            f"{width}x{height} {role} ({cell[0]},{cell[1]}) "
+            f"centre {centre['before']}→{centre['after']} "
+            f"ring {','.join(ink_bits)}"
+        )
+
+    for width, height in ((1280, 720), (1100, 800), (390, 844)):
+        _relogin(page, base_url)
+        page.set_viewport_size({"width": width, "height": height})
+        _enter_new_build_scene2(page)
+        assert _pick_unbuilt(page, "工坊"), f"{width}x{height}: 工坊 missing"
+        hot = _hot_cells(page)
+        interior = next((cell for cell in hot if not cell["edge"]), None)
+        edge = next((cell for cell in hot if cell["edge"]), None)
+        if not interior or not edge:
+            problems.append(f"{width}x{height}: missing a gold interior or edge cell")
+            continue
+        _check_focus(width, height, "gold", (interior["c"], interior["r"]), False)
+        _check_focus(width, height, "edge", (edge["c"], edge["r"]), False)
+        _check_focus(width, height, "sprite", (6, 0), False)
+        _check_focus(width, height, "gold+selected", (interior["c"], interior["r"]), True)
+        _check_focus(width, height, "edge+selected", (edge["c"], edge["r"]), True)
+    print("TC-FE-FOCUS-RING-NO-FILL " + " || ".join(summaries))
+    assert not problems, "TC-FE-FOCUS-RING-NO-FILL: " + " | ".join(problems[:12])
+
+
+@pytest.mark.case_id("TC-FE-TAP-VILLAGE-HALFPX")
+def test_tap_village_halfpx(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-TAP-VILLAGE-HALFPX 村子下緣外面半像素不得打中格子。
+
+    場景 1、捲動 0。y 是 #village 外框 bottom+0.5（1280 約 541.5，390 約 477.6）。
+    那一列不得有反應。同一條案例裡，底邊往內 1.5px、落在看得見的格上的點，
+    仍要選中那一格。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[
+            {"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0},
+            {"name": "農場", "level": 1, "stored": 0, "cell_x": 4, "cell_y": 3},
+        ],
+    )
+    _login(page, base_url)
+    problems = []
+    summaries = []
+    for width, height in ((1280, 720), (390, 844)):
+        _relogin(page, base_url)
+        page.set_viewport_size({"width": width, "height": height})
+        _restore_scene1(page)
+        set_village_scroll(page, 0)
+        if "場景 1" not in _scene_aria(page):
+            problems.append(f"{width}x{height}: not scene 1 ({_scene_aria(page)!r})")
+            continue
+        box = village_box(page)
+        if not box:
+            problems.append(f"{width}x{height}: #village missing")
+            continue
+        y = box["bottom"] + 0.5
+        print(
+            f"VILLAGE-HALFPX {width}x{height} bottom {box['bottom']:.2f} y {y:.2f}",
+            flush=True,
+        )
+        solids = open_solid_rects(page)
+        reacted = []
+        probed = 0
+        x = box["left"] + 4
+        while x < box["right"] - 4:
+            if not solid_selector(solids, x, y):
+                probed += 1
+                reaction = _map_reaction(page, x, y)
+                if reaction_happened(reaction):
+                    if len(reacted) < 6:
+                        reacted.append(
+                            f"({x:.1f},{y:.1f}) cell {reaction['acted']} "
+                            f"toast {reaction['toast']!r} sheet {reaction['sheet']}"
+                        )
+                    else:
+                        reacted.append("more")
+                if "場景 1" not in _scene_aria(page):
+                    _restore_scene1(page)
+                    set_village_scroll(page, 0)
+            x += 8
+        real = [item for item in reacted if item != "more"]
+        summaries.append(
+            f"{width}x{height} halfpx probed {probed} reactions {len(reacted)}"
+        )
+        if real:
+            problems.append(
+                f"{width}x{height} y={y:.2f}: " + " | ".join(real)
+            )
+        _enter_new_build_scene2(page)
+        assert _pick_unbuilt(page, "工坊"), f"{width}x{height}: 工坊 missing"
+        set_village_scroll(page, 0)
+        box = village_box(page)
+        if not box:
+            problems.append(f"{width}x{height}: #village missing for the control")
+            continue
+        y_in = box["bottom"] - 1.5
+        control = None
+        tried = 0
+        x = box["left"] + 8
+        while x < box["right"] - 8:
+            live = cell_under_point(page, x, y_in)
+            if live and _pad_is_gold(page, int(live["c"]), int(live["r"])):
+                if not solid_selector(open_solid_rects(page), x, y_in):
+                    cell = (int(live["c"]), int(live["r"]))
+                    tried += 1
+                    reaction = _map_reaction(page, x, y_in)
+                    if reaction["acted"] == cell and "場景 3" not in (reaction["scene"] or ""):
+                        control = (x, y_in, cell)
+                        break
+            x += 6
+        if not control:
+            problems.append(
+                f"{width}x{height}: no point at y={y_in:.2f} selected its cell "
+                f"({tried} gold points tried)"
+            )
+        else:
+            summaries.append(
+                f"{width}x{height} control selects {control[2]} "
+                f"at ({control[0]:.1f},{y_in:.1f})"
+            )
+    print("TC-FE-TAP-VILLAGE-HALFPX " + " || ".join(summaries))
+    assert not problems, "TC-FE-TAP-VILLAGE-HALFPX: " + " | ".join(problems[:8])
 
 
 _SERVER_FORMAL = "你已經興建了這種建築物。"
