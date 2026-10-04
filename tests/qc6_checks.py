@@ -794,15 +794,22 @@ def surface_rect(page, selector):
     )
 
 
-def gold_point_inside(page, rect):
-    """A visible gold-diamond point inside rect that elementFromPoint leaves on the map."""
+def gold_point_inside(page, rect, limit=1):
+    """A visible gold-diamond point inside rect that elementFromPoint leaves on the map.
+
+    ``limit`` 1 returns that point or None, the same shape as before.
+    A larger limit returns a list. Those extra points skip buttons that
+    are not the cell's own button, and take at most two points per cell.
+    """
     if not rect:
-        return None
+        return None if limit == 1 else []
     return page.evaluate(
-        """(rect) => {
+        """(args) => {
+          const rect = args.rect;
+          const limit = args.limit || 1;
           const map = document.getElementById('townMap');
           const village = document.getElementById('village');
-          if (!map || !village) return null;
+          if (!map || !village) return limit === 1 ? null : [];
           function clientBox(el) {
             const b = el.getBoundingClientRect();
             const cs = getComputedStyle(el);
@@ -869,6 +876,7 @@ def gold_point_inside(page, rect):
             const hit = cellAt(x, y);
             return !!(hit && hit.c === c && hit.r === r);
           }
+          const found = [];
           for (const pad of document.querySelectorAll('#townMap .pad')) {
             const mark = pad.querySelector(':scope > .mark');
             if (!mark || mark.hidden) continue;
@@ -884,17 +892,32 @@ def gold_point_inside(page, rect):
             const cs = getComputedStyle(pad);
             const c = parseInt(cs.getPropertyValue('--c'), 10);
             const r = parseInt(cs.getPropertyValue('--r'), 10);
-            for (let y = b.top + 4; y <= b.bottom - 4; y += 7) {
+            let taken = 0;
+            let nextPad = false;
+            for (let y = b.top + 4; y <= b.bottom - 4 && !nextPad; y += 7) {
               for (let x = b.left + 4; x <= b.right - 4; x += 7) {
                 if (Math.abs(x - cx) / hw + Math.abs(y - cy) / hh > 0.9) continue;
                 if (!open(x, y, c, r)) continue;
-                return {x, y, c, r};
+                if (limit > 1) {
+                  const el = document.elementFromPoint(x, y);
+                  const btn = el && el.closest && el.closest('button');
+                  if (btn && !(btn.classList.contains('cell-btn') && btn.closest('.pad') === pad)) {
+                    continue;
+                  }
+                }
+                const point = {x, y, c, r};
+                if (limit === 1) return point;
+                found.push(point);
+                taken += 1;
+                if (found.length >= limit) return found;
+                if (taken >= 2) { nextPad = true; break; }
               }
             }
           }
-          return null;
+          if (limit === 1) return null;
+          return found;
         }""",
-        rect,
+        {"rect": rect, "limit": limit},
     )
 
 
@@ -903,6 +926,15 @@ def any_visible_gold_point(page):
         page,
         {"left": 0, "top": 0, "right": 4000, "bottom": 4000},
     )
+
+
+def visible_gold_points(page, limit=8):
+    """Several visible gold points, skipping buttons that are not that cell."""
+    return gold_point_inside(
+        page,
+        {"left": 0, "top": 0, "right": 4000, "bottom": 4000},
+        limit=limit,
+    ) or []
 
 
 _STROKE_RE_SRC = r"""

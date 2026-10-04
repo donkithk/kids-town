@@ -57,6 +57,7 @@ from tests.qc6_checks import (  # noqa: E402
     solid_selector,
     surface_rect,
     village_box,
+    visible_gold_points,
     toast_off_visible_probes,
     visible_gold_under_toast,
 )
@@ -6274,6 +6275,23 @@ def _reverse_expectation(cell, kind):
     return f"reaches {cell} ({kind})"
 
 
+def _point_target(page, x, y):
+    try:
+        return page.evaluate(
+            """([x, y]) => {
+              const el = document.elementFromPoint(x, y);
+              if (!el) return "none";
+              const id = el.id ? "#" + el.id : "";
+              const raw = typeof el.className === "string" ? el.className : "";
+              const cls = raw.trim().split(/\\s+/).filter(Boolean).slice(0, 3).join(".");
+              return el.tagName.toLowerCase() + id + (cls ? "." + cls : "");
+            }""",
+            [x, y],
+        )
+    except Exception:
+        return "?"
+
+
 def _probe_reverse(page, x, y, width, height, kinds, expect_cell=None):
     """Map reach for a point at least 1px outside solid UI.
 
@@ -6295,21 +6313,24 @@ def _probe_reverse(page, x, y, width, height, kinds, expect_cell=None):
         return "miss", (
             f"({int(x)},{int(y)}) expected select {expect_cell}, "
             f"got {reaction['acted']} toast {reaction['toast']!r} "
-            f"scene {reaction['scene']!r}"
+            f"scene {reaction['scene']!r} target {_point_target(page, x, y)}"
         )
     if cell is None:
         if reaction["leaked"]:
             return "leak", (
                 f"({int(x)},{int(y)}) no visible cell but "
                 f"cell {reaction['acted']} toast {reaction['toast']!r} "
-                f"sheet {reaction['sheet']}"
+                f"sheet {reaction['sheet']} target {_point_target(page, x, y)}"
             )
         return None, "no reaction"
     kind = kinds.get(cell, "unfit")
     bucket, detail = _reaction_blame(cell, kind, reaction, False)
     if bucket:
         reached = detail or "no reaction"
-        return "miss", f"({int(x)},{int(y)}) visible {cell} kind {kind}: {reached}"
+        return "miss", (
+            f"({int(x)},{int(y)}) visible {cell} kind {kind}: {reached} "
+            f"target {_point_target(page, x, y)}"
+        )
     return None, _reverse_expectation(cell, kind)
 
 
@@ -6321,25 +6342,39 @@ def _restore_scene2(page, scroll):
 
 
 def _enter_scene3(page, scroll):
+    """Open scene 3 at this scroll. Try several gold points; do not move the scroll."""
     _scene2_tap_mode(page, "picked", "工坊")
     set_village_scroll(page, scroll)
-    gold = any_visible_gold_point(page)
-    if not gold:
+    points = visible_gold_points(page, 8)
+    if not points:
         return "no visible gold cell"
-    dismiss_selection(page)
-    _silence_toast(page)
-    tap_point(page, gold["x"], gold["y"])
-    page.wait_for_timeout(150)
-    advance = page.locator("#btnToScene3")
-    ready = advance.count() and advance.first.is_visible() and advance.first.is_enabled()
-    if not ready:
-        return "scene 3 control missing"
-    advance.first.click()
-    page.wait_for_timeout(200)
-    set_village_scroll(page, scroll)
-    if "場景 3" not in _scene_aria(page):
-        return f"still {_scene_aria(page)!r}"
-    return None
+    last = "scene 3 control missing"
+    for gold in points:
+        if "場景 2" not in _scene_aria(page):
+            _scene2_tap_mode(page, "picked", "工坊")
+            set_village_scroll(page, scroll)
+        dismiss_selection(page)
+        _silence_toast(page)
+        tap_point(page, gold["x"], gold["y"])
+        page.wait_for_timeout(150)
+        advance = page.locator("#btnToScene3")
+        ready = advance.count() and advance.first.is_visible() and advance.first.is_enabled()
+        if not ready:
+            last = (
+                f"scene 3 control missing after "
+                f"({int(gold['c'])},{int(gold['r'])})"
+            )
+            continue
+        advance.first.click()
+        page.wait_for_timeout(200)
+        set_village_scroll(page, scroll)
+        if "場景 3" not in _scene_aria(page):
+            last = f"still {_scene_aria(page)!r}"
+            _scene2_tap_mode(page, "picked", "工坊")
+            set_village_scroll(page, scroll)
+            continue
+        return None
+    return last
 
 
 def _bar_border_leaks(page, base_url):
