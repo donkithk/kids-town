@@ -703,21 +703,35 @@
     return { left: 0, top: 0, right: root.clientWidth, bottom: root.clientHeight };
   }
 
-  /* On-screen part of #townMap. The scrollport cuts the top and the sides.
-     The bottom stays the map edge so a diamond that sticks out of the
-     scrollport can still be tapped. */
+  /* Tightest overflow ancestor of a pad: the layer that actually clips cells.
+     Every side is that layer's border box, then the on-screen frame. */
+  function cellClipRect() {
+    var pad = document.querySelector("#townMap .pad");
+    var clip = null;
+    for (var node = pad ? pad.parentElement : $("village"); node && node !== document.body; node = node.parentElement) {
+      var cs = getComputedStyle(node);
+      var box = node.getBoundingClientRect();
+      var clipsX = cs.overflowX === "hidden" || cs.overflowX === "auto" || cs.overflowX === "scroll" || cs.overflowX === "clip";
+      var clipsY = cs.overflowY === "hidden" || cs.overflowY === "auto" || cs.overflowY === "scroll" || cs.overflowY === "clip";
+      if (!clipsX && !clipsY) continue;
+      var next = {
+        left: clipsX ? box.left : -1e9,
+        top: clipsY ? box.top : -1e9,
+        right: clipsX ? box.right : 1e9,
+        bottom: clipsY ? box.bottom : 1e9
+      };
+      clip = clip ? {
+        left: Math.max(clip.left, next.left),
+        top: Math.max(clip.top, next.top),
+        right: Math.min(clip.right, next.right),
+        bottom: Math.min(clip.bottom, next.bottom)
+      } : next;
+    }
+    return clip;
+  }
+
   function visibleMapClip() {
-    var map = $("townMap");
-    var village = $("village");
-    if (!map || !village) return null;
-    var mapBox = clientContentBox(map);
-    var villageBox = clientContentBox(village);
-    return intersectRect(layoutFrame(), {
-      left: Math.max(mapBox.left, villageBox.left),
-      top: Math.max(mapBox.top, villageBox.top),
-      right: Math.min(mapBox.right, villageBox.right),
-      bottom: mapBox.bottom
-    });
+    return intersectRect(layoutFrame(), cellClipRect());
   }
 
   /* The message sits above the margin around the scrollport. It must not
@@ -739,7 +753,7 @@
   ];
 
   function rectsOverlap(a, b) {
-    return a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom;
+    return a.right >= b.left && a.left <= b.right && a.bottom >= b.top && a.top <= b.bottom;
   }
 
   function elementConcealed(el) {
@@ -752,24 +766,38 @@
     return false;
   }
 
-  /* Open, visible solid UI. The whole border box counts, including rounded corners. */
+  /* Open and painted. Inert, hidden, fully transparent, or off-screen does not count. */
+  function solidUiOpen(el) {
+    if (!el || elementConcealed(el)) return false;
+    var box = el.getBoundingClientRect();
+    if (box.width < 2 || box.height < 2) return false;
+    if (!rectsOverlap(box, layoutFrame())) return false;
+    return true;
+  }
+
+  /* The control the event landed on, including its border. */
+  function solidUiFromTarget(target) {
+    if (!target || !target.closest) return false;
+    for (var i = 0; i < SOLID_UI.length; i += 1) {
+      var hit = target.closest(SOLID_UI[i]);
+      if (hit && solidUiOpen(hit)) return true;
+    }
+    return false;
+  }
+
+  /* Open, visible solid UI. Edges are inclusive, so a pixel on the border belongs to the control. */
   function solidUiCovers(x, y) {
     var map = $("townMap");
     if (!map) return false;
     var mapBox = map.getBoundingClientRect();
-    var frame = layoutFrame();
     for (var i = 0; i < SOLID_UI.length; i += 1) {
       var nodes = document.querySelectorAll(SOLID_UI[i]);
       for (var n = 0; n < nodes.length; n += 1) {
         var el = nodes[n];
-        if (elementConcealed(el)) continue;
+        if (!solidUiOpen(el)) continue;
         var box = el.getBoundingClientRect();
-        if (box.width < 2 || box.height < 2) continue;
-        if (!rectsOverlap(box, frame)) continue;
         if (!rectsOverlap(box, mapBox)) continue;
-        /* A whole-pixel click can sit a fraction inside a fractional edge.
-           Corners further in still belong to the control. */
-        if (x >= box.left + 1 && x <= box.right - 1 && y >= box.top + 1 && y <= box.bottom - 1) return true;
+        if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) return true;
       }
     }
     return false;
@@ -802,6 +830,7 @@
     if (!village || !pads.length) return null;
     var clip = visibleMapClip();
     if (!pointInRect(clientX, clientY, clip)) return null;
+    if (solidUiCovers(clientX, clientY)) return null;
     if (marginUnderToast(clientX, clientY)) return null;
     var rect = village.getBoundingClientRect();
     if (rect.width < 1 || rect.height < 1) return null;
@@ -1041,6 +1070,68 @@
     btn.textContent = motionOn ? "動畫 開" : "動畫 關";
   }
 
+  function diamondPoints(cx, cy, hx, hy) {
+    return [
+      cx.toFixed(2) + "," + (cy - hy).toFixed(2),
+      (cx + hx).toFixed(2) + "," + cy.toFixed(2),
+      cx.toFixed(2) + "," + (cy + hy).toFixed(2),
+      (cx - hx).toFixed(2) + "," + cy.toFixed(2)
+    ].join(" ");
+  }
+
+  /* Focus ring: the face diamond pushed out by the same gap on every edge,
+     so the aspect stays. Stroke sits outside the solid chosen line. */
+  function syncFocusRing() {
+    var map = $("townMap");
+    var slab = document.querySelector("#townMap .pad > .slab");
+    var btn = document.querySelector("#townMap .cell-btn");
+    if (!map || !slab || !btn || slab.offsetWidth < 2 || btn.offsetWidth < 2) return;
+    var painted = slab.getBoundingClientRect();
+    var halfW = slab.offsetWidth / 2;
+    var halfH = slab.offsetHeight * (50 / 120);
+    var halfWp = painted.width / 2;
+    var halfHp = painted.height * (50 / 120);
+    var ap = (halfWp * halfHp) / Math.sqrt(halfWp * halfWp + halfHp * halfHp);
+    if (!(ap > 0) || !(halfW > 0)) return;
+    var scale = halfWp / halfW;
+    var gap = 3;
+    var k = 1 + gap / ap;
+    var ringW = 2 * k * halfW;
+    var ringH = 2 * k * halfH;
+    var outerStroke = 2 / scale;
+    var innerStroke = 3 / scale;
+    var pad = Math.max(outerStroke, innerStroke);
+    var boxW = ringW + pad * 2;
+    var boxH = ringH + pad * 2;
+    var cx = boxW / 2;
+    var cy = boxH / 2;
+    var outerHx = ringW / 2;
+    var outerHy = ringH / 2;
+    var outerAp = (outerHx * outerHy) / Math.sqrt(outerHx * outerHx + outerHy * outerHy);
+    var inset = outerStroke / 2;
+    var innerK = outerAp > inset ? 1 - inset / outerAp : 1;
+    var cellAp = (halfW * halfH) / Math.sqrt(halfW * halfW + halfH * halfH);
+    var safeK = 1 + (1.8 / scale) / cellAp;
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " +
+      boxW.toFixed(2) + " " + boxH.toFixed(2) + "'>" +
+      "<polygon mask='url(#ktRingCut)' pathLength='100' fill='none' stroke='#6b4f2a' stroke-width='" +
+      outerStroke.toFixed(3) + "' stroke-linejoin='round' stroke-dasharray='6 3.5' points='" +
+      diamondPoints(cx, cy, outerHx, outerHy) + "'/>" +
+      "<polygon mask='url(#ktRingCut)' pathLength='100' fill='none' stroke='#fff8e7' stroke-width='" +
+      innerStroke.toFixed(3) + "' stroke-linejoin='round' stroke-dasharray='6 3.5' points='" +
+      diamondPoints(cx, cy, outerHx * innerK, outerHy * innerK) + "'/>" +
+      "<mask id='ktRingCut' maskUnits='userSpaceOnUse' x='0' y='0' width='" +
+      boxW.toFixed(2) + "' height='" + boxH.toFixed(2) + "'>" +
+      "<rect x='0' y='0' width='" + boxW.toFixed(2) + "' height='" + boxH.toFixed(2) + "' fill='#fff'/>" +
+      "<polygon fill='#000' points='" + diamondPoints(cx, cy, halfW * safeK, halfH * safeK) + "'/>" +
+      "</mask></svg>";
+    map.style.setProperty("--ring-x", (btn.offsetWidth / 2 - boxW / 2).toFixed(3) + "px");
+    map.style.setProperty("--ring-y", (btn.offsetHeight / 2 - boxH / 2).toFixed(3) + "px");
+    map.style.setProperty("--ring-w", boxW.toFixed(3) + "px");
+    map.style.setProperty("--ring-h", boxH.toFixed(3) + "px");
+    map.style.setProperty("--ring-image", "url(\"data:image/svg+xml," + encodeURIComponent(svg) + "\")");
+  }
+
   function render() {
     if (!built) buildGrid();
     pads.forEach(renderCell);
@@ -1048,6 +1139,7 @@
     renderBars();
     renderSheet();
     renderMotion();
+    syncFocusRing();
   }
 
   function onPalette(id) {
@@ -1228,6 +1320,13 @@
     }
   }
 
+  /* A child-facing sentence is written Chinese. English and JSON stay hidden. */
+  function childFacing(err) {
+    var msg = err && typeof err.message === "string" ? err.message.trim() : "";
+    if (msg && /[\u3400-\u9fff]/.test(msg)) return msg;
+    return "";
+  }
+
   function showUnfit(err) {
     var status = err && err.status;
     if (!(status >= 400 && status < 500)) return false;
@@ -1236,7 +1335,8 @@
     state.sheet = false;
     state.confirming = false;
     state.instantUpgrade = false;
-    if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
+    var sentence = childFacing(err) || "這個位置放不下這座建築物。";
+    if (typeof showToast === "function") showToast(sentence, "info");
     render();
     return true;
   }
@@ -1378,6 +1478,7 @@
     var map = $("townMap");
     if (!map || map.dataset.wired === "1") return;
     map.dataset.wired = "1";
+    window.addEventListener("resize", syncFocusRing);
     map.addEventListener("click", function (event) {
       var target = event.target;
       var btn = target.closest && target.closest("button");
@@ -1396,6 +1497,7 @@
           }
         }
       }
+      if (solidUiFromTarget(target)) return;
       var point = activationPoint(event, cellBtn);
       if (solidUiCovers(point.x, point.y)) return;
       if (!pointInRect(point.x, point.y, visibleMapClip())) return;
