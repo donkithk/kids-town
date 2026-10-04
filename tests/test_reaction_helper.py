@@ -58,6 +58,19 @@ def test_toast_and_sheet_count_as_reactions_without_a_cell():
     assert not reaction_happened({"toast": "探針", "scene": "場景 2"}, ignore_toast="探針")
 
 
+def test_already_open_sheet_is_not_a_new_reaction():
+    from tests.test_warehouse_e2e import _sheet_opened_by_tap
+
+    assert _sheet_opened_by_tap(True, True) is False
+    assert _sheet_opened_by_tap(False, True) is True
+    assert not reaction_happened({
+        "toast": "",
+        "sheet": False,
+        "scene": "場景 2 · 選擇建築",
+        "ready": "請點選金色空地，或打開清單選擇要興建的建築物。",
+    })
+
+
 def test_empty_chosen_does_not_hide_acted():
     reaction = {"acted": (0, 6), "chosen": [], "preview": [], "toast": "", "scene": "場景 2"}
     assert selection_of(reaction) == (0, 6)

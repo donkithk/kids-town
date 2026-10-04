@@ -4422,12 +4422,20 @@ def _ensure_town_map(page):
             pass
 
 
-def _selection_leaked(page):
+def _sheet_opened_by_tap(sheet_before, sheet_after):
+    """True only when this tap opened #actionSheet.
+
+    A sheet that was already open is the surface under test, not a reaction.
+    """
+    return bool(sheet_after) and not bool(sheet_before)
+
+
+def _selection_leaked(page, sheet_before=False):
     hit = read_reaction(page)
     ready = (_hint(page).get("ready") or "")
     observed = dict(hit)
     observed["ready"] = ready
-    observed["sheet"] = _sheet_open(page)
+    observed["sheet"] = _sheet_opened_by_tap(sheet_before, _sheet_open(page))
     acted = selection_of(observed)
     return reaction_happened(observed), acted, hit, ready
 
@@ -4557,8 +4565,9 @@ def _bar_rect_leaks(page, base_url):
                         dismiss_selection(page)
                         _silence_toast(page)
                         if not (owner.get("button") and not owner.get("map")):
+                            sheet_before = _sheet_open(page)
                             tap_point(page, point["x"], point["y"])
-                            bad, acted, hit, ready = _selection_leaked(page)
+                            bad, acted, hit, ready = _selection_leaked(page, sheet_before)
                             if bad:
                                 reasons.append(
                                     f"selected {acted} toast {hit.get('toast')!r} ready {ready!r}"
@@ -5068,8 +5077,9 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
         toast_hits = []
         for point in toast_off_visible_probes(page):
             dismiss_selection(page)
+            sheet_before = _sheet_open(page)
             tap_point(page, point["x"], point["y"])
-            leaked, acted, hit, ready = _selection_leaked(page)
+            leaked, acted, hit, ready = _selection_leaked(page, sheet_before)
             if leaked:
                 if len(toast_hits) < 6:
                     toast_hits.append(
@@ -5632,8 +5642,9 @@ def test_tap_visible_only(page, base_url, warehouse_db, warehouse_ids):
                     tapped += 1
                     dismiss_selection(page)
                     _silence_toast(page)
+                    sheet_before = _sheet_open(page)
                     tap_point(page, point["x"], point["y"])
-                    leaked, acted, hit, ready = _selection_leaked(page)
+                    leaked, acted, hit, ready = _selection_leaked(page, sheet_before)
                     if leaked and len(leaks) < 6:
                         cell = point.get("cell")
                         leaks.append(
