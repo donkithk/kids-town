@@ -933,6 +933,42 @@ def test_autoplace_already_owned_uses_formal_copy(client, family, test_db):
     assert not problems, "TC-API-AUTOPLACE-FORMAL: " + " | ".join(problems)
 
 
+@pytest.mark.case_id("TC-API-PLACE-OWNED-FORMAL")
+def test_place_owned_explicit_cell_uses_formal_copy(client, family, test_db):
+    """TC-API-PLACE-OWNED-FORMAL 指定格子、種類已放置時，錯誤句用書面語。
+
+    帶 cell_x、cell_y 的 POST 回 400，error 正好是「你已經興建了這種建築物。」。
+    不得是「你已經興建咗呢種建築物」。已放置的那一行不變，不扣費。
+    """
+    kid_id = family.kid_a.id
+    _rich(test_db, kid_id)
+    library_def = def_id(test_db, "library")
+    library = insert_building(
+        test_db, kid_id, library_def, level=2, stored=0, cell_x=0, cell_y=0
+    )
+    login_kid(client, family)
+    before = _resources(test_db, kid_id)
+    before_row = _row(test_db, library)
+    response = _place(client, kid_id, library_def, cell_x=4, cell_y=4)
+    payload = response.get_json(silent=True) or {}
+    error = payload.get("error") if isinstance(payload, dict) else None
+    problems = []
+    if response.status_code != 400:
+        problems.append(
+            f"expected HTTP 400, got {response.status_code} "
+            f"{' '.join(response_text(response).split())[:180]}"
+        )
+    if error != OWNED_FORMAL:
+        problems.append(f"error {error!r}, expected {OWNED_FORMAL!r}")
+    if OWNED_COLLOQUIAL in response_text(response):
+        problems.append("response still contains 你已經興建咗呢種建築物")
+    if _resources(test_db, kid_id) != before:
+        problems.append("already-owned explicit place must not charge")
+    if _row(test_db, library) != before_row:
+        problems.append(f"placed row changed: {before_row} -> {_row(test_db, library)}")
+    assert not problems, "TC-API-PLACE-OWNED-FORMAL: " + " | ".join(problems)
+
+
 @pytest.mark.case_id("TC-API-WAREHOUSE-MOVE-OOB")
 def test_move_outside_8x8_is_rejected_and_stays_placed(client, family, test_db):
     """TC-API-WAREHOUSE-MOVE-OOB 移去 8×8 外要 4xx，行留在原格而且仍然放置。

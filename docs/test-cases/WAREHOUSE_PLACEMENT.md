@@ -36,7 +36,7 @@
 ## 案例
 
 API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。  
-介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`、`TC-FE-TAP-OFFCENTER`、`TC-FE-CELL-ARIA-MATCH`、`TC-FE-TAP-BAR-NOTHROUGH`，以及畫面那一半的 `TC-API-AUTOPLACE-FORMAL`。API 檔另有 `TC-API-AUTOPLACE-FORMAL`，還有只 GET 靜態檔的 `TC-FE-WAREHOUSE-GRID`。
+介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`、`TC-FE-TAP-OFFCENTER`、`TC-FE-CELL-ARIA-MATCH`、`TC-FE-TAP-BAR-NOTHROUGH`、`TC-FE-TAP-VISIBLE-ONLY`、`TC-FE-SELECTED-CONTRAST`、`TC-FE-FOCUS-RING-CENTRE`、`TC-FE-HIDDEN-INERT`，以及畫面那一半的 `TC-API-AUTOPLACE-FORMAL` 和 `TC-API-PLACE-OWNED-FORMAL`。API 檔另有 `TC-API-AUTOPLACE-FORMAL`、`TC-API-PLACE-OWNED-FORMAL`，還有只 GET 靜態檔的 `TC-FE-WAREHOUSE-GRID`。
 
 下表「main」是在 `5bfe76d` 加上這些測試後的結果。紅測的斷言訊息寫明預期與實際。綠測是回歸鎖，不是本缺陷。
 
@@ -307,10 +307,10 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 還沒選建築時，空但重疊的格不是金，不得選中。選中隔壁格是打錯格。提示句子不對，或這格不該選卻被選中，是反應不符。
 
 1. 新建造、還沒選建築。64×9 = 576 點都算。
-2. 新建造、已選一座 2×2。打開的清單面板會蓋住左側一些格。一個點算在面板裡，只當 `elementFromPoint` 落在 `#palette`（圓角已經裁掉點擊）。只在外框矩形裡、視覺上在圓角外面的點仍是露出的菱形點，打中自己那一格不算穿透。面板上的點從分母拿掉，而且不得選中格子。
+2. 新建造、已選一座 2×2。打開的清單面板會蓋住左側一些格。一個點只要落在打開而且看得見的實心介面外框矩形裡（清單、動作列、頂部 HUD、頁尾、工具列、打開的面板、建築清單按鈕），就不是露出的菱形點，即使圓角讓 `elementFromPoint` 落到地圖上也一樣。這些點從分母拿掉，點下去不得選中格子，也不得出提示。
 3. 取出、存倉裡有一座建築。同樣 576 點；若有面板或其他蓋住格子的層，用同一條排除規則。不得跳進場景 3 卻把預覽放在別的格子上。
 
-分母規則：`elementFromPoint` 落在實心介面（動作列、清單、頂部 HUD、頁尾、工具列、打開的面板）才從分母移除。外框矩形的角落如果點不中那塊介面，不算被蓋住。提示和放置特效不是實心介面。場景 2 裡建築圖不是實心介面：菱形壓在前面建築圖下面時，仍必須作用在後面那一格，而不是前面建築的原點。
+分母規則：打開而且看得見、並且跟 `#townMap` 相交的實心介面，其外框矩形裡的點從分母移除。圓角外面、`elementFromPoint` 落到地圖的角落也算在矩形裡，不得選格。收起、`display:none`、`visibility:hidden`、opacity 0、inert、移出畫面、或沒有跟 `#townMap` 相交的元素不吃點擊。提示和放置特效不是實心介面。場景 2 裡建築圖不是實心介面：菱形壓在前面建築圖下面時，仍必須作用在後面那一格，而不是前面建築的原點。
 
 精靈：前面有一座高的建築圖、後面有一格沒有自己建築圖的格子時，菱形裡又疊在那張圖上的點必須作用在後面那一格，不是前面建築的原點。後面那一格若是金，就選中它；若是空而非金，提示「這個位置放不下這座建築物。」；若落在別座建築的足跡裡，提示「這個位置已經有建築物。」種子是商店 `(0,0)`、農場 `(4,3)`，至少要有一個這樣的點，而且單獨斷言。
 
@@ -332,21 +332,49 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 
 ## 實心介面不穿透（TC-FE-TAP-BAR-NOTHROUGH）
 
-實心介面要吃掉點擊，底下的格子選中數是 0，而且 `document.elementFromPoint` 落在那塊介面、不是地圖格子。背景格點（避開按鈕）蓋住：動作列 `#readyBar`、清單面板 `#palette`、頂部 HUD（`.gh`）、`#ktFooter`、以及打開的 `#actionSheet`。
+只有打開而且看得見的實心介面可以吃掉點擊。動作列 `#readyBar`、清單面板 `#palette`、頂部 HUD（`.gh`）、`#ktFooter`、打開的 `#actionSheet`，背景格點（避開按鈕）的 `elementFromPoint` 必須落在該介面、不是地圖格子，點下去不得選中格子。
 
 動作列的每一顆按鈕，以及頁尾的每一個分頁，在中心和每條邊往內 8px 的位置，`elementFromPoint` 必須是那顆按鈕（或其子元素），不能是地圖格子。點頁尾的任務、遠征、城鎮分頁，仍要切到對應畫面。
 
-相反，提示和放置特效不得吃點擊：`#toast`（info 與成功）和 `.fx-burst` 的 `pointer-events` 是 `none`。提示還顯示時，菱形中心落在提示矩形裡的金色格，用 `tap_cell_centre` 同一套中心點下去，必須選中那一格。測試會先挑一個提示真的壓到金色格中心的版面（1280×720），並斷言有這個重疊。那一格必須在當下畫出來的金色集合裡（這條用 `(4,5)`）；不是金的格不拿來當「壓住仍要選中」的目標。
+圓角：清單面板、建築清單按鈕 `#listLauncher`、動作列、頂部 HUD、打開的面板，外框矩形的四個角都要測。角往內 3px、5px、7px（大約沿著對角線 4px、7px、10px）的點，包括圓角外面的透明區，都不得打中格子：選中數 0、提示 0，而且 `elementFromPoint` 不得是地圖格子或 `#townMap`。還沒選建築，以及已選 2×2 工坊，都要測。捲動是 `#village.scrollTop` 的 0、300、366 和最大值。視窗是 1280×720、1100×800、390×844。
+
+提示和放置特效不得吃點擊：`#toast`（info 與成功）和 `.fx-burst` 的 `pointer-events` 是 `none`。若有金色格的可見菱形真的落在提示底下，點那一塊要選中那一格。若沒有，點提示範圍（含 1280×720 提示下方、壓在頁尾上的那 8px）不得選格，也不得把狀態改成已選擇空地。不得為了通過而要求選中一格看不見的格子。提示蓋住頁尾時打中藏起來的格子，由 `TC-FE-TAP-VISIBLE-ONLY` 鎖。
+
+Guard（預期在目前產品上通過，不是新的紅測）：收起清單之後（返回地圖再按我要起屋；清單沒有就地關閉的按鈕），點原先清單矩形裡一格看得見的金格，必須選中它。收起的抽屜、關掉或沒打開的面板，以及 inert、`visibility:hidden`、opacity 0、`display:none`、移出畫面、沒跟 `#townMap` 相交的元素，都不得吃掉看得見的金格。提示和特效也不得吃掉看得見的金格。
 
 ## 連續提示重新計時（TC-FE-TOAST-TIMER-RESET）
 
-新建造場景 2、還沒選建築。視窗 1100×800。商店在 `(0,0)`。兩下都是 `page.mouse` 的真實點擊，先把兩格捲進畫面並量好菱形點，再點，間隔大約 420ms（容許約 280–700ms）。量測在頁面時鐘上：`requestAnimationFrame` 抽 `#toast` 的 inline `display`、計算後的 opacity、文字、以及節點是不是同一個；`animationstart` 聽在 document 上，目標是 `#toast` 或其子節點。同一條裡「同一句」和「換句」各跑 3 次。
+新建造場景 2、還沒選建築。視窗 1100×800。商店在 `(0,0)`。兩下都是 `page.mouse` 的真實點擊，先把兩格捲進畫面並量好菱形點，再點。量測在頁面時鐘上：`requestAnimationFrame` 大約每 16ms 抽 `#toast` 的 inline `display`、計算後的 opacity、文字、以及節點是不是同一個；`animationstart` 聽在 document 上，目標是 `#toast` 或其子節點。同一條裡各跑 3 次。
 
 放不下的格優先用畫面上的非金空格 `(7,0)`、`(5,7)`、`(7,7)`。已經有建築物的格優先用被商店足跡蓋住、而且不是金的 `(0,0)` 或 `(1,0)`。
 
-(a) 同一句：點同一個放不下的格兩次。提示一直顯示（`display` 為 `block`），直到第二下之後至少 1.9 秒仍在，大約 2.7 秒之後已經消失（2.8 秒前）。第二下不得重播進場動畫：第二下前後沒有新的 `animationstart`，而且第一下淡入到 opacity ≥ 0.9 之後、直到第二下，opacity 不得再低於 0.9；第二下之後的 350ms 也不得掉下去。`#toast` 節點不變。
+(a) 同一句，兩段分開測：第二下在第一下之後 1.0 秒，以及 1.6 秒。opacity 第一次升到至少 0.99 之後，必須一直維持到隱藏開始，中間不得掉到 0 再跳回 1。第二下之後至少 1.9 秒仍然是滿透明度。最後一次淡出不超過約 0.35 秒，然後隱藏。第二下不得重播 `animationstart`。`#toast` 節點不變。`display` 為 `block` 直到第二下之後至少 1.9 秒，大約 2.7 秒之後已經消失。
 
-(b) 換句：先點放不下的格，再點已經有建築物的格。文字要在第二下開始後約 150ms 內變成「這個位置已經有建築物。」（允許到 250ms）。顯示時間與 (a) 相同，從第二下算。換句可以重播動畫。
+(b) 換句：間隔大約 420ms（容許約 140–700ms）。先點放不下的格，再點已經有建築物的格。文字要在第二下開始後約 150ms 內變成「這個位置已經有建築物。」（允許到 250ms）。顯示時間從第二下算。換句可以重播動畫。
+
+## 只吃看得見的地圖（TC-FE-TAP-VISIBLE-ONLY）
+
+視窗 1100×800、390×844、1280×720。狀態是還沒選建築、已選 2×2 工坊、取出。一個點要算點中格子，必須同時滿足：它在 `#townMap` 的可見矩形裡（視窗、地圖的 overflow、村子捲動區的四邊，再被動作列和 `#ktFooter` 裁掉），而且它落在某一格菱形看得見的那一段。否則不得選格，不得把 `#readyStatus` 改成已選擇空地，也不得新出提示。
+
+掃這些區域裡的可見矩形外面：動作列上緣的窄條、捲到頂之後的上緣、下緣、頁尾後面、左右緣，以及 1280×720 提示還顯示時提示下方壓在頁尾上的 8px。每一段都要有候選點，空掃不算通過。
+
+## 選中格的對比（TC-FE-SELECTED-CONTRAST）
+
+1280×720。選中格的實線是 `#b45309`、3px。對 `#townMap` 的草地，以及對金色填色 `#fff3c4` 以 0.62 疊在草地上的顏色，對比都至少 3:1。這條實線的顏色不得等於金色格虛線 `#d4a017`。沒選中的金色格虛線維持 `#d4a017`。線的顏色和寬度從選中標記的 SVG 讀，對比用這兩個顏色計算。
+
+## 焦點環對準頂面（TC-FE-FOCUS-RING-CENTRE）
+
+1280×720 與 390×844。`:focus-visible` 菱形環的中心，要和格子頂面菱形的中心相差不超過 1px。頂面中心在地磚外框中心上方 10 個視圖單位（外框寬度除以 168 再乘 10，用畫面上的像素）。
+
+## 隱藏時不可聚焦（TC-FE-HIDDEN-INERT）
+
+收起的抽屜 `#dr` 有 13 顆按鈕（✕、小鎮地圖，一直到登出）。收起時它們不在 Tab 順序裡。用選單按鈕打開之後，這 13 顆都回到 Tab 順序。`#ktRotate`（請轉橫向）在 `display:none` 時不在 Tab 順序裡；顯示時不得帶 inert。Tab 順序指沒有被 `display:none`、`visibility:hidden` 或 inert 祖先拿掉的可聚焦控件。移出畫面或 `pointer-events:none` 不算隱藏。
+
+## 指定格子的書面語（TC-API-PLACE-OWNED-FORMAL）
+
+POST `/api/kids/<id>/buildings` 帶 `def_id`、`cell_x`、`cell_y`，這種建築已經放置時，回 400，`error` 正好是「你已經興建了這種建築物。」。不得是「你已經興建咗呢種建築物」。已放置的那一行不變，不扣費。省略座標的自動放置仍由 `TC-API-AUTOPLACE-FORMAL` 鎖，那條在已經改成書面語的版本上通過。
+
+畫面若把這句放進 `#toast`（`showBuildFailure`），提示裡也要有書面語，不得出現口語那句。
 
 ## 同一格狀態不得有兩套預期
 
@@ -354,7 +382,7 @@ API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。
 
 | 狀態 | 預期 | 對過的案例 |
 |------|------|------------|
-| 畫面上的金格 | 選中這一格 | 偏離中心三種狀態、無障礙字、實心介面壓住 `(4,5)` 的那一下（先確認它在金色集合裡）、場景 2 合法原點 |
+| 畫面上的金格 | 選中這一格，但只有菱形看得見的那一段 | 偏離中心三種狀態、無障礙字、實心介面（提示底下若有可見金格才點它）、只吃看得見的地圖、場景 2 合法原點 |
 | 建築足跡蓋住、而且不是金 | 不選，「這個位置已經有建築物。」 | 偏離中心、無障礙字（原點與非原點）、未選預選 (a) 的 `(1,0)`、重疊掃格、放不下提示的已佔用格 |
 | 空的但不是金 | 不選，「這個位置放不下這座建築物。」 | 偏離中心（含還沒選建築時的重疊格）、無障礙字、未選預選 (a) 的 `(5,7)`、重疊掃格、放不下提示的 `(7,0)` |
 | 最小足跡是 1 的目錄 | `(5,7)` 在未選建築時是金，選了 2×2 之後不再是金 | 最小足跡。目錄不同，不跟 2×2 的重疊格混為一談 |

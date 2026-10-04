@@ -23,6 +23,31 @@ import zlib
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tests.qc6_checks import (  # noqa: E402
+    GOLD_FILL,
+    GOLD_FILL_ALPHA,
+    GOLD_STROKE,
+    GRASS_FALLBACK,
+    REQUIRED_STROKE,
+    any_visible_gold_point,
+    chosen_mark_paint,
+    composite,
+    contrast_ratio,
+    corner_insets,
+    focus_ring_delta,
+    gold_point_inside,
+    hidden_tab_state,
+    map_hit_at,
+    off_visible_probes,
+    open_solid_rects,
+    parse_hex,
+    set_rotate_shown,
+    set_village_scroll,
+    solid_selector,
+    surface_rect,
+    toast_off_visible_probes,
+    visible_gold_under_toast,
+)
 from tests.town_tap import (  # noqa: E402
     _activate_point,
     _scroll_cell_into_view,
@@ -3709,9 +3734,10 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
     nine points is the centre or 35% of the way toward a vertex or an edge
     midpoint. The expected reaction is the rendered state of the cell that
     contains the point: gold selects it, a building footprint toasts
-    已經有建築物, and any other empty cell toasts 放不下. Points that
-    elementFromPoint puts on the open palette are left out of the denominator
-    and must not select a cell.
+    已經有建築物, and any other empty cell toasts 放不下. A point inside
+    the bounding rect of open, visible solid UI is not an exposed cell,
+    even when the rounded corner lets elementFromPoint fall through to the
+    map. Those points must not select a cell and must not toast.
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(
@@ -3747,9 +3773,12 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
     def _sweep(mode, width, height):
         unstore = mode == "unstore"
         kinds = _rendered_tap_kinds(page, catalog)
+        solid_rects = open_solid_rects(page)
         neighbor = reaction = panel_hits = chrome_skipped = exposed = geometry = 0
+        fall = fall_hits = 0
         examples = []
         panel_examples = []
+        fall_examples = []
         for y in range(MAP_N):
             for x in range(MAP_N):
                 cell = (x, y)
@@ -3779,9 +3808,39 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
                         )
                         continue
                     cover = point_cover(page, point["x"], point["y"])
-                    # Palette click-through is a point elementFromPoint puts on
-                    # the panel. A bbox corner outside the rounded panel is an
-                    # exposed map point, not a panel point.
+                    # Open visible solid UI eats every point inside its bounding
+                    # rect, including the transparent corner outside the radius.
+                    # elementFromPoint falling through to the map does not make
+                    # that point an exposed cell sample.
+                    solid = solid_selector(solid_rects, point["x"], point["y"])
+                    if solid and cover.get("kind") not in ("panel", "chrome"):
+                        fall += 1
+                        dismiss_selection(page)
+                        _silence_toast(page)
+                        tap_point(page, point["x"], point["y"])
+                        hit = read_reaction(page)
+                        acted = _acted_cell(hit)
+                        ready = (_hint(page).get("ready") or "")
+                        if (
+                            acted is not None
+                            or "場景 3" in (hit.get("scene") or "")
+                            or hit.get("toast")
+                            or "已選擇空地" in ready
+                        ):
+                            fall_hits += 1
+                            if len(fall_examples) < 8:
+                                fall_examples.append(
+                                    f"rect {solid} {cell} {name} "
+                                    f"({point['x']:.0f},{point['y']:.0f}) "
+                                    f"selected {acted} toast {hit.get('toast')!r} "
+                                    f"ready {ready!r}"
+                                )
+                        if mode == "picked":
+                            _ensure_picked_build(page, "健身室")
+                        else:
+                            dismiss_selection(page)
+                            _silence_toast(page)
+                        continue
                     if cover.get("kind") == "panel":
                         dismiss_selection(page)
                         tap_point(page, point["x"], point["y"])
@@ -3823,8 +3882,11 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
             "panel": panel_hits,
             "chrome": chrome_skipped,
             "geometry": geometry,
+            "fall": fall,
+            "fall_hits": fall_hits,
             "examples": examples,
             "panel_examples": panel_examples,
+            "fall_examples": fall_examples,
         }
 
     for width, height in _TAP_VIEWPORTS:
@@ -3864,22 +3926,43 @@ def test_tap_offcenter(page, base_url, warehouse_db, warehouse_ids):
         for mode in ("bare", "picked", "unstore"):
             _setup(mode, width, height)
             counts = _sweep(mode, width, height)
-            panel_points = 576 - counts["exposed"] - counts["chrome"] - counts["geometry"]
+            panel_points = (
+                576
+                - counts["exposed"]
+                - counts["chrome"]
+                - counts["geometry"]
+                - counts["fall"]
+            )
             correct = counts["exposed"] - counts["neighbor"] - counts["reaction"]
             summary = (
                 f"{mode} {width}x{height}: {correct}/{counts['exposed']} exposed, "
                 f"panel-excluded {panel_points}, chrome-excluded {counts['chrome']}, "
+                f"rect-fallthrough {counts['fall']}, "
                 f"neighbor-mis {counts['neighbor']}, reaction-mis {counts['reaction']}, "
-                f"panel-selections {counts['panel']}, geometry {counts['geometry']}"
+                f"panel-selections {counts['panel']}, rect-selections {counts['fall_hits']}, "
+                f"geometry {counts['geometry']}"
             )
             summaries.append(summary)
-            if panel_points + counts["exposed"] + counts["chrome"] + counts["geometry"] != 576:
+            if (
+                panel_points
+                + counts["exposed"]
+                + counts["chrome"]
+                + counts["geometry"]
+                + counts["fall"]
+                != 576
+            ):
                 problems.append(f"{summary} did not account for 576 points")
             if counts["neighbor"] or counts["reaction"]:
                 problems.append(summary + " | " + " | ".join(counts["examples"]))
             if counts["panel"]:
                 problems.append(
                     summary + " panel ate a cell: " + " | ".join(counts["panel_examples"])
+                )
+            if counts["fall_hits"]:
+                problems.append(
+                    summary
+                    + " rounded-rect fallthrough selected or toasted: "
+                    + " | ".join(counts["fall_examples"])
                 )
             if mode == "picked" and panel_points == 0:
                 problems.append(f"{mode} {width}x{height}: open palette covered no sample points")
@@ -4186,14 +4269,445 @@ def _inset_points(box):
     return points
 
 
+def _ensure_town_map(page):
+    town = page.locator("#townMap")
+    try:
+        if town.count() and town.is_visible():
+            return
+    except Exception:
+        pass
+    tab = page.locator('#ktFooter [data-kt-nav="town"]')
+    if tab.count():
+        try:
+            tab.first.click()
+            page.wait_for_timeout(200)
+        except Exception:
+            pass
+
+
+def _selection_leaked(page):
+    hit = read_reaction(page)
+    ready = (_hint(page).get("ready") or "")
+    acted = _acted_cell(hit)
+    leaked = bool(
+        acted is not None
+        or "場景 3" in (hit.get("scene") or "")
+        or hit.get("toast")
+        or "已選擇空地" in ready
+    )
+    return leaked, acted, hit, ready
+
+
+def _scene2_tap_mode(page, mode, build_name):
+    """Scene 2 with the palette open (picked) or closed (bare)."""
+    scene = _scene_aria(page)
+    hint = (_hint(page).get("ready") or "")
+    if "場景 2" not in scene or "放回" in hint:
+        back = page.locator("#btnUxBack")
+        try:
+            if "場景 1" not in scene and back.count() and back.first.is_visible():
+                back.first.click()
+                page.wait_for_timeout(150)
+        except Exception:
+            pass
+        _enter_new_build_scene2(page)
+    if mode == "picked":
+        open_palette = False
+        try:
+            open_palette = page.locator("#palette").is_visible()
+        except Exception:
+            open_palette = False
+        if not open_palette or not _palette_pressed(page, build_name):
+            _ensure_picked_build(page, build_name)
+        return
+    _close_sheet(page)
+    try:
+        if page.locator("#palette").is_visible():
+            back = page.locator("#btnUxBack")
+            if back.count() and back.first.is_visible():
+                back.first.click()
+                page.wait_for_timeout(150)
+            _enter_new_build_scene2(page)
+    except Exception:
+        _enter_new_build_scene2(page)
+
+
+def _open_shop_sheet(page):
+    try:
+        if not page.locator("#palette").is_visible():
+            launcher = page.locator("#listLauncher")
+            if launcher.count() == 0 or not launcher.first.is_visible():
+                return False
+            launcher.first.click()
+            page.locator("#palette").wait_for(state="visible", timeout=4000)
+    except Exception:
+        return False
+    shop = page.locator("#palette").get_by_role("button", name=re.compile("商店"))
+    if shop.count() == 0:
+        return False
+    shop.first.focus()
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(200)
+    sheet = page.locator("#actionSheet")
+    try:
+        return bool(sheet.count() and sheet.first.is_visible())
+    except Exception:
+        return False
+
+
+def _bar_rect_leaks(page, base_url):
+    """Corners of open solid UI, including the transparent radius, must not hit a cell."""
+    problems = []
+    summaries = []
+    viewports = ((1280, 720), (1100, 800), (390, 844))
+    for width, height in viewports:
+        for mode in ("bare", "picked"):
+            _relogin(page, base_url)
+            page.set_viewport_size({"width": width, "height": height})
+            _enter_new_build_scene2(page)
+            if mode == "picked":
+                assert _pick_unbuilt(page, "工坊"), f"{width}x{height}: 工坊 missing"
+            seen = set()
+            sheet_opened = False
+            for scroll in (0, 300, 366, "max"):
+                _scene2_tap_mode(page, mode, "工坊")
+                placed = set_village_scroll(page, scroll)
+                actual = None if not placed else round(placed.get("scroll") or 0, 1)
+                if scroll != 0 and actual in seen:
+                    summaries.append(
+                        f"rect {mode} {width}x{height} scroll {scroll} clamped {actual}"
+                    )
+                    continue
+                seen.add(actual)
+                surfaces = [("bar", "#readyBar"), ("hud", "#app .gh")]
+                if mode == "picked":
+                    surfaces.insert(0, ("palette", "#palette"))
+                else:
+                    surfaces.insert(0, ("launcher", "#listLauncher"))
+                leaked = probed = 0
+                examples = []
+
+                def _probe(name, rect):
+                    nonlocal leaked, probed
+                    if not rect:
+                        return
+                    for point in corner_insets(rect):
+                        if (
+                            point["x"] < 1
+                            or point["y"] < 1
+                            or point["x"] >= width - 1
+                            or point["y"] >= height - 1
+                        ):
+                            continue
+                        probed += 1
+                        owner = map_hit_at(page, point["x"], point["y"]) or {}
+                        reasons = []
+                        if owner.get("map") or owner.get("cell"):
+                            reasons.append(f"elementFromPoint {owner.get('got')!r}")
+                        dismiss_selection(page)
+                        _silence_toast(page)
+                        if not (owner.get("button") and not owner.get("map")):
+                            tap_point(page, point["x"], point["y"])
+                            bad, acted, hit, ready = _selection_leaked(page)
+                            if bad:
+                                reasons.append(
+                                    f"selected {acted} toast {hit.get('toast')!r} ready {ready!r}"
+                                )
+                            dismiss_selection(page)
+                            _silence_toast(page)
+                            _ensure_town_map(page)
+                        if reasons:
+                            leaked += 1
+                            if len(examples) < 8:
+                                examples.append(
+                                    f"{name} {point['name']} "
+                                    f"({point['x']:.0f},{point['y']:.0f}) "
+                                    + "; ".join(reasons)
+                                )
+
+                for name, selector in surfaces:
+                    _probe(name, surface_rect(page, selector))
+                set_village_scroll(page, scroll if scroll != "max" else "max")
+                if _open_shop_sheet(page):
+                    sheet_opened = True
+                    _probe("sheet", surface_rect(page, "#actionSheet"))
+                    _close_sheet(page)
+                summaries.append(
+                    f"rect {mode} {width}x{height} scroll {actual}: "
+                    f"probed {probed}, leaked {leaked}"
+                )
+                if leaked:
+                    problems.append(
+                        f"rect {mode} {width}x{height} scroll {actual}: "
+                        f"{leaked}/{probed} | " + " | ".join(examples)
+                    )
+                elif probed == 0:
+                    problems.append(
+                        f"rect {mode} {width}x{height} scroll {actual}: no corner points"
+                    )
+            if not sheet_opened:
+                problems.append(f"rect {mode} {width}x{height}: #actionSheet did not open")
+    return problems, summaries
+
+
+def _tap_visible_gold(page, point):
+    dismiss_selection(page)
+    _silence_toast(page)
+    tap_point(page, point["x"], point["y"])
+    hit = read_reaction(page)
+    acted = _acted_cell(hit)
+    want = (point["c"], point["r"])
+    ok = acted == want and "場景 3" not in (hit.get("scene") or "")
+    return ok, acted, hit
+
+
+def _gold_in_saved_rect(page, rect):
+    point = gold_point_inside(page, rect)
+    if point:
+        return point
+    for scroll in (0, 180, 360, "max"):
+        set_village_scroll(page, scroll)
+        point = gold_point_inside(page, rect)
+        if point:
+            return point
+    return None
+
+
+def _bar_guard_checks(page, base_url):
+    """Closed or inert UI must not eat a tap on a visible gold cell.
+
+    These guards are expected to pass on the current product. They are not
+    extra red cases.
+    """
+    problems = []
+    summaries = []
+    _relogin(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _enter_new_build_scene2(page)
+    launcher = page.locator("#listLauncher")
+    if launcher.count() and launcher.first.is_visible():
+        launcher.first.click()
+        page.locator("#palette").wait_for(state="visible", timeout=8000)
+    palette_rect = surface_rect(page, "#palette")
+    if not palette_rect:
+        summaries.append("guard palette: cannot open, former-rect skipped")
+    else:
+        back = page.locator("#btnUxBack")
+        back.first.click()
+        page.wait_for_timeout(200)
+        _enter_new_build_scene2(page)
+        still = False
+        try:
+            still = page.locator("#palette").is_visible()
+        except Exception:
+            still = False
+        if still:
+            summaries.append(
+                "guard palette: still open after 返回地圖 and 我要起屋; former-rect skipped"
+            )
+        else:
+            point = _gold_in_saved_rect(page, palette_rect)
+            if not point:
+                problems.append("guard palette: no visible gold cell in the former rect")
+            else:
+                ok, acted, hit = _tap_visible_gold(page, point)
+                summaries.append(
+                    f"guard palette-closed: former rect {point['c'], point['r']} -> {acted}"
+                )
+                if not ok:
+                    problems.append(
+                        f"guard palette-closed: gold {point['c'], point['r']} "
+                        f"in the former rect selected {acted} toast {hit.get('toast')!r}"
+                    )
+    _scene2_tap_mode(page, "bare", "工坊")
+    menu = page.locator("#app .gh .mb")
+    if menu.count() and menu.first.is_visible():
+        menu.first.click()
+        page.wait_for_timeout(350)
+        drawer_rect = surface_rect(page, "#dr")
+        closer = page.locator("#dr .dc")
+        if closer.count():
+            closer.first.click()
+            page.wait_for_timeout(350)
+        else:
+            page.evaluate("() => { if (typeof td === 'function') td(); }")
+            page.wait_for_timeout(350)
+        if not drawer_rect:
+            summaries.append("guard drawer: opened rect missing; collapsed gold tap only")
+            drawer_rect = {"left": 0, "top": 0, "right": 4000, "bottom": 4000}
+        point = _gold_in_saved_rect(page, drawer_rect)
+        if not point:
+            problems.append("guard drawer: no visible gold cell after the drawer collapsed")
+        else:
+            ok, acted, hit = _tap_visible_gold(page, point)
+            summaries.append(f"guard drawer-collapsed: {point['c'], point['r']} -> {acted}")
+            if not ok:
+                problems.append(
+                    f"guard drawer-collapsed: gold {point['c'], point['r']} "
+                    f"selected {acted} toast {hit.get('toast')!r}"
+                )
+    else:
+        problems.append("guard drawer: menu button missing, could not exercise collapse")
+    _scene2_tap_mode(page, "bare", "工坊")
+    sheet_was_open = _open_shop_sheet(page)
+    sheet_rect = surface_rect(page, "#actionSheet") if sheet_was_open else None
+    if sheet_was_open:
+        _close_sheet(page)
+    sheet_open = False
+    try:
+        sheet_open = page.locator("#actionSheet").is_visible()
+    except Exception:
+        sheet_open = False
+    if sheet_open:
+        summaries.append("guard sheet: could not close; former-rect skipped")
+    else:
+        target = sheet_rect or {"left": 0, "top": 0, "right": 4000, "bottom": 4000}
+        point = _gold_in_saved_rect(page, target)
+        if not point:
+            problems.append("guard sheet-closed: no visible gold cell")
+        else:
+            ok, acted, hit = _tap_visible_gold(page, point)
+            label = "former sheet rect" if sheet_rect else "unopened sheet"
+            summaries.append(f"guard {label}: {point['c'], point['r']} -> {acted}")
+            if not ok:
+                problems.append(
+                    f"guard {label}: gold {point['c'], point['r']} "
+                    f"selected {acted} toast {hit.get('toast')!r}"
+                )
+    hidden_hits = page.evaluate(
+        r"""
+() => {
+  const map = document.getElementById('townMap');
+  const mapBox = map ? map.getBoundingClientRect() : null;
+  function hidden(el) {
+    if (!el || el === document.body || el === document.documentElement) return false;
+    const cs = getComputedStyle(el);
+    if (el.inert) return 'inert';
+    if (cs.visibility === 'hidden') return 'visibility';
+    if (Number(cs.opacity) === 0) return 'opacity';
+    if (cs.display === 'none') return 'display';
+    const box = el.getBoundingClientRect();
+    if (box.width < 2 || box.height < 2) return null;
+    if (box.right < 0 || box.bottom < 0 || box.left > innerWidth || box.top > innerHeight) {
+      return 'offscreen';
+    }
+    if (mapBox) {
+      const ix = Math.min(box.right, mapBox.right) - Math.max(box.left, mapBox.left);
+      const iy = Math.min(box.bottom, mapBox.bottom) - Math.max(box.top, mapBox.top);
+      if (ix <= 0 || iy <= 0) return 'outside-map';
+    }
+    return null;
+  }
+  const hits = [];
+  for (const el of document.querySelectorAll('[id]')) {
+    const why = hidden(el);
+    if (!why || why === 'display') continue;
+    const box = el.getBoundingClientRect();
+    if (box.width < 2 || box.height < 2) continue;
+    hits.push({
+      id: el.id, why,
+      left: box.left, top: box.top, right: box.right, bottom: box.bottom
+    });
+  }
+  return hits.slice(0, 12);
+}
+"""
+    ) or []
+    blocked = 0
+    for item in hidden_hits:
+        point = gold_point_inside(page, item)
+        if not point:
+            continue
+        ok, acted, hit = _tap_visible_gold(page, point)
+        if not ok:
+            blocked += 1
+            problems.append(
+                f"guard hidden #{item['id']} ({item['why']}) ate gold "
+                f"{point['c'], point['r']} -> {acted} toast {hit.get('toast')!r}"
+            )
+    summaries.append(f"guard hidden-elements: scanned {len(hidden_hits)}, blocked {blocked}")
+    _silence_toast(page)
+    page.evaluate("() => { if (typeof showToast === 'function') showToast('放置完成'); }")
+    point = any_visible_gold_point(page)
+    if not point:
+        problems.append("guard toast: no visible gold cell while the toast is up")
+    else:
+        dismiss_selection(page)
+        tap_point(page, point["x"], point["y"])
+        hit = read_reaction(page)
+        acted = _acted_cell(hit)
+        ok = acted == (point["c"], point["r"]) and "場景 3" not in (hit.get("scene") or "")
+        summaries.append(f"guard toast-not-eating: {point['c'], point['r']} -> {acted}")
+        if not ok:
+            problems.append(
+                f"guard toast ate visible gold {point['c'], point['r']} "
+                f"(got {acted}, toast {hit.get('toast')!r})"
+            )
+    if point:
+        burst_pe = page.evaluate(
+            """([x, y]) => {
+              const host = document.getElementById('townMap') || document.body;
+              const burst = document.createElement('div');
+              burst.className = 'fx-burst';
+              burst.setAttribute('data-town-fx', 'place');
+              burst.style.position = 'fixed';
+              burst.style.left = (x - 24) + 'px';
+              burst.style.top = (y - 24) + 'px';
+              burst.style.width = '48px';
+              burst.style.height = '48px';
+              burst.style.zIndex = '80';
+              host.appendChild(burst);
+              const pe = getComputedStyle(burst).pointerEvents;
+              burst.remove();
+              return pe;
+            }""",
+            [point["x"], point["y"]],
+        )
+        if burst_pe != "none":
+            problems.append(f"guard vfx pointer-events is {burst_pe!r}, expected none")
+        else:
+            host_point = point
+            page.evaluate(
+                """([x, y]) => {
+                  const host = document.getElementById('townMap') || document.body;
+                  const burst = document.createElement('div');
+                  burst.id = 'qc6Burst';
+                  burst.className = 'fx-burst';
+                  burst.setAttribute('data-town-fx', 'place');
+                  burst.style.position = 'fixed';
+                  burst.style.left = (x - 24) + 'px';
+                  burst.style.top = (y - 24) + 'px';
+                  burst.style.width = '48px';
+                  burst.style.height = '48px';
+                  burst.style.zIndex = '80';
+                  host.appendChild(burst);
+                }""",
+                [host_point["x"], host_point["y"]],
+            )
+            dismiss_selection(page)
+            tap_point(page, host_point["x"], host_point["y"])
+            hit = read_reaction(page)
+            acted = _acted_cell(hit)
+            ok = acted == (host_point["c"], host_point["r"])
+            page.evaluate("() => { const el = document.getElementById('qc6Burst'); if (el) el.remove(); }")
+            summaries.append(f"guard vfx-not-eating: {host_point['c'], host_point['r']} -> {acted}")
+            if not ok:
+                problems.append(
+                    f"guard vfx ate visible gold {host_point['c'], host_point['r']} (got {acted})"
+                )
+    if not problems:
+        summaries.append("guards: PASS")
+    return problems, summaries
+
+
 @pytest.mark.case_id("TC-FE-TAP-BAR-NOTHROUGH")
 def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
-    """TC-FE-TAP-BAR-NOTHROUGH 實心介面要吃掉點擊，格子不能被選中。
+    """TC-FE-TAP-BAR-NOTHROUGH 只有打開而且看得見的實心介面可以吃掉點擊。
 
-    動作列、清單面板、頂部 HUD、頁尾，以及打開的面板，背景格點的
-    elementFromPoint 必須落在該介面，而且點下去不得選中格子。
-    info／成功提示和放置特效是 pointer-events:none。提示還顯示時，
-    壓在提示底下的金色格仍要用菱形中心點中。
+    外框矩形的四個角，包括圓角外面的透明區，都不得打中格子。
+    提示蓋住看得見的金色菱形時，點那一塊要選中；蓋不住時，點提示不得選格。
+    收起的清單、抽屜、未打開的面板，以及 toast／特效，不得吃掉看得見的金格。
+    後面這組是 guard，用來防止實心介面擋太多。
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(
@@ -4353,7 +4867,6 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
     # showToast hides it after 2s, and a later keyboard click does not
     # refresh it on builds that ignore clientX 0.
     tap_cell_centre(page, 0, 0)
-    toast_box = _surface_box(page, "#toast")
     toast_state = page.evaluate(
         """() => {
           const el = document.getElementById('toast');
@@ -4381,34 +4894,43 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
         problems.append(
             f"placement .fx-burst pointer-events is {toast_state.get('burst')!r}, expected none"
         )
-    # 1280×720 puts the fixed bottom toast over gold (4,5)'s diamond centre.
-    # The cell has to be in the rendered gold set; a non-gold cell must toast
-    # instead of selecting, so it cannot be the overlap target.
-    gold = (4, 5)
-    rendered_gold = set(_mark_gold_cells(page))
-    if gold not in rendered_gold:
-        problems.append(
-            f"{gold} is not in the rendered gold set; the toast-overlap tap "
-            "only applies to a gold cell"
-        )
-    centre = cell_points(page, gold[0], gold[1])["points"]["centre"]
-    covers = bool(toast_box) and point_in_rect(centre, toast_box)
-    if not covers:
-        problems.append(
-            f"toast rect {toast_box} does not cover gold {gold} diamond centre "
-            f"({centre['x']:.0f},{centre['y']:.0f}) text {toast_state.get('text')!r}"
-        )
-        summaries.append("toast-gold: (4,5) not covered")
-    else:
-        tap_point(page, centre["x"], centre["y"])
+    # Only a gold diamond that is actually visible under the toast may be
+    # selected. A hidden cell under the toast is not that target.
+    overlap = visible_gold_under_toast(page)
+    if overlap:
+        want = (overlap["c"], overlap["r"])
+        dismiss_selection(page)
+        tap_point(page, overlap["x"], overlap["y"])
         hit = read_reaction(page)
         acted = _acted_cell(hit)
-        ok = acted == gold and "場景 3" not in (hit.get("scene") or "")
-        summaries.append(f"toast-gold: {gold} covered -> {acted}")
+        ok = acted == want and "場景 3" not in (hit.get("scene") or "")
+        summaries.append(f"toast-gold: visible {want} -> {acted}")
         if not ok:
             problems.append(
-                f"gold {gold} under the visible toast was not selected (got {acted}, "
-                f"toast {hit.get('toast')!r})"
+                f"visible gold {want} under the toast was not selected "
+                f"(got {acted}, toast {hit.get('toast')!r})"
+            )
+    else:
+        toast_hits = []
+        for point in toast_off_visible_probes(page):
+            dismiss_selection(page)
+            tap_point(page, point["x"], point["y"])
+            leaked, acted, hit, ready = _selection_leaked(page)
+            if leaked:
+                if len(toast_hits) < 6:
+                    toast_hits.append(
+                        f"{point['why']} ({point['x']:.0f},{point['y']:.0f}) "
+                        f"selected {acted} toast {hit.get('toast')!r} ready {ready!r}"
+                    )
+            _ensure_town_map(page)
+        summaries.append(
+            f"toast-gold: no visible gold under the toast; "
+            f"off-visible taps selected {len(toast_hits)}"
+        )
+        if toast_hits:
+            problems.append(
+                "toast covers no visible gold cell, but taps on it selected a cell: "
+                + " | ".join(toast_hits)
             )
     page.evaluate("() => { if (typeof showToast === 'function') showToast('放置完成'); }")
     success_pe = page.evaluate(
@@ -4436,6 +4958,13 @@ def test_tap_bar_nothrough(page, base_url, warehouse_db, warehouse_ids):
         summaries.append(f"footer-nav {nav}: {'ok' if active else 'FAIL'}")
         if not active:
             problems.append(f"tapping footer tab {nav} did not show #{tab_id}")
+
+    rect_problems, rect_summaries = _bar_rect_leaks(page, base_url)
+    problems.extend(rect_problems)
+    summaries.extend(rect_summaries)
+    guard_problems, guard_summaries = _bar_guard_checks(page, base_url)
+    problems.extend(guard_problems)
+    summaries.extend(guard_summaries)
 
     print("TC-FE-TAP-BAR-NOTHROUGH " + " || ".join(summaries))
     assert not problems, "TC-FE-TAP-BAR-NOTHROUGH: " + " || ".join(problems[:10])
@@ -4497,7 +5026,9 @@ def _silence_toast(page):
     )
 
 
-def _toast_pair_problems(page, first, second, expected_first, expected_second, same_text):
+def _toast_pair_problems(
+    page, first, second, expected_first, expected_second, same_text, gap_ms=420
+):
     """Two real taps, then rAF samples of #toast. Returns problem strings."""
     _scroll_cell_into_view(page, *first)
     _scroll_cell_into_view(page, *second)
@@ -4509,11 +5040,11 @@ def _toast_pair_problems(page, first, second, expected_first, expected_second, s
     before1 = _now_ms(page)
     tap_point(page, point_a["x"], point_a["y"])
     after1 = _now_ms(page)
-    page.wait_for_timeout(420)
+    page.wait_for_timeout(gap_ms)
     before2 = _now_ms(page)
     tap_point(page, point_b["x"], point_b["y"])
     after2 = _now_ms(page)
-    page.wait_for_timeout(3100)
+    page.wait_for_timeout(3400)
     payload = page.evaluate(
         """() => {
           const probe = window.__toastProbe;
@@ -4522,15 +5053,17 @@ def _toast_pair_problems(page, first, second, expected_first, expected_second, s
           return { samples: probe.samples, anims: probe.anims };
         }"""
     )
-    label = "same" if same_text else "different"
+    label = ("same" if same_text else "different") + f"@{gap_ms}"
     if not payload:
         return [f"{label}: probe did not start"]
     samples = payload["samples"]
     anims = payload["anims"]
     problems = []
     gap = before2 - after1
-    if gap < 280 or gap > 700:
-        problems.append(f"{label}: taps were {gap:.0f}ms apart, want about 300-500")
+    if gap < gap_ms - 280 or gap > gap_ms + 280:
+        problems.append(
+            f"{label}: taps were {gap:.0f}ms apart, want about {gap_ms}"
+        )
     if not samples:
         return problems + [f"{label}: no rAF samples"]
     if any(not item.get("sameNode") for item in samples):
@@ -4570,27 +5103,58 @@ def _toast_pair_problems(page, first, second, expected_first, expected_second, s
         problems.append(f"{label}: toast still shown at ~2.8s after the second tap")
 
     if same_text:
-        opaque = [item for item in samples if item["t"] >= after1 and item.get("opacity", 0) >= 0.9]
-        if not opaque:
-            problems.append(f"{label}: opacity never reached 0.9")
+        floor = 0.99
+        full = [
+            item for item in samples
+            if item["t"] >= before1 and _shown(item) and item.get("opacity", 0) >= floor
+        ]
+        if not full:
+            problems.append(f"{label}: opacity never held at {floor}")
         else:
-            rose = opaque[0]["t"]
-            dipped = [
+            rose = full[0]["t"]
+            after_rose = [item for item in samples if item["t"] >= rose]
+            dipped = None
+            for item in after_rose:
+                if not _shown(item) or item.get("opacity", 0) < floor:
+                    dipped = item
+                    break
+            if dipped is None:
+                problems.append(f"{label}: toast never left full opacity")
+            else:
+                returned = [
+                    item for item in after_rose
+                    if item["t"] > dipped["t"] + 20
+                    and _shown(item)
+                    and item.get("opacity", 0) >= floor
+                ]
+                if returned:
+                    problems.append(
+                        f"{label}: opacity fell to {float(dipped.get('opacity') or 0):.2f} "
+                        f"{(dipped['t'] - before1):.0f}ms after the first tap, then returned to "
+                        f"{float(returned[0].get('opacity') or 0):.2f}"
+                    )
+                else:
+                    hidden = [
+                        item for item in after_rose
+                        if item["t"] >= dipped["t"] and not _shown(item)
+                    ]
+                    if not hidden:
+                        problems.append(f"{label}: fade started but the toast never hid")
+                    else:
+                        fade_ms = hidden[0]["t"] - dipped["t"]
+                        if fade_ms > 350:
+                            problems.append(
+                                f"{label}: final fade lasted {fade_ms:.0f}ms, want <= 350"
+                            )
+            held = [
                 item for item in samples
-                if rose <= item["t"] <= before2 and item.get("opacity", 0) < 0.9
+                if hold_until - 80 <= item["t"] <= hold_until + 120
+                and _shown(item)
+                and item.get("opacity", 0) >= floor
             ]
-            if dipped:
+            if not held:
                 problems.append(
-                    f"{label}: opacity dipped to {dipped[0].get('opacity'):.2f} between taps"
-                )
-            replay_dip = [
-                item for item in samples
-                if after2 <= item["t"] <= after2 + 350 and item.get("opacity", 0) < 0.9
-            ]
-            if replay_dip:
-                problems.append(
-                    f"{label}: opacity dipped to {replay_dip[0].get('opacity'):.2f} "
-                    "just after the second tap"
+                    f"{label}: opacity was not still >= {floor} at 1.9s after the second tap"
                 )
         replayed = [
             item for item in anims
@@ -4636,13 +5200,12 @@ def _toast_pair_problems(page, first, second, expected_first, expected_second, s
 
 @pytest.mark.case_id("TC-FE-TOAST-TIMER-RESET")
 def test_toast_timer_resets(page, base_url, warehouse_db, warehouse_ids):
-    """TC-FE-TOAST-TIMER-RESET 連續兩個提示要從第二下重新計時。
+    """TC-FE-TOAST-TIMER-RESET 同一句提示的 opacity 不可中途掉下去。
 
-    兩下真實點擊大約相隔 420ms。用 rAF 抽 #toast 的 display、opacity、
-    文字和節點，並聽 animationstart。同一句（放不下點兩次）不得重播
-    進場動畫，而且要維持到第二下之後至少 1.9 秒、約 2.8 秒前消失。
-    換句（放不下然後已經有）要在約 150ms 內改文字，計時同樣從第二下算。
-    同一條裡各跑 3 次。
+    同一句在第一下之後 1.0 秒和 1.6 秒各再點一次。opacity 升到 0.99 之後
+    必須維持到隱藏計時開始，中間不得掉回 0 再跳回 1。第二下之後至少 1.9 秒
+    仍是滿透明度，最後淡出不超過約 0.35 秒。不得重播 animationstart。
+    換句仍是大約 420ms，文字要改成已經有建築物。各跑 3 次。
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(
@@ -4677,17 +5240,18 @@ def test_toast_timer_resets(page, base_url, warehouse_db, warehouse_ids):
         page.set_viewport_size({"width": 1100, "height": 800})
         _enter_new_build_scene2(page)
         dismiss_selection(page)
-        for same, second, expected_second in (
-            (True, unfit, CANNOT_FIT_TOAST),
-            (False, occupied, OCCUPIED_TOAST),
+        for same, second, expected_second, gap_ms in (
+            (True, unfit, CANNOT_FIT_TOAST, 1000),
+            (True, unfit, CANNOT_FIT_TOAST, 1600),
+            (False, occupied, OCCUPIED_TOAST, 420),
         ):
             found = _toast_pair_problems(
-                page, unfit, second, CANNOT_FIT_TOAST, expected_second, same
+                page, unfit, second, CANNOT_FIT_TOAST, expected_second, same, gap_ms
             )
             problems.extend(f"trial {trial}: {item}" for item in found)
     print(
         "TC-FE-TOAST-TIMER-RESET "
-        + (f"{len(problems)} problems" if problems else "same 3/3, different 3/3")
+        + (f"{len(problems)} problems" if problems else "same@1000 3/3, same@1600 3/3, different 3/3")
     )
     assert not problems, "TC-FE-TOAST-TIMER-RESET: " + " | ".join(problems[:12])
 
@@ -4741,3 +5305,341 @@ def test_autoplace_formal_shown(page, base_url, warehouse_db, warehouse_ids):
     if _OWNED_COLLOQUIAL in (shown.get("toast") or ""):
         problems.append("toast still shows 你已經興建咗呢種建築物")
     assert not problems, "TC-API-AUTOPLACE-FORMAL: " + " | ".join(problems)
+
+
+def _parse_css_rgb(text):
+    match = re.search(r"rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)", text or "")
+    if not match:
+        return None
+    return tuple(int(match.group(i)) for i in range(1, 4))
+
+
+@pytest.mark.case_id("TC-FE-TAP-VISIBLE-ONLY")
+def test_tap_visible_only(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-TAP-VISIBLE-ONLY 看不見的地圖範圍不得選格，也不得出提示。
+
+    點必須落在 #townMap 四邊都被捲動區、動作列、頁尾和視窗裁過的可見矩形裡，
+    而且落在菱形看得見的那一段。可見矩形外面的點，包括動作列上方的窄條、
+    捲下去之後的上緣、下緣、頁尾後面，以及 1280×720 提示下方 8px，
+    都不得選格、不得把 #readyStatus 改成已選擇空地、不得新出提示。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[
+            {"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0},
+            {"name": "農場", "level": 1, "stored": 0, "cell_x": 4, "cell_y": 3},
+            {"name": BUILDING_NAME, "level": 2, "stored": 1, "cell_x": 20, "cell_y": 12},
+        ],
+    )
+    _login(page, base_url)
+    problems = []
+    summaries = []
+    for width, height in ((1100, 800), (390, 844), (1280, 720)):
+        for mode in ("bare", "picked", "unstore"):
+            _relogin(page, base_url)
+            page.set_viewport_size({"width": width, "height": height})
+            if mode == "unstore":
+                opened = _open_takeout_scene2(page)
+                assert opened is None, f"TC-FE-TAP-VISIBLE-ONLY unstore: {opened}"
+            elif mode == "picked":
+                _enter_new_build_scene2(page)
+                assert _pick_unbuilt(page, "工坊"), "工坊 missing from the palette"
+            else:
+                _enter_new_build_scene2(page)
+            for scroll in (0, "max"):
+                set_village_scroll(page, scroll)
+                probes = off_visible_probes(page)
+                points = probes.get("points") or []
+                label = f"{mode} {width}x{height} scroll {probes.get('scroll')}"
+                if not points:
+                    problems.append(f"{label}: off-visible sweep was empty")
+                    summaries.append(f"{label}: empty")
+                    continue
+                leaks = []
+                hidden_hits = 0
+                tapped = 0
+                for point in points:
+                    if point.get("cell"):
+                        hidden_hits += 1
+                    owner = map_hit_at(page, point["x"], point["y"]) or {}
+                    if owner.get("button") and not owner.get("map"):
+                        continue
+                    tapped += 1
+                    dismiss_selection(page)
+                    _silence_toast(page)
+                    tap_point(page, point["x"], point["y"])
+                    leaked, acted, hit, ready = _selection_leaked(page)
+                    if leaked and len(leaks) < 6:
+                        cell = point.get("cell")
+                        leaks.append(
+                            f"{point['why']} ({point['x']:.0f},{point['y']:.0f}) "
+                            f"cellAt {cell} selected {acted} toast {hit.get('toast')!r} "
+                            f"ready {ready!r}"
+                        )
+                    elif leaked:
+                        leaks.append("more")
+                    _ensure_town_map(page)
+                    if "場景 2" not in _scene_aria(page) and mode != "unstore":
+                        _scene2_tap_mode(page, mode if mode != "bare" else "bare", "工坊")
+                        set_village_scroll(page, scroll)
+                real_leaks = [item for item in leaks if item != "more"]
+                summaries.append(
+                    f"{label}: probes {len(points)}, tapped {tapped}, "
+                    f"hidden-cell {hidden_hits}, leaks {len(leaks)}"
+                )
+                if real_leaks:
+                    problems.append(f"{label}: " + " | ".join(real_leaks))
+            if (width, height) == (1280, 720):
+                dismiss_selection(page)
+                _silence_toast(page)
+                page.evaluate(
+                    "() => { if (typeof showToast === 'function') showToast('已選擇空地。'); }"
+                )
+                toast_points = toast_off_visible_probes(page)
+                toast_leaks = []
+                for point in toast_points:
+                    dismiss_selection(page)
+                    tap_point(page, point["x"], point["y"])
+                    hit = read_reaction(page)
+                    ready = (_hint(page).get("ready") or "")
+                    acted = _acted_cell(hit)
+                    # The toast was already showing, so its text is not a new leak.
+                    leaked = (
+                        acted is not None
+                        or "場景 3" in (hit.get("scene") or "")
+                        or "已選擇空地" in ready
+                    )
+                    if leaked and len(toast_leaks) < 4:
+                        toast_leaks.append(
+                            f"{point['why']} ({point['x']:.0f},{point['y']:.0f}) "
+                            f"selected {acted} ready {ready!r}"
+                        )
+                    _ensure_town_map(page)
+                summaries.append(
+                    f"{mode} toast-strip: points {len(toast_points)}, leaks {len(toast_leaks)}"
+                )
+                if not toast_points:
+                    problems.append(f"{mode} 1280x720: toast off-visible strip was empty")
+                if toast_leaks:
+                    problems.append(
+                        f"{mode} 1280x720 toast strip: " + " | ".join(toast_leaks)
+                    )
+    print("TC-FE-TAP-VISIBLE-ONLY " + " || ".join(summaries))
+    assert not problems, "TC-FE-TAP-VISIBLE-ONLY: " + " || ".join(problems[:8])
+
+
+@pytest.mark.case_id("TC-FE-SELECTED-CONTRAST")
+def test_selected_contrast(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-SELECTED-CONTRAST 選中格的實線要是 #b45309、3px，對比足夠。
+
+    對比同時對草地和金色填色（#fff3c4 以 0.62 疊在草地上）計算，都要至少 3:1。
+    顏色不得跟金色格的虛線 #d4a017 相同。金色虛線本身維持 #d4a017。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[{"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0}],
+    )
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _enter_new_build_scene2(page)
+    point = any_visible_gold_point(page)
+    assert point, "TC-FE-SELECTED-CONTRAST: no visible gold cell"
+    dismiss_selection(page)
+    _silence_toast(page)
+    tap_point(page, point["x"], point["y"])
+    paint = chosen_mark_paint(page)
+    chosen = paint.get("chosen") or {}
+    gold = paint.get("gold") or {}
+    grass = _parse_css_rgb(paint.get("background")) or GRASS_FALLBACK
+    stroke = parse_hex(chosen.get("stroke"))
+    fill = parse_hex(chosen.get("fill")) or GOLD_FILL
+    alpha = chosen.get("fillOpacity")
+    if alpha is None:
+        alpha = GOLD_FILL_ALPHA
+    problems = []
+    if stroke != REQUIRED_STROKE:
+        problems.append(f"chosen stroke {chosen.get('stroke')!r}, expected #b45309")
+    if chosen.get("width") != 3:
+        problems.append(f"chosen stroke-width {chosen.get('width')!r}, expected 3")
+    if chosen.get("dashed"):
+        problems.append("chosen mark is dashed; the selected line is solid")
+    if stroke == GOLD_STROKE:
+        problems.append("chosen stroke matches the gold dashed outline #d4a017")
+    if stroke:
+        stacked = composite(fill, float(alpha), grass)
+        grass_ratio = contrast_ratio(stroke, grass)
+        fill_ratio = contrast_ratio(stroke, stacked)
+        if grass_ratio < 3:
+            problems.append(f"contrast against grass {grass_ratio:.2f} < 3")
+        if fill_ratio < 3:
+            problems.append(f"contrast against gold fill {fill_ratio:.2f} < 3")
+    gold_stroke = parse_hex(gold.get("stroke"))
+    if gold_stroke != GOLD_STROKE or not gold.get("dashed"):
+        problems.append(
+            f"gold outline {gold.get('stroke')!r} dashed {gold.get('dashed')!r}, "
+            "expected #d4a017 dashed"
+        )
+    print(
+        "TC-FE-SELECTED-CONTRAST "
+        f"stroke {chosen.get('stroke')} width {chosen.get('width')} "
+        f"grass {grass} gold {gold.get('stroke')}"
+    )
+    assert not problems, "TC-FE-SELECTED-CONTRAST: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-FE-FOCUS-RING-CENTRE")
+def test_focus_ring_centre(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-FOCUS-RING-CENTRE 鍵盤焦点環的中心要對上菱形頂面的中心。
+
+    頂面中心在地磚外框中心上方 10 個視圖單位。1280×720 與 390×844 都要在 ±1px 內。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[{"name": "商店", "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0}],
+    )
+    _login(page, base_url)
+    problems = []
+    for width, height in ((1280, 720), (390, 844)):
+        page.set_viewport_size({"width": width, "height": height})
+        if "場景 2" not in _scene_aria(page):
+            _enter_new_build_scene2(page)
+        page.wait_for_timeout(150)
+        point = any_visible_gold_point(page)
+        if not point:
+            problems.append(f"{width}x{height}: no visible gold cell")
+            continue
+        delta = focus_ring_delta(page, point["c"], point["r"]) or {}
+        dx = delta.get("dx")
+        dy = delta.get("dy")
+        print(
+            f"TC-FE-FOCUS-RING-CENTRE {width}x{height} cell {point['c'], point['r']} "
+            f"dx {dx} dy {dy} painted {delta.get('painted')}"
+        )
+        if not delta.get("painted") or dx is None or dy is None:
+            problems.append(f"{width}x{height}: focus ring was not painted ({delta})")
+            continue
+        if abs(dx) > 1 or abs(dy) > 1:
+            problems.append(
+                f"{width}x{height}: ring centre is ({dx:.1f},{dy:.1f}) px from the "
+                f"top-face centre, want ±1 (face offset {delta.get('face')})"
+            )
+    assert not problems, "TC-FE-FOCUS-RING-CENTRE: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-FE-HIDDEN-INERT")
+def test_hidden_inert(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-HIDDEN-INERT 收起的抽屜和隱藏的轉橫向層不在 Tab 順序裡。
+
+    抽屜收起時 13 顆按鈕（✕、小鎮地圖……登出）不得成為 Tab 停點。打開之後要回來。
+    #ktRotate（請轉橫向）隱藏時不在 Tab 順序裡；顯示時不得是 inert。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(warehouse_db, kid_id, points=800, buildings=[])
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _enter_new_build_scene2(page)
+    problems = []
+    closed = hidden_tab_state(page)
+    print(
+        "TC-FE-HIDDEN-INERT collapsed "
+        f"drawer {len(closed.get('drawerTab') or [])}/{closed.get('drawerCount')} "
+        f"rotate {closed.get('rotateDisplay')} tab {closed.get('rotateTab')}"
+    )
+    if closed.get("drawerCount") != 13:
+        problems.append(f"drawer has {closed.get('drawerCount')} buttons, expected 13")
+    if closed.get("drawerTab"):
+        problems.append(
+            "collapsed drawer is in the tab order: " + ", ".join(closed["drawerTab"])
+        )
+    if "請轉橫向" not in (closed.get("rotateText") or ""):
+        problems.append("rotate overlay is missing 請轉橫向")
+    if closed.get("rotateDisplay") != "none" or closed.get("rotateTab"):
+        problems.append(
+            f"hidden rotate overlay is not inert "
+            f"(display {closed.get('rotateDisplay')}, tab {closed.get('rotateTab')})"
+        )
+    menu = page.locator("#app .gh .mb")
+    assert menu.count() and menu.first.is_visible(), "menu button missing"
+    menu.first.click()
+    page.wait_for_timeout(400)
+    opened = hidden_tab_state(page)
+    if not opened.get("drawerOpen"):
+        problems.append("drawer did not open from the menu button")
+    missing = (opened.get("drawerCount") or 0) - len(opened.get("drawerTab") or [])
+    if opened.get("drawerOpen") and missing:
+        problems.append(
+            f"open drawer left {missing} buttons out of the tab order"
+        )
+    closer = page.locator("#dr .dc")
+    if closer.count():
+        closer.first.click()
+        page.wait_for_timeout(300)
+    set_rotate_shown(page, True)
+    shown = hidden_tab_state(page)
+    if shown.get("rotateDisplay") == "none" or shown.get("rotateInert"):
+        problems.append(
+            f"shown rotate overlay stayed inert "
+            f"(display {shown.get('rotateDisplay')}, inert {shown.get('rotateInert')})"
+        )
+    set_rotate_shown(page, False)
+    assert not problems, "TC-FE-HIDDEN-INERT: " + " | ".join(problems)
+
+
+@pytest.mark.case_id("TC-API-PLACE-OWNED-FORMAL")
+def test_place_owned_formal_shown(page, base_url, warehouse_db, warehouse_ids):
+    """TC-API-PLACE-OWNED-FORMAL 指定格子的已放置建築，畫面也用書面語。
+
+    POST 帶 cell_x、cell_y。錯誤句正好是「你已經興建了這種建築物。」。
+    showBuildFailure 放進 #toast 的字不得是「你已經興建咗呢種建築物」。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(
+        warehouse_db,
+        kid_id,
+        points=800,
+        buildings=[{"name": BUILDING_NAME, "level": 1, "stored": 0, "cell_x": 0, "cell_y": 0}],
+    )
+    def_id = _def_id_by_name(warehouse_db, BUILDING_NAME)["id"]
+    _login(page, base_url)
+    shown = page.evaluate(
+        """async ({defId, kidId}) => {
+          const res = await fetch('/api/kids/' + kidId + '/buildings', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({def_id: defId, cell_x: 4, cell_y: 4})
+          });
+          let data = {};
+          try { data = await res.json(); } catch (err) { data = {}; }
+          const message = (data && data.error) || '';
+          if (typeof showBuildFailure === 'function') showBuildFailure(message);
+          const toast = document.getElementById('toast');
+          return {
+            status: res.status,
+            error: message,
+            toast: toast ? (toast.textContent || '') : ''
+          };
+        }""",
+        {"defId": def_id, "kidId": kid_id},
+    )
+    problems = []
+    if shown.get("status") != 400:
+        problems.append(f"HTTP {shown.get('status')}, expected 400")
+    if shown.get("error") != _OWNED_FORMAL:
+        problems.append(f"error {shown.get('error')!r}, expected {_OWNED_FORMAL!r}")
+    if _OWNED_COLLOQUIAL in (shown.get("error") or ""):
+        problems.append("response still uses 你已經興建咗呢種建築物")
+    if _OWNED_FORMAL not in (shown.get("toast") or ""):
+        problems.append(f"toast {shown.get('toast')!r} does not show {_OWNED_FORMAL!r}")
+    if _OWNED_COLLOQUIAL in (shown.get("toast") or ""):
+        problems.append("toast still shows 你已經興建咗呢種建築物")
+    assert not problems, "TC-API-PLACE-OWNED-FORMAL: " + " | ".join(problems)
