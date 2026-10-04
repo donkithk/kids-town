@@ -1553,7 +1553,14 @@
       }
       if (solidUiFromTarget(target)) return;
       var point = activationPoint(event, cellBtn);
-      if (solidUiCovers(point.x, point.y)) return;
+      if (solidUiCovers(point.x, point.y)) {
+        /* Rounded coordinates can name a control while the event still
+           names the cell that was hit. A cell that is itself the element
+           at those coordinates stays inside the control. */
+        var atPoint = document.elementFromPoint(point.x, point.y);
+        var atBtn = atPoint && atPoint.closest && atPoint.closest(".cell-btn");
+        if (!cellBtn || atBtn === cellBtn) return;
+      }
       if (!pointInRect(point.x, point.y, visibleMapClip())) return;
       if (marginUnderToast(point.x, point.y)) return;
       if (cellBtn) {
