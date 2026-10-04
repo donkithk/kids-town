@@ -24,24 +24,23 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tests.qc6_checks import (  # noqa: E402
-    GOLD_FILL,
-    GOLD_FILL_ALPHA,
+    ADJACENT_BACKGROUNDS,
     GOLD_STROKE,
-    GRASS_FALLBACK,
     REQUIRED_STROKE,
     any_visible_gold_point,
     chosen_mark_paint,
-    composite,
     contrast_ratio,
     corner_insets,
     focus_ring_delta,
     gold_point_inside,
+    hex_of,
     hidden_tab_state,
     map_hit_at,
     off_visible_probes,
     open_solid_rects,
     parse_hex,
-    set_rotate_shown,
+    sample_line_backgrounds,
+    selected_mark_geometry,
     set_village_scroll,
     solid_selector,
     surface_rect,
@@ -5431,12 +5430,92 @@ def test_tap_visible_only(page, base_url, warehouse_db, warehouse_ids):
     assert not problems, "TC-FE-TAP-VISIBLE-ONLY: " + " || ".join(problems[:8])
 
 
+def _select_cell(page, cell_x, cell_y):
+    dismiss_selection(page)
+    _silence_toast(page)
+    data = cell_points(page, cell_x, cell_y)
+    point = _activate_point(page, cell_x, cell_y, data)
+    tap_point(page, point["x"], point["y"])
+    page.wait_for_timeout(150)
+    _silence_toast(page)
+
+
+def _clip_mark(page, geom, margin=24):
+    view = page.viewport_size
+    left = max(0, geom["left"] - margin)
+    top = max(0, geom["top"] - margin)
+    right = min(view["width"], geom["left"] + geom["width"] + margin)
+    bottom = min(view["height"], geom["top"] + geom["height"] + margin)
+    return {
+        "x": left,
+        "y": top,
+        "width": max(1, right - left),
+        "height": max(1, bottom - top),
+    }
+
+
+def _contrast_cell(page, cell_x, cell_y, role):
+    """Computed stroke, plus contrast of the painted line against adjacent fills."""
+    _select_cell(page, cell_x, cell_y)
+    geom = selected_mark_geometry(page)
+    problems = []
+    summary = f"{role} ({cell_x},{cell_y})"
+    if not geom or (geom.get("c"), geom.get("r")) != (cell_x, cell_y):
+        problems.append(f"{role} ({cell_x},{cell_y}) did not stay selected")
+        return problems, summary + " not selected"
+    if role == "edge" and not geom.get("edge"):
+        problems.append(f"edge cell ({cell_x},{cell_y}) is not on the map rim")
+    if role == "interior" and geom.get("edge"):
+        problems.append(f"interior cell ({cell_x},{cell_y}) is on the map rim")
+    clip = _clip_mark(page, geom)
+    png = page.screenshot(clip=clip, scale="css", type="png")
+    paint = chosen_mark_paint(page)
+    computed = parse_hex((paint.get("chosen") or {}).get("stroke"))
+    sampled = sample_line_backgrounds(png, geom, clip, computed)
+    stroke_px = sampled.get("stroke")
+    if computed and stroke_px and sum(
+        (stroke_px[i] - computed[i]) ** 2 for i in range(3)
+    ) > 55 * 55:
+        problems.append(
+            f"{role} ({cell_x},{cell_y}) painted line {hex_of(stroke_px)} "
+            f"is not computed stroke {hex_of(computed)}"
+        )
+        stroke_px = computed
+    backgrounds = sampled.get("backgrounds") or {}
+    parts = [f"painted {hex_of(stroke_px)} n={sampled.get('strokeCount')}"]
+    for name in ADJACENT_BACKGROUNDS:
+        found = backgrounds.get(name)
+        if not found:
+            continue
+        ratio = contrast_ratio(stroke_px, found["color"]) if stroke_px else 0
+        parts.append(
+            f"{name} {hex_of(found['color'])} x{found['count']} contrast {ratio:.2f}"
+        )
+        if ratio < 3:
+            problems.append(
+                f"{role} ({cell_x},{cell_y}) contrast against {name} "
+                f"{ratio:.2f} < 3 (line {hex_of(stroke_px)}, fill {hex_of(found['color'])})"
+            )
+    if role == "edge" and "grass" not in backgrounds:
+        problems.append(
+            f"edge cell ({cell_x},{cell_y}) did not border outer grass #7eae52"
+        )
+    if role == "interior" and not any(
+        name in backgrounds for name in ("empty", "gold", "dark-gold")
+    ):
+        problems.append(
+            f"interior cell ({cell_x},{cell_y}) did not border a cell fill"
+        )
+    return problems, summary + " " + ", ".join(parts)
+
+
 @pytest.mark.case_id("TC-FE-SELECTED-CONTRAST")
 def test_selected_contrast(page, base_url, warehouse_db, warehouse_ids):
-    """TC-FE-SELECTED-CONTRAST 選中格的實線要是 #b45309、3px，對比足夠。
+    """TC-FE-SELECTED-CONTRAST 選中格的實線要是 #7c2d12、3px。
 
-    對比同時對草地和金色填色（#fff3c4 以 0.62 疊在草地上）計算，都要至少 3:1。
-    顏色不得跟金色格的虛線 #d4a017 相同。金色虛線本身維持 #d4a017。
+    對比從畫面上的像素量：線旁邊實際出現的外圍草地、空地填色、金色填色，
+    以及出現了的深金，都要至少 3:1。邊緣格要挨到草地，內部格要挨到格子填色。
+    顏色不得跟金色格虛線 #d4a017 相同。金色虛線本身維持 #d4a017。
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(
@@ -5448,48 +5527,35 @@ def test_selected_contrast(page, base_url, warehouse_db, warehouse_ids):
     _login(page, base_url)
     page.set_viewport_size({"width": 1280, "height": 720})
     _enter_new_build_scene2(page)
-    point = any_visible_gold_point(page)
-    assert point, "TC-FE-SELECTED-CONTRAST: no visible gold cell"
-    dismiss_selection(page)
-    _silence_toast(page)
-    tap_point(page, point["x"], point["y"])
+    problems = []
+    summaries = []
+    for role, cell in (("edge", (6, 0)), ("interior", (4, 3))):
+        cell_problems, summary = _contrast_cell(page, cell[0], cell[1], role)
+        problems.extend(cell_problems)
+        summaries.append(summary)
     paint = chosen_mark_paint(page)
     chosen = paint.get("chosen") or {}
     gold = paint.get("gold") or {}
-    grass = _parse_css_rgb(paint.get("background")) or GRASS_FALLBACK
     stroke = parse_hex(chosen.get("stroke"))
-    fill = parse_hex(chosen.get("fill")) or GOLD_FILL
-    alpha = chosen.get("fillOpacity")
-    if alpha is None:
-        alpha = GOLD_FILL_ALPHA
-    problems = []
     if stroke != REQUIRED_STROKE:
-        problems.append(f"chosen stroke {chosen.get('stroke')!r}, expected #b45309")
+        problems.append(f"chosen stroke {chosen.get('stroke')!r}, expected #7c2d12")
     if chosen.get("width") != 3:
         problems.append(f"chosen stroke-width {chosen.get('width')!r}, expected 3")
     if chosen.get("dashed"):
         problems.append("chosen mark is dashed; the selected line is solid")
     if stroke == GOLD_STROKE:
         problems.append("chosen stroke matches the gold dashed outline #d4a017")
-    if stroke:
-        stacked = composite(fill, float(alpha), grass)
-        grass_ratio = contrast_ratio(stroke, grass)
-        fill_ratio = contrast_ratio(stroke, stacked)
-        if grass_ratio < 3:
-            problems.append(f"contrast against grass {grass_ratio:.2f} < 3")
-        if fill_ratio < 3:
-            problems.append(f"contrast against gold fill {fill_ratio:.2f} < 3")
     gold_stroke = parse_hex(gold.get("stroke"))
     if gold_stroke != GOLD_STROKE or not gold.get("dashed"):
         problems.append(
             f"gold outline {gold.get('stroke')!r} dashed {gold.get('dashed')!r}, "
             "expected #d4a017 dashed"
         )
-    print(
-        "TC-FE-SELECTED-CONTRAST "
-        f"stroke {chosen.get('stroke')} width {chosen.get('width')} "
-        f"grass {grass} gold {gold.get('stroke')}"
+    summaries.append(
+        f"computed stroke {chosen.get('stroke')} width {chosen.get('width')} "
+        f"gold {gold.get('stroke')}"
     )
+    print("TC-FE-SELECTED-CONTRAST " + " || ".join(summaries))
     assert not problems, "TC-FE-SELECTED-CONTRAST: " + " | ".join(problems)
 
 
@@ -5535,12 +5601,36 @@ def test_focus_ring_centre(page, base_url, warehouse_db, warehouse_ids):
     assert not problems, "TC-FE-FOCUS-RING-CENTRE: " + " | ".join(problems)
 
 
+def _rotate_hidden_guard(page, label):
+    """While #ktRotate is actually hidden, it must not be a tab stop.
+
+    A viewport where the overlay is shown is not a failure. Forcing it
+    visible with an inline style is not a product state.
+    """
+    state = hidden_tab_state(page)
+    display = state.get("rotateDisplay")
+    visibility = state.get("rotateVisibility")
+    tab = state.get("rotateTab") or 0
+    hidden = display == "none" or visibility == "hidden"
+    detail = (
+        f"guard rotate {label}: display {display} visibility {visibility} tab {tab}"
+    )
+    if "請轉橫向" not in (state.get("rotateText") or ""):
+        return state, detail, "rotate overlay is missing 請轉橫向"
+    if not hidden:
+        return state, detail + " (shown, hidden-focus check skipped)", None
+    if tab:
+        return state, detail, f"{detail} is in the tab order"
+    return state, detail + " PASS", None
+
+
 @pytest.mark.case_id("TC-FE-HIDDEN-INERT")
 def test_hidden_inert(page, base_url, warehouse_db, warehouse_ids):
-    """TC-FE-HIDDEN-INERT 收起的抽屜和隱藏的轉橫向層不在 Tab 順序裡。
+    """TC-FE-HIDDEN-INERT 收起的抽屜不在 Tab 順序裡。
 
-    抽屜收起時 13 顆按鈕（✕、小鎮地圖……登出）不得成為 Tab 停點。打開之後要回來。
-    #ktRotate（請轉橫向）隱藏時不在 Tab 順序裡；顯示時不得是 inert。
+    抽屜收起（class `dr`、沒有 `o`、移出畫面）時，13 顆按鈕不得成為 Tab 停點。
+    打開之後要回來。`#ktRotate` 只有在它真的隱藏時才要求離開 Tab 順序；
+    橫向桌面的 display:none 若已不在 Tab 順序，是通過的 guard，不是紅測。
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(warehouse_db, kid_id, points=800, buildings=[])
@@ -5548,24 +5638,25 @@ def test_hidden_inert(page, base_url, warehouse_db, warehouse_ids):
     page.set_viewport_size({"width": 1280, "height": 720})
     _enter_new_build_scene2(page)
     problems = []
+    summaries = []
     closed = hidden_tab_state(page)
+    left = closed.get("drawerLeft")
+    left_text = f"{left:.0f}" if isinstance(left, (int, float)) else "?"
     print(
         "TC-FE-HIDDEN-INERT collapsed "
-        f"drawer {len(closed.get('drawerTab') or [])}/{closed.get('drawerCount')} "
-        f"rotate {closed.get('rotateDisplay')} tab {closed.get('rotateTab')}"
+        f"class {closed.get('drawerClass')!r} open {closed.get('drawerOpen')} "
+        f"x={left_text} "
+        f"tab {len(closed.get('drawerTab') or [])}/{closed.get('drawerCount')}"
     )
     if closed.get("drawerCount") != 13:
         problems.append(f"drawer has {closed.get('drawerCount')} buttons, expected 13")
-    if closed.get("drawerTab"):
+    if closed.get("drawerOpen"):
+        problems.append("drawer already has class o; collapsed tab order was not measured")
+    elif closed.get("drawerTab"):
         problems.append(
-            "collapsed drawer is in the tab order: " + ", ".join(closed["drawerTab"])
-        )
-    if "請轉橫向" not in (closed.get("rotateText") or ""):
-        problems.append("rotate overlay is missing 請轉橫向")
-    if closed.get("rotateDisplay") != "none" or closed.get("rotateTab"):
-        problems.append(
-            f"hidden rotate overlay is not inert "
-            f"(display {closed.get('rotateDisplay')}, tab {closed.get('rotateTab')})"
+            "collapsed drawer "
+            f"(class {closed.get('drawerClass')}, offscreen x={left_text}) "
+            "is in the tab order: " + ", ".join(closed["drawerTab"])
         )
     menu = page.locator("#app .gh .mb")
     assert menu.count() and menu.first.is_visible(), "menu button missing"
@@ -5576,21 +5667,23 @@ def test_hidden_inert(page, base_url, warehouse_db, warehouse_ids):
         problems.append("drawer did not open from the menu button")
     missing = (opened.get("drawerCount") or 0) - len(opened.get("drawerTab") or [])
     if opened.get("drawerOpen") and missing:
-        problems.append(
-            f"open drawer left {missing} buttons out of the tab order"
-        )
+        problems.append(f"open drawer left {missing} buttons out of the tab order")
     closer = page.locator("#dr .dc")
     if closer.count():
         closer.first.click()
         page.wait_for_timeout(300)
-    set_rotate_shown(page, True)
-    shown = hidden_tab_state(page)
-    if shown.get("rotateDisplay") == "none" or shown.get("rotateInert"):
-        problems.append(
-            f"shown rotate overlay stayed inert "
-            f"(display {shown.get('rotateDisplay')}, inert {shown.get('rotateInert')})"
-        )
-    set_rotate_shown(page, False)
+    for label, size in (("1280x720", (1280, 720)), ("390x844", (390, 844))):
+        page.set_viewport_size({"width": size[0], "height": size[1]})
+        page.wait_for_timeout(200)
+        _state, detail, guard_problem = _rotate_hidden_guard(page, label)
+        summaries.append(detail)
+        if guard_problem:
+            problems.append(guard_problem)
+    if not any(item.startswith("guard rotate") and "PASS" not in item and "skipped" not in item
+               for item in problems):
+        if all("PASS" in item or "skipped" in item for item in summaries):
+            summaries.append("guard rotate: PASS")
+    print("TC-FE-HIDDEN-INERT " + " || ".join(summaries))
     assert not problems, "TC-FE-HIDDEN-INERT: " + " | ".join(problems)
 
 

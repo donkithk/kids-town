@@ -5,11 +5,22 @@ on the town map.
 """
 from __future__ import annotations
 
-REQUIRED_STROKE = (0xB4, 0x53, 0x09)  # #b45309
+import struct
+import zlib
+
+REQUIRED_STROKE = (0x7C, 0x2D, 0x12)  # #7c2d12
 GOLD_STROKE = (0xD4, 0xA0, 0x17)  # #d4a017
 GRASS_FALLBACK = (0x7E, 0xAE, 0x52)  # #7eae52
 GOLD_FILL = (0xFF, 0xF3, 0xC4)  # #fff3c4
 GOLD_FILL_ALPHA = 0.62
+# Backgrounds that sit against the selected line. Dark gold is only required
+# where a sample actually lands on it.
+ADJACENT_BACKGROUNDS = {
+    "grass": (0x7E, 0xAE, 0x52),  # #7eae52 outer grass
+    "empty": (0xD5, 0xE6, 0xB4),  # #d5e6b4 empty cell fill
+    "gold": (0xF2, 0xDF, 0x97),  # #f2df97 gold cell fill
+    "dark-gold": (0xEA, 0xD3, 0x81),  # #ead381
+}
 
 
 def _channel(value):
@@ -44,6 +55,226 @@ def parse_hex(text):
         return (int(raw[0:2], 16), int(raw[2:4], 16), int(raw[4:6], 16))
     except ValueError:
         return None
+
+
+def hex_of(rgb):
+    if not rgb:
+        return None
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+
+def nearest_background(rgb, limit=36):
+    """Name of a known adjacent fill, or None when the pixel is something else."""
+    if not rgb:
+        return None
+    best_name = None
+    best = limit * limit + 1
+    for name, color in ADJACENT_BACKGROUNDS.items():
+        dist = sum((rgb[i] - color[i]) ** 2 for i in range(3))
+        if dist < best:
+            best = dist
+            best_name = name
+    if best_name is None or best > limit * limit:
+        return None
+    return best_name
+
+
+def _paeth(left, up, up_left):
+    estimate = left + up - up_left
+    da = abs(estimate - left)
+    db = abs(estimate - up)
+    dc = abs(estimate - up_left)
+    if da <= db and da <= dc:
+        return left
+    if db <= dc:
+        return up
+    return up_left
+
+
+def png_rgb(data):
+    """Decode an 8-bit RGB or RGBA PNG. Returns width, height, rows of RGB tuples."""
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("not a png")
+    pos = 8
+    width = height = color_type = None
+    chunks = []
+    while pos + 8 <= len(data):
+        length = struct.unpack(">I", data[pos : pos + 4])[0]
+        kind = data[pos + 4 : pos + 8]
+        chunk = data[pos + 8 : pos + 8 + length]
+        pos += 12 + length
+        if kind == b"IHDR":
+            width, height, bit_depth, color_type = struct.unpack(">IIBB", chunk[:10])
+            if bit_depth != 8 or color_type not in (2, 6):
+                raise ValueError(f"unsupported png {bit_depth} {color_type}")
+        elif kind == b"IDAT":
+            chunks.append(chunk)
+        elif kind == b"IEND":
+            break
+    channels = 3 if color_type == 2 else 4
+    raw = zlib.decompress(b"".join(chunks))
+    stride = width * channels
+    rows = []
+    index = 0
+    previous = bytearray(stride)
+    for _y in range(height):
+        filt = raw[index]
+        index += 1
+        row = bytearray(raw[index : index + stride])
+        index += stride
+        for x in range(stride):
+            left = row[x - channels] if x >= channels else 0
+            up = previous[x]
+            up_left = previous[x - channels] if x >= channels else 0
+            if filt == 0:
+                pass
+            elif filt == 1:
+                row[x] = (row[x] + left) & 255
+            elif filt == 2:
+                row[x] = (row[x] + up) & 255
+            elif filt == 3:
+                row[x] = (row[x] + ((left + up) // 2)) & 255
+            elif filt == 4:
+                row[x] = (row[x] + _paeth(left, up, up_left)) & 255
+            else:
+                raise ValueError(f"png filter {filt}")
+        previous = row
+        if channels == 4:
+            rows.append([tuple(row[x : x + 3]) for x in range(0, stride, 4)])
+        else:
+            rows.append([tuple(row[x : x + 3]) for x in range(0, stride, 3)])
+    return width, height, rows
+
+
+def _median_rgb(pixels):
+    if not pixels:
+        return None
+    channels = list(zip(*pixels))
+    return tuple(sorted(channel)[len(channel) // 2] for channel in channels)
+
+
+def selected_mark_geometry(page):
+    """Viewport diamond of the chosen mark. Vertices follow the painted top face."""
+    return page.evaluate(
+        r"""
+() => {
+  const pad = document.querySelector('#townMap .pad.is-chosen');
+  if (!pad) return null;
+  const mark = pad.querySelector(':scope > .mark');
+  if (!mark || mark.hidden) return null;
+  const box = mark.getBoundingClientRect();
+  const cs = getComputedStyle(pad);
+  const c = parseInt(cs.getPropertyValue('--c'), 10);
+  const r = parseInt(cs.getPropertyValue('--r'), 10);
+  const left = box.left, top = box.top, w = box.width, h = box.height;
+  const cx = left + w / 2;
+  const cy = top + h * (50 / 120);
+  return {
+    c, r,
+    edge: c === 0 || r === 0 || c === 7 || r === 7,
+    left, top, width: w, height: h,
+    cx, cy,
+    verts: [
+      {x: cx, y: top},
+      {x: left + w, y: cy},
+      {x: cx, y: top + h * (100 / 120)},
+      {x: left, y: cy}
+    ]
+  };
+}
+"""
+    )
+
+
+def _rgb_dist(left, right):
+    return sum((left[i] - right[i]) ** 2 for i in range(3))
+
+
+def sample_line_backgrounds(png_bytes, geom, clip, stroke_rgb=None):
+    """Pixel colours on the selected line and the fills actually beside it.
+
+    Samples sit in CSS pixels. The line sample is the centreline pixel closest
+    to the computed stroke (a neighbour's fill can cover the shared edge).
+    Background samples are 10–22px outside the diamond, past the stroke and
+    its drop shadow. A fill counts only when several pixels match it, so a
+    couple of antialiased specks are not a background.
+    """
+    width, height, rows = png_rgb(png_bytes)
+    origin_x = clip["x"]
+    origin_y = clip["y"]
+
+    def at(x, y):
+        ix = int(round(x - origin_x))
+        iy = int(round(y - origin_y))
+        if ix < 0 or iy < 0 or ix >= width or iy >= height:
+            return None
+        return rows[iy][ix]
+
+    verts = [(point["x"], point["y"]) for point in geom["verts"]]
+    center = (geom["cx"], geom["cy"])
+    stroke_pixels = []
+    buckets = {name: [] for name in ADJACENT_BACKGROUNDS}
+    for index, start in enumerate(verts):
+        end = verts[(index + 1) % 4]
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+        length = (dx * dx + dy * dy) ** 0.5
+        if length < 1:
+            continue
+        nx, ny = -dy / length, dx / length
+        mid_x = (start[0] + end[0]) / 2
+        mid_y = (start[1] + end[1]) / 2
+        if (mid_x + nx - center[0]) ** 2 + (mid_y + ny - center[1]) ** 2 < (
+            mid_x - nx - center[0]
+        ) ** 2 + (mid_y - ny - center[1]) ** 2:
+            nx, ny = -nx, -ny
+        for step in range(1, 9):
+            t = step / 9
+            x = start[0] + dx * t
+            y = start[1] + dy * t
+            band = []
+            for offset in range(-4, 5):
+                pixel = at(x + nx * offset, y + ny * offset)
+                if not pixel:
+                    continue
+                if stroke_rgb:
+                    band.append((_rgb_dist(pixel, stroke_rgb), pixel))
+                else:
+                    band.append((-_line_score(pixel), pixel))
+            if band:
+                band.sort(key=lambda item: item[0])
+                stroke_pixels.append(band[0][1])
+            for dist in (10, 14, 18, 22):
+                pixel = at(x + nx * dist, y + ny * dist)
+                name = nearest_background(pixel)
+                if name:
+                    buckets[name].append(pixel)
+    present = {
+        name: pixels for name, pixels in buckets.items() if len(pixels) >= 8
+    }
+    # Shared edges are covered by the neighbour's fill. Keep the samples that
+    # still match the computed stroke; those are the edges this cell paints.
+    matched = stroke_pixels
+    if stroke_rgb:
+        near = [pixel for pixel in stroke_pixels if _rgb_dist(pixel, stroke_rgb) <= 55 * 55]
+        if len(near) >= 6:
+            matched = near
+    return {
+        "stroke": _median_rgb(matched),
+        "strokeCount": len(matched),
+        "backgrounds": {
+            name: {"color": _median_rgb(pixels), "count": len(pixels)}
+            for name, pixels in present.items()
+        },
+    }
+
+
+def _line_score(rgb):
+    """How far a pixel is from the nearest named fill. The stroke scores higher."""
+    return min(
+        sum((rgb[i] - color[i]) ** 2 for i in range(3))
+        for color in ADJACENT_BACKGROUNDS.values()
+    )
 
 
 def _solid_rects_js():
@@ -792,29 +1023,28 @@ def hidden_tab_state(page):
   const drawer = document.getElementById('dr');
   const buttons = drawer ? [...drawer.querySelectorAll('button')] : [];
   const rotate = document.getElementById('ktRotate');
-  const rotateBits = rotate ? [...rotate.querySelectorAll('button, a, input, select, textarea, [tabindex]')] : [];
+  const rotateBits = [];
+  if (rotate) {
+    rotateBits.push(rotate);
+    rotateBits.push(...rotate.querySelectorAll('button, a, input, select, textarea, [tabindex]'));
+  }
+  const box = drawer ? drawer.getBoundingClientRect() : null;
+  const rcs = rotate ? getComputedStyle(rotate) : null;
   return {
     drawerCount: buttons.length,
     drawerTab: buttons.filter(tabbable).map(label),
     drawerOpen: !!(drawer && drawer.classList.contains('o')),
+    drawerClass: drawer ? drawer.className : 'missing',
     drawerPointer: drawer ? getComputedStyle(drawer).pointerEvents : 'missing',
-    rotateDisplay: rotate ? getComputedStyle(rotate).display : 'missing',
+    drawerLeft: box ? box.left : null,
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
+    rotateDisplay: rcs ? rcs.display : 'missing',
+    rotateVisibility: rcs ? rcs.visibility : 'missing',
     rotateInert: !!(rotate && (rotate.inert || rotate.getAttribute('aria-hidden') === 'true')),
     rotateTab: rotateBits.filter(tabbable).length,
     rotateText: rotate ? (rotate.textContent || '') : ''
   };
 }
 """
-    )
-
-
-def set_rotate_shown(page, shown):
-    page.evaluate(
-        """(shown) => {
-          const el = document.getElementById('ktRotate');
-          if (!el) return;
-          if (shown) el.style.display = 'block';
-          else el.style.display = '';
-        }""",
-        shown,
     )
