@@ -597,3 +597,32 @@ API 在 `8940905` 與 `a871b1b` 只失敗 `test_autoplace_already_owned_uses_for
 | TC-FE-PAL-ORDER | FAIL。三種佈局的 DOM 與由上到下都是目錄順序：圖書館、探險公會、健身室、農場、工坊、醫院、商店、銀行、燈塔、競技場、天文台。`mixed` 預期探險公會、工坊在最前，圖書館與健身室在最後。`no-stored` 實際從已建的圖書館開始。`none-built` 的存倉列夾在未建列中間。沒有多出來的標題或佔位節點。 | FAIL。同一組順序。第二行的存倉／💰／已興建分得出來，但沒有依組排。 |
 
 整套：`pytest -m "not frontend"` main 17 failed、361 passed、123 deselected；`8940905` 378 passed、123 deselected。`pytest -m frontend` main 52 failed、71 passed、378 deselected（比上一輪多 15 條，就是這輪新案例；通過數仍是 71，因為收緊的放不下與 400 在 main 本來就失敗）。`8940905` 19 failed、104 passed、378 deselected。這 19 條就是上表：收緊的放不下兩條、收緊的 400 兩條、未知 4xx 八條、重疊預選、三條 service worker、清單順序三條。上一輪在 `8940905` 通過的 108 條裡，除了這四條被收緊的，其餘仍然通過。
+
+## 對照 `77f320f`（QC6）
+
+測試尖端 `77f320feff22107b4d630ef3f6f9af74d299eb55`。產品工作樹只疊了這套測試，沒有提交。`003b81f` 與 `b6dc646` 的產品檔相同，下面 `b6dc646` 的數字同時代表 `003b81f`。`kids_town.db` 仍是 `c046fc41e1cf0eb8c5be5ae5a100fd62dfc6390e8c2277a6a84f93002fe3ecfb`。
+
+| 產品 | API | 介面 |
+|------|-----|------|
+| `b6dc646` / `003b81f` | 1 failed、379 passed、134 deselected | 7 failed、127 passed、380 deselected |
+| `8940905` | 2 failed、378 passed、134 deselected | 31 failed、103 passed、380 deselected |
+| `a871b1b` | 2 failed、378 passed、134 deselected | 18 failed、116 passed、380 deselected |
+
+`b6dc646` 的 API 失敗只有 `test_place_owned_explicit_cell_uses_formal_copy`（`error` 是「你已經興建咗呢種建築物」）。介面 7 條失敗：`test_tap_bar_nothrough`、`test_toast_timer_resets`、`test_tap_visible_only`、`test_selected_contrast`、`test_focus_ring_centre`、`test_hidden_inert`、`test_place_owned_formal_shown`。`test_tap_offcenter`、`TC-FE-TOWN-HIT-01`、`TC-FE-CELL-ARIA-MATCH` 仍然通過。HIT-01 兩個視窗 overlap 15、tapped 15、bad 0，格是 `(0,1)`、`(1,0)`、`(2,0)`。ARIA 鍵不符 0。清單蓋住的焦點仍是 `(0,5)`、`(0,6)`、`(1,6)`、`(0,7)`、`(1,7)`、`(2,7)`；取出沒有。偏離中心兩個視窗都是 266/266、251/251、266/266，`rect-fallthrough` 0。
+
+`8940905` API 失敗是自動放置書面語和指定格子書面語。介面比上一輪多的失敗是這輪新案例；偏離中心仍是 reaction-mis（bare 239/266、27 格），HIT-01 bad 15，ARIA 仍是 28 格、128 個鍵。`a871b1b` API 同樣兩條書面語。介面 18 條失敗含這輪新案例；偏離中心仍是鄰格選錯。
+
+新案例在 `b6dc646` / `003b81f` 上的數字：
+
+- `TC-FE-TAP-VISIBLE-ONLY` 紅。捲動 0 有藏起來的格子候選，但選中數是 0（實心介面吃掉了）。捲到最大之後上緣會選格：1280×720 三種狀態都是 probes 40、leaks 16，含「已選擇空地。」。1100×800 與 390×844 捲到最大是 leaks 9。提示下方那 8px 有 15 個點、leaks 0。提示蓋住頁尾時打中藏起來的 `(5,5)` 仍由這條鎖；這一版的提示落在地圖裡的動作列上，那 15 個點沒有走到頁尾後面的格子。
+- `TC-FE-TOAST-TIMER-RESET` 紅。同一句 1.0 秒與 1.6 秒各 3 趟，都在第一下之後約 1720ms 掉到 opacity 0.96，然後回到 1.00。換句沒有失敗。
+- `TC-FE-SELECTED-CONTRAST` 紅。計算後的線是 `#d4a017`、寬 4，和金色虛線相同。邊緣格 `(6,0)` 的線像素是 `#d4a017`：對草地 `#7eae52` 1.10（32 點）、對空地 `#d5e6b4` 1.79（14 點）、對挨著線的金色填色 `#efde9a` 1.76（44 點）。內部格 `(4,3)` 對金色填色同樣 1.76（59 點）。深金 `#ead381` 沒有形成夠大的一片（少於 8 個像素），這次不計。
+- `TC-FE-FOCUS-RING-CENTRE` 紅。1280×720 的環中心比頂面中心低 8.8px（頂面偏移 8.50）。390×844 低 2.7px（頂面偏移 2.59）。
+- `TC-FE-HIDDEN-INERT` 紅，只因為收起的抽屜。class `dr`、沒有 `o`、左緣 x=1310，13/13 顆按鈕仍在 Tab 順序。打開之後會回來，這一半通過。
+- `TC-FE-TAP-BAR-NOTHROUGH` 紅，因為圓角外的透明區。1280×720 沒選建築每個捲動 16/48；已選工坊在捲動 0 是 42/48，其後 16/48。1100×800 沒選 14/48，已選捲動 0 是 42/48，其後 15/48。390×844 的 48 個角點都是 0，不能當成這條通過。提示底下沒有看得見的金格，點提示範圍選中數 0。
+- `TC-API-PLACE-OWNED-FORMAL` 紅。API 與 `#toast` 都是「你已經興建咗呢種建築物」。
+
+Guard（通過，不是新的紅測）：
+
+- 實心介面的反向點在三個產品上都是 PASS。收起清單後原矩形的金格 `(0,5)` 選中 `(0,5)`。收起抽屜 `(5,0)` 選中 `(5,0)`。關掉的面板 `(2,0)` 選中 `(2,0)`。隱藏元素掃了 10 個、擋住 0。提示和特效都沒有吃掉 `(2,0)`。
+- `#ktRotate` 在 1280×720 和 390×844 都是 `display:none`、Tab 停點 0，guard PASS。沒有用腳本把它改成顯示。
