@@ -8,11 +8,7 @@
   var MOTION_KEY = "ktTownMotion";
   var MARK_VALID = ASSET + "cell-valid.svg";
   var MARK_CHOSEN = "data:image/svg+xml," + encodeURIComponent(
-    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='-100 -66 200 152'>" +
-    "<polygon points='0,-50 84,0 0,50 -84,0' fill='#7c2d12' " +
-    "stroke='#7c2d12' stroke-width='3' stroke-linejoin='round'/>" +
-    "<polygon points='0,-50 84,0 0,50 -84,0' fill='none' " +
-    "stroke='#7c2d12' stroke-width='28' stroke-linejoin='round'/></svg>"
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'></svg>"
   );
 
   var ASSET_ID = {
@@ -1081,8 +1077,41 @@
     ].join(" ");
   }
 
+  /* Chosen outline: 3px stroke, fill none. The path is inset by half that
+     stroke, taken from the slab's painted diamond, so the outer edge meets
+     the cell and the centre stays clear for the badge. */
+  function syncChosenMark() {
+    var slab = document.querySelector("#townMap .pad > .slab");
+    if (!slab || slab.offsetWidth < 2 || slab.offsetHeight < 2) return;
+    var painted = slab.getBoundingClientRect();
+    var scaleX = painted.width / slab.offsetWidth;
+    var scaleY = painted.height / slab.offsetHeight;
+    if (!(scaleX > 0) || !(scaleY > 0) || !(painted.width > 1)) return;
+    var faceH = painted.height * (50 / 120);
+    var hx = (painted.width / 2) / scaleX;
+    var hy = faceH / scaleY;
+    var ap = (painted.width / 2) * faceH /
+      Math.sqrt((painted.width / 2) * (painted.width / 2) + faceH * faceH);
+    var scale = Math.min(scaleX, scaleY);
+    var inset = 1.5 * scale;
+    if (!(ap > inset) || !(hx > 0) || !(hy > 0)) return;
+    var k = 1 - inset / ap;
+    var pts = diamondPoints(hx, hy, hx * k, hy * k);
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' " +
+      "viewBox='0 0 " + slab.offsetWidth.toFixed(2) + " " + slab.offsetHeight.toFixed(2) + "'>" +
+      "<polygon points='" + pts + "' fill='none' stroke='#7c2d12' stroke-width='3' " +
+      "stroke-linejoin='round'/></svg>";
+    var next = "data:image/svg+xml," + encodeURIComponent(svg);
+    if (next === MARK_CHOSEN) return;
+    MARK_CHOSEN = next;
+    var nodes = document.querySelectorAll("#townMap .pad.is-chosen > .mark");
+    for (var i = 0; i < nodes.length; i += 1) {
+      if (nodes[i].getAttribute("src") !== next) nodes[i].src = next;
+    }
+  }
+
   /* Focus ring: the face diamond pushed out by the same gap on every edge,
-     so the aspect stays. Stroke sits outside the solid chosen line. */
+     so the aspect stays. Dashed strokes only, outside the solid chosen line. */
   function syncFocusRing() {
     var map = $("townMap");
     var slab = document.querySelector("#townMap .pad > .slab");
@@ -1101,7 +1130,7 @@
     var ringW = 2 * k * halfW;
     var ringH = 2 * k * halfH;
     /* Width 3 is scaled to about 2px so the centreline stays readable on a
-       sprite. The matte sits on the solid line and covers inner stroke ink. */
+       sprite. The centre of the diamond is left empty. */
     var unit = 2 / (3 * scale);
     var pad = 2 / scale;
     var boxW = ringW + pad * 2;
@@ -1109,13 +1138,6 @@
     var cx = boxW / 2;
     var cy = boxH / 2;
     var outerPts = diamondPoints(cx / unit, cy / unit, (ringW / 2) / unit, (ringH / 2) / unit);
-    var cover = 2.6;
-    var kCover = 1 + cover / ap;
-    var coverPts = diamondPoints(
-      cx / unit, cy / unit,
-      (ringW / 2) * (kCover / k) / unit,
-      (ringH / 2) * (kCover / k) / unit
-    );
     var svg = "<svg xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='none' " +
       "shape-rendering='geometricPrecision' width='" + boxW.toFixed(2) + "' height='" + boxH.toFixed(2) + "' " +
       "viewBox='0 0 " + (boxW / unit).toFixed(2) + " " + (boxH / unit).toFixed(2) + "'>" +
@@ -1123,7 +1145,6 @@
       "stroke-linejoin='round' stroke-dasharray='6 0.8' points='" + outerPts + "'/>" +
       "<polygon pathLength='100' fill='none' stroke='#fff8e7' stroke-width='3' " +
       "stroke-linejoin='round' stroke-dasharray='6 0.8' points='" + outerPts + "'/>" +
-      "<polygon fill='#7c2d12' stroke='none' points='" + coverPts + "'/>" +
       "</svg>";
     map.style.setProperty("--ring-x", (btn.offsetWidth / 2 - boxW / 2).toFixed(3) + "px");
     map.style.setProperty("--ring-y", (btn.offsetHeight / 2 - boxH / 2).toFixed(3) + "px");
@@ -1184,6 +1205,7 @@
 
   function render() {
     if (!built) buildGrid();
+    syncChosenMark();
     pads.forEach(renderCell);
     renderPalette();
     renderBars();
@@ -1529,7 +1551,10 @@
     var map = $("townMap");
     if (!map || map.dataset.wired === "1") return;
     map.dataset.wired = "1";
-    window.addEventListener("resize", syncFocusRing);
+    window.addEventListener("resize", function () {
+      syncChosenMark();
+      syncFocusRing();
+    });
     document.addEventListener("focusin", placeFocusRing, true);
     document.addEventListener("focusout", placeFocusRing, true);
     document.addEventListener("scroll", placeFocusRing, true);
