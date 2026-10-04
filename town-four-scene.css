@@ -195,10 +195,6 @@ body.kt-artstage #tab-town .mp { position: relative; }
   outline: none;
 }
 
-#townMap .pad:focus-within {
-  z-index: 8;
-}
-
 #townMap .cell-btn:focus-visible {
   z-index: 10;
 }
@@ -219,26 +215,36 @@ body.kt-artstage #tab-town .mp { position: relative; }
   opacity: 0;
 }
 
-/* Painted outside the artboard transform so the stroke stays on the pixel
-   grid. The pseudo-element still carries the geometry. */
+/* Inside the scrolling map, under the palette. The pseudo-element still
+   carries the ring geometry. Line sits above the sprite and under the badge;
+   the ring sits above the badge. */
 #focusRingPaint {
-  position: fixed;
-  z-index: 80;
+  position: absolute;
+  z-index: 9;
   overflow: visible;
   pointer-events: none;
 }
 
-#focusRingPaint[hidden] {
+#focusRingPaint[hidden],
+#focusRingLift[hidden],
+#chosenMarkPaint[hidden] {
   display: none !important;
 }
 
-/* Chosen stroke, outside the artboard transform. The mark image keeps the
-   same outline for the document; this layer is the one on screen. */
+/* The bar's top border sits on the village edge. This strip is only the
+   pixels in that border, above the bar and clear of the palette. */
+#focusRingLift {
+  position: absolute;
+  z-index: 31;
+  overflow: visible;
+  pointer-events: none;
+}
+
 #chosenMarkPaint {
-  position: fixed;
+  position: absolute;
   left: 0;
   top: 0;
-  z-index: 70;
+  z-index: 7;
   overflow: visible;
   pointer-events: none;
 }

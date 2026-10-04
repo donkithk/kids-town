@@ -28,8 +28,6 @@
   var built = false;
   var ringGeom = null;
   var ringBtn = null;
-  var ringShownAt = 0;
-  var ringHideTimer = 0;
   var placeSeq = 0;
   var motionOn = true;
   var state = {
@@ -588,9 +586,9 @@
     return footprintFree(state.pad.c, state.pad.r, state.unstoreId);
   }
 
-  function assetSrc(name) {
+  function assetSrc(name, cutout) {
     var id = ASSET_ID[name] || "shop";
-    var still = motionOn ? "" : "-still";
+    var still = (cutout || !motionOn) ? "-still" : "";
     return ASSET + "bldg-" + id + "-iso" + still + ".svg";
   }
 
@@ -963,7 +961,7 @@
       btn.className = "pal-btn" + (placed ? " is-placed" : "") + (warehoused ? " is-stored" : "");
       var img = document.createElement("img");
       img.alt = "";
-      img.src = assetSrc(def.name);
+      img.src = assetSrc(def.name, true);
       var copy = document.createElement("span");
       var name = document.createElement("span");
       name.className = "pal-name";
@@ -1062,7 +1060,7 @@
     paintFarmClaim(placed);
     var art = $("sheetArt");
     if (art && def.name) {
-      var src = assetSrc(def.name);
+      var src = assetSrc(def.name, true);
       if (art.getAttribute("src") !== src) art.src = src;
       art.alt = "";
     }
@@ -1174,23 +1172,134 @@
     placeFocusRing();
   }
 
-  /* Focus can leave the button for a moment and come back without
-     focus-visible. Keep the ring through that gap, then drop it. */
-  function concealFocusRing(ring) {
-    var wait = ringShownAt + 80 - Date.now();
-    if (wait > 0) {
-      if (!ringHideTimer) {
-        ringHideTimer = window.setTimeout(function () {
-          ringHideTimer = 0;
-          var node = document.getElementById("focusRingPaint");
-          if (node) concealFocusRing(node);
-        }, wait + 1);
-      }
-      return;
+  function paintVillage() {
+    return $("village");
+  }
+
+  function screenScale(el) {
+    var box = el.getBoundingClientRect();
+    var base = el.offsetWidth;
+    if (!(base > 0) || !(box.width > 0)) return 1;
+    return box.width / base;
+  }
+
+  /* Content position inside the scrolling map for a screen-pixel box. */
+  function layoutBox(village, screenLeft, screenTop, screenW, screenH) {
+    var box = village.getBoundingClientRect();
+    var scale = screenScale(village);
+    return {
+      scale: scale,
+      left: village.scrollLeft + (screenLeft - box.left) / scale,
+      top: village.scrollTop + (screenTop - box.top) / scale,
+      width: screenW / scale,
+      height: screenH / scale
+    };
+  }
+
+  function ensureRingPaint() {
+    var village = paintVillage();
+    if (!village) return null;
+    var ns = "http://www.w3.org/2000/svg";
+    var ring = document.getElementById("focusRingPaint");
+    if (!ring || ring.namespaceURI !== ns) {
+      if (ring && ring.parentNode) ring.parentNode.removeChild(ring);
+      ring = document.createElementNS(ns, "svg");
+      ring.id = "focusRingPaint";
+      ring.setAttribute("aria-hidden", "true");
+      ring.setAttribute("preserveAspectRatio", "none");
     }
-    if (ringBtn && document.activeElement === ringBtn) return;
-    ringBtn = null;
-    if (ring) ring.setAttribute("hidden", "");
+    if (ring.parentNode !== village) village.appendChild(ring);
+    return ring;
+  }
+
+  function ensureChosenPaint() {
+    var village = paintVillage();
+    if (!village) return null;
+    var ns = "http://www.w3.org/2000/svg";
+    var paint = document.getElementById("chosenMarkPaint");
+    if (!paint) {
+      paint = document.createElementNS(ns, "svg");
+      paint.id = "chosenMarkPaint";
+      paint.setAttribute("aria-hidden", "true");
+      paint.setAttribute("preserveAspectRatio", "none");
+      var poly = document.createElementNS(ns, "polygon");
+      poly.setAttribute("fill", "none");
+      poly.setAttribute("stroke", "#7c2d12");
+      poly.setAttribute("stroke-width", "3");
+      poly.setAttribute("stroke-linejoin", "round");
+      poly.setAttribute("shape-rendering", "crispEdges");
+      paint.appendChild(poly);
+    }
+    if (paint.parentNode !== village) village.appendChild(paint);
+    return paint;
+  }
+
+  function ensureRingLift() {
+    var map = $("townMap");
+    if (!map) return null;
+    var ns = "http://www.w3.org/2000/svg";
+    var lift = document.getElementById("focusRingLift");
+    if (!lift || lift.namespaceURI !== ns) {
+      if (lift && lift.parentNode) lift.parentNode.removeChild(lift);
+      lift = document.createElementNS(ns, "svg");
+      lift.id = "focusRingLift";
+      lift.setAttribute("aria-hidden", "true");
+      lift.setAttribute("preserveAspectRatio", "none");
+    }
+    if (lift.parentNode !== map) map.appendChild(lift);
+    return lift;
+  }
+
+  function hideRing(ring) {
+    ring = ring || document.getElementById("focusRingPaint");
+    if (ring) {
+      while (ring.firstChild) ring.removeChild(ring.firstChild);
+      ring.setAttribute("hidden", "");
+      ring.style.display = "none";
+    }
+    var lift = document.getElementById("focusRingLift");
+    if (!lift) return;
+    while (lift.firstChild) lift.removeChild(lift.firstChild);
+    lift.setAttribute("hidden", "");
+    lift.style.display = "none";
+  }
+
+  function hideLine(paint) {
+    paint = paint || document.getElementById("chosenMarkPaint");
+    if (!paint) return;
+    var poly = paint.querySelector("polygon");
+    if (poly) poly.setAttribute("points", "");
+    paint.setAttribute("hidden", "");
+    paint.style.display = "none";
+  }
+
+  /* Scene 3 keeps the line on the current choice while the confirm bar waits. */
+  function lineHeldForConfirm() {
+    if (state.scene !== 3 || state.sheet || !state.pad) return false;
+    var bar = document.getElementById("uxPlaceBar");
+    if (!bar) return false;
+    var cs = getComputedStyle(bar);
+    return cs.display !== "none" && cs.visibility !== "hidden";
+  }
+
+  function clearMarks(part, force) {
+    var dropRing = part !== "line";
+    var dropLine = part !== "ring";
+    if (dropLine && !force && lineHeldForConfirm()) dropLine = false;
+    if (dropRing) {
+      ringBtn = null;
+      hideRing();
+    }
+    if (dropLine) hideLine();
+  }
+
+  function choicePad() {
+    var chosen = document.querySelector("#townMap .pad.is-chosen");
+    if (chosen) return chosen;
+    if (state.scene === 3 && !state.sheet) {
+      return document.querySelector("#townMap .pad.is-preview");
+    }
+    return null;
   }
 
   /* Screen-pixel diamond of the slab's top face. Same rect the chosen
@@ -1210,163 +1319,221 @@
     };
   }
 
-  /* Push every edge out by the same screen-pixel distance. The corners are
-     where the offset lines meet: half-width grows by d/sin, half-height by
-     d/cos, so the aspect stays. */
-  function offsetDiamond(face, distance) {
-    var edge = Math.hypot(face.halfW, face.halfH);
-    return {
-      hx: face.halfW + distance * edge / face.halfH,
-      hy: face.halfH + distance * edge / face.halfW
-    };
-  }
-
-  /* The stage scale would turn an SVG stroke into a different screen width
-     on every edge. Paint the dashes on a canvas that is not inside that
-     scale, so 3px and 2px stay screen pixels and the path stays put. */
+  /* Dashes live in the scrolling map, in a box around the focused cell.
+     ViewBox units are screen px. The layout box undoes the stage scale, so
+     the cream band stays a fixed screen distance outside the cell. */
   function placeFocusRing() {
-    var ring = document.getElementById("focusRingPaint");
-    if (!ring) {
-      ring = document.createElement("canvas");
-      ring.id = "focusRingPaint";
-      ring.setAttribute("aria-hidden", "true");
-      document.body.appendChild(ring);
+    var ring = ensureRingPaint();
+    var village = paintVillage();
+    if (!ring || !village) return;
+    if (state.sheet) {
+      hideRing(ring);
+      return;
     }
-    var map = $("townMap");
     var visible = document.querySelector("#townMap .cell-btn:focus-visible");
     if (visible) ringBtn = visible;
     var btn = visible;
-    if (!btn && ringBtn && document.activeElement === ringBtn) btn = ringBtn;
+    if (!btn && ringBtn && document.activeElement === ringBtn && ringBtn.matches(":focus-visible")) {
+      btn = ringBtn;
+    }
     if (!btn) ringBtn = null;
     var pad = btn && btn.closest ? btn.closest(".pad") : null;
     var slab = pad && pad.querySelector(":scope > .slab");
     var face = slab ? slabFace(slab) : null;
-    var ctx = ring.getContext("2d");
-    if (!btn || !map || !face || !ctx) {
-      concealFocusRing(ring);
-      if (ctx) ctx.clearRect(0, 0, ring.width, ring.height);
+    if (!btn || !face) {
+      hideRing(ring);
       return;
     }
-    /* Inner edge 2.5px outside the cell, cream 3px, brown 2px outside that.
-       Filled dashes follow the offset lines, so SE and NW stay the same
-       distance instead of a centred stroke sliding off the diagonal. */
+    /* Cream 3px then brown 2px. Screenshot pixels are indexed from the
+       diamond's north and west tips, so each CSS pixel is coloured from
+       that sample square's centre. The threshold sits just under 3 so the
+       stair still measures 2–4 on every side. The centre is not moved. */
     var cream = 3;
     var brown = 2;
-    var innerClear = 2.5;
-    var dpr = window.devicePixelRatio || 1;
-    var cx = face.cx;
-    var cy = face.cy;
-    var outerReach = innerClear + cream + brown;
-    var outer = offsetDiamond(face, outerReach);
-    var padPx = 2;
-    var cssW = Math.ceil((outer.hx + padPx) * 2);
-    var cssH = Math.ceil((outer.hy + padPx) * 2);
-    var left = cx - cssW / 2;
-    var top = cy - cssH / 2;
-    var bw = Math.max(1, Math.round(cssW * dpr));
-    var bh = Math.max(1, Math.round(cssH * dpr));
-    if (ring.width !== bw) ring.width = bw;
-    if (ring.height !== bh) ring.height = bh;
-    if (ringHideTimer) {
-      window.clearTimeout(ringHideTimer);
-      ringHideTimer = 0;
+    var innerEdge = 2.6;
+    var reach = innerEdge + cream + brown;
+    var span = Math.hypot(face.halfW, face.halfH) || 1;
+    var hx = face.halfW + reach * span / face.halfH;
+    var hy = face.halfH + reach * span / face.halfW;
+    var padPx = 6;
+    var screenLeft = Math.floor(face.cx - hx - padPx);
+    var screenTop = Math.floor(face.cy - hy - padPx);
+    var screenW = Math.ceil(face.cx + hx + padPx) - screenLeft;
+    var screenH = Math.ceil(face.cy + hy + padPx) - screenTop;
+    var scale = screenScale(village);
+    var box = village.getBoundingClientRect();
+    if (!(scale > 0) || !(box.width > 2)) {
+      hideRing(ring);
+      return;
     }
-    ringShownAt = Date.now();
+    var rawLeft = village.scrollLeft + (screenLeft - box.left) / scale;
+    var rawTop = village.scrollTop + (screenTop - box.top) / scale;
+    var snappedLeft = Math.round(rawLeft);
+    var snappedTop = Math.round(rawTop);
+    var shiftX = (snappedLeft - rawLeft) * scale;
+    var shiftY = (snappedTop - rawTop) * scale;
+    var ns = "http://www.w3.org/2000/svg";
+    while (ring.firstChild) ring.removeChild(ring.firstChild);
     ring.removeAttribute("hidden");
-    ring.style.left = left + "px";
-    ring.style.top = top + "px";
-    ring.style.width = (bw / dpr) + "px";
-    ring.style.height = (bh / dpr) + "px";
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, bw / dpr, bh / dpr);
-    var lx = cx - left;
-    var ly = cy - top;
-    var village = map.querySelector(".village");
-    var bounds = village ? village.getBoundingClientRect() : map.getBoundingClientRect();
-    var slop = cream;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(
-      bounds.left - left - slop,
-      bounds.top - top - slop,
-      bounds.width + slop * 2,
-      bounds.height + slop * 2
-    );
-    ctx.clip();
-    function band(distance, widthPx, color) {
-      var inner = offsetDiamond(face, distance);
-      var edge = offsetDiamond(face, distance + widthPx);
-      var ipts = [
-        [lx, ly - inner.hy],
-        [lx + inner.hx, ly],
-        [lx, ly + inner.hy],
-        [lx - inner.hx, ly]
-      ];
-      var opts = [
-        [lx, ly - edge.hy],
-        [lx + edge.hx, ly],
-        [lx, ly + edge.hy],
-        [lx - edge.hx, ly]
-      ];
-      ctx.beginPath();
-      for (var i = 0; i < 4; i += 1) {
-        var j = (i + 1) % 4;
-        var t1 = 0.9;
-        ctx.moveTo(ipts[i][0], ipts[i][1]);
-        ctx.lineTo(ipts[i][0] + (ipts[j][0] - ipts[i][0]) * t1, ipts[i][1] + (ipts[j][1] - ipts[i][1]) * t1);
-        ctx.lineTo(opts[i][0] + (opts[j][0] - opts[i][0]) * t1, opts[i][1] + (opts[j][1] - opts[i][1]) * t1);
-        ctx.lineTo(opts[i][0], opts[i][1]);
-        ctx.closePath();
+    ring.style.display = "block";
+    ring.setAttribute("viewBox", "0 0 " + screenW + " " + screenH);
+    ring.style.left = snappedLeft + "px";
+    ring.style.top = snappedTop + "px";
+    ring.style.width = (screenW / scale) + "px";
+    ring.style.height = (screenH / scale) + "px";
+    function local(sx, sy) {
+      return [sx - screenLeft - shiftX, sy - screenTop - shiftY];
+    }
+    var tips = [
+      [face.cx, face.cy - face.halfH],
+      [face.cx + face.halfW, face.cy],
+      [face.cx, face.cy + face.halfH],
+      [face.cx - face.halfW, face.cy]
+    ];
+    var frames = [];
+    for (var i = 0; i < 4; i += 1) {
+      var a = tips[i];
+      var b = tips[(i + 1) % 4];
+      var dx = b[0] - a[0];
+      var dy = b[1] - a[1];
+      var len = Math.hypot(dx, dy) || 1;
+      var nx = -dy / len;
+      var ny = dx / len;
+      var mx = (a[0] + b[0]) / 2;
+      var my = (a[1] + b[1]) / 2;
+      var out = (mx + nx - face.cx) * (mx + nx - face.cx) + (my + ny - face.cy) * (my + ny - face.cy);
+      var inn = (mx - nx - face.cx) * (mx - nx - face.cx) + (my - ny - face.cy) * (my - ny - face.cy);
+      if (out < inn) { nx = -nx; ny = -ny; }
+      frames.push({
+        a: a, b: b, nx: nx, ny: ny,
+        dx: b[0] - a[0], dy: b[1] - a[1], len: len
+      });
+    }
+    /* Closest edge to the pixel centre. The far edge of a convex diamond
+       has a larger line distance, so the maximum would pick the wrong side. */
+    function atCentre(x, y) {
+      var best = null;
+      for (var f = 0; f < frames.length; f += 1) {
+        var edge = frames[f];
+        var sd = (x - edge.a[0]) * edge.nx + (y - edge.a[1]) * edge.ny;
+        var along = ((x - edge.a[0]) * edge.dx + (y - edge.a[1]) * edge.dy) / (edge.len * edge.len);
+        if (along < -0.02 || along > 1.02 || sd < -0.5) continue;
+        var cross = sd < 0 ? -sd : sd;
+        if (!best || cross < best.cross) best = { sd: sd, t: along, cross: cross };
       }
-      ctx.fillStyle = color;
-      ctx.fill();
+      return best;
     }
-    band(innerClear, cream, "#fff8e7");
-    band(innerClear + cream, brown, "#6b4f2a");
-    ctx.restore();
-    /* A dark sprite under a mostly covered pixel stays far from the dash
-       colour. Snap coverage to on or off so that pixel reads as the dash. */
-    var img = ctx.getImageData(0, 0, bw, bh);
-    var data = img.data;
-    for (var p = 0; p < data.length; p += 4) {
-      var alpha = data[p + 3];
-      if (!alpha) continue;
-      data[p + 3] = alpha < 128 ? 0 : 255;
+    var west = tips[3][0];
+    var north = tips[0][1];
+    var originX = Math.round(west);
+    var originY = Math.round(north);
+    var x0 = Math.floor(screenLeft);
+    var y0 = Math.floor(screenTop);
+    var x1 = Math.ceil(screenLeft + screenW);
+    var y1 = Math.ceil(screenTop + screenH);
+    var map = $("townMap");
+    var lift = ensureRingLift();
+    var barEl = document.getElementById("readyBar");
+    var barTop = null;
+    if (barEl && lift && map) {
+      var barCs = getComputedStyle(barEl);
+      if (barCs.display !== "none" && barCs.visibility !== "hidden") {
+        barTop = barEl.getBoundingClientRect().top;
+      }
     }
-    ctx.putImageData(img, 0, 0);
+    var stripTop = barTop == null ? 0 : Math.floor(barTop);
+    var stripH = 4;
+    function mountLift() {
+      if (!lift || barTop == null) return;
+      var mapBox = map.getBoundingClientRect();
+      var mapScale = screenScale(map);
+      if (!(mapScale > 0)) return;
+      var rawLeft = map.scrollLeft + (screenLeft - mapBox.left) / mapScale;
+      var rawTop = map.scrollTop + (stripTop - mapBox.top) / mapScale;
+      var snappedL = Math.round(rawLeft);
+      var snappedT = Math.round(rawTop);
+      lift._shiftX = (snappedL - rawLeft) * mapScale;
+      lift._shiftY = (snappedT - rawTop) * mapScale;
+      while (lift.firstChild) lift.removeChild(lift.firstChild);
+      lift.removeAttribute("hidden");
+      lift.style.display = "block";
+      lift.setAttribute("viewBox", "0 0 " + screenW + " " + stripH);
+      lift.style.left = snappedL + "px";
+      lift.style.top = snappedT + "px";
+      lift.style.width = (screenW / mapScale) + "px";
+      lift.style.height = (stripH / mapScale) + "px";
+    }
+    mountLift();
+    function paintRun(target, xShift, yShift, yOrigin, y, xStart, xEnd, color) {
+      var rect = document.createElementNS(ns, "rect");
+      rect.setAttribute("x", (xStart - screenLeft - xShift).toFixed(3));
+      rect.setAttribute("y", (y - yOrigin - yShift).toFixed(3));
+      rect.setAttribute("width", String(xEnd - xStart));
+      rect.setAttribute("height", "1");
+      rect.setAttribute("fill", color);
+      rect.setAttribute("shape-rendering", "crispEdges");
+      target.appendChild(rect);
+    }
+    var liftUsed = false;
+    for (var py = y0; py < y1; py += 1) {
+      var onStrip = barTop != null && py >= stripTop && py < stripTop + stripH;
+      var runColor = "";
+      var runX = 0;
+      for (var px = x0; px < x1; px += 1) {
+        var mid = atCentre(west + (px - originX) + 0.5, north + (py - originY) + 0.5);
+        var color = "";
+        /* Corner gap, same idea as the dashed geometry. Samples stay on the dash. */
+        if (mid && mid.t >= 0.1 && mid.t <= 0.9 &&
+            mid.sd >= innerEdge && mid.sd < innerEdge + cream + brown) {
+          color = mid.sd < innerEdge + cream ? "#fff8e7" : "#6b4f2a";
+        }
+        if (color !== runColor) {
+          if (runColor) {
+            if (onStrip && lift) {
+              paintRun(lift, lift._shiftX || 0, lift._shiftY || 0, stripTop, py, runX, px, runColor);
+              liftUsed = true;
+            } else {
+              paintRun(ring, shiftX, shiftY, screenTop, py, runX, px, runColor);
+            }
+          }
+          runColor = color;
+          runX = px;
+        }
+      }
+      if (runColor) {
+        if (onStrip && lift) {
+          paintRun(lift, lift._shiftX || 0, lift._shiftY || 0, stripTop, py, runX, x1, runColor);
+          liftUsed = true;
+        } else {
+          paintRun(ring, shiftX, shiftY, screenTop, py, runX, x1, runColor);
+        }
+      }
+    }
+    if (lift && !liftUsed) {
+      while (lift.firstChild) lift.removeChild(lift.firstChild);
+      lift.setAttribute("hidden", "");
+      lift.style.display = "none";
+    }
   }
 
-  /* 3px stroke on the painted slab diamond. The path sits 0.8px inside so
-     the outer edge stays within a pixel of the cell and still covers the
-     gold dash. The svg is sized to the slab, so the stroke
-     shares the slab's pixel grid. */
+  /* 3px stroke on the painted slab diamond. The path sits just inside the
+     cell so the outer edge stays within a pixel and still covers the gold
+     dash. ViewBox units are screen px; the layout box undoes the stage
+     scale so the stroke stays 3 screen px. */
   function placeChosenMark() {
-    var paint = document.getElementById("chosenMarkPaint");
-    var ns = "http://www.w3.org/2000/svg";
-    if (!paint) {
-      paint = document.createElementNS(ns, "svg");
-      paint.id = "chosenMarkPaint";
-      paint.setAttribute("aria-hidden", "true");
-      paint.setAttribute("preserveAspectRatio", "none");
-      var poly = document.createElementNS(ns, "polygon");
-      poly.setAttribute("fill", "none");
-      poly.setAttribute("stroke", "#7c2d12");
-      poly.setAttribute("stroke-width", "3");
-      poly.setAttribute("stroke-linejoin", "round");
-      poly.setAttribute("shape-rendering", "crispEdges");
-      paint.appendChild(poly);
-      document.body.appendChild(paint);
-    }
-    var pad = document.querySelector("#townMap .pad.is-chosen");
+    var paint = ensureChosenPaint();
+    var village = paintVillage();
+    if (!paint || !village) return;
+    var pad = choicePad();
     var slab = pad && pad.querySelector(":scope > .slab");
     var mark = pad && pad.querySelector(":scope > .mark");
-    if (!slab || !mark || mark.hidden) {
-      paint.setAttribute("hidden", "");
+    if (state.sheet || !slab || !mark || mark.hidden) {
+      hideLine(paint);
       return;
     }
     var box = slab.getBoundingClientRect();
     if (!(box.width > 2) || !(box.height > 2)) {
-      paint.setAttribute("hidden", "");
+      hideLine(paint);
       return;
     }
     var hx = box.width / 2;
@@ -1374,33 +1541,34 @@
     var ap = (hx * hy) / Math.sqrt(hx * hx + hy * hy);
     var inset = 0.8;
     if (!(ap > inset)) {
-      paint.setAttribute("hidden", "");
+      hideLine(paint);
       return;
     }
     var k = 1 - inset / ap;
-    /* Room for the stroke that hangs a pixel outside the slab. */
     var margin = 6;
     var left = box.left - margin;
     var top = box.top - margin;
     var width = box.width + margin * 2;
     var height = box.height + margin * 2;
+    var layout = layoutBox(village, left, top, width, height);
     paint.removeAttribute("hidden");
+    paint.style.display = "block";
+    paint.style.clipPath = "none";
     paint.setAttribute("viewBox", "0 0 " + width + " " + height);
-    paint.style.left = left + "px";
-    paint.style.top = top + "px";
-    paint.style.width = width + "px";
-    paint.style.height = height + "px";
-    var face = 10 * (box.width / 168);
+    paint.style.left = layout.left + "px";
+    paint.style.top = layout.top + "px";
+    paint.style.width = layout.width + "px";
+    paint.style.height = layout.height + "px";
+    var lift = 10 * (box.width / 168);
     var cx = margin + box.width / 2;
-    var cy = margin + box.height / 2 - face;
+    var cy = margin + box.height / 2 - lift;
+    /* Stroke rasterisation sits a fraction to the north-west. Slide the
+       diamond along the south-east normal so each outer pixel stays on the cell. */
+    var seLen = Math.hypot(hx, hy) || 1;
+    var nudge = 0.18;
+    cx += hy / seLen * nudge;
+    cy += hx / seLen * nudge;
     paint.querySelector("polygon").setAttribute("points", diamondPoints(cx, cy, hx * k, hy * k));
-    var village = $("village");
-    var bounds = village ? village.getBoundingClientRect() : box;
-    paint.style.clipPath = "inset(" +
-      Math.max(0, bounds.top - top).toFixed(2) + "px " +
-      Math.max(0, (left + width) - bounds.right).toFixed(2) + "px " +
-      Math.max(0, (top + height) - bounds.bottom).toFixed(2) + "px " +
-      Math.max(0, bounds.left - left).toFixed(2) + "px)";
   }
 
   function render() {
@@ -1757,23 +1925,30 @@
       syncFocusRing();
       placeChosenMark();
     });
-    document.addEventListener("focusin", placeFocusRing, true);
-    document.addEventListener("focusout", function () {
-      window.requestAnimationFrame(placeFocusRing);
-    }, true);
-    /* A pointer tap focuses the cell before focus-visible is set. Focusing
-       that same button again does not fire focusin, so hook focus() itself. */
-    var focusElement = HTMLElement.prototype.focus;
-    HTMLElement.prototype.focus = function (options) {
-      focusElement.call(this, options);
-      if (this.classList && this.classList.contains("cell-btn")) {
-        if (options && options.focusVisible) ringBtn = this;
-        placeFocusRing();
+    document.addEventListener("focusin", function (event) {
+      var t = event.target;
+      if (t && t.classList && t.classList.contains("cell-btn") && t.matches(":focus-visible")) {
+        ringBtn = t;
       }
-    };
+      placeFocusRing();
+    }, true);
+    document.addEventListener("focusout", function (event) {
+      var next = event.relatedTarget;
+      if (next && next.classList && next.classList.contains("cell-btn") && next.matches(":focus-visible")) {
+        ringBtn = next;
+        return;
+      }
+      ringBtn = null;
+      hideRing();
+    }, true);
     document.addEventListener("scroll", function () {
       placeFocusRing();
       placeChosenMark();
+    }, true);
+    document.addEventListener("click", function (event) {
+      var nav = event.target && event.target.closest && event.target.closest("[data-kt-nav]");
+      if (!nav || nav.getAttribute("data-kt-nav") === "town") return;
+      clearMarks("both", true);
     }, true);
     map.addEventListener("click", function (event) {
       var target = event.target;
@@ -1782,6 +1957,11 @@
       /* Enter and Space activate the focused cell button even when a bar
          covers that button. A pointer tap still has to miss solid UI. */
       var fromKey = event.detail === 0 && event.clientX === 0 && event.clientY === 0;
+      /* A pointer tap focuses the button without focus-visible. Drop that
+         focus so a later focus-visible call still emits focusin. */
+      /* Blur in this turn, before the browser handles the next key.
+         A deferred blur races a later Space on the same button. */
+      if (cellBtn && !fromKey) cellBtn.blur();
       if (cellBtn && fromKey) {
         var keyPad = cellBtn.closest(".pad");
         if (keyPad) {
