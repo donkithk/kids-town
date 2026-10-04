@@ -193,3 +193,93 @@ Noto, 4× nearest-neighbour crops under `docs/regress/assets/`.
 `sha256sum kids_town.db` at the end of this pass:
 
 `c046fc41e1cf0eb8c5be5ae5a100fd62dfc6390e8c2277a6a84f93002fe3ecfb`
+
+## Triage
+
+**Triage verdict: PASS.** The two FAIL probes do not survive the agreed hit rule or a finer ring sample. Nothing in this section is a real defect, and none of the four points is a regression against `25c91c9` (`cursor/wip-61-25c91c9`, `25c91c9e0cfd46687a981ff6639b0161aff87024`).
+
+Rule used: a solid control blocks its own border box, inclusive edges included, and children count through `target.closest`. A rounded transparent corner inside that box is blocked too. A point at least 1px outside (`floor(top)−1`, `ceil(bottom)+1`, `floor(left)−1`, `ceil(right)+1`) must reach the map when a cell is visible there. The 0–1px band outside a fractional edge is not asserted.
+
+Chromium delivers the click it actually hit-tests. Where that event coordinate differs from the requested float, the verdict uses the event. `elementFromPoint` was read at the requested float as well.
+
+Same four points on `ff05ccd` under Noto, on `25c91c9` under Noto, and on `ff05ccd` with Noto CJK rejected so `fc-match sans-serif:lang=zh-tw` is WenQuanYi Micro Hei. The button’s computed `font-family` stays Arial; the CJK fallback is what moves the tools box. Palette and bar rectangles are the same in all three runs.
+
+### 1. `.tools` left edge, y=155, 1280×720, scroll 366 — unasserted band
+
+| | Noto `ff05ccd` and `25c91c9` | WenQuanYi `ff05ccd` |
+| --- | --- | --- |
+| `#townMap .tools` rect | left 1135.359375, top 109, right 1217, bottom 155 | left 1134.84375, top 109, right 1217, bottom 153 |
+| border-radius | the div is `0px`; `#btnMotion` is `14px` | same |
+| requested point | (1135.359375, 155), the live left edge | (1134.84375, 155) |
+| signed distance of that float (outside positive) | left 0, right −81.64, top −46, bottom 0. On the bottom-left corner. | bottom +2.0, so 2px below the box |
+| delivered click | (1135, 155) on `div#village` | (1134, 155) on `div#village` |
+| signed distance of the delivered click | left +0.359px, bottom 0. The 0.36px is outside the fractional left edge. | bottom +2px |
+| result | toast 「這個位置已經有建築物。」, cell (7,0), no selection | same toast |
+| 2px inside the corner | (1137.359375, 153). Inside the box by 2px, and outside the 14px rounded paint (`hypot` from the corner centre is about 17px). `elementFromPoint` is `div.tools`. No selection, no toast. | (1136.84, 151) same: `div.tools`, no reaction |
+
+The corner of the border box is outside the button’s rounded paint, and a point that is actually inside that corner is blocked. The click that reached (7,0) is the one Chromium dispatched 0.359px outside the left edge. That is the unasserted band. Under WenQuanYi the same y=155 is 2px below a shorter button, so reaching the map is required. Same toast on `25c91c9`. The box height is font-dependent. The hit behaviour is the same on both tips.
+
+### 2. (255, 505) — correct behaviour
+
+Palette at 1100×800, scroll 0, list open. One rectangle, so the right edge at y=505 is the right edge at y=490.
+
+| | Value |
+| --- | --- |
+| `#palette` rect | left 50.703125, top 230.703125, right 253.515625, bottom 550.390625 |
+| border-radius | the element is `0px`. `::before` is `16px`, outset 3px on every side, `pointer-events: none` |
+| (255, 490) | 1.484px outside the right edge, 60.39px above the bottom. `elementFromPoint` is `button.cell-btn`. Selects gold (0,5). |
+| (255, 505) | 1.484px outside the same right edge, 45.39px above the bottom. No other solid border box contains it. `elementFromPoint` is `button.cell-btn`, not the palette, its shadow, or the bar. Selects gold (0,5). |
+
+The earlier miss was a dirty selection. (255, 490) selects (0,5), and that cell’s centre sits under the palette, so a later centre click does not clear it. A second tap on the already selected cell was scored as no reaction. With the selection cleared first, (255, 505) selects (0,5). Same rect and same selection on `25c91c9` and under WenQuanYi. The palette box does not move with the font.
+
+### 3. Palette southeast corner (255.5, 552.4) — correct behaviour
+
+Same palette rect. The point is 1.984px outside the right edge and 2.009px outside the bottom. The delivered click is (255, 552), which is 1.484px outside the right and 1.609px outside the bottom. Both are at least 1px outside the border box. `elementFromPoint` is `button.cell-btn`. The tap selects gold (1,6).
+
+The painted `::before` extends 3px past the box, so this point can sit on the rounded paint while remaining outside the border box. That paint does not take hits. Reaching the map is what the rule requires. Same selection on `25c91c9` and under WenQuanYi.
+
+### 4. Bar top at 1100×800 — correct behaviour
+
+`#readyBar` under Noto: left 52.421875, top 555.546875, right 1047.578125, bottom 610.546875, border-radius `0px` (`::before` radius 16px, outset 3px, `pointer-events: none`). `floor(top)−1` is 554. The tap (550, 554) is 1.547px above the top. `elementFromPoint` is `div#village`. It selects gold (3,3).
+
+That point is the spec’s reverse point, at least 1px outside, and a cell is visible. Reaching the map is correct. WenQuanYi gives the same top 555.546875 and the same selection. `25c91c9` matches.
+
+### Ring, northwest 1.5px — sampling artifact
+
+Remeasured at 1280×720, `deviceScaleFactor` 2, 24 samples along each edge, staying 3px clear of each vertex. Distance is from the cell edge to the centre of the first device pixel that changed and is within 8 levels of `#fff8e7`.
+
+| Role | Cell | NE min / median / max | SE | SW | NW |
+| --- | --- | --- | --- | --- | --- |
+| empty | (5,1) quiet | 2.29 / 2.50 / 3.56 | 2.60 / 2.80 / 4.95 | 2.66 / 2.90 / 3.94 | 2.43 / 2.63 / 2.98 |
+| gold | (1,1) | 2.59 / 2.82 / 3.61 | 2.90 / 3.09 / 3.47 | 2.35 / 2.56 / 3.89 | 2.15 / 2.35 / 4.48 |
+| edge | (0,6) | 2.34 / 2.55 / 3.56 | 2.60 / 2.80 / 4.95 | 2.66 / 2.90 / 3.94 | 2.43 / 2.65 / 2.98 |
+| library | (6,0) | 2.40 / 2.61 / 4.97 | 2.71 / 2.91 / 3.30 | 2.55 / 2.78 / 3.83 | 2.34 / 2.54 / 2.93 |
+| selected+focused | (3,3) | 2.59 / 2.82 / 3.61 | 2.90 / 3.09 / 3.47 | 2.35 / 2.56 / 3.89 | 2.15 / 2.35 / 4.48 |
+
+No edge’s minimum is under 2.15. Medians sit between 2.35 and 3.09. A maximum near 5 is a sample that has walked into the undrawn end of the dash (the fill stops at 90% of the edge, and a 3px margin on an 83px edge still includes that gap). The median is the edge itself.
+
+The original 1.5px sample is real cream, and it is one pixel. At `deviceScaleFactor` 1 on (3,3), northwest t=0.38, the pixel at walk distance 1.5 is `#fff7e8` (strict cream) for both the empty cell and the selected cell. The other four samples on that same edge first turn cream at 2.5 or 3.0 (t=0.22, 0.50, 0.62, 0.78). t=0.38 is in the painted part of the dash, well clear of the vertex. The dsf-2 resample of that cell’s northwest edge starts at 2.15. One CSS pixel on the diagonal was snapped to full cream about a pixel inside the 2.5px line. The edge is not drawn at 1.5px.
+
+`c2875a2`’s test geometry is the `::after` SVG polygon (the stroke centreline the test measures with `_ring_gaps`). On this build that centreline is 3.43–3.46px outside the cell on all four edges, northwest included (3.46). The four edges match. The test’s own band is 2–4px, and 3.46 sits inside it. That definition does not describe a closer northwest edge.
+
+### The `(6, 6)` line
+
+The only added occurrence is a docstring sentence on `_origin_fits` in `backend_v2.py`:
+
+```python
+def _origin_fits(cx, cy, footprint):
+    """True when this building's footprint starting here stays inside the 8×8 map.
+
+    Last legal origin is (cols - footprint, rows - footprint). The size comes
+    from _footprint. A size of 2 ends at (6, 6); (7, 0) sticks out.
+    """
+    return (
+        cx >= 0 and cy >= 0
+        and cx + footprint <= TOWN_PLACE_COLS
+        and cy + footprint <= TOWN_PLACE_ROWS
+    )
+```
+
+The return statement compares the origin plus the footprint with the map size. `(6, 6)` is not used as a value.
+
+`kids_town.db` sha256 after this triage: `c046fc41e1cf0eb8c5be5ae5a100fd62dfc6390e8c2277a6a84f93002fe3ecfb`.
