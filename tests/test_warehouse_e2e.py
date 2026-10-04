@@ -6991,12 +6991,17 @@ def test_focus_ring_shape(page, base_url, warehouse_db, warehouse_ids):
                     f"(E {both['E']:.2f}, W {both['W']:.2f})"
                 )
             clip = _ring_clip(page, focused)
+            _blur_focus(page)
+            _silence_toast(page)
+            before = page.screenshot(clip=clip, scale="css", type="png")
+            focus_ring_shape(page, cell_x, cell_y)
+            page.wait_for_timeout(40)
             png = page.screenshot(clip=clip, scale="css", type="png")
-            report = ring_pixel_report(png, focused["cell"], clip)
+            report = ring_pixel_report(before, png, focused["cell"], clip)
             if report["overlap"]:
                 problems.append(
                     f"{width}x{height} {role}: {report['overlap']} ring pixels "
-                    "lie on the selected line"
+                    "in the 1px band outside the cell lie on the selected line"
                 )
             if report["solid"] < 8:
                 problems.append(
@@ -7246,8 +7251,9 @@ def _gold_edges(page, face):
 def test_selected_no_fill(page, base_url, warehouse_db, warehouse_ids):
     """TC-FE-SELECTED-NO-FILL 選中格只畫一條在格子裡面的實線。
 
-    中心和每條邊內 8px 要仍是原來的空地、金色或建築圖，不能是 #7c2d12。
-    沿邊的法線量到的褐線是 2–4px，外緣貼着格子邊，最多伸出 1px。
+    中心和每條邊內 8px 要和未選中、未聚焦的底圖一致，中心不能是 #7c2d12。
+    選中時「此格」徽章的區域除外。褐線寬 2–4px，外緣在格子外 0–1px
+    （中線內縮 0.5–1.5px 用這條外緣判斷）。
     東南、西南若鄰格是金格，邊帶上的像素是 #7c2d12 不是 #d4a017。
     「此格」徽章要看得見。視窗 1280×720、1100×800、390×844。
     """
@@ -7310,10 +7316,10 @@ def test_selected_no_fill(page, base_url, warehouse_db, warehouse_ids):
                         f"{edge_report['width']}px, want 2–4"
                     )
                 outer = edge_report["outer"]
-                if outer is None or outer > 1:
+                if outer is None or outer < 0 or outer > 1:
                     problems.append(
-                        f"{width}x{height} {role} {name}: brown reaches "
-                        f"{outer}px outside the cell, want at most 1"
+                        f"{width}x{height} {role} {name}: brown outer edge "
+                        f"{outer}px, want 0–1 (centreline inset 0.5–1.5)"
                     )
             if brown_in:
                 sample = next(item for item in report["interior"] if item["brown"])
@@ -7325,7 +7331,8 @@ def test_selected_no_fill(page, base_url, warehouse_db, warehouse_ids):
                 sample = next(item for item in report["interior"] if not item["near"])
                 problems.append(
                     f"{width}x{height} {role}: interior {','.join(drifted)} "
-                    f"left the background ({sample['before']} → {sample['after']})"
+                    f"left the baseline ({sample['before']} → {sample['after']}, "
+                    f"Δ{sample['dist']})"
                 )
             badge = report["badge"]
             if badge.get("text") != "此格" or badge.get("cream", 0) < 8:
@@ -7346,6 +7353,7 @@ def test_selected_no_fill(page, base_url, warehouse_db, warehouse_ids):
                 f"{width}x{height} {role} ({cell['c']},{cell['r']}) "
                 f"centre {centre['before']}→{centre['after']} "
                 f"widths {','.join(widths)} outer {outers} "
+                f"inset {[edge_report['inset'] for edge_report in report['edges'].values()]} "
                 f"badge {badge.get('cream')}"
             )
     print("TC-FE-SELECTED-NO-FILL " + " || ".join(summaries))
@@ -7356,9 +7364,10 @@ def test_selected_no_fill(page, base_url, warehouse_db, warehouse_ids):
 def test_focus_ring_no_fill(page, base_url, warehouse_db, warehouse_ids):
     """TC-FE-FOCUS-RING-NO-FILL 焦點環只畫虛線，不填滿格子。
 
-    空地、金格、邊緣有建築圖的格子：中心和邊內 8px 不能變成 #7c2d12。
-    環的內緣在格子外約 2px（2–4px），是內層 #fff8e7、外層 #6b4f2a。
-    選中又聚焦時，褐線在格子邊上，環在它外面，格子裡面仍是背景。
+    未選中只聚焦時，邊內 8px 的每一點都要和未選中、未聚焦的底圖一致，
+    不排除徽章位置。選中時才排除徽章區域。中心不能是 #7c2d12。
+    環的內緣約在格子外 2px（2–4px），不得壓到褐線。
+    選中又聚焦時，褐線外緣在格子外 0–1px。
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(
@@ -7385,13 +7394,17 @@ def test_focus_ring_no_fill(page, base_url, warehouse_db, warehouse_ids):
         if selected:
             _select_cell(page, cell[0], cell[1])
             _silence_toast(page)
-            if not (cell_top_face(page, cell[0], cell[1]) or {}).get("chosen"):
+            chosen_face = cell_top_face(page, cell[0], cell[1]) or {}
+            if not chosen_face.get("chosen"):
                 problems.append(f"{width}x{height} {role}: did not stay selected")
                 return
+            face["badge"] = chosen_face.get("badge")
         focus_ring_shape(page, cell[0], cell[1])
         page.wait_for_timeout(40)
         after = _shot(page, clip)
-        focus = focus_pixel_report(before, after, face, clip)
+        focus = focus_pixel_report(
+            before, after, face, clip, allow_badge=selected
+        )
         brown_in = [item["name"] for item in focus["interior"] if item["brown"]]
         drifted = [item["name"] for item in focus["interior"] if not item["near"]]
         if brown_in:
@@ -7404,7 +7417,8 @@ def test_focus_ring_no_fill(page, base_url, warehouse_db, warehouse_ids):
             sample = next(item for item in focus["interior"] if not item["near"])
             problems.append(
                 f"{width}x{height} {role}: interior {','.join(drifted)} "
-                f"covered the background ({sample['before']} → {sample['after']})"
+                f"left the baseline ({sample['before']} → {sample['after']}, "
+                f"Δ{sample['dist']})"
             )
         ink_bits = []
         for name, edge_report in focus["edges"].items():
@@ -7430,9 +7444,9 @@ def test_focus_ring_no_fill(page, base_url, warehouse_db, warehouse_ids):
                         f"{edge_report['first']}, want 2–4px outside"
                     )
         if selected:
-            chosen_face = cell_top_face(page, cell[0], cell[1]) or {}
-            face["badge"] = chosen_face.get("badge")
-            stroke = selection_pixel_report(before, after, face, clip)
+            stroke = selection_pixel_report(
+                before, after, face, clip, allow_badge=True
+            )
             for name, edge_report in stroke["edges"].items():
                 if edge_report["width"] < 2 or edge_report["width"] > 4:
                     problems.append(
@@ -7440,10 +7454,10 @@ def test_focus_ring_no_fill(page, base_url, warehouse_db, warehouse_ids):
                         f"{edge_report['width']}px, want 2–4"
                     )
                 outer = edge_report["outer"]
-                if outer is None or outer > 1:
+                if outer is None or outer < 0 or outer > 1:
                     problems.append(
-                        f"{width}x{height} {role} selected {name}: brown reaches "
-                        f"{outer}px outside, want at most 1"
+                        f"{width}x{height} {role} selected {name}: brown outer edge "
+                        f"{outer}px, want 0–1 (centreline inset 0.5–1.5)"
                     )
         _blur_focus(page)
         centre = next(item for item in focus["interior"] if item["name"] == "centre")

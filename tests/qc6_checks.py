@@ -1733,44 +1733,71 @@ def sample_selected_edges(png_bytes, geom, clip):
     return found
 
 
-def ring_pixel_report(png_bytes, cell, clip):
-    """Ring-coloured pixels inside the selected stroke, and whether both ring inks show.
+# Screenshot noise and antialiasing. A real fill moves pixels much further.
+_UNCHANGED_DIST = 20 * 20
+# Ring ink is read only outside the cell, out to this many pixels.
+_RING_OUTSIDE_BAND = 8.0
 
-    The solid line is a 3px band centred on the cell diamond. A ring pixel
-    on or inside that band overlaps the selected outline.
-    """
-    width, height, rows = png_rgb(png_bytes)
+
+def _diamond_outside(cell, x, y):
+    """Signed pixels from the top-face edge. Negative is inside the cell."""
     half_w = cell.get("halfW") or 0
     half_h = cell.get("halfH") or 0
-    if half_w < 2 or half_h < 2:
+    if half_w < 1 or half_h < 1:
+        return None
+    span = abs(x - cell["cx"]) / half_w + abs(y - cell["cy"]) / half_h
+    apothem = (half_w * half_h) / math.hypot(half_w, half_h)
+    return (span - 1.0) * apothem
+
+
+def _in_badge(face, x, y):
+    box = face.get("badge") if face else None
+    if not box:
+        return False
+    return (box["left"] - 2) <= x <= (box["right"] + 2) and (box["top"] - 2) <= y <= (
+        box["bottom"] + 2
+    )
+
+
+def ring_pixel_report(png_before, png_after, cell, clip):
+    """Ring ink outside the cell only, in the band out to 8px.
+
+    Badge, ground, and sprite pixels inside the polygon are ignored, so a
+    light badge cannot count as ``#fff8e7``. A pixel counts only when it
+    changed from the unfocused baseline and reads as ring cream or ring
+    brown, not ``#7c2d12``. Overlap is that ink within 1px of the edge,
+    where the selected line's outer fringe sits.
+    """
+    _bw, _bh, before_rows = png_rgb(png_before)
+    width, height, after_rows = png_rgb(png_after)
+    half_w = cell.get("halfW") or 0
+    half_h = cell.get("halfH") or 0
+    if half_w < 2 or half_h < 2 or not before_rows or not after_rows:
         return {"cream": 0, "brown": 0, "overlap": 0, "solid": 0}
-    cx = cell["cx"]
-    cy = cell["cy"]
-    apothem = (half_w * half_h) / ((half_w * half_w + half_h * half_h) ** 0.5)
-    band = 1 + (1.5 / apothem if apothem else 0)
     origin_x = clip["x"]
     origin_y = clip["y"]
     cream = brown = overlap = solid = 0
-    for iy, row in enumerate(rows):
+    for iy, row in enumerate(after_rows):
         for ix, pixel in enumerate(row):
             x = origin_x + ix
             y = origin_y + iy
-            span = abs(x - cx) / half_w + abs(y - cy) / half_h
-            dist_cream = _rgb_dist(pixel, RING_CREAM)
-            dist_brown = _rgb_dist(pixel, RING_BROWN)
-            dist_solid = _rgb_dist(pixel, REQUIRED_STROKE)
-            if dist_solid <= 55 * 55 and 0.82 <= span <= 1.18:
+            outside = _diamond_outside(cell, x, y)
+            if outside is None:
+                continue
+            if -2.5 <= outside <= 1.5 and _clear_brown(pixel):
                 solid += 1
-            ringish = None
-            if dist_cream <= 40 * 40 and dist_cream <= dist_solid:
-                ringish = "cream"
-            elif dist_brown <= 45 * 45 and dist_brown <= dist_solid:
-                ringish = "brown"
-            if ringish == "cream":
+            if outside <= 0 or outside > _RING_OUTSIDE_BAND:
+                continue
+            before = _shot_pixel(before_rows, clip, x, y)
+            if not before or _rgb_dist(before, pixel) <= _UNCHANGED_DIST:
+                continue
+            if not _ring_ink(pixel):
+                continue
+            if _rgb_dist(pixel, RING_CREAM) <= _rgb_dist(pixel, RING_BROWN):
                 cream += 1
-            elif ringish == "brown":
+            else:
                 brown += 1
-            if ringish and span <= band:
+            if outside <= 1.0:
                 overlap += 1
     return {"cream": cream, "brown": brown, "overlap": overlap, "solid": solid}
 
@@ -1925,30 +1952,48 @@ def _interior_points(face):
     return points
 
 
-def selection_pixel_report(png_before, png_after, face, clip):
-    """Interior, stroke width, and badge from two CSS-pixel screenshots.
+def _interior_sample(before_rows, after_rows, face, clip, point, allow_badge):
+    """One interior point against the unselected, unfocused baseline.
 
-    Positive offsets are outside the cell edge. The 3px stroke is inside,
-    so brown may reach at most 1px outside and the run is 2–4px wide.
+    The 「此格」 badge is allowed to change only when the cell is selected.
+    """
+    after = _shot_pixel(after_rows, clip, point["x"], point["y"])
+    before = _shot_pixel(before_rows, clip, point["x"], point["y"])
+    badge = bool(allow_badge and _in_badge(face, point["x"], point["y"]))
+    if before and after:
+        dist = _rgb_dist(before, after)
+    else:
+        dist = 10 ** 9
+    return {
+        "name": point["name"],
+        "brown": _clear_brown(after),
+        "near": badge or dist <= _UNCHANGED_DIST,
+        "badge": badge,
+        "dist": 0 if dist >= 10 ** 9 else int(dist ** 0.5),
+        "after": hex_of(after),
+        "before": hex_of(before),
+    }
+
+
+def selection_pixel_report(png_before, png_after, face, clip, allow_badge=True):
+    """Interior diff, stroke width, and badge from two CSS-pixel screenshots.
+
+    Positive offsets are outside the cell edge. The stroke centreline sits
+    0.5–1.5px inside, which is judged by the outer brown edge landing 0–1px
+    outside the cell. The run is 2–4px wide. Interior points at least 8px
+    in must match the baseline; the badge region is skipped only when selected.
     """
     _bw, _bh, before_rows = png_rgb(png_before)
     _aw, _ah, after_rows = png_rgb(png_after)
-    interior = []
-    for point in _interior_points(face):
-        after = _shot_pixel(after_rows, clip, point["x"], point["y"])
-        before = _shot_pixel(before_rows, clip, point["x"], point["y"])
-        near = bool(before and after) and _rgb_dist(before, after) <= 58 * 58
-        interior.append({
-            "name": point["name"],
-            "brown": _clear_brown(after),
-            "near": near,
-            "after": hex_of(after),
-            "before": hex_of(before),
-        })
+    interior = [
+        _interior_sample(before_rows, after_rows, face, clip, point, allow_badge)
+        for point in _interior_points(face)
+    ]
     edges = {}
     for edge in _face_edges(face):
         widths = []
         outers = []
+        insets = []
         brown = gold = 0
         for x, y in edge["points"]:
             flags = []
@@ -1963,10 +2008,12 @@ def selection_pixel_report(png_before, png_after, face, clip):
             if run is None:
                 widths.append(0)
                 outers.append(None)
+                insets.append(None)
             else:
                 start, end = run
                 widths.append(end - start + 1)
                 outers.append(end - 12)
+                insets.append(12 - (start + end) / 2.0)
             best_brown = 10 ** 9
             best_gold = 10 ** 9
             for offset in (-2, -1, 0, 1):
@@ -1983,10 +2030,12 @@ def selection_pixel_report(png_before, png_after, face, clip):
                 brown += 1
             elif _clear_gold_dist(best_gold):
                 gold += 1
-        finite = [item for item in outers if item is not None]
+        finite = [(outer, inset) for outer, inset in zip(outers, insets) if outer is not None]
+        widest = max(range(len(widths)), key=lambda index: widths[index]) if widths else 0
         edges[edge["name"]] = {
             "width": max(widths) if widths else 0,
-            "outer": max(finite) if finite else None,
+            "outer": max((item[0] for item in finite), default=None),
+            "inset": None if not widths else insets[widest],
             "brown": brown,
             "gold": gold,
             "samples": len(edge["points"]),
@@ -2035,26 +2084,22 @@ def _run_touching_edge(flags, zero_index):
     return min(runs, key=lambda run: min(abs(run[0] - zero_index), abs(run[1] - zero_index)))
 
 
-def focus_pixel_report(png_before, png_after, face, clip):
-    """Interior and the ring's inner edge from screenshots.
+def focus_pixel_report(png_before, png_after, face, clip, allow_badge=False):
+    """Interior diff and the ring's inner edge from screenshots.
 
-    Ring ink is #fff8e7 or #6b4f2a. A #7c2d12 pixel more than 1px outside
-    the cell is the filled focus diamond, not the dashed ring.
+    Interior points at least 8px in must match the unselected, unfocused
+    baseline. The badge region is ignored only when ``allow_badge`` is set
+    (the cell is selected). Ring ink is a pixel that changed into ``#fff8e7``
+    or ``#6b4f2a``. The inner edge is about 2px outside and must not sit on
+    the selected line. A ``#7c2d12`` pixel more than 1px outside the cell is
+    the filled focus diamond, not the dashed ring.
     """
     _bw, _bh, before_rows = png_rgb(png_before)
     _aw, _ah, after_rows = png_rgb(png_after)
-    interior = []
-    for point in _interior_points(face):
-        after = _shot_pixel(after_rows, clip, point["x"], point["y"])
-        before = _shot_pixel(before_rows, clip, point["x"], point["y"])
-        near = bool(before and after) and _rgb_dist(before, after) <= 58 * 58
-        interior.append({
-            "name": point["name"],
-            "brown": _clear_brown(after),
-            "near": near,
-            "after": hex_of(after),
-            "before": hex_of(before),
-        })
+    interior = [
+        _interior_sample(before_rows, after_rows, face, clip, point, allow_badge)
+        for point in _interior_points(face)
+    ]
     edges = {}
     for edge in _face_edges(face):
         firsts = []
@@ -2068,9 +2113,17 @@ def focus_pixel_report(png_before, png_after, face, clip):
                     x + edge["nx"] * offset,
                     y + edge["ny"] * offset,
                 )
-                if offset >= 2 and _clear_brown(pixel):
+                before = _shot_pixel(
+                    before_rows, clip,
+                    x + edge["nx"] * offset,
+                    y + edge["ny"] * offset,
+                )
+                changed = bool(
+                    before and pixel and _rgb_dist(before, pixel) > _UNCHANGED_DIST
+                )
+                if offset >= 2 and changed and _clear_brown(pixel):
                     brown_outside += 1
-                if first is None and _ring_ink(pixel):
+                if first is None and changed and _ring_ink(pixel):
                     first = offset
             if first is not None:
                 ink += 1
