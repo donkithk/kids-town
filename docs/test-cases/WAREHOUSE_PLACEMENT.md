@@ -36,7 +36,7 @@
 ## 案例
 
 API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。  
-介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`、`TC-FE-TAP-OFFCENTER`、`TC-FE-CELL-ARIA-MATCH`、`TC-FE-TAP-BAR-NOTHROUGH`、`TC-FE-TAP-VISIBLE-ONLY`、`TC-FE-SELECTED-CONTRAST`、`TC-FE-FOCUS-RING-CENTRE`、`TC-FE-HIDDEN-INERT`、`TC-FE-TAP-BAR-GAP-BAND`、`TC-FE-TAP-SCENE-GRASS-EDGE`、`TC-FE-SELECTED-OVER-GOLD`、`TC-FE-FOCUS-RING-SHAPE`、`TC-FE-FOCUS-RING-ABOVE-SPRITE`、`TC-FE-PLACE-SERVER-MSG`、`TC-FE-SELECTED-NO-FILL`、`TC-FE-FOCUS-RING-NO-FILL`、`TC-FE-TAP-VILLAGE-HALFPX`，以及畫面那一半的 `TC-API-AUTOPLACE-FORMAL` 和 `TC-API-PLACE-OWNED-FORMAL`。API 檔另有 `TC-API-AUTOPLACE-FORMAL`、`TC-API-PLACE-OWNED-FORMAL`、`TC-API-PLACE-DETAIL-FORMAL`，還有只 GET 靜態檔的 `TC-FE-WAREHOUSE-GRID`。
+介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`、`TC-FE-TAP-OFFCENTER`、`TC-FE-CELL-ARIA-MATCH`、`TC-FE-TAP-BAR-NOTHROUGH`、`TC-FE-TAP-VISIBLE-ONLY`、`TC-FE-SELECTED-CONTRAST`、`TC-FE-FOCUS-RING-CENTRE`、`TC-FE-HIDDEN-INERT`、`TC-FE-TAP-BAR-GAP-BAND`、`TC-FE-TAP-SCENE-GRASS-EDGE`、`TC-FE-SELECTED-OVER-GOLD`、`TC-FE-FOCUS-RING-SHAPE`、`TC-FE-FOCUS-RING-ABOVE-SPRITE`、`TC-FE-PLACE-SERVER-MSG`、`TC-FE-SELECTED-NO-FILL`、`TC-FE-FOCUS-RING-NO-FILL`、`TC-FE-TAP-VILLAGE-HALFPX`、`TC-FE-MARK-CLEARED`、`TC-FE-MARK-KEPT-READYBAR`、`TC-FE-MARK-RESTORE-AFTER-SHEET`、`TC-FE-RING-CLEARED`、`TC-FE-MARK-FOLLOWS-SCROLL`、`TC-FE-PAINT-UNDER-UI`、`TC-FE-NATIVE-FOCUS`、`TC-FE-RING-EDGE`，以及畫面那一半的 `TC-API-AUTOPLACE-FORMAL` 和 `TC-API-PLACE-OWNED-FORMAL`。API 檔另有 `TC-API-AUTOPLACE-FORMAL`、`TC-API-PLACE-OWNED-FORMAL`、`TC-API-PLACE-DETAIL-FORMAL`，還有只 GET 靜態檔的 `TC-FE-WAREHOUSE-GRID`。
 
 下表「main」是在 `5bfe76d` 加上這些測試後的結果。紅測的斷言訊息寫明預期與實際。綠測是回歸鎖，不是本缺陷。
 
@@ -398,7 +398,7 @@ POST `/api/kids/<id>/buildings` 帶 `def_id`、`cell_x`、`cell_y`，這種建�
 
 ## 焦點環的形狀（TC-FE-FOCUS-RING-SHAPE）
 
-焦點環是格子頂面菱形繞自己的中心均勻放大。四個尖角沿各自的軸在格子尖角外面 2–4px（橫向因為同一比例可以到大約 8px）。每條邊在格子邊外面 2–4px。環的寬高比和格子相差不超過 2%。1280 的 `(3,3)` 大約 150–157 × 89–93。中心仍在 ±1px（`TC-FE-FOCUS-RING-CENTRE` 照舊，不改成鎖舊尺寸）。顏色照舊：內層 `#fff8e7`、外層 `#6b4f2a`，虛線。不鎖線寬。環的內緣大約在格子外 2px，不得壓到選中褐線。選中又聚焦時，重疊只數格子多邊形外面、離邊大約 8px 以內、而且相對未聚焦底圖有變化的環色像素；格子裡面的徽章和地面不算。視窗 1280×720、1100×800、390×844，各量一格邊緣格 `(6,0)` 和一格內部格 `(3,3)`。
+焦點環是格子頂面菱形繞自己的中心均勻放大。四個尖角沿各自的軸在格子尖角外面 2–4px（橫向因為同一比例可以到大約 8px）。每條邊在格子邊外面 2–4px。環的寬高比和格子相差不超過 2%。1280 的 `(3,3)` 大約 150–157 × 89–93。中心仍在 ±1px（`TC-FE-FOCUS-RING-CENTRE` 照舊，不改成鎖舊尺寸）。顏色照舊：內層 `#fff8e7`、外層 `#6b4f2a`，虛線。不鎖線寬。環的內緣大約在格子外 2px，不得壓到選中褐線。選中又聚焦時，重疊只數格子多邊形外面、離邊大約 8px 以內、而且相對未聚焦底圖有變化的環色像素；格子裡面的徽章和地面不算。視窗 1280×720、1100×800、390×844，各量一格邊緣格 `(6,0)` 和一格內部格 `(3,3)`。另外用螢幕像素（不是舞台像素）量畫出來的環：每條邊至少 20 個樣本，離尖角至少 3px，內緣最小值要 ≥2.0 而且落在 2–4。`deviceScaleFactor` 1 和 2 都量。390 的西北內緣若只有大約 1.8px，這條要紅。
 
 ## 焦點環在建築圖上面（TC-FE-FOCUS-RING-ABOVE-SPRITE）
 
@@ -418,15 +418,47 @@ POST `/api/kids/<id>/buildings` 帶 `def_id`、`cell_x`、`cell_y`，這種建�
 
 ## 選中格不填色（TC-FE-SELECTED-NO-FILL）
 
-選中標記是貼着格子頂面的實線，不是填滿的菱形。線是 `#7c2d12`，約 3px。中線內縮 0.5–1.5px，以外緣在格子外 0–1px 來判斷，線寬 2–4px。格子中心，以及每條邊向內至少 8px 的點，要和同一捲動、同一視窗、提示收起時的未選中未聚焦截圖一致（只容抗鋸齒）；選中時「此格」徽章蓋住的區域除外，徽章本身要有看得見的像素。中心不得是 `#7c2d12`。東南、西南兩條邊，若外側鄰格是金格，邊帶上的像素要是 `#7c2d12`，不能是金色虛線 `#d4a017`。像素從截圖讀，不讀標記自己的 SVG。視窗 1280×720、1100×800、390×844，各量內部金格和邊緣金格。
+選中標記是貼着格子頂面的實線，不是填滿的菱形。線是 `#7c2d12`，約 3px。中線內縮 0.5–1.5px，以外緣在格子外 0–1px 來判斷，線寬 2–4px。格子中心，以及每條邊向內至少 8px 的點，要和同一捲動、同一視窗、提示收起時的未選中未聚焦截圖一致（只容抗鋸齒）；選中時「此格」徽章蓋住的區域除外，徽章本身要有看得見的像素。中心不得是 `#7c2d12`。東南、西南兩條邊，若外側鄰格是金格，邊帶上的像素要是 `#7c2d12`，不能是金色虛線 `#d4a017`。像素從截圖讀，不讀標記自己的 SVG。拍底圖之前，全畫面 `#7c2d12` 必須是 0，焦點環層也必須是 0 像素，避免上一格沒清掉的線污染底圖。視窗 1280×720、1100×800、390×844，各量內部金格和邊緣金格。
 
 ## 焦點環不填色（TC-FE-FOCUS-RING-NO-FILL）
 
-焦點環只畫虛線：內層約 3px `#fff8e7`、外層約 2px `#6b4f2a`。環的內緣大約在格子外 2px（2–4px），不得壓到選中褐線，也不填 `#7c2d12`。未選中、只聚焦時，空地、金格、以及邊緣有建築圖的格子（圖書館），中心和每條邊向內至少 8px 的每一點（不排除徽章位置）都要和未選中未聚焦的底圖一致。選中又聚焦時才排除「此格」徽章區域；其餘內部仍要和底圖一致，中心不得是 `#7c2d12`。褐線外緣在格子外 0–1px（用來判斷中線內縮 0.5–1.5px），線寬 2–4px，環整段在褐線外面。環的形狀仍由 `TC-FE-FOCUS-RING-SHAPE` 鎖。像素從截圖差讀。
+焦點環只畫虛線：內層約 3px `#fff8e7`、外層約 2px `#6b4f2a`。環的內緣大約在格子外 2px（2–4px），不得壓到選中褐線，也不填 `#7c2d12`。未選中、只聚焦時，空地、金格、以及邊緣有建築圖的格子（圖書館），中心和每條邊向內至少 8px 的每一點（不排除徽章位置）都要和未選中未聚焦的底圖一致。選中又聚焦時才排除「此格」徽章區域；其餘內部仍要和底圖一致，中心不得是 `#7c2d12`。褐線外緣在格子外 0–1px（用來判斷中線內縮 0.5–1.5px），線寬 2–4px，環整段在褐線外面。環的形狀仍由 `TC-FE-FOCUS-RING-SHAPE` 鎖。像素從截圖差讀。拍底圖之前，全畫面 `#7c2d12` 必須是 0，焦點環層也必須是 0 像素。
 
 ## 村子下緣半像素（TC-FE-TAP-VILLAGE-HALFPX）
 
 場景 1、捲動 0。`#village` 外框 `bottom + 0.5` 那一列（1280 約 y=541.5，390 約 y=477.6，座標隨畫面矩形）不得選格、出提示或開面板。同一條案例的對照：外框 `bottom - 1.5`、落在一格看得見的金格上的點，仍要選中那一格。實心介面上的點跳過。視窗 1280×720 和 390×844。
+
+## 選中線要清掉（TC-FE-MARK-CLEARED）
+
+取消選擇、回到地圖、以及切到任務板之後，全畫面 `#7c2d12` 像素是 0。畫這條線的元素（`#chosenMarkPaint`，或當時實際在畫的那個）計算樣式必須是 `display: none`，或者沒有盒子。只設 `hidden` 屬性、畫面還看得到，不算清掉。
+
+## 確認欄還在時選中線要留著（TC-FE-MARK-KEPT-READYBAR）
+
+場景 3 先選一格進入，再改選另一格。等確認的底欄要出現（場景 3 是 `#uxPlaceBar`；`#readyBar` 只在場景 2）。新格周圍的 `#7c2d12` 要多於 0 像素。
+
+## 關上面板之後選中線要回來（TC-FE-MARK-RESTORE-AFTER-SHEET）
+
+已經選中一格時打開建築面板，再關上。選中線要回到同一格：每條邊的外緣在該格活矩形外面 0–1.5px。
+
+## 焦點環要清掉（TC-FE-RING-CLEARED）
+
+失焦、換場景、切到別的分頁之後，焦點環那一層在畫面上是 0 像素（相對乾淨底圖沒有差、計算樣式 `display: none`，或 canvas 是空的）。
+
+## 選中線和焦點環跟著捲動（TC-FE-MARK-FOLLOWS-SCROLL）
+
+1280×720，選中 `(3,3)`。捲動 0 和捲動 366 各量一次。選中線的外緣要在該格當時的活矩形外面 0–1.5px，四邊都是。同一捲動下，焦點環的內緣間隙是 2–4 螢幕 px（每條邊至少 20 個樣本，離尖角至少 3px）。
+
+## 選中線和焦點環要在介面下面（TC-FE-PAINT-UNDER-UI）
+
+基準是清單打開、沒有選中、沒有焦點、同一個捲動。選中 `(0,6)`，以及另外只聚焦 `(0,6)`，清單活矩形裡面的像素差必須是 0。捲動 366、清單打開，再做一次。鍵盤打開銀行面板、而且有一格正聚焦時，面板活矩形裡面的差也是 0。`#readyBar` 和抽屜是 guard：差必須仍是 0。
+
+## 不要改掉原生 focus（TC-FE-NATIVE-FOCUS）
+
+`HTMLElement.prototype.focus.toString()` 和 `blur` 的字串都要含 `[native code]`。產品的 `town-four-scene.js`、`audio.js`、`service-worker.js`、`check_js.js` 不得指派 `HTMLElement.prototype.focus`。
+
+## 角落的焦點環不要被村子裁進地圖裡（TC-FE-RING-EDGE）
+
+聚焦四個角。格子是 8×8 時就是 `(0,0)`、`(7,0)`、`(0,7)`、`(7,7)`；若尺寸不同，用真正的角並寫明。環在看得見的地圖裡的那一段不得被村子裁掉。看得見的地圖是 `#village` 外框和視窗的交集，實心介面蓋住的點不算。裁掉的部分必須整段落在這塊外面。樣本在實線奶油帶上，離尖角至少 3px。
 
 ## 實心介面的邊用畫面矩形（TC-FE-TAP-BAR-NOTHROUGH）
 

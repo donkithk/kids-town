@@ -1880,13 +1880,20 @@ def _clear_gold(pixel):
     return gold <= 42 * 42 and gold + 40 < brown
 
 
+def _ring_cream(pixel):
+    """Inner band of the focus ring. The selected line's fringe is not cream."""
+    if not pixel:
+        return False
+    cream = _rgb_dist(pixel, RING_CREAM)
+    return cream <= 40 * 40 and cream <= _rgb_dist(pixel, RING_BROWN)
+
+
 def _ring_ink(pixel):
     if not pixel or _clear_brown(pixel):
         return False
-    cream = _rgb_dist(pixel, RING_CREAM)
-    brown = _rgb_dist(pixel, RING_BROWN)
-    if cream <= 40 * 40 and cream <= brown:
+    if _ring_cream(pixel):
         return True
+    brown = _rgb_dist(pixel, RING_BROWN)
     return brown <= 42 * 42 and brown + 80 < _rgb_dist(pixel, REQUIRED_STROKE)
 
 
@@ -2137,6 +2144,371 @@ def focus_pixel_report(png_before, png_after, face, clip, allow_badge=False):
             "brown_outside": brown_outside,
         }
     return {"interior": interior, "edges": edges}
+
+
+# Whole-screen stroke count. Tighter than the fill check so sprite wood
+# (#6b4428, about 36 away from #7c2d12) is not the selected line.
+_STROKE_COUNT_TOL = 8 * 8
+
+
+def count_stroke_pixels(png_bytes):
+    """Pixels that are the selected outline ``#7c2d12``."""
+    _width, _height, rows = png_rgb(png_bytes)
+    count = 0
+    for row in rows:
+        for pixel in row:
+            if pixel and _rgb_dist(pixel, REQUIRED_STROKE) <= _STROKE_COUNT_TOL:
+                count += 1
+    return count
+
+
+def changed_pixel_count(png_before, png_after):
+    """Pixels whose colour moved past the screenshot noise tolerance."""
+    _bw, _bh, before_rows = png_rgb(png_before)
+    width, height, after_rows = png_rgb(png_after)
+    if not before_rows or not after_rows or len(before_rows) != height or len(before_rows[0]) != width:
+        return None
+    count = 0
+    for iy, row in enumerate(after_rows):
+        before = before_rows[iy]
+        for ix, pixel in enumerate(row):
+            if _rgb_dist(before[ix], pixel) > _UNCHANGED_DIST:
+                count += 1
+    return count
+
+
+def paint_layer_state(page):
+    """Computed box of the chosen-mark layer and the focus-ring layer.
+
+    An SVG ``hidden`` attribute does not imply ``display: none``. A layer is
+    gone only when its computed display is ``none`` or it has no box.
+    """
+    return page.evaluate(
+        r"""() => {
+          function describe(id) {
+            const el = document.getElementById(id);
+            if (!el) return {id, present: false, gone: true, display: 'none', width: 0, height: 0};
+            const cs = getComputedStyle(el);
+            const box = el.getBoundingClientRect();
+            const gone = cs.display === 'none' || cs.visibility === 'hidden'
+              || box.width < 1 || box.height < 1;
+            return {
+              id,
+              present: true,
+              tag: el.tagName,
+              gone,
+              display: cs.display,
+              hidden: el.hasAttribute('hidden'),
+              width: box.width,
+              height: box.height,
+              left: box.left,
+              top: box.top
+            };
+          }
+          const marks = [...document.querySelectorAll('#townMap .pad > .mark')].filter((el) => {
+            const cs = getComputedStyle(el);
+            const box = el.getBoundingClientRect();
+            return cs.display !== 'none' && cs.visibility !== 'hidden' && box.width > 1 && box.height > 1;
+          });
+          return {
+            mark: describe('chosenMarkPaint'),
+            ring: describe('focusRingPaint'),
+            visibleCellMarks: marks.length
+          };
+        }"""
+    )
+
+
+def ring_layer_pixels(page):
+    """Painted pixels on the focus-ring layer itself, not the map under it.
+
+    A canvas reports non-transparent backing-store pixels. Any other visible
+    ring element reports its CSS-pixel box area. ``display: none`` is 0.
+    """
+    return page.evaluate(
+        r"""() => {
+          const ring = document.getElementById('focusRingPaint');
+          if (!ring) return {pixels: 0, display: 'none', tag: null};
+          const cs = getComputedStyle(ring);
+          const box = ring.getBoundingClientRect();
+          const gone = cs.display === 'none' || cs.visibility === 'hidden'
+            || box.width < 1 || box.height < 1;
+          if (gone) return {pixels: 0, display: cs.display, tag: ring.tagName, hidden: ring.hasAttribute('hidden')};
+          if (ring.tagName === 'CANVAS' && ring.width > 0 && ring.height > 0) {
+            let pixels = 0;
+            try {
+              const data = ring.getContext('2d').getImageData(0, 0, ring.width, ring.height).data;
+              for (let i = 3; i < data.length; i += 4) {
+                if (data[i] >= 128) pixels += 1;
+              }
+            } catch (err) {
+              return {pixels: -1, display: cs.display, tag: ring.tagName, error: String(err)};
+            }
+            return {pixels, display: cs.display, tag: 'CANVAS', width: box.width, height: box.height};
+          }
+          return {
+            pixels: Math.round(box.width * box.height),
+            display: cs.display,
+            tag: ring.tagName,
+            width: box.width,
+            height: box.height
+          };
+        }"""
+    )
+
+
+def _edge_slots(face):
+    """Diamond edges as start/end, outward normal, and length."""
+    tips = face["tips"]
+    order = ("N", "E", "S", "W")
+    names = ("NE", "SE", "SW", "NW")
+    center = (face["cx"], face["cy"])
+    slots = []
+    for index, name in enumerate(names):
+        start = tips[order[index]]
+        end = tips[order[(index + 1) % 4]]
+        dx = end["x"] - start["x"]
+        dy = end["y"] - start["y"]
+        length = math.hypot(dx, dy) or 1.0
+        nx, ny = -dy / length, dx / length
+        mid_x = (start["x"] + end["x"]) / 2
+        mid_y = (start["y"] + end["y"]) / 2
+        if (mid_x + nx - center[0]) ** 2 + (mid_y + ny - center[1]) ** 2 < (
+            mid_x - nx - center[0]
+        ) ** 2 + (mid_y - ny - center[1]) ** 2:
+            nx, ny = -nx, -ny
+        slots.append({
+            "name": name,
+            "sx": start["x"],
+            "sy": start["y"],
+            "dx": dx,
+            "dy": dy,
+            "length": length,
+            "nx": nx,
+            "ny": ny,
+        })
+    return slots
+
+
+def _slot_of(face, x, y, vertex_clear):
+    """Edge whose line is closest, when the point is clear of both vertices."""
+    best = None
+    for slot in _edge_slots(face):
+        length = slot["length"]
+        t = ((x - slot["sx"]) * slot["dx"] + (y - slot["sy"]) * slot["dy"]) / (length * length)
+        if t < 0 or t > 1:
+            continue
+        along = t * length
+        if along < vertex_clear or along > length - vertex_clear:
+            continue
+        cross = abs((x - slot["sx"]) * slot["dy"] - (y - slot["sy"]) * slot["dx"]) / length
+        if best is None or cross < best[0]:
+            best = (cross, slot["name"], along)
+    if best is None:
+        return None
+    return best[1], best[2]
+
+
+def stroke_near_cell(png_bytes, face, clip, band=6.0):
+    """``#7c2d12`` pixels just outside or on the cell, per edge.
+
+    ``outer`` is the furthest brown pixel's signed distance on that edge.
+    The selected line's outer edge is 0–1.5 screen px outside the live face.
+    """
+    width, height, rows = png_rgb(png_bytes)
+    edges = {slot["name"]: [] for slot in _edge_slots(face)}
+    total = 0
+    for iy, row in enumerate(rows):
+        y = clip["y"] + iy + 0.5
+        for ix, pixel in enumerate(row):
+            if not pixel or _rgb_dist(pixel, REQUIRED_STROKE) > _STROKE_COUNT_TOL:
+                continue
+            x = clip["x"] + ix + 0.5
+            outside = _diamond_outside(face, x, y)
+            if outside is None or outside < -2.5 or outside > band:
+                continue
+            slot = _slot_of(face, x, y, 3.0)
+            if not slot:
+                continue
+            edges[slot[0]].append(outside)
+            total += 1
+    report = {}
+    for name, distances in edges.items():
+        report[name] = {
+            "count": len(distances),
+            "outer": None if not distances else max(distances),
+        }
+    report["total"] = total
+    return report
+
+
+def _clip_pixel(rows, clip, x, y):
+    if not rows:
+        return None
+    ix = int(math.floor(x - clip["x"]))
+    iy = int(math.floor(y - clip["y"]))
+    if iy < 0 or iy >= len(rows) or ix < 0 or ix >= len(rows[0]):
+        return None
+    return rows[iy][ix]
+
+
+def ring_inner_gaps(png_before, png_after, face, clip, vertex_clear=3.0, samples=24):
+    """Inner gap of the painted ring, in screen px, on each edge.
+
+    At least ``samples`` stations per edge, each at least ``vertex_clear``
+    screen px from both vertices. Each station walks outward in 0.1 screen
+    px steps. The gap is the first step that lands on the cream band
+    (``#fff8e7``) and stays cream for the next few steps. A brown fringe
+    from the selected line is not the ring. The result is screen px.
+    """
+    _bw, _bh, before_rows = png_rgb(png_before)
+    _aw, _ah, after_rows = png_rgb(png_after)
+    report = {}
+    if not before_rows or not after_rows or len(before_rows) != len(after_rows):
+        return {slot["name"]: {"min": None, "samples": 0} for slot in _edge_slots(face)}
+    for slot in _edge_slots(face):
+        length = slot["length"]
+        # The painted dash stops short of each vertex. Stay at least 3px
+        # out, and also clear of that intentional corner gap.
+        clear = max(vertex_clear, length * 0.12)
+        span = length - 2 * clear
+        gaps = []
+        if span <= 1:
+            report[slot["name"]] = {"min": None, "samples": 0, "max": None}
+            continue
+        count = max(samples, 20)
+        for index in range(count):
+            along = clear + span * (index + 0.5) / count
+            t = along / length
+            ox = slot["sx"] + slot["dx"] * t
+            oy = slot["sy"] + slot["dy"] * t
+            def _cream_at(dist):
+                x = ox + slot["nx"] * dist
+                y = oy + slot["ny"] * dist
+                after = _clip_pixel(after_rows, clip, x, y)
+                before = _clip_pixel(before_rows, clip, x, y)
+                return bool(
+                    after and before
+                    and _rgb_dist(before, after) > _UNCHANGED_DIST
+                    and _ring_cream(after)
+                )
+
+            gap = None
+            steps = int(_RING_OUTSIDE_BAND / 0.1)
+            for step in range(1, steps + 1):
+                dist = round(step * 0.1, 1)
+                if not _cream_at(dist):
+                    continue
+                # The cream band is about 3px. A one-pixel fringe does not count.
+                run = sum(1 for extra in range(4) if _cream_at(round(dist + extra * 0.1, 1)))
+                if run < 3:
+                    continue
+                gap = dist
+                break
+            if gap is not None:
+                gaps.append(gap)
+        report[slot["name"]] = {
+            "min": None if not gaps else min(gaps),
+            "max": None if not gaps else max(gaps),
+            "samples": len(gaps),
+            "stations": count,
+        }
+    return report
+
+
+def paint_overlay_count(png_before, png_after, shot_clip, guard):
+    """New selected-line or ring-cream pixels inside ``guard``.
+
+    ``shot_clip`` is the screenshot origin. ``guard`` is the inset bar or
+    drawer, in the same viewport coordinates. The ready bar's wood text
+    matches the ring's brown, so only ``#7c2d12`` and ``#fff8e7`` count.
+    """
+    _bw, _bh, before_rows = png_rgb(png_before)
+    width, height, after_rows = png_rgb(png_after)
+    if not before_rows or len(before_rows) != height or len(before_rows[0]) != width:
+        return None
+    count = 0
+    y = guard["y"]
+    while y < guard["y"] + guard["height"]:
+        x = guard["x"]
+        while x < guard["x"] + guard["width"]:
+            after = _clip_pixel(after_rows, shot_clip, x, y)
+            before = _clip_pixel(before_rows, shot_clip, x, y)
+            if after and before and _rgb_dist(before, after) > _UNCHANGED_DIST:
+                # The bar fill is #faf6ef, about 10px from the ring cream, and
+                # its wood text matches the ring brown. Only the solid dash
+                # and the #7c2d12 line count.
+                stroke = _rgb_dist(after, REQUIRED_STROKE) <= _STROKE_COUNT_TOL
+                cream = _rgb_dist(after, RING_CREAM) <= 5 * 5
+                if stroke or cream:
+                    count += 1
+            x += 1
+        y += 1
+    return count
+
+
+def _point_in_rect(rect, x, y):
+    return rect["left"] <= x <= rect["right"] and rect["top"] <= y <= rect["bottom"]
+
+
+def ring_edge_report(png_before, png_after, face, visible, clip, solids=None, vertex_clear=3.0):
+    """Whether the cream band is clipped inside the visible map.
+
+    Stations sit on the solid part of each edge, at least 3 screen px from
+    the vertices and clear of the corner dash. A station inside ``visible``
+    and not under solid UI must be ring ink. A station outside the visible
+    map may be missing; that is the only allowed clip.
+    """
+    _bw, _bh, before_rows = png_rgb(png_before)
+    _aw, _ah, after_rows = png_rgb(png_after)
+    inside_missing = inside_hit = outside_missing = outside_hit = 0
+    details = []
+    if not before_rows or not after_rows or len(before_rows) != len(after_rows):
+        return {"error": "clip size changed", "inside_missing": -1, "inside_hit": 0,
+                "outside_missing": 0, "outside_hit": 0}
+    for slot in _edge_slots(face):
+        length = slot["length"]
+        clear = max(vertex_clear, length * 0.12)
+        span = length - 2 * clear
+        if span <= 1:
+            continue
+        for index in range(12):
+            along = clear + span * (index + 0.5) / 12
+            t = along / length
+            ox = slot["sx"] + slot["dx"] * t
+            oy = slot["sy"] + slot["dy"] * t
+            for dist in (3.4, 3.8, 4.2):
+                x = ox + slot["nx"] * dist
+                y = oy + slot["ny"] * dist
+                after = _clip_pixel(after_rows, clip, x, y)
+                before = _clip_pixel(before_rows, clip, x, y)
+                ink = bool(
+                    after and before
+                    and _rgb_dist(before, after) > _UNCHANGED_DIST
+                    and _ring_ink(after)
+                )
+                inside = _point_in_rect(visible, x, y)
+                if inside and solids:
+                    if any(_point_in_rect(rect, x, y) for rect in solids if rect):
+                        continue
+                if inside:
+                    if ink:
+                        inside_hit += 1
+                    else:
+                        inside_missing += 1
+                        if len(details) < 4:
+                            details.append(f"{slot['name']}@{dist:.1f}")
+                elif ink:
+                    outside_hit += 1
+                else:
+                    outside_missing += 1
+    return {
+        "inside_missing": inside_missing,
+        "inside_hit": inside_hit,
+        "outside_missing": outside_missing,
+        "outside_hit": outside_hit,
+        "details": details,
+    }
 
 
 def point_is_ring_ink(png_bytes, points, clip):
