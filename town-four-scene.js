@@ -1416,25 +1416,6 @@
       if (!hit) return;
       onCell(hit.c, hit.r);
     }, true);
-    /* The toast is pointer-events:none, so a tap on it hits whatever is
-       underneath — often the footer, which sits outside this map. If that
-       tap is inside the toast and still maps to a cell, select the cell
-       and do not activate the control below. */
-    document.addEventListener("click", function (event) {
-      var toast = document.getElementById("toast");
-      if (!toast || toast.style.display !== "block") return;
-      var box = toast.getBoundingClientRect();
-      var x = event.clientX;
-      var y = event.clientY;
-      if (x < box.left || x > box.right || y < box.top || y > box.bottom) return;
-      if (map.contains(event.target)) return;
-      if (solidUiCovers(x, y)) return;
-      var under = cellAt(x, y);
-      if (!under) return;
-      event.preventDefault();
-      event.stopPropagation();
-      onCell(under.c, under.r);
-    }, true);
     $("btnBuild").addEventListener("click", function () {
       state.scene = 2;
       state.sheet = false;
