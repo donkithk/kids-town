@@ -1964,9 +1964,11 @@ def _interior_sample(before_rows, after_rows, face, clip, point, allow_badge):
         dist = _rgb_dist(before, after)
     else:
         dist = 10 ** 9
+    # A sprite that is already near #7c2d12 is not a new fill.
+    appeared = _clear_brown(after) and not _clear_brown(before)
     return {
         "name": point["name"],
-        "brown": _clear_brown(after),
+        "brown": appeared,
         "near": badge or dist <= _UNCHANGED_DIST,
         "badge": badge,
         "dist": 0 if dist >= 10 ** 9 else int(dist ** 0.5),
