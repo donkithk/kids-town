@@ -106,19 +106,14 @@ body.kt-artstage #tab-town .mp { position: relative; }
 
 #townMap .pad.is-empty-hot > .mark,
 #townMap .pad.is-valid > .mark,
-#townMap .pad.is-chosen > .mark,
 #townMap .pad.is-preview > .mark {
   filter: drop-shadow(0 0 4px rgba(212, 160, 23, 0.95));
 }
 
 /* Chosen outline paints above neighbouring gold dashes and above the sprite.
-   The box is padded so the stroke is not clipped by the SVG view. */
+   The box matches the slab, and the stroke is drawn inside that diamond. */
 #townMap .pad.is-chosen > .mark {
   z-index: 9;
-  width: calc(var(--s, 1) * 200px);
-  height: calc(var(--s, 1) * 152px);
-  left: calc(var(--s, 1) * -20px);
-  top: calc(var(--s, 1) * 55px);
 }
 
 #townMap .pad > .sprite,
