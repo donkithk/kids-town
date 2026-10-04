@@ -1193,31 +1193,43 @@
     if (ring) ring.setAttribute("hidden", "");
   }
 
-  /* The artboard transform rasters a pseudo-element background off the pixel
-     grid, so the dashed stroke bleeds onto the cell. A fixed svg uses the
-     same diamond and the focused button's on-screen rectangle. */
+  /* Screen-pixel diamond of the slab's top face. Same rect the chosen
+     stroke uses, so the ring and the line share one edge. */
+  function slabFace(slab) {
+    var box = slab.getBoundingClientRect();
+    if (!(box.width > 2) || !(box.height > 2)) return null;
+    var lift = 10 * (box.width / 168);
+    var halfW = box.width / 2;
+    var halfH = box.height * (50 / 120);
+    if (!(halfW > 2) || !(halfH > 2)) return null;
+    return {
+      cx: box.left + halfW,
+      cy: box.top + box.height / 2 - lift,
+      halfW: halfW,
+      halfH: halfH
+    };
+  }
+
+  /* Push every edge out by the same screen-pixel distance. The corners are
+     where the offset lines meet: half-width grows by d/sin, half-height by
+     d/cos, so the aspect stays. */
+  function offsetDiamond(face, distance) {
+    var edge = Math.hypot(face.halfW, face.halfH);
+    return {
+      hx: face.halfW + distance * edge / face.halfH,
+      hy: face.halfH + distance * edge / face.halfW
+    };
+  }
+
+  /* The stage scale would turn an SVG stroke into a different screen width
+     on every edge. Paint the dashes on a canvas that is not inside that
+     scale, so 3px and 2px stay screen pixels and the path stays put. */
   function placeFocusRing() {
     var ring = document.getElementById("focusRingPaint");
-    var ns = "http://www.w3.org/2000/svg";
     if (!ring) {
-      ring = document.createElementNS(ns, "svg");
+      ring = document.createElement("canvas");
       ring.id = "focusRingPaint";
       ring.setAttribute("aria-hidden", "true");
-      ring.setAttribute("preserveAspectRatio", "none");
-      var brown = document.createElementNS(ns, "polygon");
-      brown.setAttribute("fill", "none");
-      brown.setAttribute("stroke", "#6b4f2a");
-      brown.setAttribute("stroke-width", "2");
-      brown.setAttribute("stroke-linejoin", "round");
-      brown.setAttribute("stroke-dasharray", "22 3");
-      var cream = document.createElementNS(ns, "polygon");
-      cream.setAttribute("fill", "none");
-      cream.setAttribute("stroke", "#fff8e7");
-      cream.setAttribute("stroke-width", "3");
-      cream.setAttribute("stroke-linejoin", "round");
-      cream.setAttribute("stroke-dasharray", "22 3");
-      ring.appendChild(brown);
-      ring.appendChild(cream);
       document.body.appendChild(ring);
     }
     var map = $("townMap");
@@ -1226,51 +1238,102 @@
     var btn = visible;
     if (!btn && ringBtn && document.activeElement === ringBtn) btn = ringBtn;
     if (!btn) ringBtn = null;
-    if (!btn || !map || !ringGeom) {
+    var pad = btn && btn.closest ? btn.closest(".pad") : null;
+    var slab = pad && pad.querySelector(":scope > .slab");
+    var face = slab ? slabFace(slab) : null;
+    var ctx = ring.getContext("2d");
+    if (!btn || !map || !face || !ctx) {
       concealFocusRing(ring);
+      if (ctx) ctx.clearRect(0, 0, ring.width, ring.height);
       return;
     }
-    var box = btn.getBoundingClientRect();
-    var scaleX = btn.offsetWidth ? box.width / btn.offsetWidth : 1;
-    var scaleY = btn.offsetHeight ? box.height / btn.offsetHeight : 1;
-    var cs = getComputedStyle(map);
-    var x = parseFloat(cs.getPropertyValue("--ring-x")) || 0;
-    var y = parseFloat(cs.getPropertyValue("--ring-y")) || 0;
-    var w = parseFloat(cs.getPropertyValue("--ring-w")) || 0;
-    var h = parseFloat(cs.getPropertyValue("--ring-h")) || 0;
-    if (!(w > 2) || !(h > 2)) {
-      ring.setAttribute("hidden", "");
-      return;
-    }
-    var left = box.left + x * scaleX;
-    var top = box.top + y * scaleY;
-    var width = w * scaleX;
-    var height = h * scaleY;
+    /* Inner edge 2.5px outside the cell, cream 3px, brown 2px outside that.
+       Filled dashes follow the offset lines, so SE and NW stay the same
+       distance instead of a centred stroke sliding off the diagonal. */
+    var cream = 3;
+    var brown = 2;
+    var innerClear = 2.5;
+    var dpr = window.devicePixelRatio || 1;
+    var cx = face.cx;
+    var cy = face.cy;
+    var outerReach = innerClear + cream + brown;
+    var outer = offsetDiamond(face, outerReach);
+    var padPx = 2;
+    var cssW = Math.ceil((outer.hx + padPx) * 2);
+    var cssH = Math.ceil((outer.hy + padPx) * 2);
+    var left = cx - cssW / 2;
+    var top = cy - cssH / 2;
+    var bw = Math.max(1, Math.round(cssW * dpr));
+    var bh = Math.max(1, Math.round(cssH * dpr));
+    if (ring.width !== bw) ring.width = bw;
+    if (ring.height !== bh) ring.height = bh;
     if (ringHideTimer) {
       window.clearTimeout(ringHideTimer);
       ringHideTimer = 0;
     }
     ringShownAt = Date.now();
     ring.removeAttribute("hidden");
-    ring.setAttribute("viewBox", "0 0 " + ringGeom.vbW + " " + ringGeom.vbH);
     ring.style.left = left + "px";
     ring.style.top = top + "px";
-    ring.style.width = width + "px";
-    ring.style.height = height + "px";
-    var polys = ring.querySelectorAll("polygon");
-    for (var i = 0; i < polys.length; i += 1) {
-      polys[i].setAttribute("points", ringGeom.points);
-      polys[i].setAttribute("stroke-dasharray", ringGeom.dash);
-    }
+    ring.style.width = (bw / dpr) + "px";
+    ring.style.height = (bh / dpr) + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, bw / dpr, bh / dpr);
+    var lx = cx - left;
+    var ly = cy - top;
     var village = map.querySelector(".village");
     var bounds = village ? village.getBoundingClientRect() : map.getBoundingClientRect();
-    /* Half the stroke, plus a pixel, so the village edge does not eat the dash. */
-    var slop = 2;
-    ring.style.clipPath = "inset(" +
-      Math.max(0, bounds.top - top - slop).toFixed(2) + "px " +
-      Math.max(0, (left + width) - bounds.right - slop).toFixed(2) + "px " +
-      Math.max(0, (top + height) - bounds.bottom - slop).toFixed(2) + "px " +
-      Math.max(0, bounds.left - left - slop).toFixed(2) + "px)";
+    var slop = cream;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(
+      bounds.left - left - slop,
+      bounds.top - top - slop,
+      bounds.width + slop * 2,
+      bounds.height + slop * 2
+    );
+    ctx.clip();
+    function band(distance, widthPx, color) {
+      var inner = offsetDiamond(face, distance);
+      var edge = offsetDiamond(face, distance + widthPx);
+      var ipts = [
+        [lx, ly - inner.hy],
+        [lx + inner.hx, ly],
+        [lx, ly + inner.hy],
+        [lx - inner.hx, ly]
+      ];
+      var opts = [
+        [lx, ly - edge.hy],
+        [lx + edge.hx, ly],
+        [lx, ly + edge.hy],
+        [lx - edge.hx, ly]
+      ];
+      ctx.beginPath();
+      for (var i = 0; i < 4; i += 1) {
+        var j = (i + 1) % 4;
+        var t1 = 0.9;
+        ctx.moveTo(ipts[i][0], ipts[i][1]);
+        ctx.lineTo(ipts[i][0] + (ipts[j][0] - ipts[i][0]) * t1, ipts[i][1] + (ipts[j][1] - ipts[i][1]) * t1);
+        ctx.lineTo(opts[i][0] + (opts[j][0] - opts[i][0]) * t1, opts[i][1] + (opts[j][1] - opts[i][1]) * t1);
+        ctx.lineTo(opts[i][0], opts[i][1]);
+        ctx.closePath();
+      }
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+    band(innerClear, cream, "#fff8e7");
+    band(innerClear + cream, brown, "#6b4f2a");
+    ctx.restore();
+    /* A dark sprite under a mostly covered pixel stays far from the dash
+       colour. Snap coverage to on or off so that pixel reads as the dash. */
+    var img = ctx.getImageData(0, 0, bw, bh);
+    var data = img.data;
+    for (var p = 0; p < data.length; p += 4) {
+      var alpha = data[p + 3];
+      if (!alpha) continue;
+      data[p + 3] = alpha < 128 ? 0 : 255;
+    }
+    ctx.putImageData(img, 0, 0);
   }
 
   /* 3px stroke on the painted slab diamond. The path sits 0.8px inside so
