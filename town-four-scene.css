@@ -110,6 +110,25 @@ body.kt-artstage #tab-town .mp { position: relative; }
   filter: drop-shadow(0 0 4px rgba(212, 160, 23, 0.95));
 }
 
+/* Same gold diamond the empty cell shows, kept under the brown stroke. */
+#townMap .pad > .cell-fill {
+  position: absolute;
+  z-index: 3;
+  width: calc(var(--s, 1) * 168px);
+  height: calc(var(--s, 1) * 120px);
+  left: calc(var(--s, 1) * -4px);
+  top: calc(var(--s, 1) * 71px);
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+#townMap .pad.is-chosen > .cell-fill {
+  visibility: visible;
+  filter: drop-shadow(0 0 4px rgba(212, 160, 23, 0.95));
+}
+
 /* Chosen outline paints above neighbouring gold dashes and above the sprite.
    The box matches the slab, and the stroke is drawn inside that diamond. */
 #townMap .pad.is-chosen > .mark {
@@ -205,10 +224,12 @@ body.kt-artstage #tab-town .mp { position: relative; }
 #focusRingPaint {
   position: fixed;
   z-index: 80;
+  overflow: visible;
   pointer-events: none;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 100% 100%;
+}
+
+#focusRingPaint[hidden] {
+  display: none !important;
 }
 
 /* Chosen stroke, outside the artboard transform. The mark image keeps the
@@ -218,6 +239,7 @@ body.kt-artstage #tab-town .mp { position: relative; }
   left: 0;
   top: 0;
   z-index: 70;
+  overflow: visible;
   pointer-events: none;
 }
 
