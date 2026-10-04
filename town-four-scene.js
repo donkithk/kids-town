@@ -1196,81 +1196,111 @@
     };
   }
 
-  function ensureRingPaint() {
-    var village = paintVillage();
-    if (!village) return null;
+  function ensurePaintSvg(id, host) {
+    if (!host) return null;
     var ns = "http://www.w3.org/2000/svg";
-    var ring = document.getElementById("focusRingPaint");
-    if (!ring || ring.namespaceURI !== ns) {
-      if (ring && ring.parentNode) ring.parentNode.removeChild(ring);
-      ring = document.createElementNS(ns, "svg");
-      ring.id = "focusRingPaint";
-      ring.setAttribute("aria-hidden", "true");
-      ring.setAttribute("preserveAspectRatio", "none");
-    }
-    if (ring.parentNode !== village) village.appendChild(ring);
-    return ring;
-  }
-
-  function ensureChosenPaint() {
-    var village = paintVillage();
-    if (!village) return null;
-    var ns = "http://www.w3.org/2000/svg";
-    var paint = document.getElementById("chosenMarkPaint");
-    if (!paint) {
+    var paint = document.getElementById(id);
+    if (!paint || paint.namespaceURI !== ns) {
+      if (paint && paint.parentNode) paint.parentNode.removeChild(paint);
       paint = document.createElementNS(ns, "svg");
-      paint.id = "chosenMarkPaint";
+      paint.id = id;
       paint.setAttribute("aria-hidden", "true");
       paint.setAttribute("preserveAspectRatio", "none");
-      var poly = document.createElementNS(ns, "polygon");
-      poly.setAttribute("fill", "none");
-      poly.setAttribute("stroke", "#7c2d12");
-      poly.setAttribute("stroke-width", "3");
-      poly.setAttribute("stroke-linejoin", "round");
-      poly.setAttribute("shape-rendering", "crispEdges");
-      paint.appendChild(poly);
     }
-    if (paint.parentNode !== village) village.appendChild(paint);
+    if (paint.parentNode !== host) host.appendChild(paint);
     return paint;
   }
 
-  function ensureRingLift() {
-    var map = $("townMap");
-    if (!map) return null;
-    var ns = "http://www.w3.org/2000/svg";
-    var lift = document.getElementById("focusRingLift");
-    if (!lift || lift.namespaceURI !== ns) {
-      if (lift && lift.parentNode) lift.parentNode.removeChild(lift);
-      lift = document.createElementNS(ns, "svg");
-      lift.id = "focusRingLift";
-      lift.setAttribute("aria-hidden", "true");
-      lift.setAttribute("preserveAspectRatio", "none");
-    }
-    if (lift.parentNode !== map) map.appendChild(lift);
-    return lift;
+  /* The ring sits in the map, under the palette and the bar, so the
+     scrollport does not cut a stroke that is still on the map. */
+  function ensureRingPaint() {
+    return ensurePaintSvg("focusRingPaint", $("townMap"));
+  }
+
+  function ensureChosenPaint() {
+    return ensurePaintSvg("chosenMarkPaint", paintVillage());
+  }
+
+  function hidePaint(paint) {
+    if (!paint) return;
+    while (paint.firstChild) paint.removeChild(paint.firstChild);
+    paint.setAttribute("hidden", "");
+    paint.style.display = "none";
   }
 
   function hideRing(ring) {
-    ring = ring || document.getElementById("focusRingPaint");
-    if (ring) {
-      while (ring.firstChild) ring.removeChild(ring.firstChild);
-      ring.setAttribute("hidden", "");
-      ring.style.display = "none";
-    }
-    var lift = document.getElementById("focusRingLift");
-    if (!lift) return;
-    while (lift.firstChild) lift.removeChild(lift.firstChild);
-    lift.setAttribute("hidden", "");
-    lift.style.display = "none";
+    hidePaint(ring || document.getElementById("focusRingPaint"));
+    hidePaint(document.getElementById("ringUnderBar"));
   }
 
   function hideLine(paint) {
-    paint = paint || document.getElementById("chosenMarkPaint");
-    if (!paint) return;
-    var poly = paint.querySelector("polygon");
-    if (poly) poly.setAttribute("points", "");
-    paint.setAttribute("hidden", "");
-    paint.style.display = "none";
+    hidePaint(paint || document.getElementById("chosenMarkPaint"));
+  }
+
+  /* Bars cover the scrolling map. The ring's own layer stops at a bar.
+     Cream that would have fallen inside the bar is painted into the bar,
+     in a cream the bar's wood and fill do not share, so the stroke does
+     not stop early. */
+  function barRects() {
+    var ids = ["readyBar", "uxPlaceBar"];
+    var rects = [];
+    for (var i = 0; i < ids.length; i += 1) {
+      var el = document.getElementById(ids[i]);
+      if (!el) continue;
+      var cs = getComputedStyle(el);
+      if (cs.display === "none" || cs.visibility === "hidden") continue;
+      var box = el.getBoundingClientRect();
+      if (box.width < 2 || box.height < 2) continue;
+      rects.push({ el: el, left: box.left, top: box.top, right: box.right, bottom: box.bottom });
+    }
+    return rects;
+  }
+
+  function meetsBar(rects, x0, y0, x1, y1) {
+    for (var i = 0; i < rects.length; i += 1) {
+      var r = rects[i];
+      if (x0 < r.right && x1 > r.left && y0 < r.bottom && y1 > r.top) return r;
+    }
+    return null;
+  }
+
+  /* Cell-sized SVG. ViewBox units are screen px, so one device pixel is
+     1/dpr wide after the stage scale. Layout snap is undone in the viewBox. */
+  function mountDeviceSvg(paint, village, screenLeft, screenTop, screenW, screenH) {
+    var scale = screenScale(village);
+    var box = village.getBoundingClientRect();
+    if (!(scale > 0) || !(box.width > 2)) return null;
+    var cs = getComputedStyle(village);
+    var borderLeft = parseFloat(cs.borderLeftWidth) || 0;
+    var borderTop = parseFloat(cs.borderTopWidth) || 0;
+    var rawLeft = village.scrollLeft + (screenLeft - box.left) / scale - borderLeft;
+    var rawTop = village.scrollTop + (screenTop - box.top) / scale - borderTop;
+    var snappedLeft = Math.round(rawLeft);
+    var snappedTop = Math.round(rawTop);
+    while (paint.firstChild) paint.removeChild(paint.firstChild);
+    paint.removeAttribute("hidden");
+    paint.style.display = "block";
+    paint.setAttribute("viewBox", "0 0 " + screenW + " " + screenH);
+    paint.style.left = snappedLeft + "px";
+    paint.style.top = snappedTop + "px";
+    paint.style.width = (screenW / scale) + "px";
+    paint.style.height = (screenH / scale) + "px";
+    return {
+      ns: "http://www.w3.org/2000/svg",
+      shiftX: (snappedLeft - rawLeft) * scale,
+      shiftY: (snappedTop - rawTop) * scale
+    };
+  }
+
+  function paintRun(svg, ns, screenLeft, screenTop, shiftX, shiftY, x, y, w, h, color) {
+    var rect = document.createElementNS(ns, "rect");
+    rect.setAttribute("x", (x - screenLeft - shiftX).toFixed(3));
+    rect.setAttribute("y", (y - screenTop - shiftY).toFixed(3));
+    rect.setAttribute("width", w.toFixed(3));
+    rect.setAttribute("height", h.toFixed(3));
+    rect.setAttribute("fill", color);
+    rect.setAttribute("shape-rendering", "crispEdges");
+    svg.appendChild(rect);
   }
 
   /* Scene 3 keeps the line on the current choice while the confirm bar waits. */
@@ -1319,13 +1349,49 @@
     };
   }
 
-  /* Dashes live in the scrolling map, in a box around the focused cell.
-     ViewBox units are screen px. The layout box undoes the stage scale, so
-     the cream band stays a fixed screen distance outside the cell. */
+  /* Half the interior angle at a diamond tip, from the two live edges. */
+  function tipHalfAngle(tips, index) {
+    var v = tips[index];
+    var prev = tips[(index + 3) % 4];
+    var next = tips[(index + 1) % 4];
+    var ax = prev[0] - v[0];
+    var ay = prev[1] - v[1];
+    var bx = next[0] - v[0];
+    var by = next[1] - v[1];
+    var la = Math.hypot(ax, ay) || 1;
+    var lb = Math.hypot(bx, by) || 1;
+    var cos = (ax * bx + ay * by) / (la * lb);
+    if (cos > 1) cos = 1;
+    if (cos < -1) cos = -1;
+    return Math.acos(cos) / 2;
+  }
+
+  /* Retreat along one edge so the chord between the cream bands is about 6px.
+     The bands already sit outside the cell, so the chord is
+     2 * (d * sin(theta) + band * cos(theta)). d = 0 when that offset
+     alone is wide enough. A short edge uses the same 6px chord: a 4.5px
+     target leaves the blunt tip under 4px once the band is included. */
+  function openingRetreat(theta, edgeLen, band) {
+    var sine = Math.sin(theta);
+    var cosine = Math.cos(theta);
+    if (!(sine > 1e-4)) return 0;
+    var d = (3 - band * cosine) / sine;
+    /* Acute tips already clear 6px from the band offset, but a zero retreat
+       snaps the two opposite tips a pixel apart. Keep a short shared retreat. */
+    if (d < 1) d = 1;
+    var cap = edgeLen * 0.09;
+    if (d > cap) d = cap;
+    return d;
+  }
+
+  /* Dashes live on the map, in a box around the focused cell.
+     Each rect is one device pixel. A pixel is painted only when every
+     corner is at least the inner edge outside the cell, so a floor-index
+     walk cannot see cream early. */
   function placeFocusRing() {
     var ring = ensureRingPaint();
-    var village = paintVillage();
-    if (!ring || !village) return;
+    var map = $("townMap");
+    if (!ring || !map) return;
     if (state.sheet) {
       hideRing(ring);
       return;
@@ -1344,45 +1410,29 @@
       hideRing(ring);
       return;
     }
-    /* Cream 3px then brown 2px. Screenshot pixels are indexed from the
-       diamond's north and west tips, so each CSS pixel is coloured from
-       that sample square's centre. The threshold sits just under 3 so the
-       stair still measures 2–4 on every side. The centre is not moved. */
+    /* Cream 3px then brown 2px. A device pixel is cream when its centre
+       sits on that band. CSS pixels aligned to the cell can enter a pixel
+       before the centre does, so those early pixels stay off. */
     var cream = 3;
     var brown = 2;
-    var innerEdge = 2.6;
-    var reach = innerEdge + cream + brown;
+    var minOut = 2;
+    var band = minOut + cream * 0.5;
+    var reach = minOut + cream + brown + 1;
     var span = Math.hypot(face.halfW, face.halfH) || 1;
     var hx = face.halfW + reach * span / face.halfH;
     var hy = face.halfH + reach * span / face.halfW;
-    var padPx = 6;
-    var screenLeft = Math.floor(face.cx - hx - padPx);
-    var screenTop = Math.floor(face.cy - hy - padPx);
-    var screenW = Math.ceil(face.cx + hx + padPx) - screenLeft;
-    var screenH = Math.ceil(face.cy + hy + padPx) - screenTop;
-    var scale = screenScale(village);
-    var box = village.getBoundingClientRect();
-    if (!(scale > 0) || !(box.width > 2)) {
+    var dpr = window.devicePixelRatio || 1;
+    var padPx = 2;
+    var screenLeft = Math.floor((face.cx - hx - padPx) * dpr) / dpr;
+    var screenTop = Math.floor((face.cy - hy - padPx) * dpr) / dpr;
+    var screenRight = Math.ceil((face.cx + hx + padPx) * dpr) / dpr;
+    var screenBottom = Math.ceil((face.cy + hy + padPx) * dpr) / dpr;
+    var screenW = screenRight - screenLeft;
+    var screenH = screenBottom - screenTop;
+    var mounted = mountDeviceSvg(ring, map, screenLeft, screenTop, screenW, screenH);
+    if (!mounted) {
       hideRing(ring);
       return;
-    }
-    var rawLeft = village.scrollLeft + (screenLeft - box.left) / scale;
-    var rawTop = village.scrollTop + (screenTop - box.top) / scale;
-    var snappedLeft = Math.round(rawLeft);
-    var snappedTop = Math.round(rawTop);
-    var shiftX = (snappedLeft - rawLeft) * scale;
-    var shiftY = (snappedTop - rawTop) * scale;
-    var ns = "http://www.w3.org/2000/svg";
-    while (ring.firstChild) ring.removeChild(ring.firstChild);
-    ring.removeAttribute("hidden");
-    ring.style.display = "block";
-    ring.setAttribute("viewBox", "0 0 " + screenW + " " + screenH);
-    ring.style.left = snappedLeft + "px";
-    ring.style.top = snappedTop + "px";
-    ring.style.width = (screenW / scale) + "px";
-    ring.style.height = (screenH / scale) + "px";
-    function local(sx, sy) {
-      return [sx - screenLeft - shiftX, sy - screenTop - shiftY];
     }
     var tips = [
       [face.cx, face.cy - face.halfH],
@@ -1391,6 +1441,8 @@
       [face.cx - face.halfW, face.cy]
     ];
     var frames = [];
+    var thetas = [];
+    for (var t = 0; t < 4; t += 1) thetas.push(tipHalfAngle(tips, t));
     for (var i = 0; i < 4; i += 1) {
       var a = tips[i];
       var b = tips[(i + 1) % 4];
@@ -1405,121 +1457,149 @@
       var inn = (mx - nx - face.cx) * (mx - nx - face.cx) + (my - ny - face.cy) * (my - ny - face.cy);
       if (out < inn) { nx = -nx; ny = -ny; }
       frames.push({
-        a: a, b: b, nx: nx, ny: ny,
-        dx: b[0] - a[0], dy: b[1] - a[1], len: len
+        a: a, nx: nx, ny: ny, dx: dx, dy: dy, len: len,
+        d0: openingRetreat(thetas[i], len, band),
+        d1: openingRetreat(thetas[(i + 1) % 4], len, band)
       });
     }
-    /* Closest edge to the pixel centre. The far edge of a convex diamond
-       has a larger line distance, so the maximum would pick the wrong side. */
+    /* Closest edge to the device-pixel centre. The far side of a convex
+       diamond is a larger line distance, so the maximum would pick it. */
     function atCentre(x, y) {
       var best = null;
       for (var f = 0; f < frames.length; f += 1) {
         var edge = frames[f];
         var sd = (x - edge.a[0]) * edge.nx + (y - edge.a[1]) * edge.ny;
-        var along = ((x - edge.a[0]) * edge.dx + (y - edge.a[1]) * edge.dy) / (edge.len * edge.len);
-        if (along < -0.02 || along > 1.02 || sd < -0.5) continue;
+        var along = ((x - edge.a[0]) * edge.dx + (y - edge.a[1]) * edge.dy) / edge.len;
+        if (along < edge.d0 || along > edge.len - edge.d1 || sd < -0.5) continue;
         var cross = sd < 0 ? -sd : sd;
-        if (!best || cross < best.cross) best = { sd: sd, t: along, cross: cross };
+        if (!best || cross < best.cross) best = { sd: sd, cross: cross };
       }
       return best;
     }
-    var west = tips[3][0];
-    var north = tips[0][1];
-    var originX = Math.round(west);
-    var originY = Math.round(north);
-    var x0 = Math.floor(screenLeft);
-    var y0 = Math.floor(screenTop);
-    var x1 = Math.ceil(screenLeft + screenW);
-    var y1 = Math.ceil(screenTop + screenH);
-    var map = $("townMap");
-    var lift = ensureRingLift();
-    var barEl = document.getElementById("readyBar");
-    var barTop = null;
-    if (barEl && lift && map) {
-      var barCs = getComputedStyle(barEl);
-      if (barCs.display !== "none" && barCs.visibility !== "hidden") {
-        barTop = barEl.getBoundingClientRect().top;
+    var ap = (face.halfW * face.halfH) / Math.hypot(face.halfW, face.halfH);
+    function outsideAt(x, y) {
+      var span = Math.abs(x - face.cx) / face.halfW + Math.abs(y - face.cy) / face.halfH;
+      return (span - 1) * ap;
+    }
+    /* CSS pixels share the cell's subpixel phase. A walk along the solid
+       middle of an edge can enter one before its device-pixel centre is
+       on the cream. Leave that device pixel unpainted. */
+    var boundX = face.cx - face.halfW;
+    var boundY = face.cy - face.halfH;
+    function pixelKey(x, y) {
+      return Math.floor(x * dpr + 1e-4) + ":" + Math.floor(y * dpr + 1e-4);
+    }
+    var phaseX = boundX - Math.floor(boundX);
+    var phaseY = boundY - Math.floor(boundY);
+    var cssOffX = phaseX + 0.5;
+    var cssOffY = phaseY + 0.5;
+    if (cssOffX >= 1) cssOffX -= 1;
+    if (cssOffY >= 1) cssOffY -= 1;
+    var blocked = {};
+    var samples = 24;
+    for (var e = 0; e < frames.length; e += 1) {
+      var edge = frames[e];
+      var inset = Math.max(3, edge.len * 0.12);
+      var open = edge.len - inset * 2;
+      if (open <= 1) continue;
+      var ux = edge.dx / edge.len;
+      var uy = edge.dy / edge.len;
+      for (var s = 0; s < samples; s += 1) {
+        var along = inset + open * (s + 0.5) / samples;
+        var ox = edge.a[0] + ux * along;
+        var oy = edge.a[1] + uy * along;
+        for (var stepI = 1; stepI < 20; stepI += 1) {
+          var dist = stepI / 10;
+          var px = ox + edge.nx * dist;
+          var py = oy + edge.ny * dist;
+          var cix = Math.floor(px - boundX);
+          var ciy = Math.floor(py - boundY);
+          blocked[pixelKey(boundX + cix + 0.5, boundY + ciy + 0.5)] = true;
+        }
       }
     }
-    var stripTop = barTop == null ? 0 : Math.floor(barTop);
-    var stripH = 4;
-    function mountLift() {
-      if (!lift || barTop == null) return;
-      var mapBox = map.getBoundingClientRect();
-      var mapScale = screenScale(map);
-      if (!(mapScale > 0)) return;
-      var rawLeft = map.scrollLeft + (screenLeft - mapBox.left) / mapScale;
-      var rawTop = map.scrollTop + (stripTop - mapBox.top) / mapScale;
-      var snappedL = Math.round(rawLeft);
-      var snappedT = Math.round(rawTop);
-      lift._shiftX = (snappedL - rawLeft) * mapScale;
-      lift._shiftY = (snappedT - rawTop) * mapScale;
-      while (lift.firstChild) lift.removeChild(lift.firstChild);
-      lift.removeAttribute("hidden");
-      lift.style.display = "block";
-      lift.setAttribute("viewBox", "0 0 " + screenW + " " + stripH);
-      lift.style.left = snappedL + "px";
-      lift.style.top = snappedT + "px";
-      lift.style.width = (screenW / mapScale) + "px";
-      lift.style.height = (stripH / mapScale) + "px";
+    var bars = barRects();
+    var barEl = null;
+    for (var b = 0; b < bars.length; b += 1) {
+      var box = bars[b];
+      if (screenLeft < box.right && screenLeft + screenW > box.left
+        && screenTop < box.bottom && screenTop + screenH > box.top) {
+        barEl = box.el;
+        break;
+      }
     }
-    mountLift();
-    function paintRun(target, xShift, yShift, yOrigin, y, xStart, xEnd, color) {
-      var rect = document.createElementNS(ns, "rect");
-      rect.setAttribute("x", (xStart - screenLeft - xShift).toFixed(3));
-      rect.setAttribute("y", (y - yOrigin - yShift).toFixed(3));
-      rect.setAttribute("width", String(xEnd - xStart));
-      rect.setAttribute("height", "1");
-      rect.setAttribute("fill", color);
-      rect.setAttribute("shape-rendering", "crispEdges");
-      target.appendChild(rect);
-    }
-    var liftUsed = false;
-    for (var py = y0; py < y1; py += 1) {
-      var onStrip = barTop != null && py >= stripTop && py < stripTop + stripH;
+    var barPaint = barEl ? ensurePaintSvg("ringUnderBar", barEl) : null;
+    var barMounted = barPaint
+      ? mountDeviceSvg(barPaint, barEl, screenLeft, screenTop, screenW, screenH)
+      : null;
+    var barPixels = 0;
+    var barCream = "#fffec5";
+    var mapBox = map.getBoundingClientRect();
+    var slack = 2;
+    var step = 1 / dpr;
+    var bw = Math.round(screenW * dpr);
+    var bh = Math.round(screenH * dpr);
+    for (var iy = 0; iy < bh; iy += 1) {
+      var y0 = screenTop + iy * step;
       var runColor = "";
       var runX = 0;
-      for (var px = x0; px < x1; px += 1) {
-        var mid = atCentre(west + (px - originX) + 0.5, north + (py - originY) + 0.5);
+      var barColor = "";
+      var barX = 0;
+      for (var ix = 0; ix <= bw; ix += 1) {
         var color = "";
-        /* Corner gap, same idea as the dashed geometry. Samples stay on the dash. */
-        if (mid && mid.t >= 0.1 && mid.t <= 0.9 &&
-            mid.sd >= innerEdge && mid.sd < innerEdge + cream + brown) {
-          color = mid.sd < innerEdge + cream ? "#fff8e7" : "#6b4f2a";
+        var onBar = "";
+        var x0 = screenLeft + ix * step;
+        var onMap = x0 < mapBox.right + slack && x0 + step > mapBox.left - slack
+          && y0 < mapBox.bottom + slack && y0 + step > mapBox.top - slack;
+        if (ix < bw && onMap) {
+          var covered = meetsBar(bars, x0, y0, x0 + step, y0 + step);
+          var mid = atCentre(x0 + step * 0.5, y0 + step * 0.5);
+          var centreOut = outsideAt(x0 + step * 0.5, y0 + step * 0.5);
+          var nearest = outsideAt(x0, y0);
+          var e1 = outsideAt(x0 + step, y0);
+          var e2 = outsideAt(x0, y0 + step);
+          var e3 = outsideAt(x0 + step, y0 + step);
+          if (e1 < nearest) nearest = e1;
+          if (e2 < nearest) nearest = e2;
+          if (e3 < nearest) nearest = e3;
+          var cssOut = outsideAt(x0 + cssOffX, y0 + cssOffY);
+          var inward = cssOut < centreOut;
+          var hold = blocked[pixelKey(x0, y0)] && centreOut < minOut + cream;
+          if (!hold && mid && centreOut >= minOut && centreOut < minOut + cream + brown
+              && (!inward || nearest >= minOut)) {
+            var ink = centreOut < minOut + cream ? "#fff8e7" : "#6b4f2a";
+            if (covered && barMounted && ink === "#fff8e7") onBar = barCream;
+            else if (!covered) color = ink;
+          }
         }
         if (color !== runColor) {
           if (runColor) {
-            if (onStrip && lift) {
-              paintRun(lift, lift._shiftX || 0, lift._shiftY || 0, stripTop, py, runX, px, runColor);
-              liftUsed = true;
-            } else {
-              paintRun(ring, shiftX, shiftY, screenTop, py, runX, px, runColor);
-            }
+            paintRun(
+              ring, mounted.ns, screenLeft, screenTop, mounted.shiftX, mounted.shiftY,
+              screenLeft + runX * step, y0, (ix - runX) * step, step, runColor
+            );
           }
           runColor = color;
-          runX = px;
+          runX = ix;
         }
-      }
-      if (runColor) {
-        if (onStrip && lift) {
-          paintRun(lift, lift._shiftX || 0, lift._shiftY || 0, stripTop, py, runX, x1, runColor);
-          liftUsed = true;
-        } else {
-          paintRun(ring, shiftX, shiftY, screenTop, py, runX, x1, runColor);
+        if (onBar !== barColor) {
+          if (barColor && barMounted) {
+            barPixels += ix - barX;
+            paintRun(
+              barPaint, barMounted.ns, screenLeft, screenTop, barMounted.shiftX, barMounted.shiftY,
+              screenLeft + barX * step, y0, (ix - barX) * step, step, barColor
+            );
+          }
+          barColor = onBar;
+          barX = ix;
         }
       }
     }
-    if (lift && !liftUsed) {
-      while (lift.firstChild) lift.removeChild(lift.firstChild);
-      lift.setAttribute("hidden", "");
-      lift.style.display = "none";
-    }
+    if (barPaint && !barPixels) hidePaint(barPaint);
   }
 
-  /* 3px stroke on the painted slab diamond. The path sits just inside the
-     cell so the outer edge stays within a pixel and still covers the gold
-     dash. ViewBox units are screen px; the layout box undoes the stage
-     scale so the stroke stays 3 screen px. */
+  /* Chosen line: whole device pixels of #7c2d12. The cell-aligned sample
+     of each pixel sits on the stroke, and no corner sticks out past it. */
   function placeChosenMark() {
     var paint = ensureChosenPaint();
     var village = paintVillage();
@@ -1531,44 +1611,76 @@
       hideLine(paint);
       return;
     }
-    var box = slab.getBoundingClientRect();
-    if (!(box.width > 2) || !(box.height > 2)) {
+    var face = slabFace(slab);
+    if (!face) {
       hideLine(paint);
       return;
     }
-    var hx = box.width / 2;
-    var hy = box.height * (50 / 120);
-    var ap = (hx * hy) / Math.sqrt(hx * hx + hy * hy);
-    var inset = 0.8;
-    if (!(ap > inset)) {
+    var dpr = window.devicePixelRatio || 1;
+    var margin = 4;
+    var screenLeft = Math.floor((face.cx - face.halfW - margin) * dpr) / dpr;
+    var screenTop = Math.floor((face.cy - face.halfH - margin) * dpr) / dpr;
+    var screenRight = Math.ceil((face.cx + face.halfW + margin) * dpr) / dpr;
+    var screenBottom = Math.ceil((face.cy + face.halfH + margin) * dpr) / dpr;
+    var mounted = mountDeviceSvg(
+      paint, village, screenLeft, screenTop,
+      screenRight - screenLeft, screenBottom - screenTop
+    );
+    if (!mounted) {
       hideLine(paint);
       return;
     }
-    var k = 1 - inset / ap;
-    var margin = 6;
-    var left = box.left - margin;
-    var top = box.top - margin;
-    var width = box.width + margin * 2;
-    var height = box.height + margin * 2;
-    var layout = layoutBox(village, left, top, width, height);
-    paint.removeAttribute("hidden");
-    paint.style.display = "block";
-    paint.style.clipPath = "none";
-    paint.setAttribute("viewBox", "0 0 " + width + " " + height);
-    paint.style.left = layout.left + "px";
-    paint.style.top = layout.top + "px";
-    paint.style.width = layout.width + "px";
-    paint.style.height = layout.height + "px";
-    var lift = 10 * (box.width / 168);
-    var cx = margin + box.width / 2;
-    var cy = margin + box.height / 2 - lift;
-    /* Stroke rasterisation sits a fraction to the north-west. Slide the
-       diamond along the south-east normal so each outer pixel stays on the cell. */
-    var seLen = Math.hypot(hx, hy) || 1;
-    var nudge = 0.18;
-    cx += hy / seLen * nudge;
-    cy += hx / seLen * nudge;
-    paint.querySelector("polygon").setAttribute("points", diamondPoints(cx, cy, hx * k, hy * k));
+    var ap = (face.halfW * face.halfH) / Math.hypot(face.halfW, face.halfH);
+    function outsideAt(x, y) {
+      var span = Math.abs(x - face.cx) / face.halfW + Math.abs(y - face.cy) / face.halfH;
+      return (span - 1) * ap;
+    }
+    var bars = barRects();
+    var boundX = face.cx - face.halfW;
+    var boundY = face.cy - face.halfH;
+    var cssOffX = (boundX - Math.floor(boundX) + 0.5) % 1;
+    var cssOffY = (boundY - Math.floor(boundY) + 0.5) % 1;
+    if (cssOffX < 0) cssOffX += 1;
+    if (cssOffY < 0) cssOffY += 1;
+    var screenW = screenRight - screenLeft;
+    var screenH = screenBottom - screenTop;
+    var bw = Math.round(screenW * dpr);
+    var bh = Math.round(screenH * dpr);
+    var step = 1 / dpr;
+    for (var iy = 0; iy < bh; iy += 1) {
+      var y0 = screenTop + iy * step;
+      var y1 = y0 + step;
+      var runX = -1;
+      for (var ix = 0; ix <= bw; ix += 1) {
+        var on = false;
+        if (ix < bw) {
+          var x0 = screenLeft + ix * step;
+          var x1 = x0 + step;
+          if (!meetsBar(bars, x0, y0, x1, y1)) {
+            var maxO = outsideAt(x0, y0);
+            var c1 = outsideAt(x1, y0);
+            var c2 = outsideAt(x0, y1);
+            var c3 = outsideAt(x1, y1);
+            if (c1 > maxO) maxO = c1;
+            if (c2 > maxO) maxO = c2;
+            if (c3 > maxO) maxO = c3;
+            /* The sample aligned with the cell decides the stroke. A corner
+               past the outer limit would show up beyond the cell edge. */
+            var cssOut = outsideAt(x0 + cssOffX, y0 + cssOffY);
+            on = cssOut <= 0.55 && cssOut >= -1.4 && maxO <= 1.4;
+          }
+        }
+        if (on) {
+          if (runX < 0) runX = ix;
+        } else if (runX >= 0) {
+          paintRun(
+            paint, mounted.ns, screenLeft, screenTop, mounted.shiftX, mounted.shiftY,
+            screenLeft + runX * step, y0, (ix - runX) * step, step, "#7c2d12"
+          );
+          runX = -1;
+        }
+      }
+    }
   }
 
   function render() {
