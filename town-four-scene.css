@@ -104,7 +104,7 @@ body.kt-artstage #tab-town .mp { position: relative; }
   pointer-events: none;
 }
 
-#townMap .pad.is-empty-hot > .mark,
+#townMap .pad.is-empty-hot:not(.is-chosen) > .mark,
 #townMap .pad.is-valid > .mark,
 #townMap .pad.is-preview > .mark {
   filter: drop-shadow(0 0 4px rgba(212, 160, 23, 0.95));
@@ -114,6 +114,7 @@ body.kt-artstage #tab-town .mp { position: relative; }
    The box matches the slab, and the stroke is drawn inside that diamond. */
 #townMap .pad.is-chosen > .mark {
   z-index: 9;
+  opacity: 0;
 }
 
 #townMap .pad > .sprite,
@@ -208,6 +209,16 @@ body.kt-artstage #tab-town .mp { position: relative; }
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;
+}
+
+/* Chosen stroke, outside the artboard transform. The mark image keeps the
+   same outline for the document; this layer is the one on screen. */
+#chosenMarkPaint {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 70;
+  pointer-events: none;
 }
 
 #townMap .badge {
