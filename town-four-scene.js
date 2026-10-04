@@ -1577,6 +1577,10 @@
         }
       }
       if (solidUiFromTarget(target)) return;
+      /* A tap whose target sits outside the village is not a cell, even when
+         rounded coordinates fall inside the village border. */
+      var village = $("village");
+      if (!village || !village.contains(target)) return;
       var point = activationPoint(event, cellBtn);
       if (solidUiCovers(point.x, point.y)) {
         /* Rounded coordinates can name a control while the event still
