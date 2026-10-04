@@ -10,7 +10,7 @@
   var MARK_CHOSEN = "data:image/svg+xml," + encodeURIComponent(
     "<svg xmlns='http://www.w3.org/2000/svg' viewBox='-84 -50 168 120'>" +
     "<polygon points='0,-50 84,0 0,50 -84,0' fill='#fff3c4' fill-opacity='.62' " +
-    "stroke='#d4a017' stroke-width='4' stroke-linejoin='round'/></svg>"
+    "stroke='#7c2d12' stroke-width='3' stroke-linejoin='round'/></svg>"
   );
 
   var ASSET_ID = {
@@ -673,6 +673,93 @@
     };
   }
 
+  function clientContentBox(el) {
+    var box = el.getBoundingClientRect();
+    var cs = getComputedStyle(el);
+    return {
+      left: box.left + (parseFloat(cs.borderLeftWidth) || 0),
+      top: box.top + (parseFloat(cs.borderTopWidth) || 0),
+      right: box.right - (parseFloat(cs.borderRightWidth) || 0),
+      bottom: box.bottom - (parseFloat(cs.borderBottomWidth) || 0)
+    };
+  }
+
+  function intersectRect(a, b) {
+    if (!a || !b) return null;
+    var left = Math.max(a.left, b.left);
+    var top = Math.max(a.top, b.top);
+    var right = Math.min(a.right, b.right);
+    var bottom = Math.min(a.bottom, b.bottom);
+    if (right - left < 1 || bottom - top < 1) return null;
+    return { left: left, top: top, right: right, bottom: bottom };
+  }
+
+  function pointInRect(x, y, rect) {
+    return !!rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  }
+
+  /* Scrollport of the map: viewport ∩ #townMap ∩ #village, all four edges. */
+  function visibleMapClip() {
+    var map = $("townMap");
+    var village = $("village");
+    if (!map || !village) return null;
+    var viewport = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+    return intersectRect(intersectRect(viewport, clientContentBox(map)), clientContentBox(village));
+  }
+
+  var SOLID_UI = [
+    "#palette", "#listLauncher", "#readyBar", "#uxPlaceBar", "#actionSheet",
+    "#app .gh", "#ktFooter", "#upgradeConfirm", "#modalOverlay", "#btnBuild",
+    "#townMap .tools", "#dr", "#dov"
+  ];
+
+  function rectsOverlap(a, b) {
+    return a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom;
+  }
+
+  function elementConcealed(el) {
+    for (var node = el; node && node !== document.documentElement; node = node.parentElement) {
+      if (node.inert) return true;
+      var cs = getComputedStyle(node);
+      if (cs.display === "none" || cs.visibility === "hidden") return true;
+      if (Number(cs.opacity) === 0) return true;
+    }
+    return false;
+  }
+
+  /* Open, visible solid UI. The whole border box counts, including rounded corners. */
+  function solidUiCovers(x, y) {
+    var map = $("townMap");
+    if (!map) return false;
+    var mapBox = map.getBoundingClientRect();
+    var view = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+    for (var i = 0; i < SOLID_UI.length; i += 1) {
+      var nodes = document.querySelectorAll(SOLID_UI[i]);
+      for (var n = 0; n < nodes.length; n += 1) {
+        var el = nodes[n];
+        if (elementConcealed(el)) continue;
+        var box = el.getBoundingClientRect();
+        if (box.width < 2 || box.height < 2) continue;
+        if (!rectsOverlap(box, view)) continue;
+        if (!rectsOverlap(box, mapBox)) continue;
+        if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) return true;
+      }
+    }
+    return false;
+  }
+
+  function activationPoint(event, el) {
+    var x = event.clientX;
+    var y = event.clientY;
+    if (event.detail === 0 && x === 0 && y === 0 && el) {
+      var box = el.getBoundingClientRect();
+      if (box.width > 0 && box.height > 0) {
+        return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+      }
+    }
+    return { x: x, y: y };
+  }
+
   function gridMetrics() {
     var pad = pads[0].el;
     var s = pad.offsetWidth / 160;
@@ -686,11 +773,10 @@
   function cellAt(clientX, clientY) {
     var village = $("village");
     if (!village || !pads.length) return null;
+    var clip = visibleMapClip();
+    if (!pointInRect(clientX, clientY, clip)) return null;
     var rect = village.getBoundingClientRect();
     if (rect.width < 1 || rect.height < 1) return null;
-    var scaleX = rect.width / village.offsetWidth;
-    var inside = (clientX - rect.left) / scaleX;
-    if (inside < 0 || inside > village.clientWidth) return null;
     var point = localPoint(village, clientX, clientY);
     var metrics = gridMetrics();
     if (!metrics.stepX || !metrics.stepY) return null;
@@ -1267,9 +1353,13 @@
     map.addEventListener("click", function (event) {
       var target = event.target;
       var btn = target.closest && target.closest("button");
+      var cellBtn = btn && btn.classList.contains("cell-btn") ? btn : null;
+      var point = activationPoint(event, cellBtn);
+      if (solidUiCovers(point.x, point.y)) return;
+      if (!pointInRect(point.x, point.y, visibleMapClip())) return;
       /* Enter and Space activate the cell button. That is the same onCell a tap uses. */
-      if (btn && btn.classList.contains("cell-btn")) {
-        var pad = btn.closest(".pad");
+      if (cellBtn) {
+        var pad = cellBtn.closest(".pad");
         if (pad) {
           var pc = parseInt(pad.style.getPropertyValue("--c"), 10);
           var pr = parseInt(pad.style.getPropertyValue("--r"), 10);
@@ -1280,10 +1370,7 @@
         }
       }
       if (btn) return;
-      if (target.closest && target.closest(
-        "#palette, #readyBar, #uxPlaceBar, #actionSheet, #listLauncher, #btnBuild, #upgradeConfirm, #modalOverlay, #ktFooter, #app .gh, #townMap .tools"
-      )) return;
-      var hit = cellAt(event.clientX, event.clientY);
+      var hit = cellAt(point.x, point.y);
       if (!hit) return;
       onCell(hit.c, hit.r);
     }, true);
@@ -1299,6 +1386,7 @@
       var y = event.clientY;
       if (x < box.left || x > box.right || y < box.top || y > box.bottom) return;
       if (map.contains(event.target)) return;
+      if (solidUiCovers(x, y)) return;
       var under = cellAt(x, y);
       if (!under) return;
       event.preventDefault();

@@ -687,7 +687,7 @@ body{
   position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
   background:#15803d;color:#1e293b;padding:10px 20px;border-radius:20px;
   font-size:13px;font-weight:700;z-index:300;display:none;pointer-events:none;
-  animation:fadeInOut 2s ease;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.15);
+  opacity:1;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,0.15);
   max-width:90vw;overflow:hidden;text-overflow:ellipsis;
 }
 #toast.error{background:#ef4444;color:#fff}
@@ -697,6 +697,14 @@ body{
   15%{opacity:1;transform:translateX(-50%) translateY(0)}
   85%{opacity:1;transform:translateX(-50%) translateY(0)}
   100%{opacity:0;transform:translateX(-50%) translateY(-10px)}
+}
+@keyframes toastIn{
+  from{opacity:0}
+  to{opacity:1}
+}
+@keyframes toastOut{
+  from{opacity:1}
+  to{opacity:0}
 }
 @keyframes fadeIn{
   0%{opacity:0}
@@ -973,18 +981,27 @@ body{
    XP absorbs leftover space. Chips stay content-sized and shrink only
    after the bar, so they cannot slide under the menu. */
 .gh{
-  background:
-    linear-gradient(180deg, rgba(255,248,236,.7), rgba(255,248,236,0) 14px),
-    #faf6ef;
+  background:transparent;
   color:#3b2a1a;
-  border:3px solid #8b5e3c;
-  border-radius:0 0 18px 18px;
+  border:3px solid transparent;
+  border-radius:0;
   padding:4px 8px;
   display:flex;align-items:center;gap:8px;
   flex-wrap:nowrap;
   box-sizing:border-box;min-height:72px;height:72px;
-  overflow:hidden;
+  overflow:visible;
+  position:relative;
+  isolation:isolate;
   container-type:inline-size;
+}
+.gh::before{
+  content:"";
+  position:absolute;z-index:-1;pointer-events:none;
+  top:-3px;right:-3px;bottom:-3px;left:-3px;
+  border:3px solid #8b5e3c;border-radius:0 0 18px 18px;
+  background:
+    linear-gradient(180deg, rgba(255,248,236,.7), rgba(255,248,236,0) 14px),
+    #faf6ef;
 }
 .gh .av{width:44px;height:44px;background:#fff;border:2px solid #8b5e3c;border-radius:14px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 44px;position:relative;cursor:pointer}
 .gh .av img{width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
@@ -1297,13 +1314,22 @@ body.kt-battle .dbx{display:none !important}
   display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;
   height:88px;box-sizing:border-box;flex:none;width:100%;
   margin:0;padding:8px 14px 10px;
+  background:transparent;
+  border:3px solid transparent;
+  border-bottom:0;
+  border-radius:0;
+  box-shadow:none;
+  isolation:isolate;
+}
+#ktFooter::before{
+  content:"";
+  position:absolute;z-index:-1;pointer-events:none;
+  top:-3px;right:-3px;bottom:0;left:-3px;
+  border:3px solid #8b5e3c;border-bottom:0;border-radius:18px 18px 0 0;
   background:
     linear-gradient(180deg, rgba(255,248,236,.55), rgba(255,248,236,0) 16px),
     repeating-linear-gradient(90deg, #faf6ef 0 14px, #f3e6d0 14px 15px),
     #faf6ef;
-  border:3px solid #8b5e3c;
-  border-bottom:0;
-  border-radius:18px 18px 0 0;
   box-shadow:inset 0 1px 0 #fff8ec, 0 -6px 14px rgba(59,42,26,.16);
 }
 body.kt-artstage #ktFooter{
@@ -1655,9 +1681,24 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 /* Upgrade panel. After the stylesheet so a cached town-four-scene.css cannot
    leave the sheet pale or the confirm box as default buttons outside the stage. */
 #townMap #actionSheet.action-sheet {
+  border: 8px solid transparent !important;
+  border-radius: 0 !important;
+  color: #fff8ee !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+#townMap #actionSheet.action-sheet::after {
+  content: "" !important;
+  position: absolute !important;
+  z-index: 0 !important;
+  top: -8px !important;
+  right: -8px !important;
+  bottom: -8px !important;
+  left: -8px !important;
   border: 8px solid #3b2416 !important;
   border-radius: 22px !important;
-  color: #fff8ee !important;
+  pointer-events: none !important;
   background-color: #6e452b !important;
   background-image:
     radial-gradient(ellipse 22px 12px at 12% 78%, rgba(36, 18, 8, .42), transparent 72%),
@@ -1677,7 +1718,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
   content: "" !important;
   position: absolute !important;
   inset: 7px !important;
-  z-index: 0 !important;
+  z-index: 1 !important;
   border: 2px solid rgba(255, 224, 176, .42) !important;
   border-radius: 12px !important;
   box-shadow: inset 0 0 0 1px rgba(42, 22, 10, .45) !important;
@@ -1819,7 +1860,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 </style>
 </head>
 <body>
-<div class="kt-rotate" id="ktRotate" role="dialog" aria-label="請轉橫向">
+<div class="kt-rotate" id="ktRotate" inert role="dialog" aria-label="請轉橫向">
   <div class="kt-rotate-card">
     <div class="kt-rotate-ico" aria-hidden="true">📱</div>
     <p class="kt-rotate-title">請轉橫向</p>
@@ -2348,7 +2389,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
     </div>
     </div>
     <div class="dov" id="dov" onclick="td()"></div>
-    <div class="dr" id="dr">
+    <div class="dr" id="dr" inert>
       <div class="dh"><h3>📋 主目錄</h3><button class="dc" onclick="td()">✕</button></div>
       <button class="di" onclick="st('town');td()"><span class="ic">🏘️</span> 小鎮地圖</button>
       <button class="di" onclick="st('buildings');td()"><span class="ic">🧱</span> 建築管理</button>
@@ -2370,7 +2411,10 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 <div class="reward-popup" id="rewardPopup"></div>
 
 <script>
-function td(){var o=document.getElementById("dov"),d=document.getElementById("dr");if(!o||!d)return;var on=o.style.display==="block"||getComputedStyle(o).display!=="none";o.style.display=on?"none":"block";d.classList.toggle("o",o.style.display==="block")}
+function td(){var o=document.getElementById("dov"),d=document.getElementById("dr");if(!o||!d)return;var on=o.style.display==="block"||getComputedStyle(o).display!=="none";o.style.display=on?"none":"block";var open=o.style.display==="block";d.classList.toggle("o",open);d.inert=!open}
+function syncRotateInert(){var rotate=document.getElementById("ktRotate");if(!rotate)return;var cs=getComputedStyle(rotate);rotate.inert=cs.display==="none"||cs.visibility==="hidden"}
+syncRotateInert();
+window.addEventListener("resize",syncRotateInert);
 
 // ═══════════════════════════════════════════════════════════════
 // CONFIG
@@ -5955,19 +5999,36 @@ function showToast(msg, type) {
   const el = document.getElementById('toast');
   if (!el) return;
   const text = String(msg);
-  const visible = el.style.display === 'block';
+  const visible = el.style.display === 'block' && el.style.visibility !== 'hidden';
   const same = visible && el.textContent === text;
   const nextClass = type === 'error' ? 'error' : (type === 'info' ? 'info' : '');
   if (el.className !== nextClass) el.className = nextClass;
-  if (!same) {
-    el.textContent = text;
+  if (el._hideTimer) clearTimeout(el._hideTimer);
+  if (el._fadeTimer) clearTimeout(el._fadeTimer);
+  if (same) {
+    el.style.animation = 'none';
+    el.style.opacity = '1';
+    el.style.visibility = 'visible';
     el.style.display = 'block';
+  } else {
+    el.textContent = text;
+    el.style.visibility = 'visible';
+    el.style.display = 'block';
+    el.style.opacity = '1';
     el.style.animation = 'none';
     void el.offsetWidth;
-    el.style.animation = 'fadeInOut 2s ease';
+    el.style.animation = 'toastIn 0.15s ease forwards';
   }
-  if (el._hideTimer) clearTimeout(el._hideTimer);
-  el._hideTimer = setTimeout(() => { el.style.display = 'none'; }, 2000);
+  el._hideTimer = setTimeout(() => {
+    el.style.animation = 'none';
+    void el.offsetWidth;
+    el.style.animation = 'toastOut 0.3s linear forwards';
+    el._fadeTimer = setTimeout(() => {
+      el.style.display = 'none';
+      el.style.animation = 'none';
+      el.style.opacity = '1';
+    }, 300);
+  }, 2000);
 }
 
 // Close modal on overlay click

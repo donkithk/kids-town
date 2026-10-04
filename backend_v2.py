@@ -1766,6 +1766,8 @@ def _first_legal_cell(db, kid_id, exclude_building_id=None, building_type=None):
 
 # Shown as a normal toast when a new build has no free 8×8 cell. Not a free gift.
 TOWN_FULL_ERROR = '城鎮沒有空位，請先收起或移動其他建築。'
+# One sentence for both auto-place and an explicit cell when this kind is already on the map.
+ALREADY_BUILT_ERROR = '你已經興建了這種建築物。'
 
 
 def place_building_free(db, kid_id, def_id, level=1, exclude_building_id=None):
@@ -3468,7 +3470,7 @@ def place_building(kid_id):
             (kid_id, def_id),
         ).fetchall()
         if any(not row['stored'] for row in owned):
-            return jsonify({'error': '你已經興建了這種建築物。'}), 400
+            return jsonify({'error': ALREADY_BUILT_ERROR}), 400
         reuse = next((row for row in owned if row['stored']), None)
         cell = _first_legal_cell(
             db, kid_id, reuse['id'] if reuse else None,
@@ -3494,7 +3496,7 @@ def place_building(kid_id):
     placed = [row for row in owned if not row['stored']]
     stored_rows = [row for row in owned if row['stored']]
     if placed:
-        return jsonify({'error': '你已經興建咗呢種建築物'}), 400
+        return jsonify({'error': ALREADY_BUILT_ERROR}), 400
     reuse = stored_rows[0] if stored_rows else None
     blocked, blocked_status = _placement_blocked(
         db, kid_id, cx, cy, reuse['id'] if reuse else None, place_size
