@@ -12,7 +12,7 @@
   position: absolute;
   inset: 0;
   z-index: 40;
-  overflow: hidden;
+  overflow: visible;
   border-radius: 18px;
   background: #7eae52;
   color: var(--ink);
@@ -215,29 +215,29 @@ body.kt-artstage #tab-town .mp { position: relative; }
   opacity: 0;
 }
 
-/* Inside the scrolling map, under the palette. The pseudo-element still
-   carries the ring geometry. Line sits above the sprite and under the badge;
-   the ring sits above the badge. */
+/* Under the palette and the bar. The pseudo-element still carries the
+   ring geometry. The line stays in the scrolling map, above the sprite
+   and under the badge; the ring sits above the badge. */
 #focusRingPaint {
   position: absolute;
   z-index: 9;
-  overflow: visible;
   pointer-events: none;
+  image-rendering: pixelated;
 }
 
 #focusRingPaint[hidden],
-#focusRingLift[hidden],
-#chosenMarkPaint[hidden] {
+#chosenMarkPaint[hidden],
+#ringUnderBar[hidden] {
   display: none !important;
 }
 
-/* The bar's top border sits on the village edge. This strip is only the
-   pixels in that border, above the bar and clear of the palette. */
-#focusRingLift {
+/* Cream the bar covers. It lives in the bar, under the sentence, so the
+   scrolling map can stay clipped by the bar. */
+#townMap .place-bar > #ringUnderBar {
   position: absolute;
-  z-index: 31;
-  overflow: visible;
+  z-index: 0;
   pointer-events: none;
+  image-rendering: pixelated;
 }
 
 #chosenMarkPaint {
@@ -245,8 +245,8 @@ body.kt-artstage #tab-town .mp { position: relative; }
   left: 0;
   top: 0;
   z-index: 7;
-  overflow: visible;
   pointer-events: none;
+  image-rendering: pixelated;
 }
 
 #townMap .badge {
@@ -461,6 +461,15 @@ body.kt-artstage #tab-town .mp { position: relative; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Subpixel fringes of the bar text land on the ring brown and the ring
+   cream. A zero-offset shadow plus a hair of contrast keeps those pixels
+   on the ink colour. */
+#townMap .place-bar p,
+#townMap .place-bar button {
+  text-shadow: 0 0 0 var(--ink);
+  filter: contrast(1.02);
 }
 
 #townMap .place-bar button {
