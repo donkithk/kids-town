@@ -787,7 +787,7 @@
     return false;
   }
 
-  /* Open, visible solid UI. Edges are inclusive, so a pixel on the border belongs to the control. */
+  /* Open, visible solid UI. The element's own border box is inclusive. */
   function solidUiCovers(x, y) {
     var map = $("townMap");
     if (!map) return false;
@@ -799,9 +799,7 @@
         if (!solidUiOpen(el)) continue;
         var box = el.getBoundingClientRect();
         if (!rectsOverlap(box, mapBox)) continue;
-        /* A click on a fractional edge is delivered on the whole pixel that
-           contains it, which can sit just outside the border box. */
-        if (x >= box.left - 1 && x <= box.right + 1 && y >= box.top - 1 && y <= box.bottom + 1) return true;
+        if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) return true;
       }
     }
     return false;
