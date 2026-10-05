@@ -226,18 +226,8 @@ body.kt-artstage #tab-town .mp { position: relative; }
 }
 
 #focusRingPaint[hidden],
-#chosenMarkPaint[hidden],
-#townMap .ring-under-bar[hidden] {
+#chosenMarkPaint[hidden] {
   display: none !important;
-}
-
-/* Cream the showing bar covers. It sits in that bar, under the sentence,
-   in a colour the bar fill does not share, so the stroke does not end early. */
-#townMap .place-bar > .ring-under-bar {
-  position: absolute;
-  z-index: 0;
-  pointer-events: none;
-  image-rendering: pixelated;
 }
 
 #chosenMarkPaint {
@@ -353,6 +343,7 @@ body.kt-artstage #tab-town .mp { position: relative; }
   border-radius: 0;
   background: transparent;
   isolation: isolate;
+  transform: translateZ(0);
 }
 
 #townMap .palette::before {
@@ -431,6 +422,7 @@ body.kt-artstage #tab-town .mp { position: relative; }
   border-radius: 0;
   background: transparent;
   isolation: isolate;
+  transform: translateZ(0);
 }
 
 #townMap .place-bar::before {
@@ -461,15 +453,6 @@ body.kt-artstage #tab-town .mp { position: relative; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* Subpixel fringes of the bar text land on the ring brown and the ring
-   cream. A zero-offset shadow plus a hair of contrast keeps those pixels
-   on the ink colour. */
-#townMap .place-bar p,
-#townMap .place-bar button {
-  text-shadow: 0 0 0 var(--ink);
-  filter: contrast(1.02);
 }
 
 #townMap .place-bar button {
