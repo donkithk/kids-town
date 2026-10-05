@@ -67,6 +67,7 @@ from tests.qc6_checks import (  # noqa: E402
     ring_vertex_gaps,
     ring_band_walk,
     corner_level_delta,
+    paint_cover_report,
     ring_edge_report,
     paint_overlay_count,
     bar_ink_count,
@@ -8255,32 +8256,22 @@ def _cells_near_bar(page, width):
 
 
 def _overlay_rects(page):
-    """Visible ready bar, place bar, and palette, in viewport CSS px."""
-    return page.evaluate(
-        """() => {
-          function shown(el) {
-            if (!el || el.hidden) return false;
-            const cs = getComputedStyle(el);
-            const box = el.getBoundingClientRect();
-            return cs.display !== 'none' && cs.visibility !== 'hidden'
-              && box.width > 2 && box.height > 2;
-          }
-          const rects = [];
-          for (const sel of ['#readyBar', '#uxPlaceBar', '#palette']) {
-            const el = document.querySelector(sel);
-            if (!shown(el)) continue;
-            const box = el.getBoundingClientRect();
-            rects.push({
-              id: el.id,
-              left: box.left,
-              top: box.top,
-              right: box.right,
-              bottom: box.bottom
-            });
-          }
-          return rects;
-        }"""
-    ) or []
+    """Visible bar and palette painted extents, in viewport CSS px.
+
+    The extent is the border box plus the live ``::before`` outset. The
+    band walk still grows that rect by 1px. A 48px palette hole is not a
+    cover, so samples in that dead zone are not skipped.
+    """
+    report = paint_cover_report(page) or {}
+    rects = []
+    for row in report.get("covers") or []:
+        if row.get("id") not in ("readyBar", "uxPlaceBar", "palette"):
+            continue
+        extent = row.get("extent") or {}
+        if extent.get("right", 0) - extent.get("left", 0) < 2:
+            continue
+        rects.append({"id": row.get("id"), **extent})
+    return rects
 
 
 def _bar_text_rects(page, selector):
@@ -8389,12 +8380,37 @@ _PAINT_GUARD_JS = r"""() => {
       addLayer(layers, seen, el, 'mark');
     }
   });
+  function paintedExtent(el) {
+    const box = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    const before = getComputedStyle(el, '::before');
+    const content = before.content || '';
+    const live = content !== 'none' && content !== 'normal'
+      && before.display !== 'none' && before.visibility !== 'hidden';
+    let left = 0, top = 0, right = 0, bottom = 0;
+    if (live) {
+      function side(offset, edge, margin) {
+        if (offset == null || offset === 'auto') return 0;
+        const n = parseFloat(offset);
+        if (!Number.isFinite(n)) return 0;
+        return Math.max(0, -(edge + n + (parseFloat(margin) || 0)));
+      }
+      left = side(before.left, parseFloat(cs.borderLeftWidth) || 0, before.marginLeft);
+      top = side(before.top, parseFloat(cs.borderTopWidth) || 0, before.marginTop);
+      right = side(before.right, parseFloat(cs.borderRightWidth) || 0, before.marginRight);
+      bottom = side(before.bottom, parseFloat(cs.borderBottomWidth) || 0, before.marginBottom);
+    }
+    return {
+      left: box.left - left, top: box.top - top,
+      right: box.right + right, bottom: box.bottom + bottom
+    };
+  }
   const covers = [];
   for (const sel of ['#readyBar', '#uxPlaceBar', '#palette', '#townMap .cta']) {
     const el = document.querySelector(sel);
     if (!shown(el)) continue;
-    const box = el.getBoundingClientRect();
-    covers.push({id: el.id, el, left: box.left, top: box.top, right: box.right, bottom: box.bottom});
+    const extent = paintedExtent(el);
+    covers.push({id: el.id, el, left: extent.left, top: extent.top, right: extent.right, bottom: extent.bottom});
   }
   const z = [];
   for (const layer of layers) {
@@ -9069,6 +9085,63 @@ def _corner_pair(page, selector, label, problems):
         )
 
 
+def _hug_problems(page, label, problems, expect):
+    """Clip hole must hug the painted extent within 1 device px.
+
+    ``expect`` is ``palette`` or ``cta``. A missing cover is itself a
+    failure, so a hidden control cannot skip the check.
+    """
+    report = paint_cover_report(page) or {}
+    covers = report.get("covers") or []
+    dpr = report.get("dpr") or 1
+    brief = []
+    for row in covers:
+        outward = row.get("outward")
+        if outward:
+            sides = {name: round(value, 2) for name, value in outward.items()}
+        else:
+            sides = None
+        brief.append(
+            f"{row.get('id')} outset {row.get('outset')} outward {sides} "
+            f"ringHits {row.get('ringHits')}"
+        )
+    print(f"TC-FE-PAINT-UNDER-UI hug {label} dpr {dpr} {'; '.join(brief)}", flush=True)
+    wanted = "btnBuild" if expect == "cta" else "palette"
+    if not any(row.get("id") == wanted for row in covers):
+        problems.append(f"{label}: {wanted} has no painted extent")
+        return
+    for row in covers:
+        name = row.get("id")
+        outward = row.get("outward")
+        if outward:
+            worst = max(outward.values())
+            tight = min(outward.values())
+            if worst > 1:
+                css = worst / dpr
+                zone = " dead zone" if css >= 40 else ""
+                problems.append(
+                    f"{label} {name}: hug cut {worst:.1f} device px "
+                    f"({css:.1f} CSS px){zone}, want ≤1 device px"
+                )
+            elif tight < -1:
+                problems.append(
+                    f"{label} {name}: clip is {abs(tight):.1f} device px inside "
+                    f"the painted extent, want ≤1"
+                )
+        elif row.get("ringHits"):
+            problems.append(
+                f"{label} {name}: ring meets the painted extent and is not cut to it"
+            )
+
+
+def _painted_extent(page, selector):
+    report = paint_cover_report(page) or {}
+    for row in report.get("covers") or []:
+        if row.get("selector") == selector:
+            return row.get("extent")
+    return surface_rect(page, selector)
+
+
 def _corner_levels(page, scale_label):
     """Ring-present vs ring-hidden at the rounded bar and palette corners."""
     problems = []
@@ -9091,6 +9164,7 @@ def _corner_levels(page, scale_label):
         page.wait_for_timeout(40)
         _corner_pair(page, "#readyBar", label, problems)
         _corner_pair(page, "#palette", label, problems)
+        _hug_problems(page, label, problems, "palette")
         _blur_focus(page)
     return problems
 
@@ -9159,7 +9233,7 @@ def _scene1_cta(page, problems):
     dismiss_selection(page)
     _blur_focus(page)
     page.wait_for_timeout(80)
-    rect = surface_rect(page, "#townMap .cta")
+    rect = _painted_extent(page, "#townMap .cta")
     clip = _rect_clip(page, rect)
     if not clip:
         problems.append("scene1 cta: button has no on-screen rect")
@@ -9170,6 +9244,7 @@ def _scene1_cta(page, problems):
         return
     page.wait_for_timeout(40)
     _paint_guard_problems(page, "scene1 cta", problems)
+    _hug_problems(page, "scene1 cta", problems, "cta")
     after = _shot(page, clip)
     diff = changed_pixel_count(before, after)
     print(f"TC-FE-PAINT-UNDER-UI scene1 cta diff {diff}", flush=True)
@@ -9241,7 +9316,12 @@ def test_paint_under_ui(page, base_url, warehouse_db, warehouse_ids):
     不得有環或選中線，也不要求那裡看得到環。
     焦點環和選中標記在最近的共同堆疊上下文裡，有效 z 必須嚴格低於
     每一個看得見的確認欄、調色盤，以及場景 1 的 `.cta`（#btnBuild）。
-    場景 1 先把一格的南尖捲到「我要起屋」上再聚焦，按鈕矩形裡的像素差是 0。
+    蓋住的範圍是畫出來的外緣：border box，加上當時 `::before` 伸出
+    border box 的距離（計算樣式，沒有生成或沒有伸出就是 0）。不是 4px，
+    也不是 48px。環的 clip 洞每一邊離這條外緣不得超過 1 個裝置像素。
+    向外超過 1 是死區（調色盤外 48 螢幕 px 的洞要紅）。環的盒子壓在
+    外緣上卻沒有對上的洞，也是沒裁。場景 1 先把一格的南尖捲到
+    「我要起屋」上再聚焦，按鈕畫出來的外緣裡像素差是 0。
     場景 3、面板打開、捲動 366、改視窗都查。環若是 canvas，這些蓋住的
     矩形對到的裝置像素 alpha 全是 0；若是沒有 clip 的 SVG，畫出來的圖形
     外框不得和它們相交。`.place-bar`、確認欄、調色盤、`.cta` 裡面不得掛著

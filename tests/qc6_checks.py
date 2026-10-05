@@ -2800,8 +2800,10 @@ def ring_band_walk(png_before, png_after, face, clip, dpr=1, occluders=None):
     the device-pixel centre where three consecutive 0.1px steps are
     ``#fff8e7``, and that gap has to sit in [2.0, 4.0].
 
-    A bar or palette rect, grown 1px, is not a hole: those samples are
-    skipped, including where the cream band itself enters the rect.
+    A bar or palette painted extent (border box plus the live ::before
+    outset), grown 1px, is not a hole: those samples are skipped,
+    including where the cream band itself enters the rect. A 48px hole
+    past that extent is not a cover.
     """
     runs = ring_vertex_gaps(png_before, png_after, face, clip, dpr=dpr)
     _bw, _bh, before_rows = png_rgb(png_before)
@@ -3178,6 +3180,143 @@ def ring_edge_report(png_before, png_after, face, visible, clip, solids=None, ve
         "outside_hit": outside_hit,
         "details": details,
     }
+
+
+def paint_cover_report(page):
+    """Painted extent of each visible cover, and the ring clip hole beside it.
+
+    The extent is the element's border box plus the live ``::before`` outset.
+    Outset is how far that pseudo's border box passes the border box, from
+    the computed top/right/bottom/left (those offsets are from the padding
+    edge). A pseudo that is not generated, or that does not stick out,
+    contributes 0. ``.cta`` on these builds has no ``::before``.
+
+    ``outward`` is device px from the painted edge to the clip hole. Positive
+    is a hole outside the paint (a dead zone). The hug cut is the largest
+    side and has to be ≤ 1 device px, so a 48 screen-px palette hole fails
+    and a sub-pixel device snap still passes.
+    """
+    return page.evaluate(
+        r"""() => {
+          function paintedExtent(el) {
+            const box = el.getBoundingClientRect();
+            const cs = getComputedStyle(el);
+            const before = getComputedStyle(el, '::before');
+            const content = before.content || '';
+            const live = content !== 'none' && content !== 'normal'
+              && before.display !== 'none' && before.visibility !== 'hidden';
+            const outset = {left: 0, top: 0, right: 0, bottom: 0};
+            if (live) {
+              function side(offset, edge, margin) {
+                if (offset == null || offset === 'auto') return 0;
+                const n = parseFloat(offset);
+                if (!Number.isFinite(n)) return 0;
+                return Math.max(0, -(edge + n + (parseFloat(margin) || 0)));
+              }
+              outset.left = side(before.left, parseFloat(cs.borderLeftWidth) || 0, before.marginLeft);
+              outset.top = side(before.top, parseFloat(cs.borderTopWidth) || 0, before.marginTop);
+              outset.right = side(before.right, parseFloat(cs.borderRightWidth) || 0, before.marginRight);
+              outset.bottom = side(before.bottom, parseFloat(cs.borderBottomWidth) || 0, before.marginBottom);
+            }
+            return {
+              left: box.left - outset.left,
+              top: box.top - outset.top,
+              right: box.right + outset.right,
+              bottom: box.bottom + outset.bottom,
+              outset
+            };
+          }
+          function shown(el) {
+            if (!el || el.hidden) return false;
+            const cs = getComputedStyle(el);
+            const box = el.getBoundingClientRect();
+            return cs.display !== 'none' && cs.visibility !== 'hidden'
+              && box.width > 2 && box.height > 2;
+          }
+          function overlap(a, b) {
+            const w = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+            const h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+            if (w <= 0 || h <= 0) return 0;
+            return w * h;
+          }
+          const covers = [];
+          for (const sel of ['#readyBar', '#uxPlaceBar', '#palette', '#townMap .cta']) {
+            const el = document.querySelector(sel);
+            if (!shown(el)) continue;
+            const painted = paintedExtent(el);
+            covers.push({
+              id: el.id,
+              selector: sel,
+              outset: painted.outset,
+              extent: {
+                left: painted.left, top: painted.top,
+                right: painted.right, bottom: painted.bottom
+              }
+            });
+          }
+          const svg = document.getElementById('focusRingPaint');
+          const clip = document.getElementById('focusRingClip');
+          const path = clip && clip.querySelector('path');
+          const holes = [];
+          let ring = null;
+          if (svg && path && svg.createSVGPoint && svg.getScreenCTM()) {
+            const ctm = svg.getScreenCTM();
+            const d = path.getAttribute('d') || '';
+            const re = /M\s*([-\d.]+)\s+([-\d.]+)\s*V\s*([-\d.]+)\s*H\s*([-\d.]+)\s*V\s*([-\d.]+)\s*Z/g;
+            let match;
+            while ((match = re.exec(d))) {
+              const p0 = svg.createSVGPoint();
+              p0.x = parseFloat(match[1]);
+              p0.y = parseFloat(match[2]);
+              const p1 = svg.createSVGPoint();
+              p1.x = parseFloat(match[4]);
+              p1.y = parseFloat(match[3]);
+              const a = p0.matrixTransform(ctm);
+              const b = p1.matrixTransform(ctm);
+              holes.push({
+                left: Math.min(a.x, b.x),
+                top: Math.min(a.y, b.y),
+                right: Math.max(a.x, b.x),
+                bottom: Math.max(a.y, b.y)
+              });
+            }
+            const box = svg.getBoundingClientRect();
+            if (box.width > 1 && box.height > 1) {
+              ring = {left: box.left, top: box.top, right: box.right, bottom: box.bottom};
+            }
+          }
+          const dpr = window.devicePixelRatio || 1;
+          const rows = covers.map((cover) => {
+            let hole = null;
+            let area = 0;
+            for (const candidate of holes) {
+              const next = overlap(cover.extent, candidate);
+              if (next > area) {
+                hole = candidate;
+                area = next;
+              }
+            }
+            let outward = null;
+            if (hole) {
+              outward = {
+                left: (cover.extent.left - hole.left) * dpr,
+                top: (cover.extent.top - hole.top) * dpr,
+                right: (hole.right - cover.extent.right) * dpr,
+                bottom: (hole.bottom - cover.extent.bottom) * dpr
+              };
+            }
+            return {
+              id: cover.id,
+              selector: cover.selector,
+              outset: cover.outset,
+              extent: cover.extent,
+              outward,
+              ringHits: !!(ring && overlap(cover.extent, ring) > 0.5)
+            };
+          });
+          return {dpr, covers: rows};
+        }"""
+    )
 
 
 def point_is_ring_ink(png_bytes, points, clip):
