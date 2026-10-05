@@ -1049,3 +1049,20 @@ Guard（通過，不是新的紅測）：
 - `TC-FE-RING-VERTEX-GAP`。弦仍是 8.5–19.1px，端點和上一輪 `1449563` 的表相同。
 
 相對 `a97f2b4`，diff 只有 `tests/qc6_checks.py`、`tests/test_warehouse_e2e.py`、`docs/test-cases/WAREHOUSE_PLACEMENT.md`。資料庫檔沒有進 diff，SHA 沒有變。沒有加「Tab 到被確認欄蓋住的格子要自動捲動」的測試。
+
+## 對照 `4580fa6`（同一句的欄底圖）
+
+測試尖端 `4580fa6`。產品工作樹只疊了這套測試。資料庫 SHA 仍是 `c046fc41e1cf0eb8c5be5ae5a100fd62dfc6390e8c2277a6a84f93002fe3ecfb`。套件字型是 Noto Sans CJK TC，API 然後介面，兩邊各用新的暫存目錄。
+
+確認欄的像素差改成兩張句子相同。聚焦是該格已選中，失焦對聚焦。選中線是同一格保持選中，標記層在畫對測試把 `#chosenMarkPaint` 設成 `visibility: hidden`（測完還原）。兩張的句子都斷言是「已選擇空地。請打開清單，選擇要興建的建築物。」容差仍是平方距離 25。圓角帶沒有排除。
+
+| 產品 | API | 介面 |
+|------|-----|------|
+| `ef99b6e` | 0 failed、387 passed、152 deselected（69.88s） | 1 failed、151 passed、387 deselected（589.60s） |
+| `bbb23c0` | 0 failed、387 passed、152 deselected（63.08s） | 4 failed、148 passed、387 deselected（587.70s） |
+
+選中的像素差在 1280、1100、390 都是 0。上一輪換句造成的 16px／10px（`#867a43` → `#848947`）和 `bbb23c0` 的 17px／12px 不再出現。
+
+`ef99b6e` 仍只有 `TC-FE-PAINT-UNDER-UI` 紅。抓住 `#fffec5` 和 `text-shadow` 的斷言還在：`#readyStatus`、`#placeStatus` 的 `text-shadow` 是 `rgb(59, 42, 26) 0px 0px 0px`；`svg.ring-under-bar` 是 `#readyBar` 的後代；它在 `townMap` 裡的有效 z 是 30，沒有低於欄的 30；沒有 clip，`rect` 的客戶端盒子和欄相交；聚焦差仍是 `#8b5e3c` → `#fffec5`（1280 是 299px、242px，1100 是 100px、101px，390 兩格各 54px）。
+
+`bbb23c0` 仍是那四條紅，原因沒變。外形、外緣、尖角弦和上一輪同一組數。確認欄沒有 `text-shadow`，也沒有 `ring-under-bar`。紅的是 `#focusRingLift` z 31 沒有低於欄的 30，`#focusRingPaint` 和 lift 的盒子壓在欄上，聚焦差仍是 `#8b5e3c` → `#6b4f2a`（1280 各 79px，1100 各 59px，390 各 78px）。選中時 `#chosenMarkPaint` 的 polygon 盒子仍和欄相交。選中的像素差是 0。
