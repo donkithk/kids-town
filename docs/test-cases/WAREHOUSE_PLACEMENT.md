@@ -1066,3 +1066,52 @@ Guard（通過，不是新的紅測）：
 `ef99b6e` 仍只有 `TC-FE-PAINT-UNDER-UI` 紅。抓住 `#fffec5` 和 `text-shadow` 的斷言還在：`#readyStatus`、`#placeStatus` 的 `text-shadow` 是 `rgb(59, 42, 26) 0px 0px 0px`；`svg.ring-under-bar` 是 `#readyBar` 的後代；它在 `townMap` 裡的有效 z 是 30，沒有低於欄的 30；沒有 clip，`rect` 的客戶端盒子和欄相交；聚焦差仍是 `#8b5e3c` → `#fffec5`（1280 是 299px、242px，1100 是 100px、101px，390 兩格各 54px）。
 
 `bbb23c0` 仍是那四條紅，原因沒變。外形、外緣、尖角弦和上一輪同一組數。確認欄沒有 `text-shadow`，也沒有 `ring-under-bar`。紅的是 `#focusRingLift` z 31 沒有低於欄的 30，`#focusRingPaint` 和 lift 的盒子壓在欄上，聚焦差仍是 `#8b5e3c` → `#6b4f2a`（1280 各 79px，1100 各 59px，390 各 78px）。選中時 `#chosenMarkPaint` 的 polygon 盒子仍和欄相交。選中的像素差是 0。
+
+## 對照 `2068c0f`（捲動環只站在沒被蓋住的那段）
+
+測試尖端 `2068c0f`。產品工作樹只疊了這套測試。資料庫 SHA 仍是 `c046fc41e1cf0eb8c5be5ae5a100fd62dfc6390e8c2277a6a84f93002fe3ecfb`。套件字型是 Noto Sans CJK TC。API 然後介面，各用新的暫存目錄。`199fb09` 的介面連跑兩次。`199fb09` 的完整 SHA 是 `199fb099bb87d2c76df075b54369e58f0b001114`。`ff05ccd` 的完整 SHA 是 `ff05ccd92fe91c93e23044f60a65ebeb759383eb`。
+
+這一輪只改了 `TC-FE-MARK-FOLLOWS-SCROLL`。焦點環改用和 `TC-FE-FOCUS-RING-SHAPE` 同一個 `ring_device_gaps`：24 站只放在沒被 `#readyBar`、`#uxPlaceBar`、調色盤蓋住的那段（矩形外擴 1px，邊外 2px 和 3px 的奶油帶進了矩形也不放站）。至少 22 站打中 `#fff8e7`。看得見的長度短於 12px 就跳過。選中線的外緣仍要在 0–1.5px，這條沒有放寬。
+
+查過、沒有改的案例：`TC-FE-FOCUS-RING-SHAPE` 已經用這套站。`TC-FE-RING-EDGE` 的樣本點落在實心介面裡就略過，不要求那裡有奶油。`TC-FE-SELECTED-NO-FILL` 和 `TC-FE-MARK-RESTORE-AFTER-SHEET` 取的是畫出來的外緣，格子先捲進畫面。`TC-FE-RING-VERTEX-GAP` 和 `TC-FE-SELECTED-OVER-GOLD` 也先把格子捲開確認欄。`TC-FE-FOCUS-RING-NO-FILL`、`TC-FE-FOCUS-RING-ABOVE-SPRITE`、`TC-FE-FOCUS-RING-CENTRE` 不沿著整條邊向欄外要奶油配額。`TC-FE-RING-CLEARED`、`TC-FE-MARK-CLEARED`、`TC-FE-MARK-KEPT-READYBAR` 看的是層和像素數。`TC-FE-PAINT-UNDER-UI` 已經接受矩形裁切，底圖也是同一句。`199fb09` 的整套介面兩次都是 152 通過，這些沒改的案例沒有再和矩形裁切衝突。
+
+`199fb09` 上 `TC-FE-MARK-FOLLOWS-SCROLL` 通過。捲動 0，外緣約 0.48–0.54px；環是東北 2.7–4.0、東南 2.7–3.4、西南 2.1–3.4、西北 2.0–3.0，都是 24/24。東南、西南 `vis` 47.5、`legacy` 21。捲動 366，外緣約 0.38–0.54px；環是東北 2.7–4.0、東南 2.7–3.6、西南 2.1–3.1、西北 2.0–3.0，都是 24/24，`vis` 60.47、`legacy` 24。
+
+`ff05ccd` 上這條仍紅，選中線仍跟著捲動：捲動 0 和 366 的外緣都是 0.67–0.71px。舊的 CSS 尺把捲動 0 的西南、西北和捲動 366 的西北量成 1.90px。同一套裝置像素尺把它們讀成 2.0–2.5，不再低於 2。這次紅的是捲動 366 東南內緣 2.80–4.10（要 2–4）。捲動 0 四邊都在 2.0–3.7，24/24。
+
+`bbb23c0` 上這條現在也紅，原因和 `TC-FE-FOCUS-RING-SHAPE` 的環相同，不是選中線。外緣仍在 0–1.5：捲動 0 是 0.60、0.85、0.79、0.52，捲動 366 是 0.65、0.85、0.77、0.54。捲動 0 的環通過。捲動 366 東北和西北各 20/24（`vis` 60.47，`legacy` 24），東南 3.00–4.10。
+
+`ef99b6e` 的 `TC-FE-PAINT-UNDER-UI` 仍紅，原因沒變。`text-shadow` 仍是 `rgb(59, 42, 26) 0px 0px 0px`。`svg.ring-under-bar` 仍是 `#readyBar` 的後代，有效 z 仍是 30 對欄的 30，沒有 clip，盒子仍和欄相交。聚焦差仍是 `#8b5e3c` → `#fffec5`（1280 是 299px、242px，1100 是 100px、101px，390 兩格各 54px）。選中的像素差仍是 0。
+
+| 產品 | API | 介面 |
+|------|-----|------|
+| `199fb09` | 0 failed、387 passed、152 deselected（64.68s） | 第一次 0 failed、152 passed、387 deselected（588.10s）；第二次 0 failed、152 passed、387 deselected（588.11s） |
+| `ef99b6e` | 0 failed、387 passed、152 deselected（61.71s） | 1 failed、151 passed、387 deselected（583.47s） |
+| `bbb23c0` | 0 failed、387 passed、152 deselected（67.20s） | 5 failed、147 passed、387 deselected（581.61s） |
+
+`bbb23c0` 的五條紅：上一輪那四條還在，原因同一組數（外形的 1.90 和 4.10、奶油站 15–21、1100 外緣 1.92／1.64／1.58、390 外緣 1.6／1.6／1.8、`#focusRingLift` z 31、聚焦 `#8b5e3c` → `#6b4f2a`、尖角弦 8.5–19.1）。多出來的是 `TC-FE-MARK-FOLLOWS-SCROLL`，就是上面那組環的數。
+
+`199fb09` 的 `.palette` 和 `.place-bar` 各有一行 `transform: translateZ(0)`。這兩行拿掉、其餘不動、不提交，倉庫的 67 條介面仍是 67 passed（475.42s）。和帶著 `translateZ(0)` 的兩次全套介面比，沒有斷言翻轉。這兩個元素本來就有 `isolation: isolate`，拿掉 `translateZ(0)` 沒有拆掉堆疊上下文，z 的守衛還是過。
+
+偶數奇數 `clip-path` 跟得上活矩形。`#paintClipDefs` 的父節點一直是 `#townMap`，不在 `.place-bar`、`#readyBar`、`#uxPlaceBar`、調色盤裡面。捲動 366、場景 2、調色盤打開、`(3,3)` 選中又聚焦：環和選中線的洞和 `#readyBar`、調色盤的外框差是 0。改成 390：環的洞和這兩個外框差 0.005px、0.004px；選中線那一層是收起的，沒有洞可對。場景 3：環和選中線的洞都對上 `#uxPlaceBar`，差是 0。場景 1 和銀行面板打開時，欄和調色盤都沒顯示，環和選中線也收起，沒有 clip；defs 仍在 `#townMap`。
+
+像素差是另一次拍攝，沒有寫進測試。狀態是場景 2、清單打開、沒有選中、焦點在 `body`。句子是「請點選金色空地，或打開清單選擇要興建的建築物。」`#uxPlaceBar` 在這個狀態沒有顯示（它只在場景 3）。比的是元素自己的外框，含文字，任一通道不同就算 1。視窗是 1280×720、1100×800、390×844。
+
+| 拷貝 | 比例 | 視窗 | `#readyBar` | 調色盤 |
+|------|------|------|-------------|--------|
+| `199fb09` | 1 | 1280 | 8953（1158×64） | 4856（236×372） |
+| `199fb09` | 1 | 1100 | 6950（995×55） | 5312（202×319） |
+| `199fb09` | 1 | 390 | 2220（352×19） | 1647（71×113） |
+| `199fb09` | 2 | 1280 | 22753（2316×128） | 609（472×744） |
+| `199fb09` | 2 | 1100 | 19221（1990×110） | 913（404×638） |
+| `199fb09` | 2 | 390 | 3585（704×38） | 208（142×226） |
+| 拿掉 `translateZ(0)` | 1 | 1280 | 4993（1158×64） | 213（236×372） |
+| 拿掉 `translateZ(0)` | 1 | 1100 | 3875（995×55） | 632（202×319） |
+| 拿掉 `translateZ(0)` | 1 | 390 | 565（352×19） | 5（71×113） |
+| 拿掉 `translateZ(0)` | 2 | 1280 | 11897（2316×128） | 598（472×744） |
+| 拿掉 `translateZ(0)` | 2 | 1100 | 280（1990×110） | 913（404×638） |
+| 拿掉 `translateZ(0)` | 2 | 390 | 1886（704×38） | 208（142×226） |
+
+目標是對 `bbb23c0` 差 0。兩份拷貝都不是 0。帶著 `translateZ(0)` 時，1280、比例 1 的確認欄左段（句子）有 3757 像素不同，其中 3339 的平方距離大於 25，是字形被重新柵格化。拿掉之後，同一段是 0；剩下的 4993 全在右邊兩個按鈕上，其中 4325 像素正好是紅 −1、綠 0、藍 −1。對比度達標。`199fb09` 的 `#readyStatus` 計算色是 `#3b2a1a`，`text-shadow` 和 `filter` 都是 `none`。欄底 `::before` 是 `rgba(250, 246, 239, 0.98)`，鋪在白色上是 `#faf6ef`，對比 12.724:1。畫面裡句子最常見的墨水是 `#3b2a1a`，欄心最常見的填色是 `#f7f5eb`，對比 12.542:1。兩者都高於 4.5:1。
+
+相對 `a97f2b4`，diff 只有 `tests/qc6_checks.py`、`tests/test_warehouse_e2e.py`、`docs/test-cases/WAREHOUSE_PLACEMENT.md`。資料庫檔沒有進 diff，SHA 沒有變。
