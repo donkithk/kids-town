@@ -997,7 +997,7 @@ Guard（通過，不是新的紅測）：
 
 ## 對照 `fb298f5`（確認欄裡的 `#fffec5`）
 
-測試尖端 `fb298f5`。產品工作樹只疊了這套測試。`kids_town.db` 仍是 `c046fc41e1cf0eb8c5be5ae5a100fd62dfc6390e8c2277a6a84f93002fe3ecfb`。綠尖 `ef99b6e` 的完整 SHA 是 `ef99b6eb6c0e6ab32d542b2f512a06403b0fa751`。`bbb23c0` 的完整 SHA 是 `bbb23c0e0505b37f0eb29666471c1cd21ff4f5e3`。本輪沒有重跑 `a97f2b4`、`25c91c9`、`ff05ccd`。套件字型是 Noto Sans CJK TC。文泉驛微米黑另跑過確認欄的像素差，聚焦仍是 `#fffec5`，選中仍是欄角那一小塊，字形抗鋸齒沒有被算進墨水。
+測試尖端 `fb298f5`。產品工作樹只疊了這套測試。資料庫 SHA 仍是 `c046fc41e1cf0eb8c5be5ae5a100fd62dfc6390e8c2277a6a84f93002fe3ecfb`。綠尖 `ef99b6e` 的完整 SHA 是 `ef99b6eb6c0e6ab32d542b2f512a06403b0fa751`。`bbb23c0` 的完整 SHA 是 `bbb23c0e0505b37f0eb29666471c1cd21ff4f5e3`。本輪沒有重跑 `a97f2b4`、`25c91c9`、`ff05ccd`。套件字型是 Noto Sans CJK TC。文泉驛微米黑另跑過確認欄的像素差，聚焦仍是 `#fffec5`，選中仍是欄角那一小塊，字形抗鋸齒沒有被算進墨水。
 
 奶油只認 `#fff8e7`（平方距離 ≤25）。24 站只放在奶油帶也不會進確認欄的那段邊上。確認欄裡的像素差排除句子的文字矩形。環和選中線不再用 `elementsFromPoint`。產品沒有 `clip-path`，SVG 用畫出來的形狀的客戶端盒子。
 
@@ -1044,4 +1044,4 @@ Guard（通過，不是新的紅測）：
 - `TC-FE-PAINT-UNDER-UI`。沒有 `text-shadow`，也沒有 `ring-under-bar`。紅的是 `#focusRingLift` 的 z 31 沒有低於 `#readyBar` 的 30，`#focusRingPaint` 和 `#focusRingLift` 的盒子壓在確認欄上。聚焦的像素差是真的環色，不是 `#fffec5`：1280 兩格各 79px（`#8b5e3c` → `#6b4f2a`，樣本裡還有 `#fff8e7`），1100 各 59px，390 各 78px。選中時 `#chosenMarkPaint` 的 polygon 盒子和確認欄相交。欄角那 17 / 12 / 0 px 同上。
 - `TC-FE-RING-VERTEX-GAP`。弦仍是 8.5–19.1px，端點和上一輪 `1449563` 的表相同。
 
-相對 `a97f2b4`，diff 只有 `tests/qc6_checks.py`、`tests/test_warehouse_e2e.py`、`docs/test-cases/WAREHOUSE_PLACEMENT.md`。`kids_town.db` 這個名字在 diff 裡是 0 次。資料庫 SHA 沒有變。沒有加「Tab 到被確認欄蓋住的格子要自動捲動」的測試。
+相對 `a97f2b4`，diff 只有 `tests/qc6_checks.py`、`tests/test_warehouse_e2e.py`、`docs/test-cases/WAREHOUSE_PLACEMENT.md`。資料庫檔沒有進 diff，SHA 沒有變。沒有加「Tab 到被確認欄蓋住的格子要自動捲動」的測試。
