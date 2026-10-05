@@ -1261,8 +1261,26 @@
     return rects;
   }
 
+  /* Bars, the palette, and the scene-1 button. Each border box grows out
+     to the device-pixel grid so a fractional edge cannot cut a pixel in
+     half and blend the band into a rounded corner. */
   function coverRects() {
-    return shownBoxes("#townMap .place-bar").concat(shownBoxes("#townMap .palette"));
+    var dpr = window.devicePixelRatio || 1;
+    var rects = shownBoxes("#townMap .place-bar")
+      .concat(shownBoxes("#townMap .palette"))
+      .concat(shownBoxes("#townMap .cta"));
+    var snapped = [];
+    for (var i = 0; i < rects.length; i += 1) {
+      var r = rects[i];
+      snapped.push({
+        el: r.el,
+        left: Math.floor(r.left * dpr + 1e-4) / dpr,
+        top: Math.floor(r.top * dpr + 1e-4) / dpr,
+        right: Math.ceil(r.right * dpr - 1e-4) / dpr,
+        bottom: Math.ceil(r.bottom * dpr - 1e-4) / dpr
+      });
+    }
+    return snapped;
   }
 
   function hitsCover(rects, x0, y0, x1, y1) {
@@ -1274,36 +1292,64 @@
   }
 
   /* Cell-sized SVG. ViewBox units are screen px, so one device pixel is
-     1/dpr wide after the stage scale. Layout snap is undone in the viewBox. */
-  function mountDeviceSvg(paint, village, screenLeft, screenTop, screenW, screenH) {
+     1/dpr wide after the stage scale. The chosen line snaps its layout
+     position and undoes that in the viewBox. The ring's paint origin snaps
+     a half CSS pixel onto a whole CSS pixel, so at scale 1 that half pixel
+     is carried in the viewBox instead of in the element's screen origin. */
+  function mountDeviceSvg(paint, village, screenLeft, screenTop, screenW, screenH, deviceOrigin) {
     var scale = screenScale(village);
     var box = village.getBoundingClientRect();
     if (!(scale > 0) || !(box.width > 2)) return null;
     var cs = getComputedStyle(village);
     var borderLeft = parseFloat(cs.borderLeftWidth) || 0;
     var borderTop = parseFloat(cs.borderTopWidth) || 0;
-    var rawLeft = village.scrollLeft + (screenLeft - box.left) / scale - borderLeft;
-    var rawTop = village.scrollTop + (screenTop - box.top) / scale - borderTop;
-    var snappedLeft = Math.round(rawLeft);
-    var snappedTop = Math.round(rawTop);
+    var targetLeft = screenLeft;
+    var targetTop = screenTop;
+    if (deviceOrigin && Math.abs(scale - 1) < 0.02) {
+      var fracX = screenLeft - Math.floor(screenLeft);
+      var fracY = screenTop - Math.floor(screenTop);
+      if (Math.abs(fracX - 0.5) < 0.05) targetLeft = Math.floor(screenLeft);
+      if (Math.abs(fracY - 0.5) < 0.05) targetTop = Math.floor(screenTop);
+    }
+    var rawLeft = village.scrollLeft + (targetLeft - box.left) / scale - borderLeft;
+    var rawTop = village.scrollTop + (targetTop - box.top) / scale - borderTop;
+    var leftPx = deviceOrigin ? rawLeft : Math.round(village.scrollLeft + (screenLeft - box.left) / scale - borderLeft);
+    var topPx = deviceOrigin ? rawTop : Math.round(village.scrollTop + (screenTop - box.top) / scale - borderTop);
     while (paint.firstChild) paint.removeChild(paint.firstChild);
     paint.removeAttribute("hidden");
     paint.style.display = "block";
     paint.setAttribute("viewBox", "0 0 " + screenW + " " + screenH);
-    paint.style.left = snappedLeft + "px";
-    paint.style.top = snappedTop + "px";
     paint.style.width = (screenW / scale) + "px";
     paint.style.height = (screenH / scale) + "px";
+    paint.style.left = leftPx + "px";
+    paint.style.top = topPx + "px";
+    var shiftX = deviceOrigin ? (targetLeft - screenLeft) : (leftPx - (village.scrollLeft + (screenLeft - box.left) / scale - borderLeft)) * scale;
+    var shiftY = deviceOrigin ? (targetTop - screenTop) : (topPx - (village.scrollTop + (screenTop - box.top) / scale - borderTop)) * scale;
+    if (deviceOrigin) {
+      var placed = paint.getBoundingClientRect();
+      var errX = targetLeft - placed.left;
+      var errY = targetTop - placed.top;
+      if (Math.abs(errX) > 1e-3 || Math.abs(errY) > 1e-3) {
+        leftPx += errX / scale;
+        topPx += errY / scale;
+        paint.style.left = leftPx + "px";
+        paint.style.top = topPx + "px";
+        placed = paint.getBoundingClientRect();
+      }
+      shiftX = placed.left - screenLeft;
+      shiftY = placed.top - screenTop;
+    }
     return {
       ns: "http://www.w3.org/2000/svg",
-      shiftX: (snappedLeft - rawLeft) * scale,
-      shiftY: (snappedTop - rawTop) * scale
+      shiftX: shiftX,
+      shiftY: shiftY,
+      scale: scale
     };
   }
 
   /* Clip definitions live beside the map, not inside the line svg, so the
      line's own shapes stay the stroked rects. The clip is applied to the
-     group that holds those rects, in the same user space as the viewBox. */
+     group of those rects, in the same user space as the viewBox. */
   function clipDefsHost() {
     var map = $("townMap");
     if (!map) return null;
@@ -1326,8 +1372,9 @@
     return host;
   }
 
-  /* Even-odd clip: the cell box minus each showing bar and the palette.
-     Holes use the same user space as the stroked rects. */
+  /* Even-odd clip: the cell box minus each showing bar, the palette, and
+     the scene-1 button. Each hole is that border box grown out to the
+     device-pixel grid, in the same user space as the stroked rects. */
   function clipPaintToCovers(svg, covers, screenLeft, screenTop, shiftX, shiftY, screenW, screenH, clipId) {
     var ns = "http://www.w3.org/2000/svg";
     var defs = clipDefsHost();
@@ -1338,24 +1385,29 @@
     clip.setAttribute("id", clipId);
     clip.setAttribute("clipPathUnits", "userSpaceOnUse");
     var path = document.createElementNS(ns, "path");
+    var dpr = window.devicePixelRatio || 1;
+    var originX = screenLeft + shiftX;
+    var originY = screenTop + shiftY;
     var d = "M0 0H" + screenW + "V" + screenH + "H0Z";
     for (var i = 0; i < covers.length; i += 1) {
       var r = covers[i];
-      var x0 = r.left - screenLeft - shiftX;
-      var y0 = r.top - screenTop - shiftY;
-      var x1 = r.right - screenLeft - shiftX;
-      var y1 = r.bottom - screenTop - shiftY;
+      var x0 = Math.floor(r.left * dpr + 1e-4) / dpr - originX;
+      var y0 = Math.floor(r.top * dpr + 1e-4) / dpr - originY;
+      var x1 = Math.ceil(r.right * dpr - 1e-4) / dpr - originX;
+      var y1 = Math.ceil(r.bottom * dpr - 1e-4) / dpr - originY;
       d += "M" + x0 + " " + y0 + "V" + y1 + "H" + x1 + "V" + y0 + "Z";
     }
     path.setAttribute("d", d);
     path.setAttribute("fill-rule", "evenodd");
     path.setAttribute("clip-rule", "evenodd");
+    path.setAttribute("shape-rendering", "crispEdges");
     clip.appendChild(path);
     defs.appendChild(clip);
     var group = document.createElementNS(ns, "g");
     while (svg.firstChild) group.appendChild(svg.firstChild);
     group.setAttribute("clip-path", "url(#" + clipId + ")");
     group.setAttribute("clip-rule", "evenodd");
+    group.setAttribute("shape-rendering", "crispEdges");
     svg.appendChild(group);
     svg.removeAttribute("clip-path");
   }
@@ -1453,9 +1505,8 @@
   }
 
   /* Dashes live on the map, in a box around the focused cell.
-     Each rect is one device pixel. A pixel is painted only when every
-     corner is at least the inner edge outside the cell, so a floor-index
-     walk cannot see cream early. */
+     Each rect is one device pixel of a solid band: inner cream 3px,
+     outer brown 2px, between the two corner openings of that edge. */
   function placeFocusRing() {
     var ring = ensureRingPaint();
     var map = $("townMap");
@@ -1478,9 +1529,8 @@
       hideRing(ring);
       return;
     }
-    /* Cream 3px then brown 2px. A device pixel is cream when its centre
-       sits on that band. CSS pixels aligned to the cell can enter a pixel
-       before the centre does, so those early pixels stay off. */
+    /* Inner cream is 3px, starting 2px outside the cell. Outer brown is
+       2px. A device pixel takes the colour of the band its centre sits on. */
     var cream = 3;
     var brown = 2;
     var minOut = 2;
@@ -1497,7 +1547,7 @@
     var screenBottom = Math.ceil((face.cy + hy + padPx) * dpr) / dpr;
     var screenW = screenRight - screenLeft;
     var screenH = screenBottom - screenTop;
-    var mounted = mountDeviceSvg(ring, map, screenLeft, screenTop, screenW, screenH);
+    var mounted = mountDeviceSvg(ring, map, screenLeft, screenTop, screenW, screenH, true);
     if (!mounted) {
       hideRing(ring);
       return;
@@ -1531,16 +1581,18 @@
       });
     }
     /* Closest edge to the device-pixel centre. The far side of a convex
-       diamond is a larger line distance, so the maximum would pick it. */
+       diamond is a larger line distance, so the maximum would pick it.
+       The outer part of the band stops a pixel short of the opening, so
+       its corner cannot become the only cream at the tip. */
     function atCentre(x, y) {
       var best = null;
       for (var f = 0; f < frames.length; f += 1) {
         var edge = frames[f];
         var sd = (x - edge.a[0]) * edge.nx + (y - edge.a[1]) * edge.ny;
         var along = ((x - edge.a[0]) * edge.dx + (y - edge.a[1]) * edge.dy) / edge.len;
-        if (along < edge.d0 || along > edge.len - edge.d1 || sd < -0.5) continue;
+        if (sd < -0.5) continue;
         var cross = sd < 0 ? -sd : sd;
-        if (!best || cross < best.cross) best = { sd: sd, cross: cross };
+        if (!best || cross < best.cross) best = { sd: sd, cross: cross, along: along, edge: edge };
       }
       return best;
     }
@@ -1549,46 +1601,9 @@
       var span = Math.abs(x - face.cx) / face.halfW + Math.abs(y - face.cy) / face.halfH;
       return (span - 1) * ap;
     }
-    /* CSS pixels share the cell's subpixel phase. A walk along the solid
-       middle of an edge can enter one before its device-pixel centre is
-       on the cream. Leave that device pixel unpainted. */
-    var boundX = face.cx - face.halfW;
-    var boundY = face.cy - face.halfH;
-    function pixelKey(x, y) {
-      return Math.floor(x * dpr + 1e-4) + ":" + Math.floor(y * dpr + 1e-4);
-    }
-    var phaseX = boundX - Math.floor(boundX);
-    var phaseY = boundY - Math.floor(boundY);
-    var cssOffX = phaseX + 0.5;
-    var cssOffY = phaseY + 0.5;
-    if (cssOffX >= 1) cssOffX -= 1;
-    if (cssOffY >= 1) cssOffY -= 1;
-    var blocked = {};
-    var samples = 24;
-    for (var e = 0; e < frames.length; e += 1) {
-      var edge = frames[e];
-      var inset = Math.max(3, edge.len * 0.12);
-      var open = edge.len - inset * 2;
-      if (open <= 1) continue;
-      var ux = edge.dx / edge.len;
-      var uy = edge.dy / edge.len;
-      for (var s = 0; s < samples; s += 1) {
-        var along = inset + open * (s + 0.5) / samples;
-        var ox = edge.a[0] + ux * along;
-        var oy = edge.a[1] + uy * along;
-        for (var stepI = 1; stepI < 20; stepI += 1) {
-          var dist = stepI / 10;
-          var px = ox + edge.nx * dist;
-          var py = oy + edge.ny * dist;
-          var cix = Math.floor(px - boundX);
-          var ciy = Math.floor(py - boundY);
-          blocked[pixelKey(boundX + cix + 0.5, boundY + ciy + 0.5)] = true;
-        }
-      }
-    }
     var covers = coverRects();
     var mapBox = map.getBoundingClientRect();
-    var slack = 2;
+    var mapSlack = 2;
     var step = 1 / dpr;
     var bw = Math.round(screenW * dpr);
     var bh = Math.round(screenH * dpr);
@@ -1599,24 +1614,21 @@
       for (var ix = 0; ix <= bw; ix += 1) {
         var color = "";
         var x0 = screenLeft + ix * step;
-        var onMap = x0 < mapBox.right + slack && x0 + step > mapBox.left - slack
-          && y0 < mapBox.bottom + slack && y0 + step > mapBox.top - slack;
-        if (ix < bw && onMap && !hitsCover(covers, x0, y0, x0 + step, y0 + step)) {
-          var mid = atCentre(x0 + step * 0.5, y0 + step * 0.5);
-          var centreOut = outsideAt(x0 + step * 0.5, y0 + step * 0.5);
-          var nearest = outsideAt(x0, y0);
-          var e1 = outsideAt(x0 + step, y0);
-          var e2 = outsideAt(x0, y0 + step);
-          var e3 = outsideAt(x0 + step, y0 + step);
-          if (e1 < nearest) nearest = e1;
-          if (e2 < nearest) nearest = e2;
-          if (e3 < nearest) nearest = e3;
-          var cssOut = outsideAt(x0 + cssOffX, y0 + cssOffY);
-          var inward = cssOut < centreOut;
-          var hold = blocked[pixelKey(x0, y0)] && centreOut < minOut + cream;
-          if (!hold && mid && centreOut >= minOut && centreOut < minOut + cream + brown
-              && (!inward || nearest >= minOut)) {
-            color = centreOut < minOut + cream ? "#fff8e7" : "#6b4f2a";
+        if (ix < bw
+          && x0 < mapBox.right + mapSlack && x0 + step > mapBox.left - mapSlack
+          && y0 < mapBox.bottom + mapSlack && y0 + step > mapBox.top - mapSlack
+          && !hitsCover(covers, x0, y0, x0 + step, y0 + step)) {
+          var cx = x0 + step * 0.5;
+          var cy = y0 + step * 0.5;
+          var mid = atCentre(cx, cy);
+          var centreOut = outsideAt(cx, cy);
+          if (mid && centreOut >= minOut && centreOut < minOut + cream + brown) {
+            /* Brown stops short of the opening so it cannot be the only ink at the tip. */
+            var tipRetreat = centreOut >= minOut + cream - 1 ? 1.5 : 0;
+            var edge = mid.edge;
+            if (mid.along >= edge.d0 + tipRetreat && mid.along <= edge.len - edge.d1 - tipRetreat) {
+              color = centreOut < minOut + cream ? "#fff8e7" : "#6b4f2a";
+            }
           }
         }
         if (color !== runColor) {
@@ -1635,6 +1647,61 @@
       ring, covers, screenLeft, screenTop, mounted.shiftX, mounted.shiftY,
       screenW, screenH, "focusRingClip"
     );
+    trimPaintBox(
+      ring, screenLeft + mounted.shiftX, screenTop + mounted.shiftY,
+      screenW, screenH, mounted.scale, covers
+    );
+  }
+
+  /* The ring's border box must stay off the bars, the palette, and the
+     scene-1 button. An overlapping box changes how their rounded corners
+     are rasterized, even where the band itself is not drawn. */
+  function trimPaintBox(paint, originX, originY, screenW, screenH, scale, covers) {
+    if (!(scale > 0)) return;
+    var left = originX;
+    var top = originY;
+    var right = originX + screenW;
+    var bottom = originY + screenH;
+    var guard = 0;
+    while (guard < 8) {
+      guard += 1;
+      var best = null;
+      for (var i = 0; i < covers.length; i += 1) {
+        var c = covers[i];
+        if (right <= c.left || left >= c.right || bottom <= c.top || top >= c.bottom) continue;
+        var options = [
+          { edge: "bottom", at: c.top, loss: bottom - c.top },
+          { edge: "top", at: c.bottom, loss: c.bottom - top },
+          { edge: "right", at: c.left, loss: right - c.left },
+          { edge: "left", at: c.right, loss: c.right - left }
+        ];
+        for (var k = 0; k < options.length; k += 1) {
+          var opt = options[k];
+          if (!(opt.loss > 0.05)) continue;
+          var width = right - left;
+          var height = bottom - top;
+          if (opt.edge === "left" || opt.edge === "right") width -= opt.loss;
+          else height -= opt.loss;
+          if (width < 2 || height < 2) continue;
+          if (!best || opt.loss < best.loss) best = opt;
+        }
+      }
+      if (!best) break;
+      if (best.edge === "bottom") bottom = best.at;
+      else if (best.edge === "top") top = best.at;
+      else if (best.edge === "right") right = best.at;
+      else left = best.at;
+    }
+    var cutL = left - originX;
+    var cutT = top - originY;
+    var viewW = right - left;
+    var viewH = bottom - top;
+    if (cutL < 0.05 && cutT < 0.05 && Math.abs(viewW - screenW) < 0.05 && Math.abs(viewH - screenH) < 0.05) return;
+    paint.setAttribute("viewBox", cutL + " " + cutT + " " + viewW + " " + viewH);
+    paint.style.left = ((parseFloat(paint.style.left) || 0) + cutL / scale) + "px";
+    paint.style.top = ((parseFloat(paint.style.top) || 0) + cutT / scale) + "px";
+    paint.style.width = (viewW / scale) + "px";
+    paint.style.height = (viewH / scale) + "px";
   }
 
   /* Chosen line: whole device pixels of #7c2d12. The cell-aligned sample
