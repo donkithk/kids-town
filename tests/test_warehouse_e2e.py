@@ -8602,6 +8602,66 @@ def _paint_guard_problems(page, label, problems):
     )
 
 
+def _bar_sentence(page):
+    """Visible status text of the place bar. Hidden sentences are not included."""
+    return page.evaluate(
+        """() => {
+          const parts = [];
+          for (const sel of ['#readyStatus', '#placeStatus']) {
+            const el = document.querySelector(sel);
+            if (!el) continue;
+            const cs = getComputedStyle(el);
+            if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+            const box = el.getBoundingClientRect();
+            if (box.width < 1 || box.height < 1) continue;
+            parts.push((el.textContent || '').replace(/\\s+/g, ' ').trim());
+          }
+          return parts.join('\\n');
+        }"""
+    ) or ""
+
+
+def _hide_mark_paint(page):
+    """Test-only. Hide the mark paint layer with visibility, not display.
+
+    The sentence and the bar's border stay laid out. Ring layers are left
+    alone. Each element's previous inline visibility is stored so it can
+    be restored.
+    """
+    return page.evaluate(
+        """() => {
+          const saved = [];
+          const seen = new Set();
+          function add(el) {
+            if (!el || seen.has(el)) return;
+            const tag = el.tagName.toLowerCase();
+            if (tag !== 'svg' && tag !== 'canvas') return;
+            const name = ((el.id || '') + ' ' + (el.getAttribute('class') || '')).toLowerCase();
+            if (el.id !== 'chosenMarkPaint' && /ring|focus-lift|focuslift/.test(name)) return;
+            if (el.id !== 'chosenMarkPaint' && !/mark/.test(name)) return;
+            seen.add(el);
+            saved.push(el.id || name);
+            el.setAttribute('data-kt-mark-vis', el.style.visibility || '');
+            el.style.visibility = 'hidden';
+          }
+          add(document.getElementById('chosenMarkPaint'));
+          document.querySelectorAll('#townMap canvas, #townMap svg').forEach(add);
+          return saved;
+        }"""
+    ) or []
+
+
+def _restore_mark_paint(page):
+    page.evaluate(
+        """() => {
+          document.querySelectorAll('[data-kt-mark-vis]').forEach((el) => {
+            el.style.visibility = el.getAttribute('data-kt-mark-vis') || '';
+            el.removeAttribute('data-kt-mark-vis');
+          });
+        }"""
+    )
+
+
 def _diff_bar_outside_text(before, after, clip, rects, label, problems):
     diff = bar_masked_diff(before, after, clip, rects)
     sample = (diff or {}).get("sample")
@@ -8661,41 +8721,73 @@ def _paint_near_bar(page):
             if not clip:
                 problems.append(f"{label_base}: {bar_name} has no on-screen rect")
                 continue
-            baseline_rects = _bar_text_rects(page, bar_name)
-            baseline = _shot(page, clip)
+            # Both diffs use this selected cell, so the bar sentence matches.
+            # The corner of the rounded border is still inside the rect and
+            # still compared; only a sentence change used to move it.
+            _select_cell(page, cell["c"], cell["r"])
+            _blur_focus(page)
+            page.wait_for_timeout(80)
+            select_label = f"{label_base} select"
+            _paint_guard_problems(page, select_label, problems)
+            sentence_on = _bar_sentence(page)
+            rects_on = _bar_text_rects(page, bar_name)
+            marked = _shot(page, clip)
+            hidden = _hide_mark_paint(page)
+            try:
+                if not hidden:
+                    problems.append(f"{select_label}: mark layer not found to hide")
+                page.wait_for_timeout(40)
+                sentence_off = _bar_sentence(page)
+                rects_off = _bar_text_rects(page, bar_name)
+                unmarked = _shot(page, clip)
+            finally:
+                _restore_mark_paint(page)
+            print(
+                f"TC-FE-PAINT-UNDER-UI {select_label} sentence {sentence_on!r} "
+                f"vs {sentence_off!r} mark-hidden {hidden}",
+                flush=True,
+            )
+            if sentence_on != sentence_off:
+                problems.append(
+                    f"{select_label}: bar sentence {sentence_on!r} != {sentence_off!r}"
+                )
+            _diff_bar_outside_text(
+                unmarked,
+                marked,
+                clip,
+                rects_on + rects_off,
+                select_label,
+                problems,
+            )
             if not _focus_visible_cell(page, cell["c"], cell["r"]):
                 problems.append(f"{label_base} focus: did not focus")
                 continue
             page.wait_for_timeout(80)
             focus_label = f"{label_base} focus"
             _paint_guard_problems(page, focus_label, problems)
-            focus_rects = _bar_text_rects(page, bar_name)
+            sentence_focus = _bar_sentence(page)
+            rects_focus = _bar_text_rects(page, bar_name)
             focused = _shot(page, clip)
             _blur_focus(page)
             page.wait_for_timeout(80)
-            blurred_rects = _bar_text_rects(page, bar_name)
+            sentence_blur = _bar_sentence(page)
+            rects_blur = _bar_text_rects(page, bar_name)
             blurred = _shot(page, clip)
+            print(
+                f"TC-FE-PAINT-UNDER-UI {focus_label} sentence {sentence_focus!r} "
+                f"vs {sentence_blur!r}",
+                flush=True,
+            )
+            if sentence_focus != sentence_blur:
+                problems.append(
+                    f"{focus_label}: bar sentence {sentence_focus!r} != {sentence_blur!r}"
+                )
             _diff_bar_outside_text(
                 blurred,
                 focused,
                 clip,
-                baseline_rects + focus_rects + blurred_rects,
+                rects_focus + rects_blur,
                 focus_label,
-                problems,
-            )
-            _select_cell(page, cell["c"], cell["r"])
-            _blur_focus(page)
-            page.wait_for_timeout(80)
-            select_label = f"{label_base} select"
-            _paint_guard_problems(page, select_label, problems)
-            select_rects = _bar_text_rects(page, bar_name)
-            selected = _shot(page, clip)
-            _diff_bar_outside_text(
-                baseline,
-                selected,
-                clip,
-                baseline_rects + select_rects,
-                select_label,
                 problems,
             )
             _blur_focus(page)
@@ -8781,9 +8873,12 @@ def test_paint_under_ui(page, base_url, warehouse_db, warehouse_ids):
     鍵盤打開銀行面板時，面板矩形裡的差也是 0。
     #readyBar 和抽屜是 guard，現在通過，保持通過。
     底尖靠近確認欄的格子（1280 是 (3,4)、(2,5)；其他視窗用活矩形挑）
-    聚焦時，確認欄活矩形和失焦後的同一張比，文字節點矩形（外擴 1px）
-    以外的像素差是 0。選中時，文字矩形以外的每個像素要和沒有選中、
-    沒有焦點的乾淨底圖同一座標一致。確認欄句子的 text-shadow 是 none。
+    兩次像素差的句子都必須相同，文字也要斷言相等。聚焦：該格已選中，
+    失焦和聚焦各拍一張。選中線：同一格保持選中且失焦，一張標記層在畫，
+    另一張把標記層設成 visibility:hidden（測完還原）。文字節點矩形
+    （外擴 1px）以外的像素差是 0。不放寬容差，也不把圓角帶排除。
+    確認欄句子的 text-shadow 是 none。圓角外面的三角仍在矩形裡，
+    不得有環或選中線，也不要求那裡看得到環。
     焦點環和選中標記在最近的共同堆疊上下文裡，有效 z 必須嚴格低於
     每一個看得見的確認欄和調色盤。場景 1、場景 3、面板打開、捲動 366、
     改視窗都查。環若是 canvas，欄和調色盤對到的裝置像素 alpha 全是 0；
