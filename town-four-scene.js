@@ -1267,8 +1267,11 @@
      pixels outside the bar and the palette; a device pixel that begins on
      that edge still covers the next screen pixel, which is inside the
      4px pad around the border box. Palette and button cream use that pad.
-     Bar cream stays on the border box, because that cream is the band. */
-  function coverRects(padPx, barsToo) {
+     Bar cream stays on the border box, because that cream is the band.
+     `palettePad`, when set, is the palette hole only. Painted ring pixels
+     inside 48 screen px of that border box shift its wood corner by more
+     than 2 levels under Noto Sans CJK TC. */
+  function coverRects(padPx, barsToo, palettePad) {
     var dpr = window.devicePixelRatio || 1;
     var pad = padPx || 0;
     var rects = shownBoxes("#townMap .place-bar")
@@ -1278,7 +1281,9 @@
     for (var i = 0; i < rects.length; i += 1) {
       var r = rects[i];
       var isBar = r.el.classList && r.el.classList.contains("place-bar");
+      var isPalette = r.el.classList && r.el.classList.contains("palette");
       var extra = isBar && !barsToo ? 0 : pad;
+      if (isPalette && palettePad != null) extra = palettePad;
       snapped.push({
         el: r.el,
         left: Math.floor((r.left - extra) * dpr + 1e-4) / dpr,
@@ -1608,8 +1613,9 @@
       var span = Math.abs(x - face.cx) / face.halfW + Math.abs(y - face.cy) / face.halfH;
       return (span - 1) * ap;
     }
-    var covers = coverRects(4, false);
+    var covers = coverRects(4, false, 48);
     var brownCovers = coverRects(4, true);
+    var trimCovers = coverRects(4, false);
     var mapBox = map.getBoundingClientRect();
     var mapSlack = 2;
     var step = 1 / dpr;
@@ -1671,7 +1677,7 @@
     );
     trimPaintBox(
       ring, screenLeft + mounted.shiftX, screenTop + mounted.shiftY,
-      screenW, screenH, mounted.scale, covers
+      screenW, screenH, mounted.scale, trimCovers
     );
   }
 
