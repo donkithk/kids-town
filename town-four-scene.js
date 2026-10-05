@@ -1624,9 +1624,13 @@
           var centreOut = outsideAt(cx, cy);
           /* A down-right normal runs with the pixel grid, so a pixel whose
              centre is just past 2px still covers the point 1px closer to
-             the cell. Hold that edge until the centre clears it. */
+             the cell. Keep that edge back until the centre clears it. Near
+             an opening the same inset leaves the last cream pixel empty,
+             so it eases off along the last quarter of the edge. */
           var slant = mid ? Math.max(0, mid.edge.nx + mid.edge.ny) : 0;
-          var innerLimit = minOut + slant * 0.45;
+          var fromEnd = mid ? Math.min(mid.along, mid.edge.len - mid.along) : 0;
+          var inset = mid && fromEnd < mid.edge.len * 0.25 ? 0.34 : 0.45;
+          var innerLimit = minOut + slant * inset;
           if (mid && centreOut >= innerLimit && centreOut < minOut + cream + brown) {
             /* Brown stops short of the opening so it cannot be the only ink at the tip. */
             var tipRetreat = centreOut >= minOut + cream - 1 ? 1.5 : 0;
