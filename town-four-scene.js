@@ -1261,29 +1261,42 @@
     return rects;
   }
 
-  /* Border boxes of the bars, the palette, and the scene-1 button.
-     `padPx` grows each box in screen pixels before the edge snaps out to
-     the device-pixel grid. The painted face sits on a ::before 3 layout
-     pixels outside the bar and the palette; a device pixel that begins on
-     that edge still covers the next screen pixel, which is inside the
-     4px pad around the border box. Palette and button cream use that pad.
-     Bar cream stays on the border box, because that cream is the band.
-     `palettePad`, when set, is the palette hole only. Painted ring pixels
-     inside 48 screen px of that border box shift its wood corner by more
-     than 2 levels under Noto Sans CJK TC. */
-  function coverRects(padPx, barsToo, palettePad) {
+  /* How far the painted frame sits outside the border box, in screen px.
+     Bars and the palette paint a ::before 3px outside. The sheet's wooden
+     frame is the ::after. A control with no outside pseudo paints on its
+     own border box. */
+  function paintedOutset(el) {
+    var box = el.getBoundingClientRect();
+    var base = el.offsetWidth;
+    var scale = base > 0 && box.width > 0 ? box.width / base : 1;
+    var out = 0;
+    var names = ["::before", "::after"];
+    for (var i = 0; i < names.length; i += 1) {
+      var cs = getComputedStyle(el, names[i]);
+      if (!cs || cs.content === "none" || cs.content === "normal") continue;
+      if (cs.display === "none" || cs.visibility === "hidden") continue;
+      var edges = [cs.top, cs.right, cs.bottom, cs.left];
+      for (var k = 0; k < edges.length; k += 1) {
+        var n = parseFloat(edges[k]);
+        if (n < 0) out = Math.max(out, -n);
+      }
+    }
+    return out * scale;
+  }
+
+  /* Bars, palette, scene-1 button, and sheet. Each hole is the border box
+     plus that control's painted frame, snapped outward onto the device grid
+     so a pixel that starts on the frame is not drawn. */
+  function coverRects() {
     var dpr = window.devicePixelRatio || 1;
-    var pad = padPx || 0;
     var rects = shownBoxes("#townMap .place-bar")
       .concat(shownBoxes("#townMap .palette"))
-      .concat(shownBoxes("#townMap .cta"));
+      .concat(shownBoxes("#townMap .cta"))
+      .concat(shownBoxes("#townMap .action-sheet"));
     var snapped = [];
     for (var i = 0; i < rects.length; i += 1) {
       var r = rects[i];
-      var isBar = r.el.classList && r.el.classList.contains("place-bar");
-      var isPalette = r.el.classList && r.el.classList.contains("palette");
-      var extra = isBar && !barsToo ? 0 : pad;
-      if (isPalette && palettePad != null) extra = palettePad;
+      var extra = paintedOutset(r.el);
       snapped.push({
         el: r.el,
         left: Math.floor((r.left - extra) * dpr + 1e-4) / dpr,
@@ -1384,9 +1397,9 @@
     return host;
   }
 
-  /* Even-odd clip: the cell box minus each showing bar, the palette, and
-     the scene-1 button. Each hole is the cover from coverRects, already
-     grown past the painted face and snapped to the device-pixel grid. */
+  /* Even-odd clip: the paint box minus each showing bar, the palette,
+     the scene-1 button, and the sheet. Each hole is that control's
+     painted frame. */
   function clipPaintToCovers(svg, covers, screenLeft, screenTop, shiftX, shiftY, screenW, screenH, clipId) {
     var ns = "http://www.w3.org/2000/svg";
     var defs = clipDefsHost();
@@ -1593,9 +1606,7 @@
       });
     }
     /* Closest edge to the device-pixel centre. The far side of a convex
-       diamond is a larger line distance, so the maximum would pick it.
-       The outer part of the band stops a pixel short of the opening, so
-       its corner cannot become the only cream at the tip. */
+       diamond is a larger line distance, so the maximum would pick it. */
     function atCentre(x, y) {
       var best = null;
       for (var f = 0; f < frames.length; f += 1) {
@@ -1613,9 +1624,7 @@
       var span = Math.abs(x - face.cx) / face.halfW + Math.abs(y - face.cy) / face.halfH;
       return (span - 1) * ap;
     }
-    var covers = coverRects(4, false, 48);
-    var brownCovers = coverRects(4, true);
-    var trimCovers = coverRects(4, false);
+    var covers = coverRects();
     var mapBox = map.getBoundingClientRect();
     var mapSlack = 2;
     var step = 1 / dpr;
@@ -1636,26 +1645,12 @@
           var cy = y0 + step * 0.5;
           var mid = atCentre(cx, cy);
           var centreOut = outsideAt(cx, cy);
-          /* A down-right normal runs with the pixel grid, so a pixel whose
-             centre is just past 2px still covers the point 1px closer to
-             the cell. Keep that edge back until the centre clears it. Near
-             an opening the same inset leaves the last cream pixel empty,
-             so it eases off along the last quarter of the edge. */
-          var slant = mid ? Math.max(0, mid.edge.nx + mid.edge.ny) : 0;
-          var fromEnd = mid ? Math.min(mid.along, mid.edge.len - mid.along) : 0;
-          var inset = mid && fromEnd < mid.edge.len * 0.25 ? 0.34 : 0.45;
-          var innerLimit = minOut + slant * inset;
+          /* The band starts 0.45px past the 2px line, on every edge. */
+          var innerLimit = minOut + 0.45;
           if (mid && centreOut >= innerLimit && centreOut < minOut + cream + brown) {
-            /* Brown stops short of the opening so it cannot be the only ink at the tip. */
-            var tipRetreat = centreOut >= minOut + cream - 1 ? 1.5 : 0;
             var edge = mid.edge;
-            if (mid.along >= edge.d0 + tipRetreat && mid.along <= edge.len - edge.d1 - tipRetreat) {
+            if (mid.along >= edge.d0 && mid.along <= edge.len - edge.d1) {
               color = centreOut < minOut + cream ? "#fff8e7" : "#6b4f2a";
-            }
-            /* Brown stops inside the 4px pad around every cover. Cream on
-               a bar stays, so the band the cell owns still meets the bar. */
-            if (color === "#6b4f2a" && hitsCover(brownCovers, x0, y0, x0 + step, y0 + step)) {
-              color = "";
             }
           }
         }
@@ -1677,14 +1672,12 @@
     );
     trimPaintBox(
       ring, screenLeft + mounted.shiftX, screenTop + mounted.shiftY,
-      screenW, screenH, mounted.scale, trimCovers
+      screenW, screenH, mounted.scale, covers
     );
   }
 
-  /* The ring's border box must stay off the bars, the palette, and the
-     scene-1 button, including the painted face outside each border box.
-     An overlapping box changes how their rounded corners are rasterized,
-     even where the band itself is not drawn. */
+  /* Keep the ring's own box off the same painted frames. The clip already
+     drops the ink; the box stops at that edge so it does not cover the control. */
   function trimPaintBox(paint, originX, originY, screenW, screenH, scale, covers) {
     if (!(scale > 0)) return;
     var left = originX;
@@ -1770,7 +1763,7 @@
       var span = Math.abs(x - face.cx) / face.halfW + Math.abs(y - face.cy) / face.halfH;
       return (span - 1) * ap;
     }
-    var covers = coverRects(0, false);
+    var covers = coverRects();
     var boundX = face.cx - face.halfW;
     var boundY = face.cy - face.halfH;
     var cssOffX = (boundX - Math.floor(boundX) + 0.5) % 1;
