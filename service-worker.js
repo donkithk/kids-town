@@ -4,13 +4,15 @@
    Scope: /kids/
    ============================================ */
 
-const CACHE_NAME = 'kids-town-v18';
-const STATIC_CACHE = 'kids-town-static-v18';
+const CACHE_NAME = 'kids-town-v28';
+const STATIC_CACHE = 'kids-town-static-v28';
 
 // Files to precache on install
 const PRECACHE_URLS = [
   '/kids/',
   '/kids/index.html',
+  '/kids/town-four-scene.css',
+  '/kids/town-four-scene.js',
   '/kids/manifest.json',
   '/kids/icon-192.png',
   '/kids/icon-512.png',
@@ -37,7 +39,9 @@ self.addEventListener('activate', event => {
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(name => {
-          if (name !== CACHE_NAME && name !== STATIC_CACHE) {
+          const current = name === CACHE_NAME || name === STATIC_CACHE;
+          const ours = name.indexOf('kids-town-v') === 0 || name.indexOf('kids-town-static-v') === 0;
+          if (ours && !current) {
             console.log('[SW] Deleting old cache:', name);
             return caches.delete(name);
           }
@@ -58,11 +62,8 @@ self.addEventListener('fetch', event => {
     url.pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|js|css|woff2?)$/);
   const isCode = url.pathname.match(/\.(js|css)$/);
 
-  // API calls: network-first with timeout, fallback to cache
-  if (isApi) {
-    event.respondWith(networkFirstWithTimeout(event.request));
-    return;
-  }
+  // API stays on the page's fetch so a test can answer 4xx before this worker.
+  if (isApi) return;
 
   // Styles and scripts: network-first so a new sheet/confirm skin is not stuck
   // behind a cache-first copy of town-four-scene.css.

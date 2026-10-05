@@ -7,6 +7,9 @@
   var ASSET = "mocks/town-building-proof/assets/";
   var MOTION_KEY = "ktTownMotion";
   var MARK_VALID = ASSET + "cell-valid.svg";
+  var MARK_CHOSEN = "data:image/svg+xml," + encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'></svg>"
+  );
 
   var ASSET_ID = {
     "圖書館": "library",
@@ -23,6 +26,8 @@
 
   var pads = [];
   var built = false;
+  var ringGeom = null;
+  var ringBtn = null;
   var placeSeq = 0;
   var motionOn = true;
   var state = {
@@ -409,7 +414,7 @@
     return town.storedBuildings || town.stored_buildings || [];
   }
 
-  /* Owned but warehoused. Not a map 「已起」, and not a new-build sale. */
+  /* Owned but warehoused. Not a map building, and not a new-build sale. */
   function storedDef(defId) {
     var list = storedRows().slice();
     var owned = buildings();
@@ -422,26 +427,92 @@
     return null;
   }
 
-  function originOf(row) {
-    if (!row || row.cell_x == null || row.cell_y == null) return null;
-    return { id: row.id, x: row.cell_x | 0, y: row.cell_y | 0 };
+  /* Catalog square side. A missing footprint stays 2. */
+  function footprintOf(def) {
+    var n = parseInt(def && def.footprint, 10);
+    if (!isFinite(n) || n < 1) return 2;
+    return n;
   }
 
-  /* unstored rejects a 2×2 whose cells hold another building origin or a tile. */
-  function footprintFree(c, r, ignoreId) {
-    if (c < 0 || r < 0 || c > COLS - 2 || r > ROWS - 2) return false;
-    var blocks = buildings().concat(storedRows());
+  function defByName(name) {
+    var list = defs();
+    for (var i = 0; i < list.length; i += 1) {
+      if (list[i].name === name) return list[i];
+    }
+    return null;
+  }
+
+  function placedSize(row) {
+    if (!row) return footprintOf(null);
+    return footprintOf(defById(row.def_id) || defByName(row.name));
+  }
+
+  function minCatalogFootprint() {
+    var list = defs();
+    var min = 0;
+    for (var i = 0; i < list.length; i += 1) {
+      var n = footprintOf(list[i]);
+      if (!min || n < min) min = n;
+    }
+    return min || footprintOf(null);
+  }
+
+  function unstoreRow() {
+    if (!state.unstoreId) return null;
+    var owned = buildings().concat(storedRows());
+    for (var i = 0; i < owned.length; i += 1) {
+      if (String(owned[i].id) === String(state.unstoreId)) return owned[i];
+    }
+    return null;
+  }
+
+  /* Chosen building, else the smallest catalog footprint. */
+  function activeFootprint() {
+    if (state.unstoreId) return placedSize(unstoreRow());
+    if (state.defId != null) return footprintOf(defById(state.defId));
+    return minCatalogFootprint();
+  }
+
+  function footprintsOverlap(ax, ay, aSize, bx, by, bSize) {
+    return !(ax + aSize <= bx || bx + bSize <= ax || ay + aSize <= by || by + bSize <= ay);
+  }
+
+  function originFits(c, r, size) {
+    return c >= 0 && r >= 0 && c + size <= COLS && r + size <= ROWS;
+  }
+
+  /* True when a placed building's whole footprint covers this cell. */
+  function coveredAt(c, r) {
+    var list = buildings();
+    for (var i = 0; i < list.length; i += 1) {
+      var row = list[i];
+      if ((row.stored | 0) === 1) continue;
+      if (row.cell_x == null || row.cell_y == null) continue;
+      var size = placedSize(row);
+      var ox = row.cell_x | 0;
+      var oy = row.cell_y | 0;
+      if (c >= ox && c < ox + size && r >= oy && r < oy + size) return row;
+    }
+    return null;
+  }
+
+  /* Placed buildings only. stored=1 does not occupy a cell. */
+  function footprintFree(c, r, ignoreId, size) {
+    var fp = size || activeFootprint();
+    if (!originFits(c, r, fp)) return false;
+    var blocks = buildings();
+    for (var i = 0; i < blocks.length; i += 1) {
+      var row = blocks[i];
+      if ((row.stored | 0) === 1) continue;
+      if (row.cell_x == null || row.cell_y == null) continue;
+      if (ignoreId != null && String(row.id) === String(ignoreId)) continue;
+      if (footprintsOverlap(c, r, fp, row.cell_x | 0, row.cell_y | 0, placedSize(row))) return false;
+    }
     var tiles = (typeof townData !== "undefined" && townData && townData.tiles) || [];
-    for (var dy = 0; dy < 2; dy += 1) {
-      for (var dx = 0; dx < 2; dx += 1) {
+    for (var dy = 0; dy < fp; dy += 1) {
+      for (var dx = 0; dx < fp; dx += 1) {
         var cx = c + dx;
         var cy = r + dy;
-        for (var i = 0; i < blocks.length; i += 1) {
-          var origin = originOf(blocks[i]);
-          if (!origin) continue;
-          if (ignoreId != null && String(origin.id) === String(ignoreId)) continue;
-          if (origin.x === cx && origin.y === cy) return false;
-        }
         for (var t = 0; t < tiles.length; t += 1) {
           var tile = tiles[t];
           if ((tile.cell_x | 0) === cx && (tile.cell_y | 0) === cy) return false;
@@ -451,17 +522,50 @@
     return true;
   }
 
-  function firstUnstorePad(ignoreId) {
+  function hasLegalOrigin(ignoreId, size) {
+    var fp = size || activeFootprint();
+    var last = ROWS - fp;
+    for (var r = 0; r <= last; r += 1) {
+      for (var c = 0; c <= COLS - fp; c += 1) {
+        if (footprintFree(c, r, ignoreId, fp)) return true;
+      }
+    }
+    return false;
+  }
+
+  function firstUnstorePad(ignoreId, size) {
+    var fp = size || activeFootprint();
     for (var r = 0; r < ROWS; r += 1) {
       for (var c = 0; c < COLS; c += 1) {
         if (occAt(c, r)) continue;
-        if (footprintFree(c, r, ignoreId)) return { c: c, r: r };
+        if (footprintFree(c, r, ignoreId, fp)) return { c: c, r: r };
       }
     }
     return null;
   }
 
-  /* 建築清單放返 stays on the four-scene pad. The 存倉 tab still uses startUnstoreBuilding. */
+  /* 存倉「取出」and the building list share this path. A full map stays put. */
+  function beginWarehousePlace(row) {
+    if (!row) return false;
+    if (!hasLegalOrigin(row.id, placedSize(row))) {
+      if (typeof showToast === "function") {
+        showToast("城鎮沒有空位，請先收起或移動其他建築。", "info");
+      }
+      return false;
+    }
+    state.defId = row.def_id;
+    state.unstoreId = row.id;
+    state.sheet = false;
+    state.listOpen = false;
+    state.pad = null;
+    state.confirming = false;
+    state.placeBeat = false;
+    state.scene = 2;
+    render();
+    return true;
+  }
+
+  /* Confirm fallback when a stored row is chosen without the take-out scene. */
   function placeFromStore(row) {
     if (!row) return;
     state.defId = row.def_id;
@@ -470,8 +574,8 @@
     state.listOpen = false;
     var padOk = state.pad
       && !occAt(state.pad.c, state.pad.r)
-      && footprintFree(state.pad.c, state.pad.r, row.id);
-    if (!padOk) state.pad = firstUnstorePad(row.id);
+      && footprintFree(state.pad.c, state.pad.r, row.id, placedSize(row));
+    if (!padOk) state.pad = firstUnstorePad(row.id, placedSize(row));
     state.scene = 3;
     render();
   }
@@ -482,9 +586,9 @@
     return footprintFree(state.pad.c, state.pad.r, state.unstoreId);
   }
 
-  function assetSrc(name) {
+  function assetSrc(name, cutout) {
     var id = ASSET_ID[name] || "shop";
-    var still = motionOn ? "" : "-still";
+    var still = (cutout || !motionOn) ? "-still" : "";
     return ASSET + "bldg-" + id + "-iso" + still + ".svg";
   }
 
@@ -525,6 +629,13 @@
         mark.alt = "";
         mark.hidden = true;
         mark.src = MARK_VALID;
+        /* Gold stays on a chosen cell. The .mark swaps to the brown stroke
+           for the document, and that image is not the paint on screen. */
+        var fill = document.createElement("img");
+        fill.className = "cell-fill";
+        fill.alt = "";
+        fill.setAttribute("aria-hidden", "true");
+        fill.src = MARK_VALID;
         var sprite = document.createElement("img");
         sprite.className = "sprite";
         sprite.alt = "";
@@ -545,6 +656,7 @@
         pad.appendChild(slab);
         pad.appendChild(shadow);
         pad.appendChild(mark);
+        pad.appendChild(fill);
         pad.appendChild(sprite);
         pad.appendChild(ghost);
         pad.appendChild(badge);
@@ -569,6 +681,148 @@
     };
   }
 
+  function clientContentBox(el) {
+    var box = el.getBoundingClientRect();
+    var cs = getComputedStyle(el);
+    return {
+      left: box.left + (parseFloat(cs.borderLeftWidth) || 0),
+      top: box.top + (parseFloat(cs.borderTopWidth) || 0),
+      right: box.right - (parseFloat(cs.borderRightWidth) || 0),
+      bottom: box.bottom - (parseFloat(cs.borderBottomWidth) || 0)
+    };
+  }
+
+  function intersectRect(a, b) {
+    if (!a || !b) return null;
+    var left = Math.max(a.left, b.left);
+    var top = Math.max(a.top, b.top);
+    var right = Math.min(a.right, b.right);
+    var bottom = Math.min(a.bottom, b.bottom);
+    if (right - left < 1 || bottom - top < 1) return null;
+    return { left: left, top: top, right: right, bottom: bottom };
+  }
+
+  function pointInRect(x, y, rect) {
+    return !!rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  }
+
+  function layoutFrame() {
+    var root = document.documentElement;
+    return { left: 0, top: 0, right: root.clientWidth, bottom: root.clientHeight };
+  }
+
+  /* Tightest overflow ancestor of a pad: the layer that actually clips cells.
+     Every side is that layer's border box, then the on-screen frame. */
+  function cellClipRect() {
+    var pad = document.querySelector("#townMap .pad");
+    var clip = null;
+    for (var node = pad ? pad.parentElement : $("village"); node && node !== document.body; node = node.parentElement) {
+      var cs = getComputedStyle(node);
+      var box = node.getBoundingClientRect();
+      var clipsX = cs.overflowX === "hidden" || cs.overflowX === "auto" || cs.overflowX === "scroll" || cs.overflowX === "clip";
+      var clipsY = cs.overflowY === "hidden" || cs.overflowY === "auto" || cs.overflowY === "scroll" || cs.overflowY === "clip";
+      if (!clipsX && !clipsY) continue;
+      var next = {
+        left: clipsX ? box.left : -1e9,
+        top: clipsY ? box.top : -1e9,
+        right: clipsX ? box.right : 1e9,
+        bottom: clipsY ? box.bottom : 1e9
+      };
+      clip = clip ? {
+        left: Math.max(clip.left, next.left),
+        top: Math.max(clip.top, next.top),
+        right: Math.min(clip.right, next.right),
+        bottom: Math.min(clip.bottom, next.bottom)
+      } : next;
+    }
+    return clip;
+  }
+
+  function visibleMapClip() {
+    return intersectRect(layoutFrame(), cellClipRect());
+  }
+
+  /* The message sits above the margin around the scrollport. It must not
+     turn that margin into a cell, and it must not eat a tap on the scrollport. */
+  function marginUnderToast(x, y) {
+    var toast = document.getElementById("toast");
+    if (!toast || toast.style.display !== "block") return false;
+    var box = toast.getBoundingClientRect();
+    if (x < box.left || x > box.right || y < box.top || y > box.bottom) return false;
+    var village = $("village");
+    if (!village) return true;
+    return !pointInRect(x, y, clientContentBox(village));
+  }
+
+  var SOLID_UI = [
+    "#palette", "#listLauncher", "#readyBar", "#uxPlaceBar", "#actionSheet",
+    "#app .gh", "#ktFooter", "#upgradeConfirm", "#modalOverlay", "#btnBuild",
+    "#townMap .tools", "#dr", "#dov"
+  ];
+
+  function rectsOverlap(a, b) {
+    return a.right >= b.left && a.left <= b.right && a.bottom >= b.top && a.top <= b.bottom;
+  }
+
+  function elementConcealed(el) {
+    for (var node = el; node && node !== document.documentElement; node = node.parentElement) {
+      if (node.inert) return true;
+      var cs = getComputedStyle(node);
+      if (cs.display === "none" || cs.visibility === "hidden") return true;
+      if (Number(cs.opacity) === 0) return true;
+    }
+    return false;
+  }
+
+  /* Open and painted. Inert, hidden, fully transparent, or off-screen does not count. */
+  function solidUiOpen(el) {
+    if (!el || elementConcealed(el)) return false;
+    var box = el.getBoundingClientRect();
+    if (box.width < 2 || box.height < 2) return false;
+    if (!rectsOverlap(box, layoutFrame())) return false;
+    return true;
+  }
+
+  /* The control the event landed on, including its border. */
+  function solidUiFromTarget(target) {
+    if (!target || !target.closest) return false;
+    for (var i = 0; i < SOLID_UI.length; i += 1) {
+      var hit = target.closest(SOLID_UI[i]);
+      if (hit && solidUiOpen(hit)) return true;
+    }
+    return false;
+  }
+
+  /* Open, visible solid UI. The element's own border box is inclusive. */
+  function solidUiCovers(x, y) {
+    var map = $("townMap");
+    if (!map) return false;
+    var mapBox = map.getBoundingClientRect();
+    for (var i = 0; i < SOLID_UI.length; i += 1) {
+      var nodes = document.querySelectorAll(SOLID_UI[i]);
+      for (var n = 0; n < nodes.length; n += 1) {
+        var el = nodes[n];
+        if (!solidUiOpen(el)) continue;
+        var box = el.getBoundingClientRect();
+        if (!rectsOverlap(box, mapBox)) continue;
+        if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) return true;
+      }
+    }
+    return false;
+  }
+
+  function activationPoint(event, el) {
+    var x = event.clientX;
+    var y = event.clientY;
+    if (event.detail === 0 && x === 0 && y === 0 && el) {
+      var box = el.getBoundingClientRect();
+      if (box.width > 0 && box.height > 0) {
+        return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+      }
+    }
+    return { x: x, y: y };
+  }
+
   function gridMetrics() {
     var pad = pads[0].el;
     var s = pad.offsetWidth / 160;
@@ -582,11 +836,12 @@
   function cellAt(clientX, clientY) {
     var village = $("village");
     if (!village || !pads.length) return null;
+    var clip = visibleMapClip();
+    if (!pointInRect(clientX, clientY, clip)) return null;
+    if (solidUiCovers(clientX, clientY)) return null;
+    if (marginUnderToast(clientX, clientY)) return null;
     var rect = village.getBoundingClientRect();
     if (rect.width < 1 || rect.height < 1) return null;
-    var scaleX = rect.width / village.offsetWidth;
-    var inside = (clientX - rect.left) / scaleX;
-    if (inside < 0 || inside > village.clientWidth) return null;
     var point = localPoint(village, clientX, clientY);
     var metrics = gridMetrics();
     if (!metrics.stepX || !metrics.stepY) return null;
@@ -613,11 +868,19 @@
     var picked = sameCell(state.pad, cell);
     var ghostDef = state.defId != null ? defById(state.defId) : null;
     var showGhost = state.scene === 3 && picked && !!ghostDef && !state.sheet;
-    var hot = state.scene === 2 && !occ && !state.sheet;
+    var covered = coveredAt(cell.c, cell.r);
+    var free = footprintFree(cell.c, cell.r, state.unstoreId);
+    /* Gold, the chosen pad, and a successful tap are the cells the footprint can occupy. */
+    var selectable = free;
+    var legal = free;
+    var inScene2 = state.scene === 2 && !state.sheet;
+    var hot = inScene2 && legal;
     var kind = "quiet";
-    if (state.scene === 2 && !occ && !state.sheet) kind = picked ? "chosen" : "empty";
+    if (inScene2 && picked && selectable) kind = "chosen";
+    else if (inScene2 && legal) kind = "empty";
     if (state.scene === 3 && !state.sheet && occ) kind = "illegal";
-    else if (state.scene === 3 && !state.sheet && !occ) kind = picked ? "preview" : "valid";
+    else if (state.scene === 3 && !state.sheet && picked) kind = "preview";
+    else if (state.scene === 3 && !state.sheet && !occ) kind = "valid";
     cell.el.className = "pad is-" + kind + (hot ? " is-empty-hot" : "");
 
     if (showGhost) {
@@ -645,29 +908,48 @@
       cell.cap.textContent = "";
     }
 
-    var showMark = !state.sheet && (kind === "empty" || kind === "valid" || kind === "chosen" || kind === "preview" || kind === "illegal");
+    var showMark = !state.sheet && (kind === "empty" || kind === "chosen" || kind === "preview");
     cell.mark.hidden = !showMark;
-    if (showMark && cell.mark.getAttribute("src") !== MARK_VALID) cell.mark.src = MARK_VALID;
+    var markSrc = kind === "chosen" ? MARK_CHOSEN : MARK_VALID;
+    if (showMark && cell.mark.getAttribute("src") !== markSrc) cell.mark.src = markSrc;
     cell.badge.hidden = !(kind === "chosen" || kind === "preview");
-    if (kind === "chosen") cell.badge.textContent = "呢格";
+    if (kind === "chosen") cell.badge.textContent = "此格";
     if (kind === "preview") cell.badge.textContent = "預覽";
 
     var label = "第 " + (cell.c + 1) + " 欄第 " + (cell.r + 1) + " 行";
-    if (occ && state.scene === 1) label += "，" + occ.name;
-    else if (occ && state.scene === 3 && !state.sheet) label += "，" + occ.name + "，已經有屋，唔可以放";
-    else if (occ) label += "，" + occ.name + "，已起";
+    if (state.scene === 2) {
+      /* Same sentences the tap toasts. Covered includes non-anchor cells. */
+      if (covered) label += "，這個位置已經有建築物。";
+      else if (picked && selectable) label += "，已選此格";
+      else if (legal) label += "，空地，點選即可選擇";
+      else label += "，這個位置放不下這座建築物。";
+    } else if (occ && state.scene === 1) label += "，" + occ.name;
+    else if (occ && state.scene === 3 && !state.sheet) label += "，" + occ.name + "，已有建築物，不能放置";
+    else if (occ) label += "，" + occ.name + "，已興建";
     else if (state.scene === 1) label += "，空地";
-    else if (state.scene === 2) label += picked ? "，已揀呢格" : "，空地，撳一下就揀";
     else if (kind === "preview") label += "，擺放預覽";
-    else if (kind === "valid") label += "，可以放，撳一下就搬去呢格";
+    else if (kind === "valid") label += "，可以放置，點選即可移到此格";
     else label += "，空地";
     cell.btn.setAttribute("aria-label", label);
+  }
+
+  /* Stored, then not-yet-built, then already built. Each group keeps catalog order. */
+  function paletteOrder(list) {
+    var stored = [];
+    var unbuilt = [];
+    var built = [];
+    list.forEach(function (def) {
+      if (placedDef(def.id)) built.push(def);
+      else if (storedDef(def.id)) stored.push(def);
+      else unbuilt.push(def);
+    });
+    return stored.concat(unbuilt, built);
   }
 
   function renderPalette() {
     var grid = $("paletteGrid");
     if (!grid) return;
-    var list = defs();
+    var list = paletteOrder(defs());
     grid.textContent = "";
     var placedN = 0;
     list.forEach(function (def) {
@@ -679,27 +961,27 @@
       btn.className = "pal-btn" + (placed ? " is-placed" : "") + (warehoused ? " is-stored" : "");
       var img = document.createElement("img");
       img.alt = "";
-      img.src = assetSrc(def.name);
+      img.src = assetSrc(def.name, true);
       var copy = document.createElement("span");
       var name = document.createElement("span");
       name.className = "pal-name";
       name.textContent = def.name;
       var cost = document.createElement("span");
       cost.className = "pal-cost";
-      cost.textContent = placed ? "已起" : (warehoused ? "存倉" : ("💰" + (def.cost_gold || 0)));
+      cost.textContent = placed ? "已興建" : (warehoused ? "存倉" : ("💰" + (def.cost_gold || 0)));
       copy.appendChild(name);
       copy.appendChild(cost);
       btn.appendChild(img);
       btn.appendChild(copy);
       btn.setAttribute("aria-pressed", (!placed && !warehoused && String(state.defId) === String(def.id)) ? "true" : "false");
       btn.setAttribute("aria-label", placed
-        ? (def.name + "，已起")
-        : (warehoused ? (def.name + "，放返") : (def.name + "，未起")));
+        ? (def.name + "，已興建")
+        : (warehoused ? (def.name + "，放回") : (def.name + "，未興建")));
       btn.addEventListener("click", function () { onPalette(def.id); });
       grid.appendChild(btn);
     });
     var count = $("placedCount");
-    if (count) count.textContent = "已起 " + placedN;
+    if (count) count.textContent = "已興建 " + placedN;
   }
 
   function renderBars() {
@@ -719,25 +1001,32 @@
     if (placeStatus) {
       if (placingStore) {
         var storedDefRow = defById(state.defId);
-        var storedName = (storedDefRow && storedDefRow.name) || "呢座屋";
-        placeStatus.textContent = "放返存倉「" + storedName + "」，唔使扣金幣同材料。取消唔會扣。";
+        var storedName = (storedDefRow && storedDefRow.name) || "這座建築";
+        placeStatus.textContent = "放回「" + storedName + "」。不扣除金幣和材料。";
       } else {
-        placeStatus.textContent = "確定先至扣資源。取消唔會扣。";
+        placeStatus.textContent = "按「確定放置」後才扣除資源；取消不會扣除。";
       }
     }
     var status = $("readyStatus");
     if (status && state.scene === 2) {
       var def = defById(state.defId);
-      if (readyToPreview()) status.textContent = "已揀「" + def.name + "」同呢格空地。";
-      else if (def && storedDef(def.id)) status.textContent = "「" + def.name + "」喺存倉。用存倉放返，唔使再扣資源。";
-      else if (state.pad && !def) status.textContent = "已揀空地。打開清單，揀一座未起嘅屋。";
-      else if (def && !placedDef(def.id) && !state.pad) status.textContent = "已揀「" + def.name + "」。再點一塊金色空地。";
-      else status.textContent = "點金色空地，或者打開清單揀一座未起嘅屋。";
+      if (state.unstoreId) {
+        var takeName = (def && def.name) || "這座建築";
+        status.textContent = "請點選空地，放回「" + takeName + "」。不扣除金幣和材料。";
+      } else if (readyToPreview()) status.textContent = "已選擇「" + def.name + "」和這個位置。";
+      else if (state.pad && !def && footprintFree(state.pad.c, state.pad.r, null)) {
+        status.textContent = "已選擇空地。請打開清單，選擇要興建的建築物。";
+      }
+      else if (def && !placedDef(def.id) && !state.pad) status.textContent = "請點選金色空地，興建「" + def.name + "」。";
+      else status.textContent = "請點選金色空地，或打開清單選擇要興建的建築物。";
     }
     var map = $("townMap");
     if (map) {
       map.className = "map is-scene-" + state.scene + (state.listOpen && state.scene === 2 ? " is-list-open" : "") + (sheetOn ? " is-sheet" : "");
-      map.setAttribute("aria-label", sheetOn ? "場景 4 · 升級" : ("場景 " + state.scene));
+      var sceneLabel = "場景 " + state.scene;
+      if (sheetOn) sceneLabel = "場景 4 · 升級";
+      else if (state.scene === 1) sceneLabel = "場景 1 · 查看地圖";
+      map.setAttribute("aria-label", sceneLabel);
     }
   }
 
@@ -771,7 +1060,7 @@
     paintFarmClaim(placed);
     var art = $("sheetArt");
     if (art && def.name) {
-      var src = assetSrc(def.name);
+      var src = assetSrc(def.name, true);
       if (art.getAttribute("src") !== src) art.src = src;
       art.alt = "";
     }
@@ -789,13 +1078,753 @@
     btn.textContent = motionOn ? "動畫 開" : "動畫 關";
   }
 
+  function diamondPoints(cx, cy, hx, hy) {
+    return [
+      cx.toFixed(2) + "," + (cy - hy).toFixed(2),
+      (cx + hx).toFixed(2) + "," + cy.toFixed(2),
+      cx.toFixed(2) + "," + (cy + hy).toFixed(2),
+      (cx - hx).toFixed(2) + "," + cy.toFixed(2)
+    ].join(" ");
+  }
+
+  /* Chosen outline: 3px stroke, fill none. The path is inset by half that
+     stroke, taken from the slab's painted diamond, so the outer edge meets
+     the cell and the centre stays clear for the badge. */
+  function syncChosenMark() {
+    var slab = document.querySelector("#townMap .pad > .slab");
+    if (!slab || slab.offsetWidth < 2 || slab.offsetHeight < 2) return;
+    var painted = slab.getBoundingClientRect();
+    var scaleX = painted.width / slab.offsetWidth;
+    var scaleY = painted.height / slab.offsetHeight;
+    if (!(scaleX > 0) || !(scaleY > 0) || !(painted.width > 1)) return;
+    var faceH = painted.height * (50 / 120);
+    var hx = (painted.width / 2) / scaleX;
+    var hy = faceH / scaleY;
+    var ap = (painted.width / 2) * faceH /
+      Math.sqrt((painted.width / 2) * (painted.width / 2) + faceH * faceH);
+    var scale = Math.min(scaleX, scaleY);
+    var inset = 1.5 * scale;
+    if (!(ap > inset) || !(hx > 0) || !(hy > 0)) return;
+    var k = 1 - inset / ap;
+    var pts = diamondPoints(hx, hy, hx * k, hy * k);
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' " +
+      "viewBox='0 0 " + slab.offsetWidth.toFixed(2) + " " + slab.offsetHeight.toFixed(2) + "'>" +
+      "<polygon points='" + pts + "' fill='none' stroke='#7c2d12' stroke-width='3' " +
+      "stroke-linejoin='round'/></svg>";
+    var next = "data:image/svg+xml," + encodeURIComponent(svg);
+    if (next === MARK_CHOSEN) return;
+    MARK_CHOSEN = next;
+    var nodes = document.querySelectorAll("#townMap .pad.is-chosen > .mark");
+    for (var i = 0; i < nodes.length; i += 1) {
+      if (nodes[i].getAttribute("src") !== next) nodes[i].src = next;
+    }
+  }
+
+  /* Focus ring: the face diamond pushed out by the same gap on every edge,
+     so the aspect stays. Dashed strokes only, outside the solid chosen line. */
+  function syncFocusRing() {
+    var map = $("townMap");
+    var slab = document.querySelector("#townMap .pad > .slab");
+    var btn = document.querySelector("#townMap .cell-btn");
+    if (!map || !slab || !btn || slab.offsetWidth < 2 || btn.offsetWidth < 2) return;
+    var painted = slab.getBoundingClientRect();
+    var halfW = slab.offsetWidth / 2;
+    var halfH = slab.offsetHeight * (50 / 120);
+    var halfWp = painted.width / 2;
+    var halfHp = painted.height * (50 / 120);
+    var ap = (halfWp * halfHp) / Math.sqrt(halfWp * halfWp + halfHp * halfHp);
+    if (!(ap > 0) || !(halfW > 0)) return;
+    var scale = halfWp / halfW;
+    var gap = 3;
+    var k = 1 + gap / ap;
+    var ringW = 2 * k * halfW;
+    var ringH = 2 * k * halfH;
+    /* Width 3 in this viewBox is about 2.4px on screen. The path sits 3px
+       outside the cell, so the inner edge lands about 2px outside and the
+       dash still covers the centreline. */
+    var unit = 2.42 / (3 * scale);
+    var pad = 2 / scale;
+    var boxW = ringW + pad * 2;
+    var boxH = ringH + pad * 2;
+    var cx = boxW / 2;
+    var cy = boxH / 2;
+    var outerPts = diamondPoints(cx / unit, cy / unit, (ringW / 2) / unit, (ringH / 2) / unit);
+    /* One dash per edge, in viewBox units, with a short gap at the corner.
+       pathLength would put that gap on a different part of the stroke. */
+    var edgeLen = Math.hypot((ringW / 2) / unit, (ringH / 2) / unit);
+    var dash = (edgeLen * 0.82).toFixed(2) + " " + (edgeLen * 0.18).toFixed(2);
+    var vbW = boxW / unit;
+    var vbH = boxH / unit;
+    ringGeom = { vbW: vbW, vbH: vbH, points: outerPts, dash: dash };
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='none' " +
+      "shape-rendering='geometricPrecision' width='" + boxW.toFixed(2) + "' height='" + boxH.toFixed(2) + "' " +
+      "viewBox='0 0 " + vbW.toFixed(2) + " " + vbH.toFixed(2) + "'>" +
+      "<polygon fill='none' stroke='#6b4f2a' stroke-width='2' " +
+      "stroke-linejoin='round' stroke-dasharray='" + dash + "' points='" + outerPts + "'/>" +
+      "<polygon fill='none' stroke='#fff8e7' stroke-width='3' " +
+      "stroke-linejoin='round' stroke-dasharray='" + dash + "' points='" + outerPts + "'/>" +
+      "</svg>";
+    map.style.setProperty("--ring-x", (btn.offsetWidth / 2 - boxW / 2).toFixed(3) + "px");
+    map.style.setProperty("--ring-y", (btn.offsetHeight / 2 - boxH / 2).toFixed(3) + "px");
+    map.style.setProperty("--ring-w", boxW.toFixed(3) + "px");
+    map.style.setProperty("--ring-h", boxH.toFixed(3) + "px");
+    map.style.setProperty("--ring-image", "url(\"data:image/svg+xml," + encodeURIComponent(svg) + "\")");
+    placeFocusRing();
+  }
+
+  function paintVillage() {
+    return $("village");
+  }
+
+  function screenScale(el) {
+    var box = el.getBoundingClientRect();
+    var base = el.offsetWidth;
+    if (!(base > 0) || !(box.width > 0)) return 1;
+    return box.width / base;
+  }
+
+  /* Content position inside the scrolling map for a screen-pixel box. */
+  function layoutBox(village, screenLeft, screenTop, screenW, screenH) {
+    var box = village.getBoundingClientRect();
+    var scale = screenScale(village);
+    return {
+      scale: scale,
+      left: village.scrollLeft + (screenLeft - box.left) / scale,
+      top: village.scrollTop + (screenTop - box.top) / scale,
+      width: screenW / scale,
+      height: screenH / scale
+    };
+  }
+
+  function ensurePaintSvg(id, host) {
+    if (!host) return null;
+    var ns = "http://www.w3.org/2000/svg";
+    var paint = document.getElementById(id);
+    if (!paint || paint.namespaceURI !== ns) {
+      if (paint && paint.parentNode) paint.parentNode.removeChild(paint);
+      paint = document.createElementNS(ns, "svg");
+      paint.id = id;
+      paint.setAttribute("aria-hidden", "true");
+      paint.setAttribute("preserveAspectRatio", "none");
+    }
+    if (paint.parentNode !== host) host.appendChild(paint);
+    return paint;
+  }
+
+  /* The ring sits on the map, under the palette and every bar, so the
+     scrollport does not cut a stroke that is still on the map. Device
+     pixels are SVG rects: a bitmap inside the stage scale is resampled
+     and the cream moves onto the wrong device pixel. */
+  function ensureRingPaint() {
+    return ensurePaintSvg("focusRingPaint", $("townMap"));
+  }
+
+  function ensureChosenPaint() {
+    return ensurePaintSvg("chosenMarkPaint", paintVillage());
+  }
+
+  function hidePaint(paint) {
+    if (!paint) return;
+    while (paint.firstChild) paint.removeChild(paint.firstChild);
+    paint.setAttribute("hidden", "");
+    paint.style.display = "none";
+  }
+
+  function hideRing(ring) {
+    hidePaint(ring || document.getElementById("focusRingPaint"));
+  }
+
+  function hideLine(paint) {
+    hidePaint(paint || document.getElementById("chosenMarkPaint"));
+  }
+
+  /* Scene 2 and scene 3 each show one bar, and the palette may be open.
+     The box is the live border of whatever is actually showing. */
+  function shownBoxes(selector) {
+    var nodes = document.querySelectorAll(selector);
+    var rects = [];
+    for (var i = 0; i < nodes.length; i += 1) {
+      var el = nodes[i];
+      if (!el || el.hidden) continue;
+      var cs = getComputedStyle(el);
+      if (cs.display === "none" || cs.visibility === "hidden") continue;
+      var box = el.getBoundingClientRect();
+      if (box.width < 2 || box.height < 2) continue;
+      rects.push({
+        el: el,
+        left: box.left,
+        top: box.top,
+        right: box.right,
+        bottom: box.bottom
+      });
+    }
+    return rects;
+  }
+
+  /* How far the painted frame sits outside the border box, in screen px.
+     Bars and the palette paint a ::before 3px outside. The sheet's wooden
+     frame is the ::after. A control with no outside pseudo paints on its
+     own border box. */
+  function paintedOutset(el) {
+    var box = el.getBoundingClientRect();
+    var base = el.offsetWidth;
+    var scale = base > 0 && box.width > 0 ? box.width / base : 1;
+    var out = 0;
+    var names = ["::before", "::after"];
+    for (var i = 0; i < names.length; i += 1) {
+      var cs = getComputedStyle(el, names[i]);
+      if (!cs || cs.content === "none" || cs.content === "normal") continue;
+      if (cs.display === "none" || cs.visibility === "hidden") continue;
+      var edges = [cs.top, cs.right, cs.bottom, cs.left];
+      for (var k = 0; k < edges.length; k += 1) {
+        var n = parseFloat(edges[k]);
+        if (n < 0) out = Math.max(out, -n);
+      }
+    }
+    return out * scale;
+  }
+
+  /* Bars, palette, scene-1 button, and sheet. Each hole is the border box
+     plus that control's painted frame, snapped outward onto the device grid
+     so a pixel that starts on the frame is not drawn. */
+  function coverRects() {
+    var dpr = window.devicePixelRatio || 1;
+    var rects = shownBoxes("#townMap .place-bar")
+      .concat(shownBoxes("#townMap .palette"))
+      .concat(shownBoxes("#townMap .cta"))
+      .concat(shownBoxes("#townMap .action-sheet"));
+    var snapped = [];
+    for (var i = 0; i < rects.length; i += 1) {
+      var r = rects[i];
+      var extra = paintedOutset(r.el);
+      snapped.push({
+        el: r.el,
+        left: Math.floor((r.left - extra) * dpr + 1e-4) / dpr,
+        top: Math.floor((r.top - extra) * dpr + 1e-4) / dpr,
+        right: Math.ceil((r.right + extra) * dpr - 1e-4) / dpr,
+        bottom: Math.ceil((r.bottom + extra) * dpr - 1e-4) / dpr
+      });
+    }
+    return snapped;
+  }
+
+  function hitsCover(rects, x0, y0, x1, y1) {
+    for (var i = 0; i < rects.length; i += 1) {
+      var r = rects[i];
+      if (x0 < r.right && x1 > r.left && y0 < r.bottom && y1 > r.top) return true;
+    }
+    return false;
+  }
+
+  /* Cell-sized SVG. ViewBox units are screen px, so one device pixel is
+     1/dpr wide after the stage scale. The chosen line snaps its layout
+     position and undoes that in the viewBox. The ring's paint origin snaps
+     a half CSS pixel onto a whole CSS pixel, so at scale 1 that half pixel
+     is carried in the viewBox instead of in the element's screen origin. */
+  function mountDeviceSvg(paint, village, screenLeft, screenTop, screenW, screenH, deviceOrigin) {
+    var scale = screenScale(village);
+    var box = village.getBoundingClientRect();
+    if (!(scale > 0) || !(box.width > 2)) return null;
+    var cs = getComputedStyle(village);
+    var borderLeft = parseFloat(cs.borderLeftWidth) || 0;
+    var borderTop = parseFloat(cs.borderTopWidth) || 0;
+    var targetLeft = screenLeft;
+    var targetTop = screenTop;
+    if (deviceOrigin && Math.abs(scale - 1) < 0.02) {
+      var fracX = screenLeft - Math.floor(screenLeft);
+      var fracY = screenTop - Math.floor(screenTop);
+      if (Math.abs(fracX - 0.5) < 0.05) targetLeft = Math.floor(screenLeft);
+      if (Math.abs(fracY - 0.5) < 0.05) targetTop = Math.floor(screenTop);
+    }
+    var rawLeft = village.scrollLeft + (targetLeft - box.left) / scale - borderLeft;
+    var rawTop = village.scrollTop + (targetTop - box.top) / scale - borderTop;
+    var leftPx = deviceOrigin ? rawLeft : Math.round(village.scrollLeft + (screenLeft - box.left) / scale - borderLeft);
+    var topPx = deviceOrigin ? rawTop : Math.round(village.scrollTop + (screenTop - box.top) / scale - borderTop);
+    while (paint.firstChild) paint.removeChild(paint.firstChild);
+    paint.removeAttribute("hidden");
+    paint.style.display = "block";
+    paint.setAttribute("viewBox", "0 0 " + screenW + " " + screenH);
+    paint.style.width = (screenW / scale) + "px";
+    paint.style.height = (screenH / scale) + "px";
+    paint.style.left = leftPx + "px";
+    paint.style.top = topPx + "px";
+    var shiftX = deviceOrigin ? (targetLeft - screenLeft) : (leftPx - (village.scrollLeft + (screenLeft - box.left) / scale - borderLeft)) * scale;
+    var shiftY = deviceOrigin ? (targetTop - screenTop) : (topPx - (village.scrollTop + (screenTop - box.top) / scale - borderTop)) * scale;
+    if (deviceOrigin) {
+      var placed = paint.getBoundingClientRect();
+      var errX = targetLeft - placed.left;
+      var errY = targetTop - placed.top;
+      if (Math.abs(errX) > 1e-3 || Math.abs(errY) > 1e-3) {
+        leftPx += errX / scale;
+        topPx += errY / scale;
+        paint.style.left = leftPx + "px";
+        paint.style.top = topPx + "px";
+        placed = paint.getBoundingClientRect();
+      }
+      shiftX = placed.left - screenLeft;
+      shiftY = placed.top - screenTop;
+    }
+    return {
+      ns: "http://www.w3.org/2000/svg",
+      shiftX: shiftX,
+      shiftY: shiftY,
+      scale: scale
+    };
+  }
+
+  /* Clip definitions live beside the map, not inside the line svg, so the
+     line's own shapes stay the stroked rects. The clip is applied to the
+     group of those rects, in the same user space as the viewBox. */
+  function clipDefsHost() {
+    var map = $("townMap");
+    if (!map) return null;
+    var ns = "http://www.w3.org/2000/svg";
+    var host = document.getElementById("paintClipDefs");
+    if (!host || host.namespaceURI !== ns) {
+      if (host && host.parentNode) host.parentNode.removeChild(host);
+      host = document.createElementNS(ns, "svg");
+      host.id = "paintClipDefs";
+      host.setAttribute("aria-hidden", "true");
+      host.setAttribute("width", "0");
+      host.setAttribute("height", "0");
+      host.style.position = "absolute";
+      host.style.width = "0";
+      host.style.height = "0";
+      host.style.overflow = "hidden";
+      host.style.pointerEvents = "none";
+    }
+    if (host.parentNode !== map) map.appendChild(host);
+    return host;
+  }
+
+  /* Even-odd clip: the paint box minus each showing bar, the palette,
+     the scene-1 button, and the sheet. Each hole is that control's
+     painted frame. */
+  function clipPaintToCovers(svg, covers, screenLeft, screenTop, shiftX, shiftY, screenW, screenH, clipId) {
+    var ns = "http://www.w3.org/2000/svg";
+    var defs = clipDefsHost();
+    if (!defs) return;
+    var prior = document.getElementById(clipId);
+    if (prior && prior.parentNode) prior.parentNode.removeChild(prior);
+    var clip = document.createElementNS(ns, "clipPath");
+    clip.setAttribute("id", clipId);
+    clip.setAttribute("clipPathUnits", "userSpaceOnUse");
+    var path = document.createElementNS(ns, "path");
+    var dpr = window.devicePixelRatio || 1;
+    var originX = screenLeft + shiftX;
+    var originY = screenTop + shiftY;
+    var d = "M0 0H" + screenW + "V" + screenH + "H0Z";
+    for (var i = 0; i < covers.length; i += 1) {
+      var r = covers[i];
+      var x0 = Math.floor(r.left * dpr + 1e-4) / dpr - originX;
+      var y0 = Math.floor(r.top * dpr + 1e-4) / dpr - originY;
+      var x1 = Math.ceil(r.right * dpr - 1e-4) / dpr - originX;
+      var y1 = Math.ceil(r.bottom * dpr - 1e-4) / dpr - originY;
+      d += "M" + x0 + " " + y0 + "V" + y1 + "H" + x1 + "V" + y0 + "Z";
+    }
+    path.setAttribute("d", d);
+    path.setAttribute("fill-rule", "evenodd");
+    path.setAttribute("clip-rule", "evenodd");
+    path.setAttribute("shape-rendering", "crispEdges");
+    clip.appendChild(path);
+    defs.appendChild(clip);
+    var group = document.createElementNS(ns, "g");
+    while (svg.firstChild) group.appendChild(svg.firstChild);
+    group.setAttribute("clip-path", "url(#" + clipId + ")");
+    group.setAttribute("clip-rule", "evenodd");
+    group.setAttribute("shape-rendering", "crispEdges");
+    svg.appendChild(group);
+    svg.removeAttribute("clip-path");
+  }
+
+  function paintRun(svg, ns, screenLeft, screenTop, shiftX, shiftY, x, y, w, h, color) {
+    var rect = document.createElementNS(ns, "rect");
+    rect.setAttribute("x", (x - screenLeft - shiftX).toFixed(3));
+    rect.setAttribute("y", (y - screenTop - shiftY).toFixed(3));
+    rect.setAttribute("width", w.toFixed(3));
+    rect.setAttribute("height", h.toFixed(3));
+    rect.setAttribute("fill", color);
+    rect.setAttribute("shape-rendering", "crispEdges");
+    svg.appendChild(rect);
+  }
+
+  /* Scene 3 keeps the line on the current choice while the confirm bar waits. */
+  function lineHeldForConfirm() {
+    if (state.scene !== 3 || state.sheet || !state.pad) return false;
+    var bar = document.getElementById("uxPlaceBar");
+    if (!bar) return false;
+    var cs = getComputedStyle(bar);
+    return cs.display !== "none" && cs.visibility !== "hidden";
+  }
+
+  function clearMarks(part, force) {
+    var dropRing = part !== "line";
+    var dropLine = part !== "ring";
+    if (dropLine && !force && lineHeldForConfirm()) dropLine = false;
+    if (dropRing) {
+      ringBtn = null;
+      hideRing();
+    }
+    if (dropLine) hideLine();
+  }
+
+  function choicePad() {
+    var chosen = document.querySelector("#townMap .pad.is-chosen");
+    if (chosen) return chosen;
+    if (state.scene === 3 && !state.sheet) {
+      return document.querySelector("#townMap .pad.is-preview");
+    }
+    return null;
+  }
+
+  /* Screen-pixel diamond of the slab's top face. Same rect the chosen
+     stroke uses, so the ring and the line share one edge. */
+  function slabFace(slab) {
+    var box = slab.getBoundingClientRect();
+    if (!(box.width > 2) || !(box.height > 2)) return null;
+    var lift = 10 * (box.width / 168);
+    var halfW = box.width / 2;
+    var halfH = box.height * (50 / 120);
+    if (!(halfW > 2) || !(halfH > 2)) return null;
+    return {
+      cx: box.left + halfW,
+      cy: box.top + box.height / 2 - lift,
+      halfW: halfW,
+      halfH: halfH
+    };
+  }
+
+  /* Half the interior angle at a diamond tip, from the two live edges. */
+  function tipHalfAngle(tips, index) {
+    var v = tips[index];
+    var prev = tips[(index + 3) % 4];
+    var next = tips[(index + 1) % 4];
+    var ax = prev[0] - v[0];
+    var ay = prev[1] - v[1];
+    var bx = next[0] - v[0];
+    var by = next[1] - v[1];
+    var la = Math.hypot(ax, ay) || 1;
+    var lb = Math.hypot(bx, by) || 1;
+    var cos = (ax * bx + ay * by) / (la * lb);
+    if (cos > 1) cos = 1;
+    if (cos < -1) cos = -1;
+    return Math.acos(cos) / 2;
+  }
+
+  /* Retreat along one edge so the chord between the cream bands is about 6px.
+     The bands already sit outside the cell, so the chord is
+     2 * (d * sin(theta) + band * cos(theta)). d = 0 when that offset
+     alone is wide enough. A short edge uses the same 6px chord: a 4.5px
+     target leaves the blunt tip under 4px once the band is included. */
+  function openingRetreat(theta, edgeLen, band) {
+    var sine = Math.sin(theta);
+    var cosine = Math.cos(theta);
+    if (!(sine > 1e-4)) return 0;
+    var d = (3 - band * cosine) / sine;
+    /* Acute tips already clear 6px from the band offset, but a zero retreat
+       snaps the two opposite tips a pixel apart. Keep a short shared retreat. */
+    if (d < 1) d = 1;
+    var cap = edgeLen * 0.09;
+    if (d > cap) d = cap;
+    return d;
+  }
+
+  /* Dashes live on the map, in a box around the focused cell.
+     Each rect is one device pixel of a solid band: inner cream 3px,
+     outer brown 2px, between the two corner openings of that edge. */
+  function placeFocusRing() {
+    var ring = ensureRingPaint();
+    var map = $("townMap");
+    if (!ring || !map) return;
+    if (state.sheet) {
+      hideRing(ring);
+      return;
+    }
+    var visible = document.querySelector("#townMap .cell-btn:focus-visible");
+    if (visible) ringBtn = visible;
+    var btn = visible;
+    if (!btn && ringBtn && document.activeElement === ringBtn && ringBtn.matches(":focus-visible")) {
+      btn = ringBtn;
+    }
+    if (!btn) ringBtn = null;
+    var pad = btn && btn.closest ? btn.closest(".pad") : null;
+    var slab = pad && pad.querySelector(":scope > .slab");
+    var face = slab ? slabFace(slab) : null;
+    if (!btn || !face) {
+      hideRing(ring);
+      return;
+    }
+    /* Inner cream is 3px, starting 2px outside the cell. Outer brown is
+       2px. A device pixel takes the colour of the band its centre sits on. */
+    var cream = 3;
+    var brown = 2;
+    var minOut = 2;
+    var band = minOut + cream * 0.5;
+    var reach = minOut + cream + brown + 1;
+    var span = Math.hypot(face.halfW, face.halfH) || 1;
+    var hx = face.halfW + reach * span / face.halfH;
+    var hy = face.halfH + reach * span / face.halfW;
+    var dpr = window.devicePixelRatio || 1;
+    var padPx = 2;
+    var screenLeft = Math.floor((face.cx - hx - padPx) * dpr) / dpr;
+    var screenTop = Math.floor((face.cy - hy - padPx) * dpr) / dpr;
+    var screenRight = Math.ceil((face.cx + hx + padPx) * dpr) / dpr;
+    var screenBottom = Math.ceil((face.cy + hy + padPx) * dpr) / dpr;
+    var screenW = screenRight - screenLeft;
+    var screenH = screenBottom - screenTop;
+    var mounted = mountDeviceSvg(ring, map, screenLeft, screenTop, screenW, screenH, true);
+    if (!mounted) {
+      hideRing(ring);
+      return;
+    }
+    var tips = [
+      [face.cx, face.cy - face.halfH],
+      [face.cx + face.halfW, face.cy],
+      [face.cx, face.cy + face.halfH],
+      [face.cx - face.halfW, face.cy]
+    ];
+    var frames = [];
+    var thetas = [];
+    for (var t = 0; t < 4; t += 1) thetas.push(tipHalfAngle(tips, t));
+    for (var i = 0; i < 4; i += 1) {
+      var a = tips[i];
+      var b = tips[(i + 1) % 4];
+      var dx = b[0] - a[0];
+      var dy = b[1] - a[1];
+      var len = Math.hypot(dx, dy) || 1;
+      var nx = -dy / len;
+      var ny = dx / len;
+      var mx = (a[0] + b[0]) / 2;
+      var my = (a[1] + b[1]) / 2;
+      var out = (mx + nx - face.cx) * (mx + nx - face.cx) + (my + ny - face.cy) * (my + ny - face.cy);
+      var inn = (mx - nx - face.cx) * (mx - nx - face.cx) + (my - ny - face.cy) * (my - ny - face.cy);
+      if (out < inn) { nx = -nx; ny = -ny; }
+      frames.push({
+        a: a, nx: nx, ny: ny, dx: dx, dy: dy, len: len,
+        d0: openingRetreat(thetas[i], len, band),
+        d1: openingRetreat(thetas[(i + 1) % 4], len, band)
+      });
+    }
+    /* Closest edge to the device-pixel centre. The far side of a convex
+       diamond is a larger line distance, so the maximum would pick it. */
+    function atCentre(x, y) {
+      var best = null;
+      for (var f = 0; f < frames.length; f += 1) {
+        var edge = frames[f];
+        var sd = (x - edge.a[0]) * edge.nx + (y - edge.a[1]) * edge.ny;
+        var along = ((x - edge.a[0]) * edge.dx + (y - edge.a[1]) * edge.dy) / edge.len;
+        if (sd < -0.5) continue;
+        var cross = sd < 0 ? -sd : sd;
+        if (!best || cross < best.cross) best = { sd: sd, cross: cross, along: along, edge: edge };
+      }
+      return best;
+    }
+    var ap = (face.halfW * face.halfH) / Math.hypot(face.halfW, face.halfH);
+    function outsideAt(x, y) {
+      var span = Math.abs(x - face.cx) / face.halfW + Math.abs(y - face.cy) / face.halfH;
+      return (span - 1) * ap;
+    }
+    var covers = coverRects();
+    var mapBox = map.getBoundingClientRect();
+    var mapSlack = 2;
+    var step = 1 / dpr;
+    var bw = Math.round(screenW * dpr);
+    var bh = Math.round(screenH * dpr);
+    for (var iy = 0; iy < bh; iy += 1) {
+      var y0 = screenTop + iy * step;
+      var runColor = "";
+      var runX = 0;
+      for (var ix = 0; ix <= bw; ix += 1) {
+        var color = "";
+        var x0 = screenLeft + ix * step;
+        if (ix < bw
+          && x0 < mapBox.right + mapSlack && x0 + step > mapBox.left - mapSlack
+          && y0 < mapBox.bottom + mapSlack && y0 + step > mapBox.top - mapSlack
+          && !hitsCover(covers, x0, y0, x0 + step, y0 + step)) {
+          var cx = x0 + step * 0.5;
+          var cy = y0 + step * 0.5;
+          var mid = atCentre(cx, cy);
+          var centreOut = outsideAt(cx, cy);
+          /* The band starts 0.45px past the 2px line, on every edge. */
+          var innerLimit = minOut + 0.45;
+          if (mid && centreOut >= innerLimit && centreOut < minOut + cream + brown) {
+            var edge = mid.edge;
+            if (mid.along >= edge.d0 && mid.along <= edge.len - edge.d1) {
+              color = centreOut < minOut + cream ? "#fff8e7" : "#6b4f2a";
+            }
+          }
+        }
+        if (color !== runColor) {
+          if (runColor) {
+            paintRun(
+              ring, mounted.ns, screenLeft, screenTop, mounted.shiftX, mounted.shiftY,
+              screenLeft + runX * step, y0, (ix - runX) * step, step, runColor
+            );
+          }
+          runColor = color;
+          runX = ix;
+        }
+      }
+    }
+    clipPaintToCovers(
+      ring, covers, screenLeft, screenTop, mounted.shiftX, mounted.shiftY,
+      screenW, screenH, "focusRingClip"
+    );
+    trimPaintBox(
+      ring, screenLeft + mounted.shiftX, screenTop + mounted.shiftY,
+      screenW, screenH, mounted.scale, covers
+    );
+  }
+
+  /* Keep the ring's own box off the same painted frames. The clip already
+     drops the ink; the box stops at that edge so it does not cover the control. */
+  function trimPaintBox(paint, originX, originY, screenW, screenH, scale, covers) {
+    if (!(scale > 0)) return;
+    var left = originX;
+    var top = originY;
+    var right = originX + screenW;
+    var bottom = originY + screenH;
+    var guard = 0;
+    while (guard < 8) {
+      guard += 1;
+      var best = null;
+      for (var i = 0; i < covers.length; i += 1) {
+        var c = covers[i];
+        if (right <= c.left || left >= c.right || bottom <= c.top || top >= c.bottom) continue;
+        var options = [
+          { edge: "bottom", at: c.top, loss: bottom - c.top },
+          { edge: "top", at: c.bottom, loss: c.bottom - top },
+          { edge: "right", at: c.left, loss: right - c.left },
+          { edge: "left", at: c.right, loss: c.right - left }
+        ];
+        for (var k = 0; k < options.length; k += 1) {
+          var opt = options[k];
+          if (!(opt.loss > 0.05)) continue;
+          var width = right - left;
+          var height = bottom - top;
+          if (opt.edge === "left" || opt.edge === "right") width -= opt.loss;
+          else height -= opt.loss;
+          if (width < 2 || height < 2) continue;
+          if (!best || opt.loss < best.loss) best = opt;
+        }
+      }
+      if (!best) break;
+      if (best.edge === "bottom") bottom = best.at;
+      else if (best.edge === "top") top = best.at;
+      else if (best.edge === "right") right = best.at;
+      else left = best.at;
+    }
+    var cutL = left - originX;
+    var cutT = top - originY;
+    var viewW = right - left;
+    var viewH = bottom - top;
+    if (cutL < 0.05 && cutT < 0.05 && Math.abs(viewW - screenW) < 0.05 && Math.abs(viewH - screenH) < 0.05) return;
+    paint.setAttribute("viewBox", cutL + " " + cutT + " " + viewW + " " + viewH);
+    paint.style.left = ((parseFloat(paint.style.left) || 0) + cutL / scale) + "px";
+    paint.style.top = ((parseFloat(paint.style.top) || 0) + cutT / scale) + "px";
+    paint.style.width = (viewW / scale) + "px";
+    paint.style.height = (viewH / scale) + "px";
+  }
+
+  /* Chosen line: whole device pixels of #7c2d12. The cell-aligned sample
+     of each pixel sits on the stroke, and no corner sticks out past it. */
+  function placeChosenMark() {
+    var paint = ensureChosenPaint();
+    var village = paintVillage();
+    if (!paint || !village) return;
+    var pad = choicePad();
+    var slab = pad && pad.querySelector(":scope > .slab");
+    var mark = pad && pad.querySelector(":scope > .mark");
+    if (state.sheet || !slab || !mark || mark.hidden) {
+      hideLine(paint);
+      return;
+    }
+    var face = slabFace(slab);
+    if (!face) {
+      hideLine(paint);
+      return;
+    }
+    var dpr = window.devicePixelRatio || 1;
+    var margin = 4;
+    var screenLeft = Math.floor((face.cx - face.halfW - margin) * dpr) / dpr;
+    var screenTop = Math.floor((face.cy - face.halfH - margin) * dpr) / dpr;
+    var screenRight = Math.ceil((face.cx + face.halfW + margin) * dpr) / dpr;
+    var screenBottom = Math.ceil((face.cy + face.halfH + margin) * dpr) / dpr;
+    var mounted = mountDeviceSvg(
+      paint, village, screenLeft, screenTop,
+      screenRight - screenLeft, screenBottom - screenTop
+    );
+    if (!mounted) {
+      hideLine(paint);
+      return;
+    }
+    var ap = (face.halfW * face.halfH) / Math.hypot(face.halfW, face.halfH);
+    function outsideAt(x, y) {
+      var span = Math.abs(x - face.cx) / face.halfW + Math.abs(y - face.cy) / face.halfH;
+      return (span - 1) * ap;
+    }
+    var covers = coverRects();
+    var boundX = face.cx - face.halfW;
+    var boundY = face.cy - face.halfH;
+    var cssOffX = (boundX - Math.floor(boundX) + 0.5) % 1;
+    var cssOffY = (boundY - Math.floor(boundY) + 0.5) % 1;
+    if (cssOffX < 0) cssOffX += 1;
+    if (cssOffY < 0) cssOffY += 1;
+    var screenW = screenRight - screenLeft;
+    var screenH = screenBottom - screenTop;
+    var bw = Math.round(screenW * dpr);
+    var bh = Math.round(screenH * dpr);
+    var step = 1 / dpr;
+    for (var iy = 0; iy < bh; iy += 1) {
+      var y0 = screenTop + iy * step;
+      var y1 = y0 + step;
+      var runX = -1;
+      for (var ix = 0; ix <= bw; ix += 1) {
+        var on = false;
+        if (ix < bw) {
+          var x0 = screenLeft + ix * step;
+          var x1 = x0 + step;
+          if (!hitsCover(covers, x0, y0, x1, y1)) {
+            var maxO = outsideAt(x0, y0);
+            var c1 = outsideAt(x1, y0);
+            var c2 = outsideAt(x0, y1);
+            var c3 = outsideAt(x1, y1);
+            if (c1 > maxO) maxO = c1;
+            if (c2 > maxO) maxO = c2;
+            if (c3 > maxO) maxO = c3;
+            /* The sample aligned with the cell decides the stroke. A corner
+               past the outer limit would show up beyond the cell edge. */
+            var cssOut = outsideAt(x0 + cssOffX, y0 + cssOffY);
+            on = cssOut <= 0.55 && cssOut >= -1.4 && maxO <= 1.4;
+          }
+        }
+        if (on) {
+          if (runX < 0) runX = ix;
+        } else if (runX >= 0) {
+          paintRun(
+            paint, mounted.ns, screenLeft, screenTop, mounted.shiftX, mounted.shiftY,
+            screenLeft + runX * step, y0, (ix - runX) * step, step, "#7c2d12"
+          );
+          runX = -1;
+        }
+      }
+    }
+    clipPaintToCovers(
+      paint, covers, screenLeft, screenTop, mounted.shiftX, mounted.shiftY,
+      screenW, screenH, "chosenMarkClip"
+    );
+  }
+
   function render() {
     if (!built) buildGrid();
+    syncChosenMark();
     pads.forEach(renderCell);
     renderPalette();
     renderBars();
     renderSheet();
     renderMotion();
+    syncFocusRing();
+    placeChosenMark();
   }
 
   function onPalette(id) {
@@ -805,12 +1834,16 @@
     }
     var warehoused = storedDef(id);
     if (warehoused) {
-      placeFromStore(warehoused);
+      beginWarehousePlace(warehoused);
       return;
     }
     state.unstoreId = null;
     state.defId = String(state.defId) === String(id) ? null : id;
     state.listOpen = true;
+    if (state.defId != null && state.pad && !footprintFree(state.pad.c, state.pad.r, null, footprintOf(defById(state.defId)))) {
+      state.pad = null;
+      if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
+    }
     render();
   }
 
@@ -822,12 +1855,24 @@
     }
     if (state.scene === 1) {
       if (occ) openSheet(occ.def_id);
-      else if (typeof showToast === "function") showToast("想喺呢度起屋？先撳「我要起屋」。");
+      else if (typeof showToast === "function") showToast("想在這裏興建？請先按「我要起屋」。");
       return;
     }
     if (state.scene === 2) {
-      if (occ) {
-        openSheet(occ.def_id);
+      var coveredNow = coveredAt(c, r);
+      var freeNow = footprintFree(c, r, state.unstoreId, activeFootprint());
+      if (!freeNow) {
+        if (typeof showToast === "function") {
+          showToast(coveredNow ? "這個位置已經有建築物。" : "這個位置放不下這座建築物。", "info");
+        }
+        return;
+      }
+      if (state.unstoreId) {
+        state.pad = { c: c, r: r };
+        state.scene = 3;
+        state.listOpen = false;
+        state.sheet = false;
+        render();
         return;
       }
       state.pad = sameCell(state.pad, { c: c, r: r }) ? null : { c: c, r: r };
@@ -836,7 +1881,11 @@
     }
     if (state.scene === 3) {
       if (occ) {
-        if (typeof showToast === "function") showToast("呢度已經有" + occ.name + "，唔可以放。");
+        if (typeof showToast === "function") showToast("這裏已有「" + occ.name + "」，不能放置。", "info");
+        return;
+      }
+      if (!footprintFree(c, r, state.unstoreId)) {
+        if (typeof showToast === "function") showToast("這個位置放不下這座建築物。", "info");
         return;
       }
       state.pad = { c: c, r: r };
@@ -861,12 +1910,14 @@
   }
 
   function cancelPreview() {
+    var keepUnstore = state.unstoreId;
     state.scene = 2;
     state.sheet = false;
     state.confirming = false;
     state.instantUpgrade = false;
-    state.unstoreId = null;
-    if (typeof showToast === "function") showToast("已取消，資源未扣除");
+    state.pad = null;
+    state.unstoreId = keepUnstore;
+    if (typeof showToast === "function") showToast("已取消，資源未扣除", "info");
     render();
   }
 
@@ -943,13 +1994,37 @@
       state.unstoreId = null;
       state.listOpen = false;
       render();
-      if (typeof showToast === "function") showToast("放好「" + name + "」。");
+      if (typeof showToast === "function") showToast("已放好「" + name + "」。");
       celebrate("place", cell);
       await loadTown();
     } catch (e) {
-      if (typeof showToast === "function") showToast(e.message || "放唔返", "error");
-      render();
+      if (!showUnfit(e)) {
+        if (typeof showToast === "function") showToast(e.message || "未能放回", "error");
+        render();
+      }
     }
+  }
+
+  /* A child-facing sentence is written Chinese. English and JSON stay hidden. */
+  function childFacing(err) {
+    var msg = err && typeof err.message === "string" ? err.message.trim() : "";
+    /* A fragment such as a range or occupancy note is not a sentence for the child. */
+    if (msg && /[\u3400-\u9fff]/.test(msg) && /[。！？]$/.test(msg)) return msg;
+    return "";
+  }
+
+  function showUnfit(err) {
+    var status = err && err.status;
+    if (!(status >= 400 && status < 500)) return false;
+    state.scene = 2;
+    state.pad = null;
+    state.sheet = false;
+    state.confirming = false;
+    state.instantUpgrade = false;
+    var sentence = childFacing(err) || "這個位置放不下這座建築物。";
+    if (typeof showToast === "function") showToast(sentence, "info");
+    render();
+    return true;
   }
 
   async function onConfirm() {
@@ -990,7 +2065,12 @@
         openSheet(def.id, { instant: true });
       }, 420);
     } catch (e) {
-      if (typeof showToast === "function") showToast(e.message || "起唔到", "error");
+      if (showUnfit(e)) return;
+      var msg = e.message || "未能興建";
+      if (typeof showToast === "function") {
+        if (msg === "城鎮沒有空位，請先收起或移動其他建築。") showToast(msg, "info");
+        else showToast(msg, "error");
+      }
       render();
     }
   }
@@ -1066,14 +2146,106 @@
     renderSheet();
   }
 
+  function returnToMap() {
+    state.scene = 1;
+    state.sheet = false;
+    state.listOpen = false;
+    state.pad = null;
+    state.defId = null;
+    state.unstoreId = null;
+    state.confirming = false;
+    state.instantUpgrade = false;
+    var bar = document.getElementById("placementBar");
+    if (bar) bar.classList.remove("active");
+    render();
+  }
+
   function wire() {
     var map = $("townMap");
     if (!map || map.dataset.wired === "1") return;
     map.dataset.wired = "1";
+    window.addEventListener("resize", function () {
+      syncChosenMark();
+      syncFocusRing();
+      placeChosenMark();
+    });
+    document.addEventListener("focusin", function (event) {
+      var t = event.target;
+      if (t && t.classList && t.classList.contains("cell-btn") && t.matches(":focus-visible")) {
+        ringBtn = t;
+      }
+      placeFocusRing();
+    }, true);
+    document.addEventListener("focusout", function (event) {
+      var next = event.relatedTarget;
+      if (next && next.classList && next.classList.contains("cell-btn") && next.matches(":focus-visible")) {
+        ringBtn = next;
+        return;
+      }
+      ringBtn = null;
+      hideRing();
+    }, true);
+    document.addEventListener("scroll", function () {
+      placeFocusRing();
+      placeChosenMark();
+    }, true);
+    document.addEventListener("click", function (event) {
+      var nav = event.target && event.target.closest && event.target.closest("[data-kt-nav]");
+      if (!nav || nav.getAttribute("data-kt-nav") === "town") return;
+      clearMarks("both", true);
+    }, true);
     map.addEventListener("click", function (event) {
-      var btn = event.target.closest && event.target.closest("button");
-      if (btn && !btn.classList.contains("cell-btn")) return;
-      var hit = cellAt(event.clientX, event.clientY);
+      var target = event.target;
+      var btn = target.closest && target.closest("button");
+      var cellBtn = btn && btn.classList.contains("cell-btn") ? btn : null;
+      /* Enter and Space activate the focused cell button even when a bar
+         covers that button. A pointer tap still has to miss solid UI. */
+      var fromKey = event.detail === 0 && event.clientX === 0 && event.clientY === 0;
+      /* A pointer tap focuses the button without focus-visible. Drop that
+         focus so a later focus-visible call still emits focusin. */
+      /* Blur in this turn, before the browser handles the next key.
+         A deferred blur races a later Space on the same button. */
+      if (cellBtn && !fromKey) cellBtn.blur();
+      if (cellBtn && fromKey) {
+        var keyPad = cellBtn.closest(".pad");
+        if (keyPad) {
+          var kc = parseInt(keyPad.style.getPropertyValue("--c"), 10);
+          var kr = parseInt(keyPad.style.getPropertyValue("--r"), 10);
+          if (isFinite(kc) && isFinite(kr)) {
+            onCell(kc, kr);
+            return;
+          }
+        }
+      }
+      if (solidUiFromTarget(target)) return;
+      /* A tap whose target sits outside the village is not a cell, even when
+         rounded coordinates fall inside the village border. */
+      var village = $("village");
+      if (!village || !village.contains(target)) return;
+      var point = activationPoint(event, cellBtn);
+      if (solidUiCovers(point.x, point.y)) {
+        /* Rounded coordinates can name a control while the event still
+           names the cell that was hit. A cell that is itself the element
+           at those coordinates stays inside the control. */
+        var atPoint = document.elementFromPoint(point.x, point.y);
+        var atBtn = atPoint && atPoint.closest && atPoint.closest(".cell-btn");
+        if (!cellBtn || atBtn === cellBtn) return;
+      }
+      if (!pointInRect(point.x, point.y, visibleMapClip())) return;
+      if (marginUnderToast(point.x, point.y)) return;
+      if (cellBtn) {
+        var pad = cellBtn.closest(".pad");
+        if (pad) {
+          var pc = parseInt(pad.style.getPropertyValue("--c"), 10);
+          var pr = parseInt(pad.style.getPropertyValue("--r"), 10);
+          if (isFinite(pc) && isFinite(pr)) {
+            onCell(pc, pr);
+            return;
+          }
+        }
+      }
+      if (btn) return;
+      var hit = cellAt(point.x, point.y);
       if (!hit) return;
       onCell(hit.c, hit.r);
     }, true);
@@ -1087,6 +2259,8 @@
       state.listOpen = true;
       render();
     });
+    var back = $("btnUxBack");
+    if (back) back.addEventListener("click", returnToMap);
     $("btnToScene3").addEventListener("click", function () {
       if (state.unstoreId) {
         if (!readyToUnstore()) return;
@@ -1136,6 +2310,7 @@
 
   motionOn = readMotion();
   window.townUxSync = townUxSync;
+  window.ktBeginWarehousePlace = beginWarehousePlace;
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", townUxSync);
   } else {

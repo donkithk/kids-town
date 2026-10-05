@@ -30,7 +30,8 @@ body.kt-artstage #tab-town .mp { position: relative; }
 #townMap [hidden] { display: none !important; }
 
 #townMap .village.is-iso {
-  --s: 1;
+  /* 0.85 fits the 1344px diamond inside the ~1162px village with ≥8px side margins. */
+  --s: 0.85;
   --step-x: calc(var(--s) * 84px);
   --step-y: calc(var(--s) * 50px);
   --pad-w: calc(var(--s) * 160px);
@@ -53,7 +54,7 @@ body.kt-artstage #tab-town .mp { position: relative; }
   width: var(--pad-w);
   height: var(--pad-h);
   margin: 0;
-  left: calc(50% + (var(--c) - var(--r) - 0.5) * var(--step-x) - var(--pad-w) / 2);
+  left: calc(50% + (var(--c) - var(--r)) * var(--step-x) - var(--pad-w) / 2);
   top: calc((var(--c) + var(--r) + 1) * var(--step-y));
   pointer-events: none;
 }
@@ -103,11 +104,36 @@ body.kt-artstage #tab-town .mp { position: relative; }
   pointer-events: none;
 }
 
-#townMap .pad.is-empty-hot > .mark,
+#townMap .pad.is-empty-hot:not(.is-chosen) > .mark,
 #townMap .pad.is-valid > .mark,
-#townMap .pad.is-chosen > .mark,
 #townMap .pad.is-preview > .mark {
   filter: drop-shadow(0 0 4px rgba(212, 160, 23, 0.95));
+}
+
+/* Same gold diamond the empty cell shows, kept under the brown stroke. */
+#townMap .pad > .cell-fill {
+  position: absolute;
+  z-index: 3;
+  width: calc(var(--s, 1) * 168px);
+  height: calc(var(--s, 1) * 120px);
+  left: calc(var(--s, 1) * -4px);
+  top: calc(var(--s, 1) * 71px);
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+#townMap .pad.is-chosen > .cell-fill {
+  visibility: visible;
+  filter: drop-shadow(0 0 4px rgba(212, 160, 23, 0.95));
+}
+
+/* Chosen outline paints above neighbouring gold dashes and above the sprite.
+   The box matches the slab, and the stroke is drawn inside that diamond. */
+#townMap .pad.is-chosen > .mark {
+  z-index: 9;
+  opacity: 0;
 }
 
 #townMap .pad > .sprite,
@@ -159,6 +185,58 @@ body.kt-artstage #tab-town .mp { position: relative; }
   color: transparent;
   cursor: pointer;
   pointer-events: auto;
+  outline: none;
+}
+
+/* Keyboard focus only. The ring is the face diamond scaled around its centre,
+   dashed, outside the solid chosen line and above the sprite. */
+#townMap .cell-btn:focus,
+#townMap .cell-btn:focus-visible {
+  outline: none;
+}
+
+#townMap .cell-btn:focus-visible {
+  z-index: 10;
+}
+
+#townMap .cell-btn:focus-visible::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: var(--ring-x, 0px);
+  top: var(--ring-y, 0px);
+  width: var(--ring-w, 0px);
+  height: var(--ring-h, 0px);
+  pointer-events: none;
+  background-image: var(--ring-image);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  opacity: 0;
+}
+
+/* Under the palette and the bar. The pseudo-element still carries the
+   ring geometry. The line stays in the scrolling map, above the sprite
+   and under the badge; the ring sits above the badge. */
+#focusRingPaint {
+  position: absolute;
+  z-index: 9;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+#focusRingPaint[hidden],
+#chosenMarkPaint[hidden] {
+  display: none !important;
+}
+
+#chosenMarkPaint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 7;
+  pointer-events: none;
+  image-rendering: pixelated;
 }
 
 #townMap .badge {
@@ -229,8 +307,25 @@ body.kt-artstage #tab-town .mp { position: relative; }
   left: 12px;
   top: 10px;
   padding: 8px 12px;
-  border-color: var(--gold);
+  border-radius: 0;
+  border-color: transparent;
+  background: transparent;
+  isolation: isolate;
+}
+
+/* Rounded paint sits on a pseudo. The control's border box stays the hit target. */
+#townMap .list-launcher::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -3px;
+  right: -3px;
+  bottom: -3px;
+  left: -3px;
+  border: 3px solid var(--gold);
+  border-radius: 14px;
   background: linear-gradient(180deg, #fff6d2, #ffe3a0);
+  pointer-events: none;
 }
 
 #townMap .palette {
@@ -244,9 +339,29 @@ body.kt-artstage #tab-town .mp { position: relative; }
   flex-direction: column;
   gap: 6px;
   padding: 8px;
+  border: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  isolation: isolate;
+}
+
+#townMap .palette::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: -3px;
+  right: -3px;
+  bottom: -3px;
+  left: -3px;
   border: 3px solid var(--wood);
   border-radius: 16px;
   background: rgba(250, 246, 239, 0.97);
+  pointer-events: none;
+}
+
+#townMap .palette > * {
+  position: relative;
+  z-index: 1;
 }
 
 #townMap .palette h2 {
@@ -266,10 +381,13 @@ body.kt-artstage #tab-town .mp { position: relative; }
 
 #townMap .pal-btn {
   width: 100%;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
+  box-sizing: border-box;
+  min-height: 68px;
+  padding: 8px 10px;
   text-align: left;
 }
 
@@ -292,21 +410,60 @@ body.kt-artstage #tab-town .mp { position: relative; }
   left: 10px;
   right: 10px;
   bottom: 8px;
-  min-height: 56px;
+  box-sizing: border-box;
+  height: 64px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 6px;
+  border: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  isolation: isolate;
+}
+
+#townMap .place-bar::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: -3px;
+  right: -3px;
+  bottom: -3px;
+  left: -3px;
   border: 3px solid var(--wood);
   border-radius: 16px;
   background: rgba(250, 246, 239, 0.98);
+  pointer-events: none;
+}
+
+#townMap .place-bar > * {
+  position: relative;
+  z-index: 1;
 }
 
 #townMap .place-bar p {
   flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   font-size: 15px;
   font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#townMap .place-bar button {
+  box-sizing: border-box;
+  white-space: nowrap;
+  height: 46px;
+  min-height: 46px;
+  padding: 0 14px;
+  min-width: 112px;
+}
+
+#townMap #btnUxCancel {
+  min-width: 76px;
 }
 
 #townMap .place-bar button:disabled,
@@ -335,9 +492,24 @@ body.kt-artstage #tab-town .mp { position: relative; }
   gap: 12px;
   align-items: center;
   padding: 16px 14px 14px;
+  border: 8px solid transparent;
+  border-radius: 0;
+  color: #fff8ee;
+  background: transparent;
+  box-shadow: none;
+  isolation: isolate;
+}
+
+#townMap .action-sheet::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: -8px;
+  right: -8px;
+  bottom: -8px;
+  left: -8px;
   border: 8px solid #3b2416;
   border-radius: 22px;
-  color: #fff8ee;
   background-color: #6e452b;
   background-image:
     radial-gradient(ellipse 22px 12px at 12% 78%, rgba(36, 18, 8, .42), transparent 72%),
@@ -358,13 +530,14 @@ body.kt-artstage #tab-town .mp { position: relative; }
     inset 0 0 0 3px rgba(92, 58, 32, .55),
     0 8px 0 #2a180e,
     0 16px 22px rgba(20, 10, 4, .38);
+  pointer-events: none;
 }
 
 #townMap .action-sheet::before {
   content: "";
   position: absolute;
   inset: 7px;
-  z-index: 0;
+  z-index: 1;
   border: 2px solid rgba(255, 224, 176, .42);
   border-radius: 12px;
   box-shadow: inset 0 0 0 1px rgba(42, 22, 10, .45);
