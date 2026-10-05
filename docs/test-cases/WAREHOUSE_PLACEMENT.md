@@ -1151,3 +1151,33 @@ Guard（通過，不是新的紅測）：
 場景 1 的 `.cta`（`#btnBuild`）算進 cover。1280 把 `(3,4)` 的南尖捲到按鈕中線（捲動 17，南尖 575.3，按鈕 549–601）再聚焦。`#focusRingPaint` 的 `rect` 客戶端外框和 `btnBuild` 相交。按鈕矩形裡有 3 個像素變了。
 
 確認欄和調色盤的角：環在畫，對上把 `#focusRingPaint` 設成 `visibility: hidden`。外框外擴 6px，角上 22px 見方，扣掉環色和選中褐。1280、`deviceScaleFactor` 1，確認欄和調色盤的最大通道差都是 0。1100、`deviceScaleFactor` 2，調色盤是 0；確認欄是 35（`#b1937b` → `#c6b19e`，62 個像素超過 2，樣本在裝置像素 1970,100）。要的是 ≤2。
+
+## 對照 `a1ef673` 和 `f92ea38`（畫出來的外緣、貼邊裁切）
+
+測試尖端 `ba26bc6`，疊在 `b6254c2` 上。產品工作樹只疊了這套測試，沒有改產品。資料庫 SHA 仍是 `c046fc41e1cf0eb8c5be5ae5a100fd62dfc6390e8c2277a6a84f93002fe3ecfb`。只跑了 `TC-FE-PAINT-UNDER-UI` 和 `TC-FE-RING-BAND-WALK`。`fc-match sans-serif:lang=zh-tw` 是 Droid Sans Fallback。
+
+蓋住的範圍是 border box，加上當時 `::before` 伸出 border box 的距離。這兩個產品的確認欄和調色盤，`::before` 是 `border-box`，四邊 inset 都是 `-3px`，元素自己的 border 也是 3px，所以伸出是 0。`.cta` 沒有生成 `::before`，外緣就是 border box。4px 和 48px 都不算進 cover。洞的每一邊離這條外緣要在 1 個裝置像素以內。`.cta` 外緣裡的像素差要是 0。
+
+`a1ef673`，完整 SHA `a1ef673a6891e5bfb00e451b78fd2424ab23037e`。1 failed、1 passed、66 deselected（44.09s）。`TC-FE-RING-BAND-WALK` 通過：`(3,3)` 的實線帶沒有走進調色盤外那 48px，所以走查抓不到這個死區。`TC-FE-PAINT-UNDER-UI` 紅。清單、銀行面板、近欄句子差、場景 2／3 的 z 與幾何、角上抗鋸齒沒有再翻成紅。`.cta` 像素差是 0。紅的是貼邊：
+
+- 1280、`deviceScaleFactor` 1。調色盤四邊都是 48.0 裝置像素（48.0 CSS px）的死區。確認欄是 0。
+- 1100、`deviceScaleFactor` 2。調色盤最大 97.0 裝置像素（48.5 CSS px）。確認欄四邊是 0.78、0.11、0.75、0.88，不超過 1，這是裝置像素 snap，留下。
+- 場景 1 `#btnBuild`。四邊都是 4.0 裝置像素。要的是 ≤1。南尖捲到按鈕中線（捲動 17），像素差是 0。
+
+角：1280 確認欄和調色盤都是 Δ0。1100、`deviceScaleFactor` 2，兩邊也是 Δ0。
+
+`f92ea38`，完整 SHA `f92ea38bcba0ca3605b325f7d4fbb51e3fb55a8d`。2 failed、66 deselected（44.09s）。兩條都紅。
+
+`TC-FE-RING-BAND-WALK` 和上一輪同一組數。內緣要 2.0–4.0，洞不得長過 1 個裝置像素。
+
+- `deviceScaleFactor` 1，1280 捲動 0 東南 2.7–4.1。捲動 366 東南 2.7–4.1、西南 2.0–4.1。1100 捲動 366 東南 2.7–4.4、西南 2.7–4.3。洞都是 0。390 兩次捲動四邊都在 2.0–3.9，洞是 0。
+- `deviceScaleFactor` 2，1280 捲動 0 和 366 四邊都在 2.0–3.9，洞是 0。
+- 1100、`deviceScaleFactor` 2、Tab 到 `(3,3)`。捲動 0 四邊 2.3–3.7，洞是 0。捲動 366 紅：西南 2.3–4.5，西北有一段 2 個裝置像素的奶油洞（內緣 2.4–3.3）。
+
+`TC-FE-PAINT-UNDER-UI` 的貼邊，確認欄和調色盤是過的。1280、`deviceScaleFactor` 1，兩邊的洞都是 0。1100、`deviceScaleFactor` 2，最大 0.01、最小 −0.09，不超過 1。確認欄的環盒子仍然壓在欄上，洞本身貼著外緣，所以貼邊這條過。紅的是下面三處，加上上一輪的角：
+
+- 1100、`deviceScaleFactor` 2，確認欄角 Δ35（`#b1937b` → `#c6b19e`，62 個像素超過 2，裝置像素 1970,100）。1280 兩邊 Δ0。1100 的調色盤是 Δ0。
+- 場景 1 `.cta` 沒有洞。`#focusRingPaint` 的 `rect` 客戶端外框和 `btnBuild` 相交，環的盒子也壓在畫出來的外緣上。
+- 同一顆按鈕的像素差是 3。要的是 0。捲動 17，南尖 575.3，按鈕 549–601。
+
+相對 `b6254c2`，diff 只有 `tests/qc6_checks.py`、`tests/test_warehouse_e2e.py`、`docs/test-cases/WAREHOUSE_PLACEMENT.md`。資料庫檔沒有進 diff，SHA 沒有變。
