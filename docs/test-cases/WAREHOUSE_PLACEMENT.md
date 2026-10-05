@@ -36,7 +36,7 @@
 ## 案例
 
 API：`tests/test_warehouse_placement.py`（`pytest -m "not frontend"`）。  
-介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`、`TC-FE-TAP-OFFCENTER`、`TC-FE-CELL-ARIA-MATCH`、`TC-FE-TAP-BAR-NOTHROUGH`、`TC-FE-TAP-VISIBLE-ONLY`、`TC-FE-SELECTED-CONTRAST`、`TC-FE-FOCUS-RING-CENTRE`、`TC-FE-HIDDEN-INERT`、`TC-FE-TAP-BAR-GAP-BAND`、`TC-FE-TAP-SCENE-GRASS-EDGE`、`TC-FE-SELECTED-OVER-GOLD`、`TC-FE-FOCUS-RING-SHAPE`、`TC-FE-FOCUS-RING-ABOVE-SPRITE`、`TC-FE-PLACE-SERVER-MSG`、`TC-FE-SELECTED-NO-FILL`、`TC-FE-FOCUS-RING-NO-FILL`、`TC-FE-TAP-VILLAGE-HALFPX`、`TC-FE-MARK-CLEARED`、`TC-FE-MARK-KEPT-READYBAR`、`TC-FE-MARK-RESTORE-AFTER-SHEET`、`TC-FE-RING-CLEARED`、`TC-FE-MARK-FOLLOWS-SCROLL`、`TC-FE-PAINT-UNDER-UI`、`TC-FE-NATIVE-FOCUS`、`TC-FE-RING-EDGE`、`TC-FE-RING-VERTEX-GAP`，以及畫面那一半的 `TC-API-AUTOPLACE-FORMAL` 和 `TC-API-PLACE-OWNED-FORMAL`。API 檔另有 `TC-API-AUTOPLACE-FORMAL`、`TC-API-PLACE-OWNED-FORMAL`、`TC-API-PLACE-DETAIL-FORMAL`，還有只 GET 靜態檔的 `TC-FE-WAREHOUSE-GRID`。
+介面：`tests/test_warehouse_e2e.py` 的 `TC-FE-WAREHOUSE-UNSTORE`、`TC-FE-WAREHOUSE-CARD`、`TC-FE-WAREHOUSE-CARD-BODY`、`TC-FE-WAREHOUSE-SCENE2-LEGAL`、`TC-FE-WAREHOUSE-SCENE3-CANCEL`、`TC-FE-BUILD-SCENE2-NOREGRESS`、`TC-FE-WAREHOUSE-COPY-FORMAL`、`TC-FE-WAREHOUSE-RETURN-MAP`、`TC-FE-WAREHOUSE-TAKEOUT-FULL`、`TC-FE-BUILD-SCENE2-NEWBUILD-LEGAL`、`TC-FE-WAREHOUSE-OFFGRID-TOAST`、`TC-FE-WAREHOUSE-CANCEL-TOAST-INFO`、`TC-FE-WAREHOUSE-BAR-NOOVERFLOW`、`TC-FE-TOWN-MAP-FIT`、`TC-FE-BUILD-UNFIT-PRESELECT`、`TC-FE-BUILD-UNFIT-PRESELECT-MINFP`、`TC-FE-PAL-BTN-NOCLIP`、`TC-FE-BUILD-UNFIT-PRESELECT-OVERLAP`、`TC-FE-CONFIRM-GENERIC-4XX`、`TC-FE-SW-AUTOREG`、`TC-FE-SW-PRECACHE`、`TC-FE-SW-UPGRADE-CLEANUP`、`TC-FE-PAL-ORDER`、`TC-FE-TAP-OFFCENTER`、`TC-FE-CELL-ARIA-MATCH`、`TC-FE-TAP-BAR-NOTHROUGH`、`TC-FE-TAP-VISIBLE-ONLY`、`TC-FE-SELECTED-CONTRAST`、`TC-FE-FOCUS-RING-CENTRE`、`TC-FE-HIDDEN-INERT`、`TC-FE-TAP-BAR-GAP-BAND`、`TC-FE-TAP-SCENE-GRASS-EDGE`、`TC-FE-SELECTED-OVER-GOLD`、`TC-FE-FOCUS-RING-SHAPE`、`TC-FE-FOCUS-RING-ABOVE-SPRITE`、`TC-FE-PLACE-SERVER-MSG`、`TC-FE-SELECTED-NO-FILL`、`TC-FE-FOCUS-RING-NO-FILL`、`TC-FE-TAP-VILLAGE-HALFPX`、`TC-FE-MARK-CLEARED`、`TC-FE-MARK-KEPT-READYBAR`、`TC-FE-MARK-RESTORE-AFTER-SHEET`、`TC-FE-RING-CLEARED`、`TC-FE-MARK-FOLLOWS-SCROLL`、`TC-FE-PAINT-UNDER-UI`、`TC-FE-NATIVE-FOCUS`、`TC-FE-RING-EDGE`、`TC-FE-RING-VERTEX-GAP`、`TC-FE-RING-BAND-WALK`，以及畫面那一半的 `TC-API-AUTOPLACE-FORMAL` 和 `TC-API-PLACE-OWNED-FORMAL`。API 檔另有 `TC-API-AUTOPLACE-FORMAL`、`TC-API-PLACE-OWNED-FORMAL`、`TC-API-PLACE-DETAIL-FORMAL`，還有只 GET 靜態檔的 `TC-FE-WAREHOUSE-GRID`。
 
 下表「main」是在 `5bfe76d` 加上這些測試後的結果。紅測的斷言訊息寫明預期與實際。綠測是回歸鎖，不是本缺陷。
 
@@ -467,11 +467,25 @@ POST `/api/kids/<id>/buildings` 帶 `def_id`、`cell_x`、`cell_y`，這種建�
 1. 有效 z。找出焦點環層、選中標記層，和每一個看得見的 `#readyBar`、`#uxPlaceBar`、調色盤，它們最近的共同堆疊上下文（不要把其中一個元素自己當成那個上下文）。環和標記在這個上下文裡的 z（沿著祖先走到該上下文的那一層）必須嚴格小於每一個看得見的欄和調色盤。場景 1、場景 3、建築面板打開、捲動 366、以及改視窗之後都要查。
 2. 環若是 canvas：把每個看得見的欄和調色盤客戶端矩形對到 canvas 的裝置像素（用 canvas 矩形和畫布寬高，不是只乘 `devicePixelRatio`），`getImageData` 那個區域，alpha 必須全是 0。
 3. 選中標記，以及環若是 SVG：這一版產品沒有把環裁進 `clip-path`。沒有 clip 時，每一個畫出來的 `rect`／`path`／`polygon` 的客戶端外框不得和欄或調色盤相交（0.5px 以內的貼邊不算相交）。若產品改成 `clip-path: url(#…)`，就在欄裡打一格點，用 `isPointInFill`／`isPointInStroke` 看幾何，再看該點是不是落在 clip 裡面；落在裁切後仍看得到的區域裡就是紅。
-4. DOM。`.place-bar`、`#readyBar`、`#uxPlaceBar`、調色盤子樹裡不得有環或標記的繪製元素：canvas、svg，或 id／class 含 `ring`、`mark`、`focus-lift`。掛在確認欄裡的 `svg.ring-under-bar` 會紅。
+4. DOM。`.place-bar`、`#readyBar`、`#uxPlaceBar`、調色盤、場景 1 的 `.cta`（`#btnBuild`）子樹裡不得有環或標記的繪製元素：canvas、svg，或 id／class 含 `ring`、`mark`、`focus-lift`。掛在確認欄裡的 `svg.ring-under-bar` 會紅。
+
+場景 1 的「我要起屋」（`.cta`）是蓋住環的實心控制項，和確認欄、調色盤同一份 cover。有效 z 必須嚴格低於它。環的繪製矩形不得留在按鈕裡面（有 clip 時用 `isPointInFill`，沒有 clip 時用客戶端外框）。測試把一格的南尖捲到按鈕的垂直中線再聚焦，按鈕活矩形裡的像素差是 0。不因為按鈕畫在環上面就放行沒裁掉的幾何。
+
+確認欄和調色盤的圓角抗鋸齒：同一句、同一格聚焦，一張環層在畫，另一張把 `#focusRingPaint` 設成 `visibility: hidden`（測完還原）。比的是外框再外擴 6px 之後四個角上 22px 見方的裝置像素，扣掉環色 `#fff8e7`、環褐 `#6b4f2a` 和選中褐 `#7c2d12`。剩下的每個通道相差不得超過 2。視窗 1280×720（`deviceScaleFactor` 1）和 1100×800（`deviceScaleFactor` 2），調色盤打開。
 
 ## 不要改掉原生 focus（TC-FE-NATIVE-FOCUS）
 
 `HTMLElement.prototype.focus.toString()` 和 `blur` 的字串都要含 `[native code]`。產品的 `town-four-scene.js`、`audio.js`、`service-worker.js`、`check_js.js` 不得指派 `HTMLElement.prototype.focus`。
+
+## 實線帶要連續（TC-FE-RING-BAND-WALK）
+
+尖角開口不算洞。四個角的開口就是 `TC-FE-RING-VERTEX-GAP` 量的那兩個內端之間的直線距離：設計目標是邊長夠長時 5–8px，測試接受 4–10px。連續裝置像素走查只走每一條邊的兩個實線內端之間，用的就是那條案例寫下來的同一對端點。內端外面、走進尖角開口的那段不查連續，也不把開口算成洞。
+
+內端之間的走查以 1 個裝置像素為一步。沒有奶油的連續樣本不得長過 1 個裝置像素；正好 1 個裝置像素的缺口留下，更長就是洞。每一個打中奶油的樣本，內緣（裝置像素中心，連續 3 個 `#fff8e7` 才起算，半進位到 0.1）都要在 2.0–4.0。只認平方距離 ≤25 的 `#fff8e7`。看得見的 `#readyBar`、`#uxPlaceBar`、調色盤（外擴 1px，連邊外 2px 和 3px 的奶油帶）蓋住的樣本跳過，不把矩形裁切算成洞。
+
+這條專門抓住只在 24 個站上補洞或挖洞的畫法：`placeFocusRing` 若按那 24 站把裝置像素標成 blocked，再在奶油帶裡 hold 住不畫，站與站之間的內緣或沿邊的洞仍要紅。
+
+1100×800、`deviceScaleFactor` 2，焦點必須是 Tab 送到 `(3,3)`，不是 `element.focus()`。捲動 0 和 366 都量。那一組每一個樣本的內緣都要在 2.0–4.0，洞不得長過 1 個裝置像素。另外在 `deviceScaleFactor` 1 的 1280×720、1100×800、390×844，以及 `deviceScaleFactor` 2 的 1280×720，同樣捲動 0 和 366。
 
 ## 尖角開口是兩條帶的內端（TC-FE-RING-VERTEX-GAP）
 
@@ -1115,3 +1129,21 @@ Guard（通過，不是新的紅測）：
 目標是對 `bbb23c0` 差 0。兩份拷貝都不是 0。帶著 `translateZ(0)` 時，1280、比例 1 的確認欄左段（句子）有 3757 像素不同，其中 3339 的平方距離大於 25，是字形被重新柵格化。拿掉之後，同一段是 0；剩下的 4993 全在右邊兩個按鈕上，其中 4325 像素正好是紅 −1、綠 0、藍 −1。對比度達標。`199fb09` 的 `#readyStatus` 計算色是 `#3b2a1a`，`text-shadow` 和 `filter` 都是 `none`。欄底 `::before` 是 `rgba(250, 246, 239, 0.98)`，鋪在白色上是 `#faf6ef`，對比 12.724:1。畫面裡句子最常見的墨水是 `#3b2a1a`，欄心最常見的填色是 `#f7f5eb`，對比 12.542:1。兩者都高於 4.5:1。
 
 相對 `a97f2b4`，diff 只有 `tests/qc6_checks.py`、`tests/test_warehouse_e2e.py`、`docs/test-cases/WAREHOUSE_PLACEMENT.md`。資料庫檔沒有進 diff，SHA 沒有變。
+
+## 對照 `f92ea38`（實線帶連續、場景 1 按鈕、角上抗鋸齒）
+
+產品是 `f92ea38`，完整 SHA `f92ea38bcba0ca3605b325f7d4fbb51e3fb55a8d`。測試工作樹只疊了這套測試，沒有改產品。資料庫 SHA 仍是 `c046fc41e1cf0eb8c5be5ae5a100fd62dfc6390e8c2277a6a84f93002fe3ecfb`。只跑了 `TC-FE-RING-BAND-WALK` 和 `TC-FE-PAINT-UNDER-UI`。兩條都紅。`TC-FE-PAINT-UNDER-UI` 裡原有的清單、銀行面板、近欄句子差、場景 2／3 的 z 與幾何沒有再翻成紅；紅的是下面三處新斷言。
+
+尖角開口不算洞。走查只用 `TC-FE-RING-VERTEX-GAP` 的實線內端。內端外面不查。第一個奶油裝置像素的內緣和連續 3 步起算的內緣相同，沒有藏在 3 步規則下面的低於 2.0。
+
+`TC-FE-RING-BAND-WALK` 紅。內緣要 2.0–4.0，沿邊的洞不得長過 1 個裝置像素。
+
+- `deviceScaleFactor` 1，1280 捲動 0 東南 2.7–4.1。捲動 366 東南 2.7–4.1、西南 2.0–4.1。1100 捲動 366 東南 2.7–4.4、西南 2.7–4.3。洞都是 0。390 兩次捲動四邊都在 2.0–3.9，洞是 0。
+- `deviceScaleFactor` 2，1280 捲動 0 和 366 四邊都在 2.0–3.9，洞是 0。
+- 1100、`deviceScaleFactor` 2、Tab 到 `(3,3)`。捲動 0 四邊 2.3–3.7，洞是 0，內緣沒有低於 2.0。捲動 366 紅：西南 2.3–4.5，西北有一段 2 個裝置像素的奶油洞（內緣 2.4–3.3）。東北 2.8–3.7、東南 2.3–3.0，這兩邊的洞是 0。
+
+`TC-FE-PAINT-UNDER-UI` 的新紅有兩處。
+
+場景 1 的 `.cta`（`#btnBuild`）算進 cover。1280 把 `(3,4)` 的南尖捲到按鈕中線（捲動 17，南尖 575.3，按鈕 549–601）再聚焦。`#focusRingPaint` 的 `rect` 客戶端外框和 `btnBuild` 相交。按鈕矩形裡有 3 個像素變了。
+
+確認欄和調色盤的角：環在畫，對上把 `#focusRingPaint` 設成 `visibility: hidden`。外框外擴 6px，角上 22px 見方，扣掉環色和選中褐。1280、`deviceScaleFactor` 1，確認欄和調色盤的最大通道差都是 0。1100、`deviceScaleFactor` 2，調色盤是 0；確認欄是 35（`#b1937b` → `#c6b19e`，62 個像素超過 2，樣本在裝置像素 1970,100）。要的是 ≤2。

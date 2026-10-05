@@ -2733,6 +2733,9 @@ def ring_vertex_gaps(png_before, png_after, face, clip, dpr=1):
             "solid": round(solid, 3),
             "start": None if not start else {"x": _round_pt(start[0]), "y": _round_pt(start[1])},
             "end": None if not end else {"x": _round_pt(end[0]), "y": _round_pt(end[1])},
+            # Edge parameter of the same cream pixels VERTEX-GAP calls the ends.
+            "start_along": None if not start else round(start[2], 3),
+            "end_along": None if not end else round(end[2], 3),
         }
     # NE starts at N and ends at E. SE starts at E and ends at S.
     # SW starts at S and ends at W. NW starts at W and ends at N.
@@ -2762,6 +2765,202 @@ def ring_vertex_gaps(png_before, png_after, face, clip, dpr=1):
         "edges": edges,
         "vertices": vertices,
     }
+
+
+def _gap_tenth(outside):
+    """Half-up to 0.1 screen px, matching the station ruler."""
+    return math.floor(outside * 10 + 0.5) / 10
+
+
+def _sample_on_cover(slot, along, boxes):
+    """True when the edge point, or the cream band 2–3px outside, is covered."""
+    if not boxes:
+        return False
+    length = slot["length"] or 1.0
+    t = along / length
+    ox = slot["sx"] + slot["dx"] * t
+    oy = slot["sy"] + slot["dy"] * t
+    points = ((ox, oy), (ox + slot["nx"] * 2.0, oy + slot["ny"] * 2.0),
+              (ox + slot["nx"] * 3.0, oy + slot["ny"] * 3.0))
+    for left, top, right, bottom in boxes:
+        for x, y in points:
+            if left <= x <= right and top <= y <= bottom:
+                return True
+    return False
+
+
+def ring_band_walk(png_before, png_after, face, clip, dpr=1, occluders=None):
+    """Continuous device-pixel walk of the inner cream, between vertex ends.
+
+    The four corner notches are the straight gaps ``ring_vertex_gaps``
+    measures (design 5–8px, accepted 4–10px). They sit outside each edge's
+    solid-band endpoints and are not holes. Inside an endpoint pair the
+    walk steps one device pixel at a time. A run of samples with no cream
+    longer than 1 device px is a hole. Every cream sample's inner gap is
+    the device-pixel centre where three consecutive 0.1px steps are
+    ``#fff8e7``, and that gap has to sit in [2.0, 4.0].
+
+    A bar or palette rect, grown 1px, is not a hole: those samples are
+    skipped, including where the cream band itself enters the rect.
+    """
+    runs = ring_vertex_gaps(png_before, png_after, face, clip, dpr=dpr)
+    _bw, _bh, before_rows = png_rgb(png_before)
+    _aw, _ah, after_rows = png_rgb(png_after)
+    dpr = dpr or 1
+    boxes = _occluder_boxes(occluders, margin=1.0)
+    step = 1.0 / dpr
+    report = {}
+    if not before_rows or not after_rows or len(before_rows) != len(after_rows):
+        return {"error": "clip size changed", "edges": {}}
+    slots = {slot["name"]: slot for slot in _edge_slots(face)}
+    for name, edge in (runs.get("edges") or {}).items():
+        slot = slots.get(name)
+        start = edge.get("start_along")
+        end = edge.get("end_along")
+        empty = {
+            "min": None, "max": None, "samples": 0, "holes": 0,
+            "hole": 0, "skipped": False, "missing": False,
+            "start": start, "end": end,
+        }
+        if slot is None or start is None or end is None or end <= start:
+            covered = bool(slot) and _sample_on_cover(slot, slot["length"] * 0.5, boxes)
+            empty["skipped"] = covered
+            empty["missing"] = not covered
+            report[name] = empty
+            continue
+        gaps = []
+        specks = []
+        miss = 0
+        worst = 0
+        holes = 0
+        along = start
+        guard = 0
+        limit = int((end - start) / step) + 3
+        while along <= end + 1e-6 and guard < limit:
+            guard += 1
+            if _sample_on_cover(slot, along, boxes):
+                if miss > 1:
+                    holes += 1
+                    worst = max(worst, miss)
+                miss = 0
+                along += step
+                continue
+            t = along / slot["length"]
+            ox = slot["sx"] + slot["dx"] * t
+            oy = slot["sy"] + slot["dy"] * t
+
+            def _cream_centre(dist, _ox=ox, _oy=oy):
+                x = _ox + slot["nx"] * dist
+                y = _oy + slot["ny"] * dist
+                after, cx, cy = _device_at(after_rows, clip, x, y, dpr)
+                before, _bx, _by = _device_at(before_rows, clip, x, y, dpr)
+                if not after or not before or not _ring_cream_strict(after):
+                    return None
+                if _rgb_dist(before, after) <= _UNCHANGED_DIST:
+                    return None
+                outside = _diamond_outside(face, cx, cy)
+                if outside is None:
+                    return None
+                return outside
+
+            gap = None
+            speck = None
+            run = []
+            steps = int(_RING_OUTSIDE_BAND / 0.1)
+            for index in range(1, steps + 1):
+                dist = round(index * 0.1, 1)
+                outside = _cream_centre(dist)
+                if outside is None:
+                    run = []
+                    continue
+                if speck is None:
+                    speck = outside
+                run.append(outside)
+                if len(run) < 3:
+                    continue
+                gap = _gap_tenth(run[0])
+                break
+            if gap is None:
+                miss += 1
+            else:
+                if miss > 1:
+                    holes += 1
+                    worst = max(worst, miss)
+                miss = 0
+                gaps.append(gap)
+                if speck is not None:
+                    specks.append(speck)
+            along += step
+        if miss > 1:
+            holes += 1
+            worst = max(worst, miss)
+        report[name] = {
+            "min": None if not gaps else min(gaps),
+            "max": None if not gaps else max(gaps),
+            "speck": None if not specks else _gap_tenth(min(specks)),
+            "samples": len(gaps),
+            "holes": holes,
+            "hole": worst,
+            "skipped": False,
+            "missing": False,
+            "start": start,
+            "end": end,
+        }
+    return {"error": runs.get("error"), "edges": report, "length": runs.get("length")}
+
+
+def corner_level_delta(png_a, png_b, radius_css, dpr=1):
+    """Max per-channel change in the four corner squares of two device shots.
+
+    ``radius_css`` is the corner square, in CSS px, measured from each
+    corner of the image. Ring ink (``#fff8e7``, ``#6b4f2a``, ``#7c2d12``)
+    is left out, so a dash that crosses the corner is not the antialias.
+    Returns the largest absolute channel delta among the remaining pixels.
+    """
+    _aw, _ah, rows_a = png_rgb(png_a)
+    width, height, rows_b = png_rgb(png_b)
+    if not rows_a or not rows_b or len(rows_a) != height or len(rows_a[0]) != width:
+        return {"max": None, "over": None, "sample": None}
+    dpr = dpr or 1
+    span = max(2, int(round(radius_css * dpr)))
+    span = min(span, width, height)
+    boxes = (
+        (0, span, 0, span),
+        (width - span, width, 0, span),
+        (0, span, height - span, height),
+        (width - span, width, height - span, height),
+    )
+    worst = 0
+    over = 0
+    sample = None
+    for x0, x1, y0, y1 in boxes:
+        for iy in range(y0, y1):
+            row_a = rows_a[iy]
+            row_b = rows_b[iy]
+            for ix in range(x0, x1):
+                left = row_a[ix]
+                right = row_b[ix]
+                if not left or not right:
+                    continue
+                if _ring_cream_strict(left) or _ring_cream_strict(right):
+                    continue
+                if _rgb_dist(left, RING_BROWN) <= 12 * 12 or _rgb_dist(right, RING_BROWN) <= 12 * 12:
+                    continue
+                if _rgb_dist(left, REQUIRED_STROKE) <= _STROKE_COUNT_TOL:
+                    continue
+                if _rgb_dist(right, REQUIRED_STROKE) <= _STROKE_COUNT_TOL:
+                    continue
+                delta = max(abs(left[0] - right[0]), abs(left[1] - right[1]), abs(left[2] - right[2]))
+                if delta > worst:
+                    worst = delta
+                    sample = {
+                        "x": ix, "y": iy,
+                        "before": hex_of(left), "after": hex_of(right),
+                        "delta": delta,
+                    }
+                if delta > 2:
+                    over += 1
+    return {"max": worst, "over": over, "sample": sample}
 
 
 def stroke_outer_rays(png_bytes, face, clip):

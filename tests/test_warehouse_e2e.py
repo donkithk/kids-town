@@ -65,6 +65,8 @@ from tests.qc6_checks import (  # noqa: E402
     stroke_outer_rays,
     ring_device_gaps,
     ring_vertex_gaps,
+    ring_band_walk,
+    corner_level_delta,
     ring_edge_report,
     paint_overlay_count,
     bar_ink_count,
@@ -8388,7 +8390,7 @@ _PAINT_GUARD_JS = r"""() => {
     }
   });
   const covers = [];
-  for (const sel of ['#readyBar', '#uxPlaceBar', '#palette']) {
+  for (const sel of ['#readyBar', '#uxPlaceBar', '#palette', '#townMap .cta']) {
     const el = document.querySelector(sel);
     if (!shown(el)) continue;
     const box = el.getBoundingClientRect();
@@ -8537,7 +8539,7 @@ _PAINT_GUARD_JS = r"""() => {
     }
   }
   const dom = [];
-  document.querySelectorAll('.place-bar, #readyBar, #uxPlaceBar, #palette').forEach((host) => {
+  document.querySelectorAll('.place-bar, #readyBar, #uxPlaceBar, #palette, #townMap .cta').forEach((host) => {
     host.querySelectorAll('canvas, svg, [id*="ring" i], [id*="mark" i], [id*="focus-lift" i], [class*="ring" i], [class*="mark" i], [class*="focus-lift" i]').forEach((el) => {
       if (el === host) return;
       dom.push({
@@ -8828,6 +8830,356 @@ def _open_scene3_for_guard(page):
     return "場景 3" in (_scene_aria(page) or "")
 
 
+def _tab_to_cell(page, cell_x, cell_y):
+    """Move keyboard focus onto a cell with Tab, not element.focus()."""
+    prepared = page.evaluate(
+        """([c, r]) => {
+          const pad = [...document.querySelectorAll('#townMap .pad')].find((el) => {
+            const cs = getComputedStyle(el);
+            return parseInt(cs.getPropertyValue('--c'), 10) === c
+              && parseInt(cs.getPropertyValue('--r'), 10) === r;
+          });
+          const btn = pad && pad.querySelector(':scope > .cell-btn');
+          if (!btn) return {ok: false};
+          const buttons = [...document.querySelectorAll('#townMap .cell-btn')];
+          const index = buttons.indexOf(btn);
+          if (index < 0) return {ok: false};
+          const prev = index > 0 ? buttons[index - 1] : document.body;
+          prev.focus();
+          return {ok: true, index};
+        }""",
+        [cell_x, cell_y],
+    )
+    if not prepared or not prepared.get("ok"):
+        return False
+    page.keyboard.press("Tab")
+    page.wait_for_timeout(40)
+    return bool(page.evaluate(
+        """([c, r]) => {
+          const el = document.activeElement;
+          const pad = el && el.closest ? el.closest('.pad') : null;
+          if (!pad || !el.matches(':focus-visible')) return false;
+          const cs = getComputedStyle(pad);
+          return parseInt(cs.getPropertyValue('--c'), 10) === c
+            && parseInt(cs.getPropertyValue('--r'), 10) === r;
+        }""",
+        [cell_x, cell_y],
+    ))
+
+
+def _band_problems(report, label):
+    """Holes longer than 1 device px, and every inner gap in [2.0, 4.0]."""
+    problems = []
+    bits = []
+    edges = (report or {}).get("edges") or {}
+    if not edges:
+        problems.append(f"{label}: {(report or {}).get('error') or 'no edge report'}")
+        return problems, ""
+    for name in ("NE", "SE", "SW", "NW"):
+        edge = edges.get(name) or {}
+        bits.append(
+            f"{name} {edge.get('min')}/{edge.get('max')} speck={edge.get('speck')} n={edge.get('samples')} "
+            f"hole={edge.get('hole')} along {edge.get('start')}-{edge.get('end')}"
+            + (" skipped" if edge.get("skipped") else "")
+            + (" missing" if edge.get("missing") else "")
+        )
+        if edge.get("skipped"):
+            continue
+        if edge.get("missing") or not edge.get("samples"):
+            problems.append(
+                f"{label} {name}: no solid cream between the vertex-gap endpoints"
+            )
+            continue
+        if edge.get("hole", 0) > 1:
+            problems.append(
+                f"{label} {name}: cream hole {edge.get('hole')} device px, want ≤1"
+            )
+        gap_min = edge.get("min")
+        gap_max = edge.get("max")
+        if gap_min is None or gap_max is None or gap_min < 2 or gap_max > 4:
+            problems.append(
+                f"{label} {name}: inner gap {gap_min}–{gap_max}, want 2.0–4.0"
+            )
+    return problems, " ".join(bits)
+
+
+def _band_on_cell(page, label, focus="api", scroll=0):
+    """Walk (3,3). ``focus`` is ``api`` or ``tab``."""
+    problems = []
+    dpr = _dpr(page)
+    dismiss_selection(page)
+    _blur_focus(page)
+    _silence_toast(page)
+    set_village_scroll(page, scroll)
+    page.wait_for_timeout(80)
+
+    def _focus():
+        if focus == "tab":
+            return _tab_to_cell(page, 3, 3)
+        return _focus_visible_cell(page, 3, 3)
+
+    def _moved(left, right):
+        if not left or not right or not left.get("tips") or not right.get("tips"):
+            return True
+        return abs(left["cx"] - right["cx"]) > 0.5 or abs(left["cy"] - right["cy"]) > 0.5
+
+    # Land keyboard scroll first, then photograph the unfocused cell there.
+    if not _focus():
+        problems.append(f"{label}: cell did not take {focus} focus")
+        return problems
+    page.wait_for_timeout(40)
+    _blur_focus(page)
+    page.wait_for_timeout(120)
+    _require_clean_paint(page, problems, label)
+    face = cell_top_face(page, 3, 3) or {}
+    if face.get("error") or not face.get("tips"):
+        problems.append(f"{label}: {face.get('error')}")
+        return problems
+    clip = _align_device_clip(_paint_clip(page, face, margin=16), dpr)
+    before = _device_shot(page, clip)
+    if not _focus():
+        problems.append(f"{label}: cell did not take {focus} focus for the ring")
+        return problems
+    page.wait_for_timeout(40)
+    face_now = cell_top_face(page, 3, 3) or {}
+    if _moved(face, face_now):
+        _blur_focus(page)
+        page.wait_for_timeout(80)
+        face = cell_top_face(page, 3, 3) or {}
+        if not face.get("tips"):
+            problems.append(f"{label}: face moved and could not be reread")
+            return problems
+        clip = _align_device_clip(_paint_clip(page, face, margin=16), dpr)
+        before = _device_shot(page, clip)
+        if not _focus():
+            problems.append(f"{label}: cell did not take {focus} focus after the reshoot")
+            return problems
+        page.wait_for_timeout(40)
+        face_now = cell_top_face(page, 3, 3) or {}
+        if _moved(face, face_now):
+            problems.append(f"{label}: focusing moved the cell between the two shots")
+            return problems
+    face = face_now
+    report = ring_band_walk(
+        before,
+        _device_shot(page, clip),
+        face,
+        clip,
+        dpr=dpr,
+        occluders=_overlay_rects(page),
+    )
+    found, text = _band_problems(report, label)
+    problems.extend(found)
+    print(f"TC-FE-RING-BAND-WALK {label} {text}", flush=True)
+    _blur_focus(page)
+    return problems
+
+
+def _band_matrix(page, scale_label, focus="api"):
+    problems = []
+    scrolls = (0, 366)
+    viewports = ((1280, 720), (1100, 800), (390, 844))
+    if scale_label != "dsf1":
+        viewports = ((1280, 720), (1100, 800))
+    for width, height in viewports:
+        page.set_viewport_size({"width": width, "height": height})
+        page.wait_for_timeout(80)
+        if "場景 2" not in _scene_aria(page):
+            _enter_new_build_scene2(page)
+        for scroll in scrolls:
+            set_village_scroll(page, scroll)
+            page.wait_for_timeout(40)
+            label = f"{scale_label} {width}x{height} scroll {scroll}"
+            # 1100 dsf2 is the Tab path. Other stations stay on focus().
+            mode = focus
+            if scale_label == "dsf2" and width == 1100:
+                mode = "tab"
+                label = f"{scale_label} {width}x{height} scroll {scroll} Tab (3,3)"
+            problems.extend(_band_on_cell(page, label, mode, scroll))
+    return problems
+
+
+def _hide_ring_paint(page):
+    return page.evaluate(
+        """() => {
+          const el = document.getElementById('focusRingPaint');
+          if (!el) return false;
+          el.setAttribute('data-kt-ring-vis', el.style.visibility || '');
+          el.style.visibility = 'hidden';
+          return true;
+        }"""
+    )
+
+
+def _restore_ring_paint(page):
+    page.evaluate(
+        """() => {
+          document.querySelectorAll('[data-kt-ring-vis]').forEach((el) => {
+            el.style.visibility = el.getAttribute('data-kt-ring-vis') || '';
+            el.removeAttribute('data-kt-ring-vis');
+          });
+        }"""
+    )
+
+
+def _corner_pair(page, selector, label, problems):
+    """Bar or palette corners, ring shown against ring hidden. ≤2 levels."""
+    rect = surface_rect(page, selector)
+    if not rect:
+        problems.append(f"{label}: {selector} has no rect")
+        return
+    grown = {
+        "left": rect["left"] - 6,
+        "top": rect["top"] - 6,
+        "right": rect["right"] + 6,
+        "bottom": rect["bottom"] + 6,
+    }
+    clip = _align_device_clip(_rect_clip(page, grown), _dpr(page))
+    if not clip:
+        problems.append(f"{label}: {selector} clip is empty")
+        return
+    shown = _device_shot(page, clip)
+    hidden_ok = _hide_ring_paint(page)
+    try:
+        if not hidden_ok:
+            problems.append(f"{label}: ring layer not found to hide")
+        page.wait_for_timeout(40)
+        hidden = _device_shot(page, clip)
+    finally:
+        _restore_ring_paint(page)
+    delta = corner_level_delta(hidden, shown, 22, dpr=_dpr(page))
+    sample = (delta or {}).get("sample")
+    print(
+        f"TC-FE-PAINT-UNDER-UI corner {label} {selector} "
+        f"max {None if not delta else delta.get('max')} "
+        f"over {None if not delta else delta.get('over')} sample {sample}",
+        flush=True,
+    )
+    if not delta or delta.get("max") is None:
+        problems.append(f"{label} {selector}: corner shots differ in size")
+    elif delta["max"] > 2:
+        painted = ""
+        if sample:
+            painted = (
+                f" ({sample.get('before')} → {sample.get('after')} "
+                f"Δ{sample.get('delta')} at {sample.get('x')},{sample.get('y')})"
+            )
+        problems.append(
+            f"{label} {selector}: corner antialias Δ{delta['max']} levels{painted}, want ≤2"
+        )
+
+
+def _corner_levels(page, scale_label):
+    """Ring-present vs ring-hidden at the rounded bar and palette corners."""
+    problems = []
+    dpr_note = scale_label
+    viewports = ((1280, 720),) if scale_label == "dsf1" else ((1100, 800),)
+    for width, height in viewports:
+        page.set_viewport_size({"width": width, "height": height})
+        page.wait_for_timeout(80)
+        if "場景 2" not in (_scene_aria(page) or ""):
+            _enter_new_build_scene2(page)
+        _open_palette(page)
+        dismiss_selection(page)
+        _blur_focus(page)
+        set_village_scroll(page, 0)
+        page.wait_for_timeout(80)
+        label = f"{dpr_note} {width}x{height}"
+        if not _focus_visible_cell(page, 3, 3):
+            problems.append(f"{label}: cell did not focus")
+            continue
+        page.wait_for_timeout(40)
+        _corner_pair(page, "#readyBar", label, problems)
+        _corner_pair(page, "#palette", label, problems)
+        _blur_focus(page)
+    return problems
+
+
+def _place_cell_over_cta(page):
+    """Scroll a free cell so its south tip lies on the scene-1 build button."""
+    return page.evaluate(
+        """() => {
+          const cta = document.querySelector('#townMap .cta');
+          const village = document.getElementById('village');
+          if (!cta || !village) return {ok: false, reason: 'missing'};
+          const cs = getComputedStyle(cta);
+          const box = cta.getBoundingClientRect();
+          if (cs.display === 'none' || box.width < 2 || box.height < 2) {
+            return {ok: false, reason: 'hidden'};
+          }
+          const pads = [...document.querySelectorAll('#townMap .pad')];
+          let pad = pads.find((el) => {
+            const style = getComputedStyle(el);
+            return parseInt(style.getPropertyValue('--c'), 10) === 3
+              && parseInt(style.getPropertyValue('--r'), 10) === 4;
+          }) || pads[0];
+          if (!pad) return {ok: false, reason: 'no cell'};
+          const style = getComputedStyle(pad);
+          const c = parseInt(style.getPropertyValue('--c'), 10);
+          const r = parseInt(style.getPropertyValue('--r'), 10);
+          function southOf(el) {
+            const slab = el.querySelector(':scope > .slab');
+            const slabBox = slab.getBoundingClientRect();
+            const face = 10 * (slabBox.width / 168);
+            const cy = slabBox.top + slabBox.height / 2 - face;
+            const halfH = slabBox.height * (50 / 120);
+            return cy + halfH;
+          }
+          const scale = village.getBoundingClientRect().width / village.offsetWidth || 1;
+          const ctaBox = cta.getBoundingClientRect();
+          const target = (ctaBox.top + ctaBox.bottom) / 2;
+          const delta = (southOf(pad) - target) / scale;
+          const max = Math.max(0, village.scrollHeight - village.clientHeight);
+          village.scrollTop = Math.max(0, Math.min(max, village.scrollTop + delta));
+          const south = southOf(pad);
+          const now = cta.getBoundingClientRect();
+          return {
+            ok: south >= now.top - 2 && south <= now.bottom + 2,
+            c, r, south, top: now.top, bottom: now.bottom, scroll: village.scrollTop
+          };
+        }"""
+    ) or {"ok": False}
+
+
+def _scene1_cta(page, problems):
+    """Scene 1 build button is a cover: no ring paint in its rect, and the guard."""
+    page.set_viewport_size({"width": 1280, "height": 720})
+    page.wait_for_timeout(80)
+    _restore_scene1(page)
+    page.wait_for_timeout(80)
+    if "場景 1" not in (_scene_aria(page) or ""):
+        problems.append(f"scene1 cta: landed in {_scene_aria(page)!r}")
+        return
+    placed = _place_cell_over_cta(page) or {}
+    print(f"TC-FE-PAINT-UNDER-UI scene1 cta place {placed}", flush=True)
+    cell = (placed.get("c"), placed.get("r"))
+    if not placed.get("ok") or cell[0] is None:
+        problems.append(f"scene1 cta: could not lay a cell on the button ({placed})")
+        return
+    dismiss_selection(page)
+    _blur_focus(page)
+    page.wait_for_timeout(80)
+    rect = surface_rect(page, "#townMap .cta")
+    clip = _rect_clip(page, rect)
+    if not clip:
+        problems.append("scene1 cta: button has no on-screen rect")
+        return
+    before = _shot(page, clip)
+    if not _focus_visible_cell(page, cell[0], cell[1]):
+        problems.append(f"scene1 cta: ({cell[0]},{cell[1]}) did not focus")
+        return
+    page.wait_for_timeout(40)
+    _paint_guard_problems(page, "scene1 cta", problems)
+    after = _shot(page, clip)
+    diff = changed_pixel_count(before, after)
+    print(f"TC-FE-PAINT-UNDER-UI scene1 cta diff {diff}", flush=True)
+    if diff is None:
+        problems.append("scene1 cta: screenshots differ in size")
+    elif diff:
+        problems.append(f"scene1 cta: {diff} px changed inside .cta")
+    _blur_focus(page)
+
+
 def _guard_sweep(page, problems):
     """Z-order of the ring and mark across scene, scroll, resize, and a sheet."""
     page.set_viewport_size({"width": 1280, "height": 720})
@@ -8859,9 +9211,7 @@ def _guard_sweep(page, problems):
         _paint_guard_problems(page, "scene3 uxPlaceBar", problems)
         _blur_focus(page)
     _cancel_scene3(page)
-    _restore_scene1(page)
-    page.wait_for_timeout(80)
-    _paint_guard_problems(page, "scene1", problems)
+    _scene1_cta(page, problems)
     _scroll_cell_into_view(page, 6, 0)
     tap_cell_centre(page, 6, 0)
     try:
@@ -8890,10 +9240,14 @@ def test_paint_under_ui(page, base_url, warehouse_db, warehouse_ids):
     確認欄句子的 text-shadow 是 none。圓角外面的三角仍在矩形裡，
     不得有環或選中線，也不要求那裡看得到環。
     焦點環和選中標記在最近的共同堆疊上下文裡，有效 z 必須嚴格低於
-    每一個看得見的確認欄和調色盤。場景 1、場景 3、面板打開、捲動 366、
-    改視窗都查。環若是 canvas，欄和調色盤對到的裝置像素 alpha 全是 0；
-    若是沒有 clip 的 SVG，畫出來的圖形外框不得和欄或調色盤相交。
-    .place-bar、確認欄、調色盤裡面不得掛著環或標記的繪製元素。
+    每一個看得見的確認欄、調色盤，以及場景 1 的 `.cta`（#btnBuild）。
+    場景 1 先把一格的南尖捲到「我要起屋」上再聚焦，按鈕矩形裡的像素差是 0。
+    場景 3、面板打開、捲動 366、改視窗都查。環若是 canvas，這些蓋住的
+    矩形對到的裝置像素 alpha 全是 0；若是沒有 clip 的 SVG，畫出來的圖形
+    外框不得和它們相交。`.place-bar`、確認欄、調色盤、`.cta` 裡面不得掛著
+    環或標記的繪製元素。
+    確認欄和調色盤四個角（外框再外擴 6px，角上 22px 見方，不含環色和
+    選中褐）在環畫著和把環層設成 visibility:hidden 時，每通道相差 ≤2。
     """
     kid_id = warehouse_ids["kid_id"]
     _ensure_bank_def(warehouse_db)
@@ -9025,6 +9379,20 @@ def test_paint_under_ui(page, base_url, warehouse_db, warehouse_ids):
                         f"(ring layer {ring.get('pixels')} px)"
                     )
     problems.extend(_paint_near_bar(page))
+    problems.extend(_corner_levels(page, "dsf1"))
+    browser = page.context.browser
+    context = browser.new_context(
+        viewport={"width": 1280, "height": 720},
+        device_scale_factor=2,
+    )
+    other = context.new_page()
+    try:
+        other.route("https://image.pollinations.ai/**", lambda route: route.abort())
+        _login(other, base_url)
+        _enter_new_build_scene2(other)
+        problems.extend(_corner_levels(other, "dsf2"))
+    finally:
+        context.close()
     _guard_sweep(page, problems)
     assert not problems, "TC-FE-PAINT-UNDER-UI: " + " | ".join(problems[:12])
 
@@ -9233,3 +9601,38 @@ def test_ring_vertex_gap(page, base_url, warehouse_db, warehouse_ids):
     problems.extend(_vertex_matrix(page, "dsf1"))
     problems.extend(_vertex_at_scale(page, base_url, 2))
     assert not problems, "TC-FE-RING-VERTEX-GAP: " + " | ".join(problems[:12])
+
+
+@pytest.mark.case_id("TC-FE-RING-BAND-WALK")
+def test_ring_band_walk(page, base_url, warehouse_db, warehouse_ids):
+    """TC-FE-RING-BAND-WALK 實線奶油帶裡不得有超過 1 裝置像素的洞。
+
+    四個尖角的開口是 TC-FE-RING-VERTEX-GAP 的那兩個內端，設計 5–8px、
+    接受 4–10px，不算洞。連續走的只是每一條邊兩個內端之間的那段。
+    步進是 1 個裝置像素。那段裡面，沒有奶油的連續樣本不得長過 1 裝置像素，
+    每一個打中奶油的樣本內緣都在 2.0–4.0。內端外面、走進尖角開口的部分不查。
+    欄和調色盤蓋住的樣本跳過，不算洞。
+    1100×800、deviceScaleFactor 2，捲動 0 和 366，用 Tab 把焦點送到 (3,3)，
+    不是 element.focus()。那一組的內緣也要在 2.0–4.0，洞不得長過 1 裝置像素。
+    """
+    kid_id = warehouse_ids["kid_id"]
+    _reset_kid(warehouse_db, kid_id, points=800, buildings=[])
+    _login(page, base_url)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    _enter_new_build_scene2(page)
+    problems = []
+    problems.extend(_band_matrix(page, "dsf1"))
+    browser = page.context.browser
+    context = browser.new_context(
+        viewport={"width": 1280, "height": 720},
+        device_scale_factor=2,
+    )
+    other = context.new_page()
+    try:
+        other.route("https://image.pollinations.ai/**", lambda route: route.abort())
+        _login(other, base_url)
+        _enter_new_build_scene2(other)
+        problems.extend(_band_matrix(other, "dsf2"))
+    finally:
+        context.close()
+    assert not problems, "TC-FE-RING-BAND-WALK: " + " | ".join(problems[:12])
