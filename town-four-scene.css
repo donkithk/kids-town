@@ -12,7 +12,7 @@
   position: absolute;
   inset: 0;
   z-index: 40;
-  overflow: visible;
+  overflow: hidden;
   border-radius: 18px;
   background: #7eae52;
   color: var(--ink);
@@ -343,7 +343,6 @@ body.kt-artstage #tab-town .mp { position: relative; }
   border-radius: 0;
   background: transparent;
   isolation: isolate;
-  transform: translateZ(0);
 }
 
 #townMap .palette::before {
@@ -422,7 +421,6 @@ body.kt-artstage #tab-town .mp { position: relative; }
   border-radius: 0;
   background: transparent;
   isolation: isolate;
-  transform: translateZ(0);
 }
 
 #townMap .place-bar::before {
