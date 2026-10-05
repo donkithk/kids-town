@@ -1891,6 +1891,9 @@ def _ring_cream(pixel):
 # Squared distance. #fff8e7's own device-pixel fringe stays inside this.
 # #fffec5 is about 1192 away, so a cream layer painted under the bar does not count.
 _RING_CREAM_STRICT = 5 * 5
+# The stand-in yellow painted under the bar. Tight on purpose: bar wood and
+# the gold button are farther away than this.
+_RING_STANDIN = (0xFF, 0xFE, 0xC5)
 
 
 def _ring_cream_strict(pixel):
@@ -3107,11 +3110,13 @@ def paint_overlay_count(png_before, png_after, shot_clip, guard):
             before = _clip_pixel(before_rows, shot_clip, x, y)
             if after and before and _rgb_dist(before, after) > _UNCHANGED_DIST:
                 # The bar fill is #faf6ef, about 10px from the ring cream, and
-                # its wood text matches the ring brown. Only the solid dash
-                # and the #7c2d12 line count.
+                # its wood text matches the ring brown. Only a strict cream
+                # match, the #fffec5 stand-in, and the #7c2d12 line count.
+                # Antialiased fringe is outside 5*5 of #fff8e7.
                 stroke = _rgb_dist(after, REQUIRED_STROKE) <= _STROKE_COUNT_TOL
-                cream = _rgb_dist(after, RING_CREAM) <= 5 * 5
-                if stroke or cream:
+                cream = _rgb_dist(after, RING_CREAM) <= _RING_CREAM_STRICT
+                stand = _rgb_dist(after, _RING_STANDIN) <= _RING_CREAM_STRICT
+                if stroke or cream or stand:
                     count += 1
             x += 1
         y += 1
