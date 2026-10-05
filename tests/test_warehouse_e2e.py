@@ -63,7 +63,6 @@ from tests.qc6_checks import (  # noqa: E402
     ring_layer_pixels,
     stroke_near_cell,
     stroke_outer_rays,
-    ring_inner_gaps,
     ring_device_gaps,
     ring_vertex_gaps,
     ring_edge_report,
@@ -8154,7 +8153,9 @@ def test_ring_cleared(page, base_url, warehouse_db, warehouse_ids):
 def test_mark_follows_scroll(page, base_url, warehouse_db, warehouse_ids):
     """TC-FE-MARK-FOLLOWS-SCROLL 捲動 0 和 366 時，選中線仍包住同一格。
 
-    外緣在活格子外 0–1.5px。焦點環在捲動之後，內緣間隙是 2–4 螢幕 px。
+    外緣在活格子外 0–1.5px，這條不因確認欄裁切而放寬。焦點環的內緣用
+    ring_device_gaps，和 TC-FE-FOCUS-RING-SHAPE 同一套站：24 站只放在
+    沒被欄或調色盤蓋住的那段，至少 22 站打中 #fff8e7，短於 12px 就跳過。
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(warehouse_db, kid_id, points=800, buildings=[])
@@ -8165,6 +8166,7 @@ def test_mark_follows_scroll(page, base_url, warehouse_db, warehouse_ids):
     _select_cell(page, 3, 3)
     _blur_focus(page)
     problems = []
+    dpr = _dpr(page)
     for scroll in (0, 366):
         moved = set_village_scroll(page, scroll)
         page.wait_for_timeout(80)
@@ -8178,13 +8180,21 @@ def test_mark_follows_scroll(page, base_url, warehouse_db, warehouse_ids):
         problems.extend(_wrap_problems(near, f"scroll {scroll}"))
         _blur_focus(page)
         page.wait_for_timeout(150)
-        before = _shot(page, clip)
+        device_clip = _align_device_clip(clip, dpr)
+        before = _device_shot(page, device_clip)
         if not _focus_visible_cell(page, 3, 3):
             problems.append(f"scroll {scroll}: cell did not focus")
             continue
         page.wait_for_timeout(40)
-        gaps = ring_inner_gaps(before, _shot(page, clip), face, clip)
-        found, text = _gap_problems(gaps, f"scroll {scroll} ring")
+        gaps = ring_device_gaps(
+            before,
+            _device_shot(page, device_clip),
+            face,
+            device_clip,
+            dpr=dpr,
+            occluders=_overlay_rects(page),
+        )
+        found, text = _device_gap_problems(gaps, f"scroll {scroll} ring")
         print(f"TC-FE-MARK-FOLLOWS-SCROLL ring {text}", flush=True)
         problems.extend(found)
         _blur_focus(page)
