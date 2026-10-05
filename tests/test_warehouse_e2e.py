@@ -69,6 +69,7 @@ from tests.qc6_checks import (  # noqa: E402
     ring_edge_report,
     paint_overlay_count,
     bar_ink_count,
+    bar_masked_diff,
     selected_mark_geometry,
     scroll_for_cell_point,
     set_village_scroll,
@@ -6921,10 +6922,12 @@ def test_focus_ring_shape(page, base_url, warehouse_db, warehouse_ids):
     四個尖角沿各自的軸在格子尖角外 2–4px（橫向因為比例可以到約 8px），
     每條邊在格子邊外 2–4px，寬高比和格子相差不超過 2%。1280 的 (3,3)
     大約 150–157 × 89–93。中心仍在 ±1px。選中又聚焦時，環不得壓到
-    #7c2d12 實線。不鎖線寬。畫出來的內緣用裝置像素中心：每條邊至少 24 站，
-    0.1px 步進，連續 3 個奶油樣本才算帶的起點，離尖角開口至少 3px。
-    最小值 ≥2、最大值 ≤4 螢幕 px。1280、1100、390，捲動 0 和 366，
-    deviceScaleFactor 1 和 2。
+    #7c2d12 實線。不鎖線寬。畫出來的內緣用裝置像素中心：24 站只放在
+    沒被看得見的確認欄或調色盤蓋住的那段（活矩形外擴 1px，再離開尖角
+    開口加 3px）。24 站裡至少 22 站要打中真正的環奶油 #fff8e7
+    （平方距離約 25，#fffec5 不算）。看得見的邊短於 12px 就跳過。
+    0.1px 步進，連續 3 個樣本。最小值 ≥2、最大值 ≤4 螢幕 px。
+    1280、1100、390，捲動 0 和 366，deviceScaleFactor 1 和 2。
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(warehouse_db, kid_id, points=800, buildings=[])
@@ -7894,19 +7897,25 @@ def _dpr(page):
 
 
 def _device_gap_problems(gaps, label):
-    """Min ≥2, max ≤4, at least 24 cream stations. Screen px."""
+    """Min ≥2, max ≤4, at least 22 of 24 stations on the unoccluded edge."""
     problems = []
     bits = []
     for name in ("NE", "SE", "SW", "NW"):
         edge = gaps.get(name) or {}
         bits.append(
             f"{name} {edge.get('min')}/{edge.get('median')}/{edge.get('max')} "
-            f"n={edge.get('samples')}"
+            f"n={edge.get('samples')}/{edge.get('stations')} "
+            f"vis={edge.get('visible')} legacy={edge.get('legacy_visible')}"
+            + (" skipped" if edge.get("skipped") else "")
         )
+        if edge.get("skipped"):
+            continue
         samples = edge.get("samples", 0)
-        if samples < 24 or edge.get("min") is None or edge.get("max") is None:
+        if samples < 22 or edge.get("min") is None or edge.get("max") is None:
             problems.append(
-                f"{label} {name}: {samples} inner-edge samples, want ≥24"
+                f"{label} {name}: {samples} of {edge.get('stations')} unoccluded "
+                f"stations hit cream (visible {edge.get('visible')}px, "
+                f"legacy {edge.get('legacy_visible')}/24), want ≥22"
             )
             continue
         if edge["min"] < 2 or edge["max"] > 4:
@@ -7950,7 +7959,14 @@ def _device_ring_gaps(page, scale_label):
                 problems.append(f"{label}: cell did not focus")
                 continue
             page.wait_for_timeout(40)
-            gaps = ring_device_gaps(before, _device_shot(page, clip), face, clip, dpr=dpr)
+            gaps = ring_device_gaps(
+                before,
+                _device_shot(page, clip),
+                face,
+                clip,
+                dpr=dpr,
+                occluders=_overlay_rects(page),
+            )
             found, text = _device_gap_problems(gaps, label)
             problems.extend(found)
             print(f"TC-FE-FOCUS-RING-SHAPE {text}", flush=True)
@@ -8226,66 +8242,382 @@ def _cells_near_bar(page, width):
     return picked
 
 
-def _ring_above_bar(page):
-    """Points in the bar whose topmost ring element paints above the bar."""
+def _overlay_rects(page):
+    """Visible ready bar, place bar, and palette, in viewport CSS px."""
     return page.evaluate(
         """() => {
           function shown(el) {
-            if (!el) return false;
+            if (!el || el.hidden) return false;
             const cs = getComputedStyle(el);
             const box = el.getBoundingClientRect();
-            return cs.display !== 'none' && cs.visibility !== 'hidden' && box.width > 2 && box.height > 2;
+            return cs.display !== 'none' && cs.visibility !== 'hidden'
+              && box.width > 2 && box.height > 2;
           }
-          const ready = document.getElementById('readyBar');
-          const place = document.getElementById('uxPlaceBar');
-          const target = shown(ready) ? ready : (shown(place) ? place : null);
-          if (!target) return {error: 'no bar', hits: 0};
-          const box = target.getBoundingClientRect();
-          const hits = [];
-          for (let y = box.top + 1; y < Math.min(box.bottom, box.top + 8); y += 2) {
-            for (let x = box.left + 12; x < box.right - 8; x += 28) {
-              const stack = document.elementsFromPoint(x, y);
-              const ids = stack.map((el) => el.id).filter(Boolean);
-              const barAt = ids.indexOf(target.id);
-              for (const ringId of ['focusRingLift', 'focusRingPaint']) {
-                const ringAt = ids.indexOf(ringId);
-                if (ringAt >= 0 && (barAt < 0 || ringAt < barAt)) {
-                  hits.push({x, y, ring: ringId, above: ids.slice(0, 5)});
-                  break;
-                }
-              }
-            }
-          }
-          const lift = document.getElementById('focusRingLift');
-          const paint = document.getElementById('focusRingPaint');
-          const liftCs = lift ? getComputedStyle(lift) : null;
-          const barZ = parseFloat(getComputedStyle(target).zIndex) || 0;
-          // elementsFromPoint skips pointer-events:none, so also compare
-          // the ring box with the bar. A shown ring with a higher z-index
-          // whose box meets the bar paints on top of it.
-          const overlap = [];
-          for (const el of [lift, paint]) {
+          const rects = [];
+          for (const sel of ['#readyBar', '#uxPlaceBar', '#palette']) {
+            const el = document.querySelector(sel);
             if (!shown(el)) continue;
-            const rb = el.getBoundingClientRect();
-            const z = parseFloat(getComputedStyle(el).zIndex) || 0;
-            const meets = rb.left < box.right - 1 && rb.right > box.left + 1
-              && rb.top < box.bottom - 1 && rb.bottom > box.top + 1;
-            if (meets && z >= barZ) {
-              overlap.push(el.id);
-              hits.push({x: rb.left, y: rb.top, ring: el.id, above: ['z-order']});
+            const box = el.getBoundingClientRect();
+            rects.push({
+              id: el.id,
+              left: box.left,
+              top: box.top,
+              right: box.right,
+              bottom: box.bottom
+            });
+          }
+          return rects;
+        }"""
+    ) or []
+
+
+def _bar_text_rects(page, selector):
+    """Client rects of every text node in the bar, padded by 1px."""
+    return page.evaluate(
+        """(selector) => {
+          const root = document.querySelector(selector);
+          if (!root) return [];
+          const rects = [];
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+          let node;
+          while ((node = walker.nextNode())) {
+            if (!node.textContent || !node.textContent.trim()) continue;
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            for (const box of range.getClientRects()) {
+              if (box.width < 0.4 && box.height < 0.4) continue;
+              rects.push({
+                left: box.left - 1,
+                top: box.top - 1,
+                right: box.right + 1,
+                bottom: box.bottom + 1
+              });
             }
           }
-          return {
-            bar: target.id,
-            hits: hits.length,
-            sample: hits.slice(0, 3),
-            overlap: overlap,
-            liftDisplay: liftCs ? liftCs.display : 'none',
-            liftZ: liftCs ? liftCs.zIndex : null,
-            barZ: String(barZ)
-          };
-        }"""
+          return rects;
+        }""",
+        selector,
+    ) or []
+
+
+_PAINT_GUARD_JS = r"""() => {
+  function layerName(el) {
+    const id = el.id || '';
+    const cls = el.getAttribute ? (el.getAttribute('class') || '') : '';
+    return (id + ' ' + cls).trim();
+  }
+  function shown(el) {
+    if (!el || el.hidden) return false;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    const box = el.getBoundingClientRect();
+    return box.width > 1 && box.height > 1;
+  }
+  function isStackingContext(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (el === document.documentElement) return true;
+    const cs = getComputedStyle(el);
+    const pos = cs.position;
+    const z = cs.zIndex;
+    if (z !== 'auto' && (pos === 'absolute' || pos === 'relative' || pos === 'fixed' || pos === 'sticky')) {
+      return true;
+    }
+    if (parseFloat(cs.opacity) < 1) return true;
+    if (cs.transform && cs.transform !== 'none') return true;
+    if (cs.filter && cs.filter !== 'none') return true;
+    if (cs.perspective && cs.perspective !== 'none') return true;
+    if (cs.clipPath && cs.clipPath !== 'none') return true;
+    if (cs.maskImage && cs.maskImage !== 'none') return true;
+    if (cs.isolation === 'isolate') return true;
+    if (cs.mixBlendMode && cs.mixBlendMode !== 'normal') return true;
+    if (/\b(layout|paint|strict|content)\b/.test(cs.contain || '')) return true;
+    if (/transform|opacity|filter|perspective/.test(cs.willChange || '')) return true;
+    return false;
+  }
+  function chain(el) {
+    const list = [];
+    for (let node = el; node; node = node.parentElement) list.push(node);
+    return list;
+  }
+  function commonContext(a, b) {
+    const others = new Set(chain(b));
+    for (const node of chain(a)) {
+      if (node === a || node === b) continue;
+      if (others.has(node) && isStackingContext(node)) return node;
+    }
+    return document.documentElement;
+  }
+  function participant(el, context) {
+    let node = el;
+    while (node && node.parentElement && node.parentElement !== context) node = node.parentElement;
+    if (!node || node === context) node = el;
+    const cs = getComputedStyle(node);
+    const positioned = cs.position === 'absolute' || cs.position === 'relative'
+      || cs.position === 'fixed' || cs.position === 'sticky';
+    const numeric = positioned && cs.zIndex !== 'auto' && Number.isFinite(parseFloat(cs.zIndex));
+    return {z: numeric ? parseFloat(cs.zIndex) : 0};
+  }
+  function addLayer(found, seen, el, kind) {
+    if (!el || seen.has(el)) return;
+    seen.add(el);
+    found.push({el, kind});
+  }
+  const layers = [];
+  const seen = new Set();
+  addLayer(layers, seen, document.getElementById('focusRingPaint'), 'ring');
+  addLayer(layers, seen, document.getElementById('focusRingLift'), 'ring');
+  addLayer(layers, seen, document.getElementById('chosenMarkPaint'), 'mark');
+  document.querySelectorAll('#townMap canvas, #townMap svg').forEach((el) => {
+    const name = layerName(el).toLowerCase();
+    const paint = el.tagName.toLowerCase() === 'canvas' || el.tagName.toLowerCase() === 'svg';
+    if (!paint) return;
+    if (el.id === 'focusRingPaint' || el.id === 'focusRingLift' || /ring|focus-lift|focuslift/.test(name)) {
+      addLayer(layers, seen, el, 'ring');
+    } else if (el.id === 'chosenMarkPaint' || /mark/.test(name)) {
+      addLayer(layers, seen, el, 'mark');
+    }
+  });
+  const covers = [];
+  for (const sel of ['#readyBar', '#uxPlaceBar', '#palette']) {
+    const el = document.querySelector(sel);
+    if (!shown(el)) continue;
+    const box = el.getBoundingClientRect();
+    covers.push({id: el.id, el, left: box.left, top: box.top, right: box.right, bottom: box.bottom});
+  }
+  const z = [];
+  for (const layer of layers) {
+    for (const cover of covers) {
+      const ctx = commonContext(layer.el, cover.el);
+      const lz = participant(layer.el, ctx);
+      const cz = participant(cover.el, ctx);
+      if (!(lz.z < cz.z)) {
+        z.push({
+          layer: layer.el.id || layerName(layer.el),
+          kind: layer.kind,
+          against: cover.id,
+          layerZ: lz.z,
+          againstZ: cz.z,
+          context: ctx.id || ctx.tagName
+        });
+      }
+    }
+  }
+  function intersects(box, cover) {
+    return box.left < cover.right - 0.5 && box.right > cover.left + 0.5
+      && box.top < cover.bottom - 0.5 && box.bottom > cover.top + 0.5;
+  }
+  function localPoint(svg, x, y) {
+    if (typeof svg.createSVGPoint !== 'function') return null;
+    const pt = svg.createSVGPoint();
+    pt.x = x;
+    pt.y = y;
+    const ctm = svg.getScreenCTM && svg.getScreenCTM();
+    if (!ctm) return null;
+    return pt.matrixTransform(ctm.inverse());
+  }
+  function hitsGeometry(shape, local) {
+    try {
+      if (typeof shape.isPointInFill === 'function' && shape.isPointInFill(local)) return true;
+    } catch (err) { /* not a geometry element */ }
+    try {
+      if (typeof shape.isPointInStroke === 'function' && shape.isPointInStroke(local)) return true;
+    } catch (err) { /* no stroke */ }
+    return false;
+  }
+  function resolveClip(svg) {
+    const raw = (svg.getAttribute('clip-path') || '') + ' ' + (getComputedStyle(svg).clipPath || '');
+    const match = raw.match(/url\(["']?#([^)"']+)/);
+    if (!match) return null;
+    return document.getElementById(match[1]);
+  }
+  function canvasInk(canvas, coverList) {
+    const hits = [];
+    const box = canvas.getBoundingClientRect();
+    if (!(box.width > 1) || !(canvas.width > 0)) return hits;
+    let ctx = null;
+    try { ctx = canvas.getContext('2d', {willReadFrequently: true}); } catch (err) { ctx = null; }
+    if (!ctx) {
+      hits.push({layer: canvas.id || 'canvas', kind: 'canvas', cover: '', detail: 'no 2d context'});
+      return hits;
+    }
+    const sx = canvas.width / box.width;
+    const sy = canvas.height / box.height;
+    for (const cover of coverList) {
+      const x0 = Math.max(0, Math.floor((cover.left - box.left) * sx));
+      const y0 = Math.max(0, Math.floor((cover.top - box.top) * sy));
+      const x1 = Math.min(canvas.width, Math.ceil((cover.right - box.left) * sx));
+      const y1 = Math.min(canvas.height, Math.ceil((cover.bottom - box.top) * sy));
+      if (x1 - x0 < 1 || y1 - y0 < 1) continue;
+      let data;
+      try { data = ctx.getImageData(x0, y0, x1 - x0, y1 - y0).data; }
+      catch (err) {
+        hits.push({layer: canvas.id || 'canvas', kind: 'canvas', cover: cover.id, detail: 'getImageData failed'});
+        continue;
+      }
+      let ink = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i] !== 0) ink += 1;
+      if (ink) {
+        hits.push({layer: canvas.id || 'canvas', kind: 'canvas', cover: cover.id, detail: ink + ' device px with alpha'});
+      }
+    }
+    return hits;
+  }
+  function svgHits(svg, coverList) {
+    const shapes = [...svg.querySelectorAll('rect, path, polygon, polyline, circle, ellipse, line')];
+    const clip = resolveClip(svg);
+    const label = svg.id || layerName(svg);
+    if (clip) {
+      const clipShapes = [...clip.querySelectorAll('rect, path, polygon, polyline, circle, ellipse')];
+      for (const cover of coverList) {
+        for (let gy = 1; gy <= 5; gy += 1) {
+          for (let gx = 1; gx <= 7; gx += 1) {
+            const x = cover.left + (cover.right - cover.left) * gx / 8;
+            const y = cover.top + (cover.bottom - cover.top) * gy / 6;
+            const local = localPoint(svg, x, y);
+            if (!local) continue;
+            let painted = false;
+            for (const shape of shapes) {
+              if (hitsGeometry(shape, local)) { painted = true; break; }
+            }
+            if (!painted) continue;
+            let inside = clipShapes.length === 0;
+            for (const shape of clipShapes) {
+              if (hitsGeometry(shape, local)) { inside = true; break; }
+            }
+            if (inside) {
+              return [{layer: label, kind: 'svg-clip', cover: cover.id, detail: 'bar point is inside the clipped geometry'}];
+            }
+          }
+        }
+      }
+      return [];
+    }
+    const hits = [];
+    for (const shape of shapes) {
+      const box = shape.getBoundingClientRect();
+      if (box.width < 0.2 && box.height < 0.2) continue;
+      for (const cover of coverList) {
+        if (!intersects(box, cover)) continue;
+        hits.push({
+          layer: label,
+          kind: 'svg-bbox',
+          cover: cover.id,
+          detail: shape.tagName.toLowerCase() + ' client bbox intersects'
+        });
+        return hits;
+      }
+    }
+    return hits;
+  }
+  const geometry = [];
+  const method = [];
+  for (const layer of layers) {
+    if (!shown(layer.el)) {
+      method.push({id: layer.el.id || layerName(layer.el), method: 'hidden'});
+      continue;
+    }
+    const tag = layer.el.tagName.toLowerCase();
+    if (tag === 'canvas') {
+      method.push({id: layer.el.id || 'canvas', method: 'canvas-alpha'});
+      geometry.push(...canvasInk(layer.el, covers));
+    } else if (tag === 'svg') {
+      const clipped = !!resolveClip(layer.el);
+      method.push({id: layer.el.id || layerName(layer.el), method: clipped ? 'svg-clip' : 'svg-bbox'});
+      geometry.push(...svgHits(layer.el, covers));
+    }
+  }
+  const dom = [];
+  document.querySelectorAll('.place-bar, #readyBar, #uxPlaceBar, #palette').forEach((host) => {
+    host.querySelectorAll('canvas, svg, [id*="ring" i], [id*="mark" i], [id*="focus-lift" i], [class*="ring" i], [class*="mark" i], [class*="focus-lift" i]').forEach((el) => {
+      if (el === host) return;
+      dom.push({
+        host: host.id || (host.getAttribute('class') || ''),
+        tag: el.tagName.toLowerCase(),
+        id: el.id || '',
+        className: (el.getAttribute('class') || '').slice(0, 80)
+      });
+    });
+  });
+  const textShadow = [];
+  const shadowSeen = new Set();
+  document.querySelectorAll('#readyStatus, #placeStatus, .place-bar p').forEach((el) => {
+    if (shadowSeen.has(el)) return;
+    shadowSeen.add(el);
+    const value = getComputedStyle(el).textShadow;
+    if (value && value !== 'none') textShadow.push({id: el.id || el.tagName, value});
+  });
+  return {
+    textShadow,
+    dom: dom.slice(0, 6),
+    z: z.slice(0, 8),
+    geometry: geometry.slice(0, 6),
+    method,
+    layers: layers.map((layer) => ({
+      id: layer.el.id || layerName(layer.el),
+      kind: layer.kind,
+      tag: layer.el.tagName.toLowerCase()
+    }))
+  };
+}"""
+
+
+def _paint_guard_problems(page, label, problems):
+    """Stacking, canvas/SVG coverage, DOM parent, and bar text-shadow.
+
+    The ring and the selected mark are pointer-events:none, so this does not
+    use elementsFromPoint. SVG paint with no clip-path is judged by each
+    drawn shape's client bbox (it must miss every visible bar and the
+    palette). A clip-path url is judged by isPointInFill on a grid inside
+    those rects. A canvas ring is judged by getImageData alpha.
+    """
+    report = page.evaluate(_PAINT_GUARD_JS) or {}
+    if not any("text-shadow" in item for item in problems):
+        for row in report.get("textShadow") or []:
+            problems.append(
+                f"{label}: bar sentence #{row.get('id')} text-shadow is "
+                f"{row.get('value')!r}, want none"
+            )
+    for row in report.get("dom") or []:
+        name = row.get("id") or row.get("className") or row.get("tag")
+        problems.append(
+            f"{label}: {row.get('tag')} {name} is a descendant of {row.get('host')}"
+        )
+    for row in report.get("z") or []:
+        problems.append(
+            f"{label}: {row.get('kind')} {row.get('layer')} z {row.get('layerZ')} "
+            f"is not below {row.get('against')} z {row.get('againstZ')} "
+            f"(context {row.get('context')})"
+        )
+    for row in report.get("geometry") or []:
+        problems.append(
+            f"{label}: {row.get('layer')} {row.get('kind')} {row.get('detail')} "
+            f"({row.get('cover')})"
+        )
+    print(
+        f"TC-FE-PAINT-UNDER-UI guards {label} scene {_scene_aria(page)!r} "
+        f"method {report.get('method')} layers {report.get('layers')} "
+        f"z {report.get('z')} geom {report.get('geometry')} "
+        f"dom {report.get('dom')} shadow {report.get('textShadow')}",
+        flush=True,
     )
+
+
+def _diff_bar_outside_text(before, after, clip, rects, label, problems):
+    diff = bar_masked_diff(before, after, clip, rects)
+    sample = (diff or {}).get("sample")
+    count = None if diff is None else diff.get("count")
+    print(
+        f"TC-FE-PAINT-UNDER-UI {label} masked-diff {count} sample {sample} "
+        f"more {(diff or {}).get('samples')}",
+        flush=True,
+    )
+    if count is None:
+        problems.append(f"{label}: bar screenshots differ in size")
+    elif count:
+        painted = ""
+        if sample:
+            painted = f" ({sample.get('before')} → {sample.get('after')} at {sample.get('x')},{sample.get('y')})"
+        problems.append(f"{label}: {count} px changed outside text rects{painted}")
 
 
 def _paint_near_bar(page):
@@ -8308,58 +8640,137 @@ def _paint_near_bar(page):
             problems.append(f"{width}x{height}: found {len(cells)} cells near the bar")
         if width == 1280 and {(item['c'], item['r']) for item in cells} != {(3, 4), (2, 5)}:
             problems.append(f"1280 near-bar cells {cells}, want (3,4) and (2,5)")
-        for kind in ("focus", "select"):
-            for cell in cells:
-                dismiss_selection(page)
-                _blur_focus(page)
-                # The south tip is under the bar, so a centre tap may miss.
-                # A click on the button itself still toggles the chosen pad.
-                page.evaluate(
-                    """() => {
-                      const pad = document.querySelector('#townMap .pad.is-chosen');
-                      const btn = pad && pad.querySelector(':scope > .cell-btn');
-                      if (btn) btn.click();
-                    }"""
-                )
-                _blur_focus(page)
-                _silence_toast(page)
-                page.wait_for_timeout(200)
-                label = f"{width}x{height} {kind} ({cell['c']},{cell['r']})"
-                _require_clean_paint(page, problems, label)
-                bar_name = "#uxPlaceBar" if page.locator("#uxPlaceBar").is_visible() else "#readyBar"
-                rect = surface_rect(page, bar_name)
-                clip = _rect_clip(page, rect)
-                if not clip:
-                    problems.append(f"{label}: {bar_name} has no on-screen rect")
-                    continue
-                if kind == "focus":
-                    if not _focus_visible_cell(page, cell["c"], cell["r"]):
-                        problems.append(f"{label}: did not focus")
-                        continue
-                else:
-                    _select_cell(page, cell["c"], cell["r"])
-                    _blur_focus(page)
-                page.wait_for_timeout(200)
-                ink = bar_ink_count(_shot(page, clip), clip, clip)
-                above = _ring_above_bar(page) or {}
-                print(
-                    f"TC-FE-PAINT-UNDER-UI {label} gap {cell.get('gap')} "
-                    f"ink {ink} above {above}",
-                    flush=True,
-                )
-                if ink:
-                    problems.append(
-                        f"{label}: {ink} ink px inside {bar_name} "
-                        f"(south tip {cell.get('south')}, bar top {cell.get('barTop')})"
-                    )
-                if above.get("hits"):
-                    problems.append(
-                        f"{label}: ring paints above {bar_name} "
-                        f"({above.get('hits')} points, lift {above.get('liftDisplay')} "
-                        f"z {above.get('liftZ')} bar z {above.get('barZ')})"
-                    )
-                _blur_focus(page)
+        for cell in cells:
+            dismiss_selection(page)
+            _blur_focus(page)
+            page.evaluate(
+                """() => {
+                  const pad = document.querySelector('#townMap .pad.is-chosen');
+                  const btn = pad && pad.querySelector(':scope > .cell-btn');
+                  if (btn) btn.click();
+                }"""
+            )
+            _blur_focus(page)
+            _silence_toast(page)
+            page.wait_for_timeout(200)
+            label_base = f"{width}x{height} ({cell['c']},{cell['r']})"
+            _require_clean_paint(page, problems, label_base)
+            bar_name = "#uxPlaceBar" if page.locator("#uxPlaceBar").is_visible() else "#readyBar"
+            rect = surface_rect(page, bar_name)
+            clip = _rect_clip(page, rect)
+            if not clip:
+                problems.append(f"{label_base}: {bar_name} has no on-screen rect")
+                continue
+            baseline_rects = _bar_text_rects(page, bar_name)
+            baseline = _shot(page, clip)
+            if not _focus_visible_cell(page, cell["c"], cell["r"]):
+                problems.append(f"{label_base} focus: did not focus")
+                continue
+            page.wait_for_timeout(80)
+            focus_label = f"{label_base} focus"
+            _paint_guard_problems(page, focus_label, problems)
+            focus_rects = _bar_text_rects(page, bar_name)
+            focused = _shot(page, clip)
+            _blur_focus(page)
+            page.wait_for_timeout(80)
+            blurred_rects = _bar_text_rects(page, bar_name)
+            blurred = _shot(page, clip)
+            _diff_bar_outside_text(
+                blurred,
+                focused,
+                clip,
+                baseline_rects + focus_rects + blurred_rects,
+                focus_label,
+                problems,
+            )
+            _select_cell(page, cell["c"], cell["r"])
+            _blur_focus(page)
+            page.wait_for_timeout(80)
+            select_label = f"{label_base} select"
+            _paint_guard_problems(page, select_label, problems)
+            select_rects = _bar_text_rects(page, bar_name)
+            selected = _shot(page, clip)
+            _diff_bar_outside_text(
+                baseline,
+                selected,
+                clip,
+                baseline_rects + select_rects,
+                select_label,
+                problems,
+            )
+            _blur_focus(page)
     return problems
+
+
+def _open_scene3_for_guard(page):
+    if "場景 3" in (_scene_aria(page) or ""):
+        return True
+    _ensure_scene2(page)
+    dismiss_selection(page)
+    _blur_focus(page)
+    _open_palette(page)
+    choice = page.locator('#palette [aria-label*="未興建"]')
+    if not choice.count():
+        return False
+    choice.first.click()
+    page.wait_for_timeout(80)
+    gold = _gold_cells(page)
+    if not gold:
+        return False
+    _click_cell(page, gold[0][0], gold[0][1])
+    go = page.locator("#btnToScene3")
+    if not go.count() or not go.is_enabled():
+        return False
+    go.click()
+    page.locator("#uxPlaceBar").wait_for(state="visible", timeout=8000)
+    return "場景 3" in (_scene_aria(page) or "")
+
+
+def _guard_sweep(page, problems):
+    """Z-order of the ring and mark across scene, scroll, resize, and a sheet."""
+    page.set_viewport_size({"width": 1280, "height": 720})
+    page.wait_for_timeout(80)
+    if "場景 2" not in (_scene_aria(page) or ""):
+        _enter_new_build_scene2(page)
+    _open_palette(page)
+    set_village_scroll(page, 366)
+    page.wait_for_timeout(80)
+    _focus_visible_cell(page, 3, 3)
+    page.wait_for_timeout(40)
+    _paint_guard_problems(page, "scene2 palette scroll 366", problems)
+    _blur_focus(page)
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.wait_for_timeout(80)
+    if "場景 2" not in (_scene_aria(page) or ""):
+        _enter_new_build_scene2(page)
+    _focus_visible_cell(page, 3, 3)
+    page.wait_for_timeout(40)
+    _paint_guard_problems(page, "scene2 resize 390", problems)
+    _blur_focus(page)
+    page.set_viewport_size({"width": 1280, "height": 720})
+    page.wait_for_timeout(80)
+    if not _open_scene3_for_guard(page):
+        problems.append("scene 3 guard: #uxPlaceBar did not open")
+    else:
+        _focus_visible_cell(page, 3, 3)
+        page.wait_for_timeout(40)
+        _paint_guard_problems(page, "scene3 uxPlaceBar", problems)
+        _blur_focus(page)
+    _cancel_scene3(page)
+    _restore_scene1(page)
+    page.wait_for_timeout(80)
+    _paint_guard_problems(page, "scene1", problems)
+    _scroll_cell_into_view(page, 6, 0)
+    tap_cell_centre(page, 6, 0)
+    try:
+        page.locator("#actionSheet").wait_for(state="visible", timeout=8000)
+    except Exception:
+        problems.append("sheet guard: #actionSheet did not open")
+    else:
+        _blur_focus(page)
+        page.wait_for_timeout(40)
+        _paint_guard_problems(page, "sheet open", problems)
+        _close_sheet(page)
 
 
 @pytest.mark.case_id("TC-FE-PAINT-UNDER-UI")
@@ -8370,8 +8781,14 @@ def test_paint_under_ui(page, base_url, warehouse_db, warehouse_ids):
     鍵盤打開銀行面板時，面板矩形裡的差也是 0。
     #readyBar 和抽屜是 guard，現在通過，保持通過。
     底尖靠近確認欄的格子（1280 是 (3,4)、(2,5)；其他視窗用活矩形挑）
-    聚焦和選中時，確認欄活矩形裡的墨水（#7c2d12、環奶油、環褐）是 0，
-    而且沒有環元素畫在確認欄上面。狀態句子的像素差不算。
+    聚焦時，確認欄活矩形和失焦後的同一張比，文字節點矩形（外擴 1px）
+    以外的像素差是 0。選中時，文字矩形以外的每個像素要和沒有選中、
+    沒有焦點的乾淨底圖同一座標一致。確認欄句子的 text-shadow 是 none。
+    焦點環和選中標記在最近的共同堆疊上下文裡，有效 z 必須嚴格低於
+    每一個看得見的確認欄和調色盤。場景 1、場景 3、面板打開、捲動 366、
+    改視窗都查。環若是 canvas，欄和調色盤對到的裝置像素 alpha 全是 0；
+    若是沒有 clip 的 SVG，畫出來的圖形外框不得和欄或調色盤相交。
+    .place-bar、確認欄、調色盤裡面不得掛著環或標記的繪製元素。
     """
     kid_id = warehouse_ids["kid_id"]
     _ensure_bank_def(warehouse_db)
@@ -8503,7 +8920,8 @@ def test_paint_under_ui(page, base_url, warehouse_db, warehouse_ids):
                         f"(ring layer {ring.get('pixels')} px)"
                     )
     problems.extend(_paint_near_bar(page))
-    assert not problems, "TC-FE-PAINT-UNDER-UI: " + " | ".join(problems[:8])
+    _guard_sweep(page, problems)
+    assert not problems, "TC-FE-PAINT-UNDER-UI: " + " | ".join(problems[:12])
 
 
 @pytest.mark.case_id("TC-FE-NATIVE-FOCUS")

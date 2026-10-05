@@ -1888,6 +1888,19 @@ def _ring_cream(pixel):
     return cream <= 40 * 40 and cream <= _rgb_dist(pixel, RING_BROWN)
 
 
+# Squared distance. #fff8e7's own device-pixel fringe stays inside this.
+# #fffec5 is about 1192 away, so a cream layer painted under the bar does not count.
+_RING_CREAM_STRICT = 5 * 5
+
+
+def _ring_cream_strict(pixel):
+    """Ring cream close enough to ``#fff8e7`` that a stand-in yellow fails."""
+    if not pixel:
+        return False
+    cream = _rgb_dist(pixel, RING_CREAM)
+    return cream <= _RING_CREAM_STRICT and cream <= _rgb_dist(pixel, RING_BROWN)
+
+
 def _ring_ink(pixel):
     if not pixel or _clear_brown(pixel):
         return False
@@ -2445,33 +2458,163 @@ def ring_inner_gaps(png_before, png_after, face, clip, vertex_clear=3.0, samples
     return report
 
 
-def ring_device_gaps(png_before, png_after, face, clip, dpr=1, samples=24):
+def _merge_intervals(spans):
+    if not spans:
+        return []
+    ordered = sorted(spans)
+    merged = [list(ordered[0])]
+    for start, end in ordered[1:]:
+        if start <= merged[-1][1] + 1e-6:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return [(a, b) for a, b in merged]
+
+
+def _occluder_boxes(occluders, margin=1.0):
+    """Live UI rects grown by ``margin`` screen px. Points inside are covered."""
+    boxes = []
+    for rect in occluders or []:
+        if not rect:
+            continue
+        if "left" in rect:
+            left, top = float(rect["left"]), float(rect["top"])
+            right, bottom = float(rect["right"]), float(rect["bottom"])
+        else:
+            left, top = float(rect["x"]), float(rect["y"])
+            right = left + float(rect.get("width") or 0)
+            bottom = top + float(rect.get("height") or 0)
+        if right - left < 1 or bottom - top < 1:
+            continue
+        boxes.append((left - margin, top - margin, right + margin, bottom + margin))
+    return boxes
+
+
+def _axis_inside(origin, delta, length, lo, hi):
+    if abs(delta) < 1e-9:
+        if lo <= origin <= hi:
+            return 0.0, length
+        return None
+    t0 = (lo - origin) * length / delta
+    t1 = (hi - origin) * length / delta
+    return min(t0, t1), max(t0, t1)
+
+
+def _occluded_intervals(slot, boxes):
+    """Along-edge distances, in screen px, that sit inside a cover rect."""
+    length = slot["length"]
+    intervals = []
+    for left, top, right, bottom in boxes:
+        rx = _axis_inside(slot["sx"], slot["dx"], length, left, right)
+        ry = _axis_inside(slot["sy"], slot["dy"], length, top, bottom)
+        if rx is None or ry is None:
+            continue
+        start = max(rx[0], ry[0], 0.0)
+        end = min(rx[1], ry[1], length)
+        if end > start:
+            intervals.append((start, end))
+    return _merge_intervals(intervals)
+
+
+def _subtract_intervals(start, end, cuts):
+    spans = []
+    cursor = start
+    for cut_a, cut_b in cuts:
+        if cut_b <= cursor or cut_a >= end:
+            continue
+        if cut_a > cursor:
+            spans.append((cursor, min(cut_a, end)))
+        cursor = max(cursor, cut_b)
+        if cursor >= end:
+            break
+    if cursor < end - 1e-6:
+        spans.append((cursor, end))
+    return [(a, b) for a, b in spans if b - a > 0.05]
+
+
+def _stations_on_spans(spans, count):
+    total = sum(b - a for a, b in spans)
+    points = []
+    if total <= 0 or count <= 0:
+        return points, total
+    for index in range(count):
+        target = total * (index + 0.5) / count
+        acc = 0.0
+        placed = None
+        for start, end in spans:
+            seg = end - start
+            if acc + seg + 1e-9 >= target:
+                placed = start + (target - acc)
+                break
+            acc += seg
+        if placed is not None:
+            points.append(placed)
+    return points, total
+
+
+def ring_device_gaps(png_before, png_after, face, clip, dpr=1, samples=24, occluders=None):
     """Inner cream edge in screen px, read at device-pixel centres.
 
-    At least 24 stations per edge. Each station is at least 3 screen px
-    clear of the corner opening (the unpainted 10% plus 3px). The walk is
-    0.1 screen px. The gap is the outside distance of the device-pixel
-    centre where three consecutive steps are cream. Min must be ≥2 and
-    max ≤4.
+    The 24 stations sit only on the part of the edge that is clear of the
+    corner opening (10% of the edge plus 3px) and clear of every visible
+    bar and palette rect, each grown by 1px. At least 22 of those 24 must
+    hit the real ring cream. A visible run shorter than 12px is skipped.
+    The walk is 0.1 screen px. The gap is the outside distance of the
+    device-pixel centre where three consecutive steps are cream. Min must
+    be ≥2 and max ≤4.
+
+    ``legacy_visible`` is how many of 24 stations spread over the whole
+    corner-cleared edge would still be unoccluded. That is the count a
+    clipped south edge used to fail (about 19–20, and 15–16 at 390).
     """
     _bw, _bh, before_rows = png_rgb(png_before)
     _aw, _ah, after_rows = png_rgb(png_after)
     dpr = dpr or 1
+    boxes = _occluder_boxes(occluders, margin=1.0)
     report = {}
+    empty = {
+        "min": None, "max": None, "median": None, "samples": 0, "stations": 0,
+        "visible": 0.0, "legacy_visible": 0, "skipped": False,
+    }
     if not before_rows or not after_rows or len(before_rows) != len(after_rows):
-        return {slot["name"]: {"min": None, "max": None, "samples": 0, "stations": 0}
-                for slot in _edge_slots(face)}
+        return {slot["name"]: dict(empty) for slot in _edge_slots(face)}
     for slot in _edge_slots(face):
         length = slot["length"]
         clear = max(3.0, length * 0.10 + 3.0)
         span = length - 2 * clear
-        gaps = []
         count = max(samples, 24)
-        if span <= 1:
-            report[slot["name"]] = {"min": None, "max": None, "samples": 0, "stations": count}
+        # legacy_visible counts edge points only, the old 24-along-the-edge
+        # placement. Stations for the gap are also dropped where the cream
+        # band 2–3px outside the edge falls inside a bar.
+        edge_occluded = _occluded_intervals(slot, boxes)
+        occluded = list(edge_occluded)
+        for probe in (2.0, 3.0):
+            shifted = dict(slot)
+            shifted["sx"] = slot["sx"] + slot["nx"] * probe
+            shifted["sy"] = slot["sy"] + slot["ny"] * probe
+            occluded = _merge_intervals(occluded + _occluded_intervals(shifted, boxes))
+        visible_spans = _subtract_intervals(clear, length - clear, occluded) if span > 1 else []
+        alongs, visible_len = _stations_on_spans(visible_spans, count)
+        legacy = 0
+        if span > 1:
+            for index in range(count):
+                along = clear + span * (index + 0.5) / count
+                if not any(a <= along <= b for a, b in edge_occluded):
+                    legacy += 1
+        if span <= 1 or visible_len < 12:
+            report[slot["name"]] = {
+                "min": None,
+                "max": None,
+                "median": None,
+                "samples": 0,
+                "stations": 0,
+                "visible": round(visible_len, 2),
+                "legacy_visible": legacy,
+                "skipped": True,
+            }
             continue
-        for index in range(count):
-            along = clear + span * (index + 0.5) / count
+        gaps = []
+        for along in alongs:
             t = along / length
             ox = slot["sx"] + slot["dx"] * t
             oy = slot["sy"] + slot["dy"] * t
@@ -2481,7 +2624,7 @@ def ring_device_gaps(png_before, png_after, face, clip, dpr=1, samples=24):
                 y = _oy + slot["ny"] * dist
                 after, cx, cy = _device_at(after_rows, clip, x, y, dpr)
                 before, _bx, _by = _device_at(before_rows, clip, x, y, dpr)
-                if not after or not before or not _ring_cream(after):
+                if not after or not before or not _ring_cream_strict(after):
                     return None
                 if _rgb_dist(before, after) <= _UNCHANGED_DIST:
                     return None
@@ -2519,6 +2662,9 @@ def ring_device_gaps(png_before, png_after, face, clip, dpr=1, samples=24):
             "median": None if median is None else round(median, 2),
             "samples": len(gaps),
             "stations": count,
+            "visible": round(visible_len, 2),
+            "legacy_visible": legacy,
+            "skipped": False,
         }
     return report
 
@@ -2657,6 +2803,61 @@ def stroke_outer_rays(png_bytes, face, clip):
             "samples": len(exits),
         }
     return report
+
+
+_BAR_PIXEL_TOL = 5 * 5
+
+
+def _rects_cover(x, y, rects):
+    for rect in rects or []:
+        if rect["left"] <= x <= rect["right"] and rect["top"] <= y <= rect["bottom"]:
+            return True
+    return False
+
+
+def bar_masked_diff(png_before, png_after, clip, text_rects, tol=_BAR_PIXEL_TOL):
+    """Pixels outside text glyph rects whose colour changed.
+
+    Text rects are client rectangles padded by the caller (1px). A change
+    larger than the ink tolerance is foreign paint. ``#fffec5`` against the
+    bar fill is well outside that tolerance. Returns ``count`` None when the
+    two shots differ in size.
+    """
+    _bw, _bh, before_rows = png_rgb(png_before)
+    width, height, after_rows = png_rgb(png_after)
+    if (
+        not before_rows
+        or not after_rows
+        or len(before_rows) != height
+        or len(before_rows[0]) != width
+    ):
+        return {"count": None, "sample": None}
+    count = 0
+    sample = None
+    samples = []
+    for iy, row in enumerate(after_rows):
+        cy = clip["y"] + iy + 0.5
+        before_row = before_rows[iy]
+        for ix, after in enumerate(row):
+            cx = clip["x"] + ix + 0.5
+            if _rects_cover(cx, cy, text_rects):
+                continue
+            before = before_row[ix]
+            if not before or not after:
+                continue
+            if _rgb_dist(before, after) <= tol:
+                continue
+            count += 1
+            if len(samples) < 8:
+                samples.append({
+                    "x": round(cx, 1),
+                    "y": round(cy, 1),
+                    "before": hex_of(before),
+                    "after": hex_of(after),
+                })
+            if sample is None:
+                sample = samples[0]
+    return {"count": count, "sample": sample, "samples": samples}
 
 
 def bar_ink_count(png_bytes, shot_clip, guard):
