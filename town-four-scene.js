@@ -1622,7 +1622,12 @@
           var cy = y0 + step * 0.5;
           var mid = atCentre(cx, cy);
           var centreOut = outsideAt(cx, cy);
-          if (mid && centreOut >= minOut && centreOut < minOut + cream + brown) {
+          /* A down-right normal runs with the pixel grid, so a pixel whose
+             centre is just past 2px still covers the point 1px closer to
+             the cell. Hold that edge until the centre clears it. */
+          var slant = mid ? Math.max(0, mid.edge.nx + mid.edge.ny) : 0;
+          var innerLimit = minOut + slant * 0.45;
+          if (mid && centreOut >= innerLimit && centreOut < minOut + cream + brown) {
             /* Brown stops short of the opening so it cannot be the only ink at the tip. */
             var tipRetreat = centreOut >= minOut + cream - 1 ? 1.5 : 0;
             var edge = mid.edge;
