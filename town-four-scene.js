@@ -1211,8 +1211,10 @@
     return paint;
   }
 
-  /* The ring sits in the map, under the palette and the bar, so the
-     scrollport does not cut a stroke that is still on the map. */
+  /* The ring sits on the map, under the palette and every bar, so the
+     scrollport does not cut a stroke that is still on the map. Device
+     pixels are SVG rects: a bitmap inside the stage scale is resampled
+     and the cream moves onto the wrong device pixel. */
   function ensureRingPaint() {
     return ensurePaintSvg("focusRingPaint", $("townMap"));
   }
@@ -1230,8 +1232,6 @@
 
   function hideRing(ring) {
     hidePaint(ring || document.getElementById("focusRingPaint"));
-    var extras = document.querySelectorAll("#townMap .ring-under-bar");
-    for (var i = 0; i < extras.length; i += 1) hidePaint(extras[i]);
   }
 
   function hideLine(paint) {
@@ -1263,19 +1263,6 @@
 
   function coverRects() {
     return shownBoxes("#townMap .place-bar").concat(shownBoxes("#townMap .palette"));
-  }
-
-  function ensureBarPaint(host) {
-    var ns = "http://www.w3.org/2000/svg";
-    var paint = host.querySelector(":scope > svg.ring-under-bar");
-    if (!paint) {
-      paint = document.createElementNS(ns, "svg");
-      paint.setAttribute("class", "ring-under-bar");
-      paint.setAttribute("aria-hidden", "true");
-      paint.setAttribute("preserveAspectRatio", "none");
-      host.appendChild(paint);
-    }
-    return paint;
   }
 
   function hitsCover(rects, x0, y0, x1, y1) {
@@ -1312,6 +1299,65 @@
       shiftX: (snappedLeft - rawLeft) * scale,
       shiftY: (snappedTop - rawTop) * scale
     };
+  }
+
+  /* Clip definitions live beside the map, not inside the line svg, so the
+     line's own shapes stay the stroked rects. The clip is applied to the
+     group that holds those rects, in the same user space as the viewBox. */
+  function clipDefsHost() {
+    var map = $("townMap");
+    if (!map) return null;
+    var ns = "http://www.w3.org/2000/svg";
+    var host = document.getElementById("paintClipDefs");
+    if (!host || host.namespaceURI !== ns) {
+      if (host && host.parentNode) host.parentNode.removeChild(host);
+      host = document.createElementNS(ns, "svg");
+      host.id = "paintClipDefs";
+      host.setAttribute("aria-hidden", "true");
+      host.setAttribute("width", "0");
+      host.setAttribute("height", "0");
+      host.style.position = "absolute";
+      host.style.width = "0";
+      host.style.height = "0";
+      host.style.overflow = "hidden";
+      host.style.pointerEvents = "none";
+    }
+    if (host.parentNode !== map) map.appendChild(host);
+    return host;
+  }
+
+  /* Even-odd clip: the cell box minus each showing bar and the palette.
+     Holes use the same user space as the stroked rects. */
+  function clipPaintToCovers(svg, covers, screenLeft, screenTop, shiftX, shiftY, screenW, screenH, clipId) {
+    var ns = "http://www.w3.org/2000/svg";
+    var defs = clipDefsHost();
+    if (!defs) return;
+    var prior = document.getElementById(clipId);
+    if (prior && prior.parentNode) prior.parentNode.removeChild(prior);
+    var clip = document.createElementNS(ns, "clipPath");
+    clip.setAttribute("id", clipId);
+    clip.setAttribute("clipPathUnits", "userSpaceOnUse");
+    var path = document.createElementNS(ns, "path");
+    var d = "M0 0H" + screenW + "V" + screenH + "H0Z";
+    for (var i = 0; i < covers.length; i += 1) {
+      var r = covers[i];
+      var x0 = r.left - screenLeft - shiftX;
+      var y0 = r.top - screenTop - shiftY;
+      var x1 = r.right - screenLeft - shiftX;
+      var y1 = r.bottom - screenTop - shiftY;
+      d += "M" + x0 + " " + y0 + "V" + y1 + "H" + x1 + "V" + y0 + "Z";
+    }
+    path.setAttribute("d", d);
+    path.setAttribute("fill-rule", "evenodd");
+    path.setAttribute("clip-rule", "evenodd");
+    clip.appendChild(path);
+    defs.appendChild(clip);
+    var group = document.createElementNS(ns, "g");
+    while (svg.firstChild) group.appendChild(svg.firstChild);
+    group.setAttribute("clip-path", "url(#" + clipId + ")");
+    group.setAttribute("clip-rule", "evenodd");
+    svg.appendChild(group);
+    svg.removeAttribute("clip-path");
   }
 
   function paintRun(svg, ns, screenLeft, screenTop, shiftX, shiftY, x, y, w, h, color) {
@@ -1540,25 +1586,7 @@
         }
       }
     }
-    var bars = shownBoxes("#townMap .place-bar");
-    var covers = bars.concat(shownBoxes("#townMap .palette"));
-    var barEl = null;
-    for (var b = 0; b < bars.length; b += 1) {
-      var box = bars[b];
-      if (screenLeft < box.right && screenLeft + screenW > box.left
-        && screenTop < box.bottom && screenTop + screenH > box.top) {
-        barEl = box.el;
-        break;
-      }
-    }
-    var barPaint = barEl ? ensureBarPaint(barEl) : null;
-    var barMounted = barPaint
-      ? mountDeviceSvg(barPaint, barEl, screenLeft, screenTop, screenW, screenH)
-      : null;
-    var barPixels = 0;
-    /* Inside the bar this reads as the ring's cream band, and it stays off
-       the bar's own ink colours. */
-    var barCream = "#fffec5";
+    var covers = coverRects();
     var mapBox = map.getBoundingClientRect();
     var slack = 2;
     var step = 1 / dpr;
@@ -1568,17 +1596,12 @@
       var y0 = screenTop + iy * step;
       var runColor = "";
       var runX = 0;
-      var barColor = "";
-      var barX = 0;
       for (var ix = 0; ix <= bw; ix += 1) {
         var color = "";
-        var onBar = "";
         var x0 = screenLeft + ix * step;
         var onMap = x0 < mapBox.right + slack && x0 + step > mapBox.left - slack
           && y0 < mapBox.bottom + slack && y0 + step > mapBox.top - slack;
-        if (ix < bw && onMap) {
-          var covered = hitsCover(covers, x0, y0, x0 + step, y0 + step);
-          var inBar = hitsCover(bars, x0, y0, x0 + step, y0 + step);
+        if (ix < bw && onMap && !hitsCover(covers, x0, y0, x0 + step, y0 + step)) {
           var mid = atCentre(x0 + step * 0.5, y0 + step * 0.5);
           var centreOut = outsideAt(x0 + step * 0.5, y0 + step * 0.5);
           var nearest = outsideAt(x0, y0);
@@ -1593,9 +1616,7 @@
           var hold = blocked[pixelKey(x0, y0)] && centreOut < minOut + cream;
           if (!hold && mid && centreOut >= minOut && centreOut < minOut + cream + brown
               && (!inward || nearest >= minOut)) {
-            var ink = centreOut < minOut + cream ? "#fff8e7" : "#6b4f2a";
-            if (inBar && barMounted && ink === "#fff8e7") onBar = barCream;
-            else if (!covered) color = ink;
+            color = centreOut < minOut + cream ? "#fff8e7" : "#6b4f2a";
           }
         }
         if (color !== runColor) {
@@ -1608,20 +1629,12 @@
           runColor = color;
           runX = ix;
         }
-        if (onBar !== barColor) {
-          if (barColor && barMounted) {
-            barPixels += ix - barX;
-            paintRun(
-              barPaint, barMounted.ns, screenLeft, screenTop, barMounted.shiftX, barMounted.shiftY,
-              screenLeft + barX * step, y0, (ix - barX) * step, step, barColor
-            );
-          }
-          barColor = onBar;
-          barX = ix;
-        }
       }
     }
-    if (barPaint && !barPixels) hidePaint(barPaint);
+    clipPaintToCovers(
+      ring, covers, screenLeft, screenTop, mounted.shiftX, mounted.shiftY,
+      screenW, screenH, "focusRingClip"
+    );
   }
 
   /* Chosen line: whole device pixels of #7c2d12. The cell-aligned sample
@@ -1707,6 +1720,10 @@
         }
       }
     }
+    clipPaintToCovers(
+      paint, covers, screenLeft, screenTop, mounted.shiftX, mounted.shiftY,
+      screenW, screenH, "chosenMarkClip"
+    );
   }
 
   function render() {
