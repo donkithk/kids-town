@@ -63,6 +63,7 @@ from tests.qc6_checks import (  # noqa: E402
     stroke_near_cell,
     stroke_outer_rays,
     paint_cover_report,
+    cover_panel_audit,
     ring_edge_report,
     paint_overlay_count,
     bar_ink_count,
@@ -6923,12 +6924,51 @@ def test_selected_over_gold(page, base_url, warehouse_db, warehouse_ids):
     assert not problems, "TC-FE-SELECTED-OVER-GOLD: " + " | ".join(problems)
 
 
+def _sprite_alphas(page, cell_x, cell_y, points):
+    """Sprite-image alpha (0–255) at each viewport point. 0 off the image."""
+    if not points:
+        return []
+    return page.evaluate(
+        """([c, r, points]) => {
+          const pad = [...document.querySelectorAll('#townMap .pad')].find((el) => {
+            const cs = getComputedStyle(el);
+            return parseInt(cs.getPropertyValue('--c'), 10) === c
+              && parseInt(cs.getPropertyValue('--r'), 10) === r;
+          });
+          const img = pad && pad.querySelector(':scope > .sprite');
+          if (!img || img.hidden) return {error: 'missing sprite'};
+          const w = img.naturalWidth || 0;
+          const h = img.naturalHeight || 0;
+          if (w < 2 || h < 2) return {error: 'sprite not loaded'};
+          const box = img.getBoundingClientRect();
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d', {willReadFrequently: true});
+          try { ctx.drawImage(img, 0, 0, w, h); }
+          catch (err) { return {error: String(err)}; }
+          return points.map((point) => {
+            if (point.x < box.left || point.x > box.right || point.y < box.top || point.y > box.bottom) {
+              return 0;
+            }
+            const ix = Math.max(0, Math.min(w - 1, Math.round((point.x - box.left) / box.width * (w - 1))));
+            const iy = Math.max(0, Math.min(h - 1, Math.round((point.y - box.top) / box.height * (h - 1))));
+            try { return ctx.getImageData(ix, iy, 1, 1).data[3]; }
+            catch (err) { return 0; }
+          });
+        }""",
+        [cell_x, cell_y, points],
+    )
+
+
 @pytest.mark.case_id("TC-FE-FOCUS-RING-ABOVE-SPRITE")
 def test_focus_ring_above_sprite(page, base_url, warehouse_db, warehouse_ids):
     """TC-FE-FOCUS-RING-ABOVE-SPRITE 有建築的格子，焦點環要畫在建築圖上面。
 
+    層次是地磚和金色虛線、建築圖、選中線 #7c2d12、「此格」徽章、焦點環。
     沿四條邊、和建築圖重疊的位置抽樣。那些像素要是 #fff8e7 或 #6b4f2a。
-    選中線畫在菱形裡面。建築圖蓋住線的那段，螢幕上要是 #7c2d12。
+    選中線畫在菱形裡面。建築圖不透明蓋住的那一段至少抽 7 點，過半數的
+    筆畫要是 #7c2d12，而且褐色要落在圖上面，不能靠圖外漏出來的線。
     圖沒蓋到的邊不算被蓋住。
     """
     kid_id = warehouse_ids["kid_id"]
@@ -7074,14 +7114,19 @@ def test_focus_ring_above_sprite(page, base_url, warehouse_db, warehouse_ids):
                     mid_x - nx - centre[0]
                 ) ** 2 + (mid_y - ny - centre[1]) ** 2:
                     nx, ny = -nx, -ny
-                for step_index in range(5):
-                    t = 0.3 + step_index * 0.1
-                    # The stroke is inset about 1.5px, not on the diamond edge.
+                # One CSS px along the inset stroke. The sprite-covered
+                # segment needs at least 7 of these, not three middle points.
+                along = 0.0
+                while along <= length + 0.1:
+                    t = along / length
                     stations.append({
                         "edge": name,
+                        "nx": nx,
+                        "ny": ny,
                         "x": start["x"] + dx * t - nx * 1.5,
                         "y": start["y"] + dy * t - ny * 1.5,
                     })
+                    along += 1.0
             opaque = page.evaluate(
                 """([c, r, points]) => {
                   const pad = [...document.querySelectorAll('#townMap .pad')].find((el) => {
@@ -7122,34 +7167,60 @@ def test_focus_ring_above_sprite(page, base_url, warehouse_db, warehouse_ids):
                     by_edge.setdefault(station["edge"], []).append((station, alpha or 0))
                 for name, items in by_edge.items():
                     covered = [(station, alpha) for station, alpha in items if alpha >= 160]
-                    hits = 0
+                    probes = []
+                    placed = []
                     for station, _alpha in covered:
                         ix = int(round(station["x"] - clip["x"]))
                         iy = int(round(station["y"] - clip["y"]))
-                        # The stroke is about 3px. One CSS pixel off the
-                        # centre still is the line, not a sub-pixel walk.
-                        found = False
                         for oy in range(-1, 2):
                             for ox in range(-1, 2):
-                                py = iy + oy
-                                px = ix + ox
-                                if not rows or py < 0 or px < 0 or py >= len(rows) or px >= len(rows[0]):
-                                    continue
-                                pixel = rows[py][px]
-                                dist = (
-                                    (pixel[0] - 0x7C) ** 2
-                                    + (pixel[1] - 0x2D) ** 2
-                                    + (pixel[2] - 0x12) ** 2
-                                )
-                                if dist <= 55 * 55:
-                                    found = True
-                                    break
-                            if found:
+                                probes.append({
+                                    "x": clip["x"] + ix + ox,
+                                    "y": clip["y"] + iy + oy,
+                                })
+                        placed.append((station, ix, iy))
+                    neighbor_alpha = _sprite_alphas(page, 0, 0, probes) if probes else []
+                    hits = 0
+                    if not isinstance(neighbor_alpha, list):
+                        problems.append(f"selected line {name} sprite alpha {neighbor_alpha}")
+                        continue
+                    for index, (station, ix, iy) in enumerate(placed):
+                        # The stroke is about 3px. A brown pixel counts only
+                        # when it is also on the sprite, so a line that only
+                        # peeks out beside the drawing is not the line on top.
+                        found = False
+                        for slot in range(9):
+                            oy, ox = divmod(slot, 3)
+                            oy -= 1
+                            ox -= 1
+                            alpha = neighbor_alpha[index * 9 + slot] or 0
+                            if alpha < 160:
+                                continue
+                            py = iy + oy
+                            px = ix + ox
+                            if not rows or py < 0 or px < 0 or py >= len(rows) or px >= len(rows[0]):
+                                continue
+                            pixel = rows[py][px]
+                            dist = (
+                                (pixel[0] - 0x7C) ** 2
+                                + (pixel[1] - 0x2D) ** 2
+                                + (pixel[2] - 0x12) ** 2
+                            )
+                            if dist <= 55 * 55:
+                                found = True
                                 break
                         if found:
                             hits += 1
                     line_bits.append(f"{name} {hits}/{len(covered)}")
-                    if len(covered) >= 3 and hits < 3:
+                    # Clear majority of at least 7 sprite-covered stations.
+                    # A shorter overlap still needs 3, so a buried line on a
+                    # short segment does not get easier.
+                    if len(covered) >= 7 and hits * 2 <= len(covered):
+                        problems.append(
+                            f"selected line {name}: {hits}/{len(covered)} "
+                            "#7c2d12 where the sprite covers the stroke"
+                        )
+                    elif 3 <= len(covered) < 7 and hits < 3:
                         problems.append(
                             f"selected line {name}: {hits}/{len(covered)} "
                             "#7c2d12 where the sprite covers the stroke"
@@ -8129,10 +8200,18 @@ _PAINT_GUARD_JS = r"""() => {
   }
   function shown(el) {
     if (!el || el.hidden) return false;
-    const cs = getComputedStyle(el);
-    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+      const cs = getComputedStyle(node);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+      if (Number(cs.opacity) === 0) return false;
+      if (node === document.documentElement) break;
+    }
     const box = el.getBoundingClientRect();
-    return box.width > 1 && box.height > 1;
+    if (!(box.width > 1 && box.height > 1)) return false;
+    const viewW = window.innerWidth;
+    const viewH = window.innerHeight;
+    if (box.right <= 0 || box.bottom <= 0 || box.left >= viewW || box.top >= viewH) return false;
+    return true;
   }
   function isStackingContext(el) {
     if (!el || el.nodeType !== 1) return false;
@@ -8812,6 +8891,30 @@ def _ring_ink_pixel(pixel):
     return cream <= 40 * 40 or brown <= 42 * 42
 
 
+def _split_cover_extents(page):
+    """Visible painted extents, and extents the report still treats as covers.
+
+    The second list is panels ``cover_panel_audit`` says are not showing
+    (opacity 0, off-screen, hidden, display or visibility). A station in
+    that pad and outside every visible cover is exposed and must be sampled.
+    """
+    audit = {}
+    for panel in cover_panel_audit(page) or []:
+        audit[panel.get("id") or ""] = panel
+    visible = []
+    invisible = []
+    for row in (paint_cover_report(page) or {}).get("covers") or []:
+        extent = row.get("extent") or {}
+        if extent.get("right", 0) - extent.get("left", 0) <= 2:
+            continue
+        panel = audit.get(row.get("id") or "")
+        if panel and not panel.get("visible"):
+            invisible.append(extent)
+        else:
+            visible.append(extent)
+    return visible, invisible
+
+
 def _cover_pad_hit(x, y, covers, pad):
     for cover in covers:
         if (
@@ -8826,7 +8929,9 @@ def _coarse_edge_ring(page, cell_x, cell_y, label, problems, require_all=False):
     """Uncovered part of each ring edge shows ring. Corner notches are skipped.
 
     Stations within 6 CSS px of a painted cover are the allowed dead pad,
-    not a hole. This does not measure inner-gap or device-pixel continuity.
+    not a hole. A panel that is hidden, fully transparent, or off-screen is
+    not a cover, and a station skipped only because of one is a failure.
+    This does not measure inner-gap or device-pixel continuity.
     """
     face = cell_top_face(page, cell_x, cell_y) or {}
     if not face.get("tips"):
@@ -8838,11 +8943,7 @@ def _coarse_edge_ring(page, cell_x, cell_y, label, problems, require_all=False):
         return
     page.wait_for_timeout(40)
     _width, _height, rows = png_rgb(_shot(page, clip))
-    covers = []
-    for row in (paint_cover_report(page) or {}).get("covers") or []:
-        extent = row.get("extent") or {}
-        if extent.get("right", 0) - extent.get("left", 0) > 2:
-            covers.append(extent)
+    visible_covers, invisible_covers = _split_cover_extents(page)
     tips = face["tips"]
     order = ("N", "E", "S", "W")
     names = ("NE", "SE", "SW", "NW")
@@ -8879,6 +8980,7 @@ def _coarse_edge_ring(page, cell_x, cell_y, label, problems, require_all=False):
         seen = 0
         step = 4.0
         along = clear
+        exposed_skip = False
         while along <= length - clear + 0.1:
             t = along / length
             ox = start["x"] + dx * t
@@ -8886,7 +8988,22 @@ def _coarse_edge_ring(page, cell_x, cell_y, label, problems, require_all=False):
             probe_x = ox + nx * 3
             probe_y = oy + ny * 3
             along += step
-            if _cover_pad_hit(probe_x, probe_y, covers, _DEAD_ZONE_CSS_PX):
+            on_visible = _cover_pad_hit(
+                probe_x, probe_y, visible_covers, _DEAD_ZONE_CSS_PX
+            )
+            on_invisible = _cover_pad_hit(
+                probe_x, probe_y, invisible_covers, _DEAD_ZONE_CSS_PX
+            )
+            # A hidden, transparent, or off-screen panel is not a cover.
+            # Skipping this station would hide a real gap.
+            if on_invisible and not on_visible:
+                if not exposed_skip:
+                    problems.append(
+                        f"{label} {name}: exposed station skipped because a panel "
+                        "is not showing"
+                    )
+                    exposed_skip = True
+            elif on_visible:
                 continue
             seen += 1
             found = False
