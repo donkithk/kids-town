@@ -3190,6 +3190,13 @@ def ring_edge_report(png_before, png_after, face, visible, clip, solids=None, ve
 def paint_cover_report(page):
     """Painted extent of each visible cover, and the ring clip hole beside it.
 
+    A cover has to be on screen. ``display: none``, ``visibility: hidden``,
+    ``opacity: 0`` on the element or an ancestor, the ``hidden`` attribute,
+    or a border box that sits entirely outside the viewport is not a cover.
+    ``cover_panel_audit`` is the same rule, used to catch a skip that only
+    an invisible panel would cause.
+
+
     The extent is the element's border box plus the live ``::before`` outset.
     Outset is how far that pseudo's border box passes the border box, from
     the computed top/right/bottom/left (those offsets are from the padding
@@ -3233,10 +3240,20 @@ def paint_cover_report(page):
           }
           function shown(el) {
             if (!el || el.hidden) return false;
-            const cs = getComputedStyle(el);
+            for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+              const cs = getComputedStyle(node);
+              if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+              if (Number(cs.opacity) === 0) return false;
+              if (node === document.documentElement) break;
+            }
             const box = el.getBoundingClientRect();
-            return cs.display !== 'none' && cs.visibility !== 'hidden'
-              && box.width > 2 && box.height > 2;
+            if (!(box.width > 2 && box.height > 2)) return false;
+            const viewW = window.innerWidth;
+            const viewH = window.innerHeight;
+            if (box.right <= 0 || box.bottom <= 0 || box.left >= viewW || box.top >= viewH) {
+              return false;
+            }
+            return true;
           }
           function overlap(a, b) {
             const w = Math.min(a.right, b.right) - Math.max(a.left, b.left);
@@ -3245,7 +3262,7 @@ def paint_cover_report(page):
             return w * h;
           }
           const covers = [];
-          for (const sel of ['#readyBar', '#uxPlaceBar', '#palette', '#townMap .cta']) {
+          for (const sel of ['#readyBar', '#uxPlaceBar', '#palette', '#townMap .cta', '#actionSheet']) {
             const el = document.querySelector(sel);
             if (!shown(el)) continue;
             const painted = paintedExtent(el);
@@ -3320,6 +3337,60 @@ def paint_cover_report(page):
             };
           });
           return {dpr, covers: rows};
+        }"""
+    )
+
+
+def cover_panel_audit(page):
+    """Each cover candidate, and why it does or does not count.
+
+    ``visible`` is false for ``hidden``, ``display: none``,
+    ``visibility: hidden``, ``opacity: 0`` (including an ancestor), an empty
+    box, or a box moved fully off the viewport. Those panels must not skip
+    an exposed ring station.
+    """
+    return page.evaluate(
+        r"""() => {
+          const selectors = ['#readyBar', '#uxPlaceBar', '#palette', '#townMap .cta', '#actionSheet'];
+          function audit(el) {
+            if (!el) return {reason: 'missing'};
+            if (el.hidden) return {reason: 'hidden'};
+            for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+              const cs = getComputedStyle(node);
+              if (cs.display === 'none') return {reason: 'display'};
+              if (cs.visibility === 'hidden') return {reason: 'visibility'};
+              if (Number(cs.opacity) === 0) return {reason: 'opacity'};
+              if (node === document.documentElement) break;
+            }
+            const box = el.getBoundingClientRect();
+            if (!(box.width > 2 && box.height > 2)) return {reason: 'empty'};
+            const viewW = window.innerWidth;
+            const viewH = window.innerHeight;
+            if (box.right <= 0 || box.bottom <= 0 || box.left >= viewW || box.top >= viewH) {
+              return {
+                reason: 'offscreen',
+                left: box.left, top: box.top, right: box.right, bottom: box.bottom
+              };
+            }
+            return {
+              reason: '',
+              left: box.left, top: box.top, right: box.right, bottom: box.bottom
+            };
+          }
+          const panels = [];
+          for (const sel of selectors) {
+            const el = document.querySelector(sel);
+            if (!el) continue;
+            const row = audit(el);
+            panels.push({
+              id: el.id || '',
+              selector: sel,
+              reason: row.reason || '',
+              visible: !row.reason,
+              left: row.left, top: row.top, right: row.right, bottom: row.bottom
+            });
+          }
+          return panels;
         }"""
     )
 
