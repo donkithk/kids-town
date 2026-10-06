@@ -6935,7 +6935,8 @@ def test_focus_ring_above_sprite(page, base_url, warehouse_db, warehouse_ids):
     """TC-FE-FOCUS-RING-ABOVE-SPRITE 有建築的格子，焦點環要畫在建築圖上面。
 
     沿四條邊、和建築圖重疊的位置抽樣。那些像素要是 #fff8e7 或 #6b4f2a。
-    選中線同一格，每條邊中段 5 點至少 3 點是 #7c2d12。
+    選中線畫在菱形裡面。建築圖蓋住線的那段，螢幕上要是 #7c2d12。
+    圖沒蓋到的邊不算被蓋住。
     """
     kid_id = warehouse_ids["kid_id"]
     _reset_kid(
@@ -7063,20 +7064,77 @@ def test_focus_ring_above_sprite(page, base_url, warehouse_db, warehouse_ids):
             clip = _paint_clip(page, face, margin=8)
             png = _shot(page, clip)
             _width, _height, rows = png_rgb(png)
-            line_bits = []
             tips = face["tips"]
             order = ("N", "E", "S", "W")
+            centre = (face["cx"], face["cy"])
+            stations = []
             for index, name in enumerate(("NE", "SE", "SW", "NW")):
                 start = tips[order[index]]
                 end = tips[order[(index + 1) % 4]]
-                hits = 0
+                dx = end["x"] - start["x"]
+                dy = end["y"] - start["y"]
+                length = math.hypot(dx, dy) or 1.0
+                nx, ny = -dy / length, dx / length
+                mid_x = (start["x"] + end["x"]) / 2
+                mid_y = (start["y"] + end["y"]) / 2
+                if (mid_x + nx - centre[0]) ** 2 + (mid_y + ny - centre[1]) ** 2 < (
+                    mid_x - nx - centre[0]
+                ) ** 2 + (mid_y - ny - centre[1]) ** 2:
+                    nx, ny = -nx, -ny
                 for step_index in range(5):
                     t = 0.3 + step_index * 0.1
-                    x = start["x"] + (end["x"] - start["x"]) * t
-                    y = start["y"] + (end["y"] - start["y"]) * t
-                    ix = int(round(x - clip["x"]))
-                    iy = int(round(y - clip["y"]))
-                    if rows and 0 <= iy < len(rows) and 0 <= ix < len(rows[0]):
+                    # The stroke is inset about 1.5px, not on the diamond edge.
+                    stations.append({
+                        "edge": name,
+                        "x": start["x"] + dx * t - nx * 1.5,
+                        "y": start["y"] + dy * t - ny * 1.5,
+                    })
+            opaque = page.evaluate(
+                """([c, r, points]) => {
+                  const pad = [...document.querySelectorAll('#townMap .pad')].find((el) => {
+                    const cs = getComputedStyle(el);
+                    return parseInt(cs.getPropertyValue('--c'), 10) === c
+                      && parseInt(cs.getPropertyValue('--r'), 10) === r;
+                  });
+                  const img = pad && pad.querySelector(':scope > .sprite');
+                  if (!img || img.hidden) return {error: 'missing sprite'};
+                  const w = img.naturalWidth || 0;
+                  const h = img.naturalHeight || 0;
+                  if (w < 2 || h < 2) return {error: 'sprite not loaded'};
+                  const box = img.getBoundingClientRect();
+                  const canvas = document.createElement('canvas');
+                  canvas.width = w;
+                  canvas.height = h;
+                  const ctx = canvas.getContext('2d', {willReadFrequently: true});
+                  try { ctx.drawImage(img, 0, 0, w, h); }
+                  catch (err) { return {error: String(err)}; }
+                  return points.map((point) => {
+                    if (point.x < box.left || point.x > box.right || point.y < box.top || point.y > box.bottom) {
+                      return 0;
+                    }
+                    const ix = Math.max(0, Math.min(w - 1, Math.round((point.x - box.left) / box.width * (w - 1))));
+                    const iy = Math.max(0, Math.min(h - 1, Math.round((point.y - box.top) / box.height * (h - 1))));
+                    try { return ctx.getImageData(ix, iy, 1, 1).data[3]; }
+                    catch (err) { return 0; }
+                  });
+                }""",
+                [0, 0, stations],
+            )
+            if not isinstance(opaque, list):
+                problems.append(f"selected line sprite alpha {opaque}")
+            else:
+                line_bits = []
+                by_edge = {}
+                for station, alpha in zip(stations, opaque):
+                    by_edge.setdefault(station["edge"], []).append((station, alpha or 0))
+                for name, items in by_edge.items():
+                    covered = [(station, alpha) for station, alpha in items if alpha >= 160]
+                    hits = 0
+                    for station, _alpha in covered:
+                        ix = int(round(station["x"] - clip["x"]))
+                        iy = int(round(station["y"] - clip["y"]))
+                        if not rows or iy < 0 or ix < 0 or iy >= len(rows) or ix >= len(rows[0]):
+                            continue
                         pixel = rows[iy][ix]
                         dist = (
                             (pixel[0] - 0x7C) ** 2
@@ -7085,12 +7143,13 @@ def test_focus_ring_above_sprite(page, base_url, warehouse_db, warehouse_ids):
                         )
                         if dist <= 55 * 55:
                             hits += 1
-                line_bits.append(f"{name} {hits}/5")
-                if hits < 3:
-                    problems.append(
-                        f"selected line {name}: {hits}/5 #7c2d12 over the sprite"
-                    )
-            print("TC-FE-FOCUS-RING-ABOVE-SPRITE line " + ", ".join(line_bits))
+                    line_bits.append(f"{name} {hits}/{len(covered)}")
+                    if len(covered) >= 3 and hits < 3:
+                        problems.append(
+                            f"selected line {name}: {hits}/{len(covered)} "
+                            "#7c2d12 where the sprite covers the stroke"
+                        )
+                print("TC-FE-FOCUS-RING-ABOVE-SPRITE line " + ", ".join(line_bits))
     assert not problems, "TC-FE-FOCUS-RING-ABOVE-SPRITE: " + " | ".join(problems)
 
 
@@ -8799,10 +8858,17 @@ def _coarse_edge_ring(page, cell_x, cell_y, label, problems, require_all=False):
             nx, ny = -nx, -ny
         clear = max(8.0, length * 0.12)
         span = length - 2 * clear
-        if span < 12:
-            bits.append(f"{name} short")
+        # Corner notches are allowed. A 390 edge is about 25px, so an 8px
+        # notch at each end still leaves a middle. Only an edge with no
+        # middle past the notch is skipped. The old 12px station floor is
+        # a polish skip, not this check.
+        if span < 4:
+            bits.append(f"{name} notch {length:.0f}")
             if require_all:
-                problems.append(f"{label} {name}: edge shorter than 12px ({length:.0f})")
+                problems.append(
+                    f"{label} {name}: no middle past the corner notch "
+                    f"(edge {length:.0f}px)"
+                )
             continue
         hits = 0
         seen = 0
@@ -8833,7 +8899,9 @@ def _coarse_edge_ring(page, cell_x, cell_y, label, problems, require_all=False):
             if found:
                 hits += 1
         bits.append(f"{name} {hits}/{seen}")
-        if seen >= 3 and hits * 5 < seen * 4:
+        if seen == 0 and require_all:
+            problems.append(f"{label} {name}: no uncovered station on the edge")
+        elif seen and (require_all or seen >= 3) and hits * 5 < seen * 4:
             problems.append(
                 f"{label} {name}: ring on {hits}/{seen} uncovered stations "
                 "(corner notches and the 6px cover pad are skipped)"
