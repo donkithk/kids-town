@@ -7133,15 +7133,27 @@ def test_focus_ring_above_sprite(page, base_url, warehouse_db, warehouse_ids):
                     for station, _alpha in covered:
                         ix = int(round(station["x"] - clip["x"]))
                         iy = int(round(station["y"] - clip["y"]))
-                        if not rows or iy < 0 or ix < 0 or iy >= len(rows) or ix >= len(rows[0]):
-                            continue
-                        pixel = rows[iy][ix]
-                        dist = (
-                            (pixel[0] - 0x7C) ** 2
-                            + (pixel[1] - 0x2D) ** 2
-                            + (pixel[2] - 0x12) ** 2
-                        )
-                        if dist <= 55 * 55:
+                        # The stroke is about 3px. One CSS pixel off the
+                        # centre still is the line, not a sub-pixel walk.
+                        found = False
+                        for oy in range(-1, 2):
+                            for ox in range(-1, 2):
+                                py = iy + oy
+                                px = ix + ox
+                                if not rows or py < 0 or px < 0 or py >= len(rows) or px >= len(rows[0]):
+                                    continue
+                                pixel = rows[py][px]
+                                dist = (
+                                    (pixel[0] - 0x7C) ** 2
+                                    + (pixel[1] - 0x2D) ** 2
+                                    + (pixel[2] - 0x12) ** 2
+                                )
+                                if dist <= 55 * 55:
+                                    found = True
+                                    break
+                            if found:
+                                break
+                        if found:
                             hits += 1
                     line_bits.append(f"{name} {hits}/{len(covered)}")
                     if len(covered) >= 3 and hits < 3:
