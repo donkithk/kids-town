@@ -48,7 +48,7 @@ Synthetic fixtures only: `test_parent_*` / `TestParent!pass1`, kid PIN `1357`. P
 | P1-TC-REG-03 | `tests/test_region_lock.py::test_region_5_battle_start_returns_region_locked` | **PASS** | same for region 5 |
 | P1-TC-REG-04 | `tests/test_region_lock.py::test_region_4_explore_start_returns_region_locked` | **PASS** | explore start locked; gold not deducted |
 | P1-TC-UNL-01 | `tests/test_unlock_region.py::test_lighthouse_requires_explored_region_3` | **PASS** | lighthouse place 400 `unlock_region` without r3 |
-| P1-TC-UNL-02 | `tests/test_unlock_region.py::test_lighthouse_place_succeeds_after_region_3_explored` | **PASS** | explored 3 → lighthouse 201 |
+| P1-TC-UNL-02 | `tests/test_unlock_region.py::test_lighthouse_place_succeeds_after_region_3_explored` | **FAIL** on main | 8×8 rule, Grok decision: (8,0) must be 400 with resources unchanged; (0,0) must be 201 and stored=0. main still returns 201 at (8,0) and charges. |
 | P1-TC-UNL-03 | `tests/test_unlock_region.py::test_arena_stays_locked_while_region_4_content_locked` | **PASS** | arena 400 `region_locked` even with explored 4 |
 | P1-TC-CER-01 | `tests/test_task_ceremony.py::test_complete_json_includes_ceremony_fields` | **PASS** | bonus/total/pending_approval + HUD XP fields; XP not in points_log |
 | P1-TC-CER-02 | `tests/test_task_ceremony.py::test_first_task_achievement_in_complete_response` | **PASS** | `first_task` still awarded |
