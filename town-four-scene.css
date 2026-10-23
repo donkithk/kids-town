@@ -160,6 +160,43 @@ body.kt-artstage #tab-town .mp { position: relative; }
   color: transparent;
   cursor: pointer;
   pointer-events: auto;
+  outline: none;
+}
+
+/* Geometry only. Opacity 0 so the dashes are not resampled onto the map.
+   The visible ring is #focusRingLift, one device pixel at a time. */
+#townMap .cell-btn:focus-visible::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: var(--ring-x, 0px);
+  top: var(--ring-y, 0px);
+  width: var(--ring-w, 0px);
+  height: var(--ring-h, 0px);
+  pointer-events: none;
+  background-image: var(--ring-image);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  opacity: 0;
+}
+
+#focusRingPaint,
+#focusRingLift,
+#chosenMarkPaint {
+  position: absolute;
+  pointer-events: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+#focusRingPaint,
+#focusRingLift {
+  z-index: 9;
+}
+
+#chosenMarkPaint {
+  z-index: 7;
 }
 
 #townMap .badge {

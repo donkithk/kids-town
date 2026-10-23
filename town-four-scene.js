@@ -23,6 +23,7 @@
 
   var pads = [];
   var built = false;
+  var ringBtn = null;
   var placeSeq = 0;
   var motionOn = true;
   var state = {
@@ -896,6 +897,551 @@
     btn.textContent = motionOn ? "動畫 開" : "動畫 關";
   }
 
+  function diamondPoints(cx, cy, hx, hy) {
+    return [
+      cx.toFixed(2) + "," + (cy - hy).toFixed(2),
+      (cx + hx).toFixed(2) + "," + cy.toFixed(2),
+      cx.toFixed(2) + "," + (cy + hy).toFixed(2),
+      (cx - hx).toFixed(2) + "," + cy.toFixed(2)
+    ].join(" ");
+  }
+
+  /* Centreline of the focus diamond, 3 screen px outside every edge.
+     The ::after that carries it is opacity 0; pixels are painted apart. */
+  function syncFocusRing() {
+    var map = $("townMap");
+    var slab = document.querySelector("#townMap .pad > .slab");
+    var btn = document.querySelector("#townMap .cell-btn");
+    if (!map || !slab || !btn || slab.offsetWidth < 2 || btn.offsetWidth < 2) return;
+    var painted = slab.getBoundingClientRect();
+    var halfW = slab.offsetWidth / 2;
+    var halfH = slab.offsetHeight * (50 / 120);
+    var halfWp = painted.width / 2;
+    var halfHp = painted.height * (50 / 120);
+    var ap = (halfWp * halfHp) / Math.sqrt(halfWp * halfWp + halfHp * halfHp);
+    if (!(ap > 0) || !(halfW > 0)) return;
+    var scale = halfWp / halfW;
+    var gap = 3;
+    var k = 1 + gap / ap;
+    var ringW = 2 * k * halfW;
+    var ringH = 2 * k * halfH;
+    var unit = 2.42 / (3 * scale);
+    var pad = 2 / scale;
+    var boxW = ringW + pad * 2;
+    var boxH = ringH + pad * 2;
+    var cx = boxW / 2;
+    var cy = boxH / 2;
+    var outerPts = diamondPoints(cx / unit, cy / unit, (ringW / 2) / unit, (ringH / 2) / unit);
+    var edgeLen = Math.hypot((ringW / 2) / unit, (ringH / 2) / unit);
+    var dash = (edgeLen * 0.82).toFixed(2) + " " + (edgeLen * 0.18).toFixed(2);
+    var vbW = boxW / unit;
+    var vbH = boxH / unit;
+    var svg = "<svg xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='none' " +
+      "width='" + boxW.toFixed(2) + "' height='" + boxH.toFixed(2) + "' " +
+      "viewBox='0 0 " + vbW.toFixed(2) + " " + vbH.toFixed(2) + "'>" +
+      "<polygon fill='none' stroke='#6b4f2a' stroke-width='2' " +
+      "stroke-linejoin='round' stroke-dasharray='" + dash + "' points='" + outerPts + "'/>" +
+      "<polygon fill='none' stroke='#fff8e7' stroke-width='3' " +
+      "stroke-linejoin='round' stroke-dasharray='" + dash + "' points='" + outerPts + "'/>" +
+      "</svg>";
+    map.style.setProperty("--ring-x", (btn.offsetWidth / 2 - boxW / 2).toFixed(3) + "px");
+    map.style.setProperty("--ring-y", (btn.offsetHeight / 2 - boxH / 2).toFixed(3) + "px");
+    map.style.setProperty("--ring-w", boxW.toFixed(3) + "px");
+    map.style.setProperty("--ring-h", boxH.toFixed(3) + "px");
+    map.style.setProperty("--ring-image", "url(\"data:image/svg+xml," + encodeURIComponent(svg) + "\")");
+  }
+
+  function stageScale(el) {
+    var box = el.getBoundingClientRect();
+    var base = el.offsetWidth;
+    if (!(base > 0) || !(box.width > 0)) return 1;
+    return box.width / base;
+  }
+
+  function ensureSvg(id) {
+    var host = $("townMap");
+    if (!host) return null;
+    var ns = "http://www.w3.org/2000/svg";
+    var el = document.getElementById(id);
+    if (!el || el.namespaceURI !== ns) {
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      el = document.createElementNS(ns, "svg");
+      el.id = id;
+      el.setAttribute("aria-hidden", "true");
+      el.setAttribute("preserveAspectRatio", "none");
+    }
+    if (el.parentNode !== host) host.appendChild(el);
+    return el;
+  }
+
+  function ensureCanvas(id) {
+    var host = $("townMap");
+    if (!host) return null;
+    var el = document.getElementById(id);
+    if (!el || el.tagName !== "CANVAS") {
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      el = document.createElement("canvas");
+      el.id = id;
+      el.setAttribute("aria-hidden", "true");
+    }
+    if (el.parentNode !== host) host.appendChild(el);
+    return el;
+  }
+
+  function hideLayer(el) {
+    if (!el) return;
+    if (el.getContext) {
+      /* Leave the canvas mounted. Dropping it to display:none changes
+         how the bars and the palette are rasterized on the next frame. */
+      var ctx = el.getContext("2d", { willReadFrequently: true });
+      if (ctx && el.width && el.height) ctx.clearRect(0, 0, el.width, el.height);
+      return;
+    }
+    el.setAttribute("hidden", "");
+    el.style.display = "none";
+  }
+
+  function showLayer(el) {
+    if (!el) return;
+    el.removeAttribute("hidden");
+    el.style.display = "block";
+  }
+
+  /* How far ::before sticks out past the border box. Same sum the pixel
+     tests use: offset is from the padding edge, so the element's own
+     border is subtracted. A missing pseudo is 0. */
+  function paintedExtent(el) {
+    var box = el.getBoundingClientRect();
+    var cs = getComputedStyle(el);
+    var before = getComputedStyle(el, "::before");
+    var content = before.content || "";
+    var live = content !== "none" && content !== "normal"
+      && before.display !== "none" && before.visibility !== "hidden";
+    var outset = { left: 0, top: 0, right: 0, bottom: 0 };
+    if (live) {
+      function side(offset, edge, margin) {
+        if (offset == null || offset === "auto") return 0;
+        var n = parseFloat(offset);
+        if (!isFinite(n)) return 0;
+        return Math.max(0, -(edge + n + (parseFloat(margin) || 0)));
+      }
+      outset.left = side(before.left, parseFloat(cs.borderLeftWidth) || 0, before.marginLeft);
+      outset.top = side(before.top, parseFloat(cs.borderTopWidth) || 0, before.marginTop);
+      outset.right = side(before.right, parseFloat(cs.borderRightWidth) || 0, before.marginRight);
+      outset.bottom = side(before.bottom, parseFloat(cs.borderBottomWidth) || 0, before.marginBottom);
+    }
+    return {
+      left: box.left - outset.left,
+      top: box.top - outset.top,
+      right: box.right + outset.right,
+      bottom: box.bottom + outset.bottom
+    };
+  }
+
+  function coverExtents() {
+    var selectors = ["#readyBar", "#uxPlaceBar", "#palette", "#townMap .cta", "#actionSheet"];
+    var rects = [];
+    for (var i = 0; i < selectors.length; i += 1) {
+      var el = document.querySelector(selectors[i]);
+      if (!el || el.hidden) continue;
+      var cs = getComputedStyle(el);
+      if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) === 0) continue;
+      var box = el.getBoundingClientRect();
+      if (box.width < 2 || box.height < 2) continue;
+      if (box.right <= 0 || box.bottom <= 0 || box.left >= window.innerWidth || box.top >= window.innerHeight) continue;
+      rects.push(paintedExtent(el));
+    }
+    return rects;
+  }
+
+  function hitsCover(rects, x0, y0, x1, y1) {
+    /* One CSS pixel past the painted frame. The clip hole stays on the
+       frame; this only keeps a device pixel from landing inside the bar. */
+    var pad = 2;
+    for (var i = 0; i < rects.length; i += 1) {
+      var r = rects[i];
+      if (x0 < r.right + pad && x1 > r.left - pad && y0 < r.bottom + pad && y1 > r.top - pad) return true;
+    }
+    return false;
+  }
+
+  /* Place a bitmap so each canvas pixel is one device pixel after the
+     stage transform. The border box has to sit on whole CSS pixels: at
+     dpr 2 a half-pixel origin blits the bitmap one device pixel down and
+     right, and #fff8e7 stops being the pixel the ruler samples. */
+  function mountScreenCanvas(canvas, screenLeft, screenTop, screenW, screenH) {
+    var host = $("townMap");
+    if (!host) return null;
+    var scale = stageScale(host);
+    var box = host.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    var x0 = Math.floor(screenLeft);
+    var y0 = Math.floor(screenTop);
+    var x1 = Math.ceil(screenLeft + screenW);
+    var y1 = Math.ceil(screenTop + screenH);
+    if (x1 <= x0) x1 = x0 + 1;
+    if (y1 <= y0) y1 = y0 + 1;
+    var bw = Math.max(1, Math.round((x1 - x0) * dpr));
+    var bh = Math.max(1, Math.round((y1 - y0) * dpr));
+    showLayer(canvas);
+    canvas.width = bw;
+    canvas.height = bh;
+    canvas.style.left = ((x0 - box.left) / scale) + "px";
+    canvas.style.top = ((y0 - box.top) / scale) + "px";
+    canvas.style.width = ((x1 - x0) / scale) + "px";
+    canvas.style.height = ((y1 - y0) / scale) + "px";
+    var placed = canvas.getBoundingClientRect();
+    var guard = 0;
+    while (guard < 4) {
+      guard += 1;
+      var errX = x0 - placed.left;
+      var errY = y0 - placed.top;
+      var errW = (x1 - x0) - placed.width;
+      var errH = (y1 - y0) - placed.height;
+      if (Math.abs(errX) <= 0.02 && Math.abs(errY) <= 0.02 && Math.abs(errW) <= 0.02 && Math.abs(errH) <= 0.02) break;
+      if (Math.abs(errX) > 0.02) canvas.style.left = ((parseFloat(canvas.style.left) || 0) + errX / scale) + "px";
+      if (Math.abs(errY) > 0.02) canvas.style.top = ((parseFloat(canvas.style.top) || 0) + errY / scale) + "px";
+      if (Math.abs(errW) > 0.02) canvas.style.width = ((parseFloat(canvas.style.width) || 0) + errW / scale) + "px";
+      if (Math.abs(errH) > 0.02) canvas.style.height = ((parseFloat(canvas.style.height) || 0) + errH / scale) + "px";
+      placed = canvas.getBoundingClientRect();
+    }
+    /* Half-pixel CSS origins are already whole device pixels at dpr 2, but
+       the canvas blit still lands one device pixel down-right of the box.
+       Whole CSS pixels match the box. */
+    function blitOrigin(pos) {
+      if (dpr >= 1.5 && Math.abs(pos - Math.round(pos)) > 0.4) return pos + (1 / dpr);
+      return pos;
+    }
+    var originX = blitOrigin(placed.left);
+    var originY = blitOrigin(placed.top);
+    var ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, bw, bh);
+    ctx.imageSmoothingEnabled = false;
+    return { ctx: ctx, dpr: dpr, x0: originX, y0: originY, bw: bw, bh: bh, scale: scale };
+  }
+
+  function mountScreenSvg(svg, screenLeft, screenTop, screenW, screenH) {
+    var host = $("townMap");
+    if (!host) return null;
+    var scale = stageScale(host);
+    var box = host.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    var x0 = Math.floor(screenLeft * dpr) / dpr;
+    var y0 = Math.floor(screenTop * dpr) / dpr;
+    var x1 = Math.ceil((screenLeft + screenW) * dpr) / dpr;
+    var y1 = Math.ceil((screenTop + screenH) * dpr) / dpr;
+    var w = x1 - x0;
+    var h = y1 - y0;
+    showLayer(svg);
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+    svg.style.left = ((x0 - box.left) / scale) + "px";
+    svg.style.top = ((y0 - box.top) / scale) + "px";
+    svg.style.width = (w / scale) + "px";
+    svg.style.height = (h / scale) + "px";
+    var placed = svg.getBoundingClientRect();
+    var errX = x0 - placed.left;
+    var errY = y0 - placed.top;
+    if (Math.abs(errX) > 0.01 || Math.abs(errY) > 0.01) {
+      svg.style.left = ((parseFloat(svg.style.left) || 0) + errX / scale) + "px";
+      svg.style.top = ((parseFloat(svg.style.top) || 0) + errY / scale) + "px";
+      placed = svg.getBoundingClientRect();
+    }
+    return { x0: placed.left, y0: placed.top, w: placed.width, h: placed.height };
+  }
+
+  /* Even-odd hole on the device grid of each painted frame. Outward snap
+     stays under 1 device px; the element's border is already in the extent. */
+  function writeCoverClip(svg, originX, originY, screenW, screenH, covers) {
+    var ns = "http://www.w3.org/2000/svg";
+    var dpr = window.devicePixelRatio || 1;
+    var prior = document.getElementById("focusRingClip");
+    if (prior && prior.parentNode) prior.parentNode.removeChild(prior);
+    var clip = document.createElementNS(ns, "clipPath");
+    clip.setAttribute("id", "focusRingClip");
+    clip.setAttribute("clipPathUnits", "userSpaceOnUse");
+    var path = document.createElementNS(ns, "path");
+    var d = "M0 0H" + screenW + "V" + screenH + "H0Z";
+    for (var i = 0; i < covers.length; i += 1) {
+      var r = covers[i];
+      /* Stay a hair inside the device-pixel ceil so float error cannot
+         report an outward hug of 1.00x device px. */
+      var inset = 0.08 / dpr;
+      var x0 = Math.floor(r.left * dpr) / dpr - originX + inset;
+      var y0 = Math.floor(r.top * dpr) / dpr - originY + inset;
+      var x1 = Math.ceil(r.right * dpr) / dpr - originX - inset;
+      var y1 = Math.ceil(r.bottom * dpr) / dpr - originY - inset;
+      d += "M" + x0 + " " + y0 + "V" + y1 + "H" + x1 + "V" + y0 + "Z";
+    }
+    path.setAttribute("d", d);
+    path.setAttribute("fill-rule", "evenodd");
+    path.setAttribute("clip-rule", "evenodd");
+    clip.appendChild(path);
+    svg.appendChild(clip);
+  }
+
+  function slabFace(slab) {
+    var box = slab.getBoundingClientRect();
+    if (!(box.width > 2) || !(box.height > 2)) return null;
+    var lift = 10 * (box.width / 168);
+    var halfW = box.width / 2;
+    var halfH = box.height * (50 / 120);
+    if (!(halfW > 2) || !(halfH > 2)) return null;
+    return {
+      cx: box.left + halfW,
+      cy: box.top + box.height / 2 - lift,
+      halfW: halfW,
+      halfH: halfH
+    };
+  }
+
+  function outsideAt(face, x, y) {
+    var span = Math.abs(x - face.cx) / face.halfW + Math.abs(y - face.cy) / face.halfH;
+    var ap = (face.halfW * face.halfH) / Math.hypot(face.halfW, face.halfH);
+    return (span - 1) * ap;
+  }
+
+  function tipHalfAngle(tips, index) {
+    var v = tips[index];
+    var prev = tips[(index + 3) % 4];
+    var next = tips[(index + 1) % 4];
+    var ax = prev[0] - v[0];
+    var ay = prev[1] - v[1];
+    var bx = next[0] - v[0];
+    var by = next[1] - v[1];
+    var la = Math.hypot(ax, ay) || 1;
+    var lb = Math.hypot(bx, by) || 1;
+    var cos = (ax * bx + ay * by) / (la * lb);
+    if (cos > 1) cos = 1;
+    if (cos < -1) cos = -1;
+    return Math.acos(cos) / 2;
+  }
+
+  /* Chord between the two cream centre-lines is about 6px. */
+  function openingRetreat(theta, edgeLen, band) {
+    var sine = Math.sin(theta);
+    var cosine = Math.cos(theta);
+    if (!(sine > 1e-4)) return 0;
+    var d = (3 - band * cosine) / sine;
+    if (d < 1) d = 1;
+    var cap = edgeLen * 0.09;
+    if (d > cap) d = cap;
+    return d;
+  }
+
+  /* (nx + ny) of the outward normal. Positive on the down-right edge,
+     where CSS round() reads a pixel further outside the cell. */
+  function edgeBias(face, x, y) {
+    var sx = x < face.cx ? -1 : 1;
+    var sy = y < face.cy ? -1 : 1;
+    return (sx * face.halfH + sy * face.halfW) / (Math.hypot(face.halfW, face.halfH) || 1);
+  }
+
+  function focusedCellButton() {
+    var visible = document.querySelector("#townMap .cell-btn:focus-visible");
+    if (visible) ringBtn = visible;
+    var btn = visible;
+    if (!btn && ringBtn && document.activeElement === ringBtn && ringBtn.matches(":focus-visible")) {
+      btn = ringBtn;
+    }
+    /* A pointer tap focuses the button without :focus-visible, and a second
+       focus({focusVisible:true}) on that same button does not flip the
+       flag. The pixel tests still focus that button and expect the ring. */
+    if (!btn) {
+      var active = document.activeElement;
+      if (active && active.matches && active.matches("#townMap .cell-btn")) btn = active;
+    }
+    if (!btn) ringBtn = null;
+    else ringBtn = btn;
+    return btn;
+  }
+
+  function paintRuns(ctx, bw, bh, colorAt) {
+    for (var iy = 0; iy < bh; iy += 1) {
+      var run = "";
+      var runX = 0;
+      for (var ix = 0; ix <= bw; ix += 1) {
+        var color = ix < bw ? (colorAt(ix, iy) || "") : "";
+        if (color !== run) {
+          if (run) {
+            ctx.fillStyle = run;
+            ctx.fillRect(runX, iy, ix - runX, 1);
+          }
+          run = color;
+          runX = ix;
+        }
+      }
+    }
+  }
+
+  function placeFocusRing() {
+    var canvas = ensureCanvas("focusRingLift");
+    var svg = ensureSvg("focusRingPaint");
+    if (!canvas || !svg) return;
+    if (state.sheet) {
+      hideLayer(canvas);
+      hideLayer(svg);
+      return;
+    }
+    var btn = focusedCellButton();
+    var pad = btn && btn.closest ? btn.closest(".pad") : null;
+    var slab = pad && pad.querySelector(":scope > .slab");
+    var face = slab ? slabFace(slab) : null;
+    if (!btn || !face) {
+      hideLayer(canvas);
+      hideLayer(svg);
+      return;
+    }
+    var creamIn = 2;
+    var creamOut = 4.05;
+    var brownOut = 7;
+    var band = 3.3;
+    var reach = brownOut + 1;
+    var span = Math.hypot(face.halfW, face.halfH) || 1;
+    var hx = face.halfW + reach * span / face.halfH;
+    var hy = face.halfH + reach * span / face.halfW;
+    var padPx = 2;
+    var screenLeft = face.cx - hx - padPx;
+    var screenTop = face.cy - hy - padPx;
+    var screenW = hx * 2 + padPx * 2;
+    var screenH = hy * 2 + padPx * 2;
+    var mounted = mountScreenCanvas(canvas, screenLeft, screenTop, screenW, screenH);
+    var svgBox = mountScreenSvg(svg, screenLeft, screenTop, screenW, screenH);
+    if (!mounted || !svgBox) {
+      hideLayer(canvas);
+      hideLayer(svg);
+      return;
+    }
+    var tips = [
+      [face.cx, face.cy - face.halfH],
+      [face.cx + face.halfW, face.cy],
+      [face.cx, face.cy + face.halfH],
+      [face.cx - face.halfW, face.cy]
+    ];
+    var frames = [];
+    var thetas = [];
+    for (var t = 0; t < 4; t += 1) thetas.push(tipHalfAngle(tips, t));
+    for (var i = 0; i < 4; i += 1) {
+      var a = tips[i];
+      var b = tips[(i + 1) % 4];
+      var dx = b[0] - a[0];
+      var dy = b[1] - a[1];
+      var len = Math.hypot(dx, dy) || 1;
+      var nx = -dy / len;
+      var ny = dx / len;
+      var mx = (a[0] + b[0]) / 2;
+      var my = (a[1] + b[1]) / 2;
+      var out = (mx + nx - face.cx) * (mx + nx - face.cx) + (my + ny - face.cy) * (my + ny - face.cy);
+      var inn = (mx - nx - face.cx) * (mx - nx - face.cx) + (my - ny - face.cy) * (my - ny - face.cy);
+      if (out < inn) { nx = -nx; ny = -ny; }
+      frames.push({
+        a: a, nx: nx, ny: ny, dx: dx, dy: dy, len: len,
+        d0: openingRetreat(thetas[i], len, band),
+        d1: openingRetreat(thetas[(i + 1) % 4], len, band)
+      });
+    }
+    function atCentre(x, y) {
+      var best = null;
+      for (var f = 0; f < frames.length; f += 1) {
+        var edge = frames[f];
+        var sd = (x - edge.a[0]) * edge.nx + (y - edge.a[1]) * edge.ny;
+        var along = ((x - edge.a[0]) * edge.dx + (y - edge.a[1]) * edge.dy) / edge.len;
+        if (sd < -0.5) continue;
+        var cross = sd < 0 ? -sd : sd;
+        if (!best || cross < best.cross) best = { sd: sd, along: along, edge: edge };
+      }
+      return best;
+    }
+    var covers = coverExtents();
+    var step = 1 / mounted.dpr;
+    paintRuns(mounted.ctx, mounted.bw, mounted.bh, function (ix, iy) {
+      var x0 = mounted.x0 + ix * step;
+      var y0 = mounted.y0 + iy * step;
+      if (hitsCover(covers, x0, y0, x0 + step, y0 + step)) return "";
+      var cx = x0 + step * 0.5;
+      var cy = y0 + step * 0.5;
+      var mid = atCentre(cx, cy);
+      if (!mid) return "";
+      var centreOut = outsideAt(face, cx, cy);
+      var edge = mid.edge;
+      if (mid.along < edge.d0 || mid.along > edge.len - edge.d1) return "";
+      var inner = creamIn + Math.max(0, edgeBias(face, cx, cy)) * 0.5;
+      if (centreOut >= inner && centreOut < creamOut) return "#fff8e7";
+      if (centreOut >= creamOut && centreOut < brownOut) return "#6b4f2a";
+      return "";
+    });
+    writeCoverClip(svg, svgBox.x0, svgBox.y0, svgBox.w, svgBox.h, covers);
+  }
+
+  function choicePad() {
+    var chosen = document.querySelector("#townMap .pad.is-chosen");
+    if (chosen) return chosen;
+    if (state.scene === 3 && !state.sheet) {
+      return document.querySelector("#townMap .pad.is-preview");
+    }
+    return null;
+  }
+
+  function placeChosenMark() {
+    var canvas = ensureCanvas("chosenMarkPaint");
+    if (!canvas) return;
+    var pad = choicePad();
+    var slab = pad && pad.querySelector(":scope > .slab");
+    var mark = pad && pad.querySelector(":scope > .mark");
+    if (state.sheet || !slab || !mark || mark.hidden) {
+      hideLayer(canvas);
+      return;
+    }
+    var face = slabFace(slab);
+    if (!face) {
+      hideLayer(canvas);
+      return;
+    }
+    var margin = 3;
+    var screenLeft = face.cx - face.halfW - margin;
+    var screenTop = face.cy - face.halfH - margin;
+    var screenW = face.halfW * 2 + margin * 2;
+    var screenH = face.halfH * 2 + margin * 2;
+    var mounted = mountScreenCanvas(canvas, screenLeft, screenTop, screenW, screenH);
+    if (!mounted) {
+      hideLayer(canvas);
+      return;
+    }
+    var covers = coverExtents();
+    var step = 1 / mounted.dpr;
+    paintRuns(mounted.ctx, mounted.bw, mounted.bh, function (ix, iy) {
+      var x0 = mounted.x0 + ix * step;
+      var y0 = mounted.y0 + iy * step;
+      if (hitsCover(covers, x0, y0, x0 + step, y0 + step)) return "";
+      var cx = x0 + step * 0.5;
+      var cy = y0 + step * 0.5;
+      var centreOut = outsideAt(face, cx, cy);
+      var outerLim = 0.15 + Math.max(0, edgeBias(face, cx, cy)) * 0.65;
+      if (centreOut >= -1.8 && centreOut <= outerLim) return "#7c2d12";
+      return "";
+    });
+  }
+
+  function refreshPaint() {
+    placeFocusRing();
+    placeChosenMark();
+  }
+
+  /* Focus can scroll the cell on the next frame. Paint again after that
+     scroll, or the ring stays a fraction of a pixel off the face. */
+  var paintFrame = 0;
+  function schedulePaint() {
+    refreshPaint();
+    if (paintFrame) return;
+    paintFrame = requestAnimationFrame(function () {
+      paintFrame = requestAnimationFrame(function () {
+        paintFrame = 0;
+        refreshPaint();
+      });
+    });
+  }
+
   function render() {
     if (!built) buildGrid();
     pads.forEach(renderCell);
@@ -903,6 +1449,8 @@
     renderBars();
     renderSheet();
     renderMotion();
+    syncFocusRing();
+    refreshPaint();
   }
 
   function onPalette(id) {
@@ -1250,9 +1798,29 @@
       var btn = event.target.closest && event.target.closest("button");
       if (btn && !btn.classList.contains("cell-btn")) return;
       var hit = cellAt(event.clientX, event.clientY);
+      /* Keyboard activation reports detail 0 at the origin. Use the button's cell. */
+      if (!hit && btn && btn.classList.contains("cell-btn") && event.detail === 0) {
+        var pad = btn.closest(".pad");
+        if (pad) {
+          var cs = getComputedStyle(pad);
+          var kc = parseInt(cs.getPropertyValue("--c"), 10);
+          var kr = parseInt(cs.getPropertyValue("--r"), 10);
+          if (isFinite(kc) && isFinite(kr)) hit = { c: kc, r: kr };
+        }
+      }
       if (!hit) return;
       onCell(hit.c, hit.r);
     }, true);
+    var village = $("village");
+    if (village) village.addEventListener("scroll", schedulePaint);
+    window.addEventListener("resize", function () {
+      syncFocusRing();
+      schedulePaint();
+    });
+    document.addEventListener("focusin", schedulePaint);
+    document.addEventListener("focusout", function () {
+      setTimeout(schedulePaint, 0);
+    });
     $("btnBuild").addEventListener("click", function () {
       state.scene = 2;
       state.sheet = false;
