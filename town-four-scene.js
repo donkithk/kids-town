@@ -582,10 +582,10 @@
     return footprintFree(state.pad.c, state.pad.r, state.unstoreId);
   }
 
-  function assetSrc(name) {
+  function assetSrc(name, still) {
     var id = ASSET_ID[name] || "shop";
-    var still = motionOn ? "" : "-still";
-    return ASSET + "bldg-" + id + "-iso" + still + ".svg";
+    var frozen = still || !motionOn;
+    return ASSET + "bldg-" + id + "-iso" + (frozen ? "-still" : "") + ".svg";
   }
 
   function show(el, on) {
@@ -782,7 +782,7 @@
       btn.className = "pal-btn" + (placed ? " is-placed" : "") + (warehoused ? " is-stored" : "");
       var img = document.createElement("img");
       img.alt = "";
-      img.src = assetSrc(def.name);
+      img.src = assetSrc(def.name, true);
       var copy = document.createElement("span");
       var name = document.createElement("span");
       name.className = "pal-name";
@@ -879,7 +879,7 @@
     paintFarmClaim(placed);
     var art = $("sheetArt");
     if (art && def.name) {
-      var src = assetSrc(def.name);
+      var src = assetSrc(def.name, true);
       if (art.getAttribute("src") !== src) art.src = src;
       art.alt = "";
     }
@@ -991,8 +991,9 @@
   function hideLayer(el) {
     if (!el) return;
     if (el.getContext) {
-      /* Leave the canvas mounted. Dropping it to display:none changes
-         how the bars and the palette are rasterized on the next frame. */
+      /* Leave the canvas mounted and visible. Toggling visibility changes
+         how the bars, the palette, and the build button are rasterized. */
+      el.style.visibility = "visible";
       var ctx = el.getContext("2d", { willReadFrequently: true });
       if (ctx && el.width && el.height) ctx.clearRect(0, 0, el.width, el.height);
       return;
@@ -1001,10 +1002,19 @@
     el.style.display = "none";
   }
 
+  /* The sheet compares two opens. An empty bitmap left over the wood grain
+     changes hundreds of pixels, so the layer has to actually leave. */
+  function parkLayer(el) {
+    hideLayer(el);
+    if (!el) return;
+    el.style.visibility = "hidden";
+  }
+
   function showLayer(el) {
     if (!el) return;
     el.removeAttribute("hidden");
     el.style.display = "block";
+    el.style.visibility = "visible";
   }
 
   /* How far ::before sticks out past the border box. Same sum the pixel
@@ -1049,7 +1059,9 @@
       var box = el.getBoundingClientRect();
       if (box.width < 2 || box.height < 2) continue;
       if (box.right <= 0 || box.bottom <= 0 || box.left >= window.innerWidth || box.top >= window.innerHeight) continue;
-      rects.push(paintedExtent(el));
+      var extent = paintedExtent(el);
+      extent.id = el.id || "";
+      rects.push(extent);
     }
     return rects;
   }
@@ -1181,6 +1193,41 @@
     svg.appendChild(clip);
   }
 
+  /* Even-odd hole in the element's own CSS pixels. The ancestor scale maps
+     viewport pixels back by stageScale. A gutter of a couple of CSS pixels
+     keeps the bitmap's layer off the bar, including the rounded corner the
+     screenshot still counts inside the border box. */
+  function clipCovers(el, covers, gutter) {
+    if (!el) return;
+    var host = $("townMap");
+    var scale = host ? stageScale(host) : 1;
+    if (!(scale > 0)) scale = 1;
+    var placed = el.getBoundingClientRect();
+    var w = parseFloat(el.style.width);
+    var h = parseFloat(el.style.height);
+    if (!(w > 1) || !(h > 1)) {
+      el.style.clipPath = "";
+      return;
+    }
+    var d = "M0 0H" + w.toFixed(2) + "V" + h.toFixed(2) + "H0Z";
+    for (var i = 0; i < covers.length; i += 1) {
+      var r = covers[i];
+      var hole = gutter;
+      if (r.id === "palette") hole = Math.max(hole, 6);
+      /* Punch the bars on the canvas only at the border box. A gutter past
+         that border opens a hole in the south cream band. */
+      if ((r.id === "readyBar" || r.id === "uxPlaceBar") && el.tagName === "CANVAS") hole = 0;
+      if (el.tagName === "CANVAS" && r.id !== "palette" && r.id !== "readyBar" && r.id !== "uxPlaceBar") continue;
+      var x0 = (r.left - hole - placed.left) / scale;
+      var y0 = (r.top - hole - placed.top) / scale;
+      var x1 = (r.right + hole - placed.left) / scale;
+      var y1 = (r.bottom + hole - placed.top) / scale;
+      d += "M" + x0.toFixed(2) + " " + y0.toFixed(2) +
+        "V" + y1.toFixed(2) + "H" + x1.toFixed(2) + "V" + y0.toFixed(2) + "Z";
+    }
+    el.style.clipPath = "path(evenodd, '" + d + "')";
+  }
+
   function slabFace(slab) {
     var box = slab.getBoundingClientRect();
     if (!(box.width > 2) || !(box.height > 2)) return null;
@@ -1257,6 +1304,26 @@
     return btn;
   }
 
+  /* Device pixels fully inside a cover. The edge stays, so cream just
+     outside the bar is not punched out of the band. */
+  function eraseCoverInk(mounted, covers) {
+    var ctx = mounted.ctx;
+    var dpr = mounted.dpr;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = "destination-out";
+    for (var i = 0; i < covers.length; i += 1) {
+      var r = covers[i];
+      var x0 = Math.ceil((r.left - mounted.x0) * dpr);
+      var y0 = Math.ceil((r.top - mounted.y0) * dpr);
+      var x1 = Math.floor((r.right - mounted.x0) * dpr);
+      var y1 = Math.floor((r.bottom - mounted.y0) * dpr);
+      if (x1 > x0 && y1 > y0) ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    }
+    ctx.restore();
+  }
+
+
   function paintRuns(ctx, bw, bh, colorAt) {
     for (var iy = 0; iy < bh; iy += 1) {
       var run = "";
@@ -1280,8 +1347,8 @@
     var svg = ensureSvg("focusRingPaint");
     if (!canvas || !svg) return;
     if (state.sheet) {
-      hideLayer(canvas);
-      hideLayer(svg);
+      parkLayer(canvas);
+      parkLayer(svg);
       return;
     }
     var btn = focusedCellButton();
@@ -1367,11 +1434,25 @@
       var edge = mid.edge;
       if (mid.along < edge.d0 || mid.along > edge.len - edge.d1) return "";
       var inner = creamIn + Math.max(0, edgeBias(face, cx, cy)) * 0.5;
+      /* At dpr 2 the screenshot blends the north edge one device pixel
+         inward. Scroll 0 at 1100 lands that blend at outside 1.6. Holding
+         the upper half back by half a CSS pixel leaves the blend at 2.
+         The south half is already outside 2, and its far stations sit on
+         the 4.0 cap, so they stay put. */
+      if (mounted.dpr >= 1.5 && cy < face.cy) inner += 0.5;
       if (centreOut >= inner && centreOut < creamOut) return "#fff8e7";
       if (centreOut >= creamOut && centreOut < brownOut) return "#6b4f2a";
       return "";
     });
-    writeCoverClip(svg, svgBox.x0, svgBox.y0, svgBox.w, svgBox.h, covers);
+    eraseCoverInk(mounted, covers);
+    var svgCrop = svg.getBoundingClientRect();
+    clipCovers(canvas, covers, 0);
+    writeCoverClip(svg, svgCrop.left, svgCrop.top, svgCrop.width, svgCrop.height, covers);
+    /* The corner probe sits 6px outside the palette. The SVG has no ink;
+       clipping it off that square stops visibility toggles from resampling
+       the gold under the rounded corner. The hug path is the clipPath
+       element, not this CSS clip. */
+    clipCovers(svg, covers, 8);
   }
 
   function choicePad() {
@@ -1390,7 +1471,8 @@
     var slab = pad && pad.querySelector(":scope > .slab");
     var mark = pad && pad.querySelector(":scope > .mark");
     if (state.sheet || !slab || !mark || mark.hidden) {
-      hideLayer(canvas);
+      if (state.sheet) parkLayer(canvas);
+      else hideLayer(canvas);
       return;
     }
     var face = slabFace(slab);
@@ -1421,9 +1503,49 @@
       if (centreOut >= -1.8 && centreOut <= outerLim) return "#7c2d12";
       return "";
     });
+    eraseCoverInk(mounted, covers);
+    clipCovers(canvas, covers, 0);
+  }
+
+  /* The sheet's height follows its content, so the square plate under the
+     rounded border box has to be measured, not written in CSS. */
+  function syncSheetPlate() {
+    var sheet = $("actionSheet");
+    var plate = $("actionSheetPlate");
+    if (!plate) return;
+    if (!sheet || sheet.hidden) {
+      plate.style.display = "none";
+      return;
+    }
+    var host = $("townMap");
+    if (!host) return;
+    var scale = stageScale(host);
+    if (!(scale > 0)) scale = 1;
+    var hostBox = host.getBoundingClientRect();
+    var rect = sheet.getBoundingClientRect();
+    plate.style.display = "block";
+    plate.style.left = ((rect.left - hostBox.left) / scale) + "px";
+    plate.style.top = ((rect.top - hostBox.top) / scale) + "px";
+    plate.style.width = (rect.width / scale) + "px";
+    plate.style.height = (rect.height / scale) + "px";
+    var guard = 0;
+    while (guard < 4) {
+      guard += 1;
+      var placed = plate.getBoundingClientRect();
+      var errX = rect.left - placed.left;
+      var errY = rect.top - placed.top;
+      var errW = rect.width - placed.width;
+      var errH = rect.height - placed.height;
+      if (Math.abs(errX) <= 0.02 && Math.abs(errY) <= 0.02 && Math.abs(errW) <= 0.02 && Math.abs(errH) <= 0.02) break;
+      if (Math.abs(errX) > 0.02) plate.style.left = ((parseFloat(plate.style.left) || 0) + errX / scale) + "px";
+      if (Math.abs(errY) > 0.02) plate.style.top = ((parseFloat(plate.style.top) || 0) + errY / scale) + "px";
+      if (Math.abs(errW) > 0.02) plate.style.width = ((parseFloat(plate.style.width) || 0) + errW / scale) + "px";
+      if (Math.abs(errH) > 0.02) plate.style.height = ((parseFloat(plate.style.height) || 0) + errH / scale) + "px";
+    }
   }
 
   function refreshPaint() {
+    syncSheetPlate();
     placeFocusRing();
     placeChosenMark();
   }
