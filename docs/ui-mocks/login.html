@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登入 · 開羅小鎮 Kids Town（靜態設計稿）</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #3a2616;
+      --ink-soft: #5c4030;
+      --paper: #fff8ee;
+      --paper-deep: #fff3e0;
+      --line: #e4c89a;
+      --oak: #8a552c;
+      --oak-deep: #5a341c;
+      --honey: #f0d7a4;
+      --gold: #c4922a;
+      --green: #187a34;
+      --green-deep: #14532d;
+      --focus: #143e78;
+      --focus-halo: #fff6d0;
+      --font: "PingFang TC", "Noto Sans TC", "Noto Sans CJK TC", "Microsoft JhengHei", "WenQuanYi Micro Hei", "Droid Sans Fallback", sans-serif;
+    }
+
+    *,
+    *::before,
+    *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+    }
+
+    body {
+      min-height: 100%;
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      background: #140e0b;
+      color: var(--ink);
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.4;
+    }
+
+    #fit {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stage {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1280px;
+      height: 720px;
+      transform-origin: top left;
+      padding: 12px 18px 14px;
+      background-color: #a86b38;
+      background-image:
+        radial-gradient(90% 55% at 50% -8%, rgba(255, 226, 176, 0.55), transparent 58%),
+        radial-gradient(70% 45% at 50% 115%, rgba(48, 22, 8, 0.28), transparent 55%),
+        repeating-linear-gradient(
+          90deg,
+          rgba(255, 244, 224, 0.05) 0 18px,
+          rgba(70, 34, 14, 0.05) 18px 20px,
+          rgba(255, 244, 224, 0.03) 20px 92px,
+          rgba(48, 22, 10, 0.06) 92px 94px
+        ),
+        linear-gradient(180deg, #d59a58 0%, #b4763c 42%, #8d552b 100%);
+      box-shadow: inset 0 0 0 8px #4e2e18, inset 0 0 0 11px #efd092;
+    }
+
+    .frame {
+      height: 100%;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: minmax(220px, 1fr) auto auto 56px;
+      gap: 8px;
+    }
+
+    .hero {
+      position: relative;
+      margin: 0;
+      min-height: 0;
+      height: 100%;
+      border-radius: 26px;
+      padding: 8px;
+      background: linear-gradient(180deg, #f3d9a6 0%, #d7ae68 14%, #a56b38 48%, #734420 100%);
+      box-shadow:
+        inset 0 0 0 2px #f8e7c0,
+        0 7px 0 #5a341c,
+        0 16px 22px rgba(40, 18, 6, 0.28);
+    }
+
+    .hero img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 40%;
+      border-radius: 16px;
+      display: block;
+      background: #6b4428;
+    }
+
+    .hero figcaption {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .pill {
+      background: #fff6e8;
+      color: var(--ink);
+      border: 2px solid #e4c48a;
+      border-radius: 999px;
+      padding: 4px 12px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.3;
+    }
+
+    .sheet {
+      width: min(920px, 100%);
+      justify-self: center;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 12px 16px 8px;
+      background: var(--paper);
+      border: 3px solid var(--line);
+      border-radius: 28px;
+      box-shadow: 0 8px 0 rgba(74, 42, 20, 0.18);
+    }
+
+    .sheet:focus { outline: none; }
+
+    .sheet:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+      box-shadow: 0 0 0 6px var(--focus-halo), 0 8px 0 rgba(74, 42, 20, 0.18);
+    }
+
+    .titleblock {
+      width: min(920px, 100%);
+      justify-self: center;
+      text-align: center;
+      padding: 6px 18px 8px;
+      background: var(--paper);
+      border: 3px solid var(--line);
+      border-radius: 24px;
+      box-shadow: 0 6px 0 rgba(74, 42, 20, 0.16);
+    }
+
+    .titleblock h1 {
+      margin: 0;
+      color: #6b3a16;
+      font-weight: 800;
+    }
+
+    .en {
+      display: block;
+      font-size: 40px;
+      line-height: 42px;
+      letter-spacing: 0.045em;
+    }
+
+    .zh {
+      display: block;
+      margin-top: 1px;
+      color: #8a5424;
+      font-size: 22px;
+      line-height: 26px;
+      letter-spacing: 0.12em;
+    }
+
+    .slogan {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin: 2px 0 0;
+      color: var(--ink-soft);
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 22px;
+    }
+
+    .panel {
+      flex: 0 0 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 8px;
+    }
+
+    .login-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 240px;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .login-row .fields { display: contents; }
+
+    .login-row .btn-primary {
+      height: auto;
+      min-height: 56px;
+      white-space: nowrap;
+    }
+
+    .kicker {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 26px;
+    }
+
+    .kicker h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 24px;
+      color: var(--ink);
+    }
+
+    .kicker p {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 15px;
+      line-height: 22px;
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 56px;
+      padding: 4px 12px 6px;
+      background: #fffdf9;
+      border: 2px solid #c9a36b;
+      border-radius: 16px;
+      cursor: text;
+    }
+
+    .field span {
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 16px;
+      color: #6b4a2c;
+    }
+
+    .field input {
+      width: 100%;
+      height: 28px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      font-size: 18px;
+      line-height: 28px;
+      outline: none;
+    }
+
+    .field input::placeholder { color: #6f5136; opacity: 1; }
+
+    .field:focus-within {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+      box-shadow: 0 0 0 6px var(--focus-halo);
+      border-color: #8a6230;
+    }
+
+    .btn-primary {
+      min-height: 56px;
+      height: 56px;
+      border-radius: 16px;
+      border: 3px solid var(--green-deep);
+      background: var(--green);
+      color: #f4fff6;
+      font: inherit;
+      padding: 0 14px;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 0 var(--green-deep);
+    }
+
+    .btn-primary:hover { background: #146b30; }
+
+    .btn-primary:active {
+      transform: translateY(2px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 0 var(--green-deep);
+    }
+
+    .btn-primary:focus { outline: none; }
+
+    .btn-primary:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+      box-shadow: 0 0 0 6px var(--focus-halo), inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 4px 0 var(--green-deep);
+    }
+
+    .status {
+      min-height: 22px;
+      margin: 0;
+      color: #7a3e12;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 22px;
+      text-align: center;
+    }
+
+    .actions {
+      width: min(920px, 100%);
+      justify-self: center;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      min-width: 0;
+      min-height: 56px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .action {
+      --accent: var(--gold);
+      position: relative;
+      flex: 1 1 0;
+      min-width: 0;
+      min-height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 12px 0 16px;
+      background: #f3ddc0;
+      color: var(--ink);
+      border: 2px solid #6b4424;
+      border-radius: 18px;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+      cursor: pointer;
+      box-shadow: inset 6px 0 0 var(--accent), 0 4px 0 #6b4424;
+    }
+
+    .action-kid { --accent: #1f8a3c; }
+    .action-parent { --accent: #c4922a; }
+    .action-admin { --accent: #1f4f86; }
+    .action-register { --accent: #b85a32; }
+
+    .action svg { flex: 0 0 auto; display: block; }
+
+    .action input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .action:has(input:checked) {
+      background: var(--paper);
+      box-shadow:
+        inset 6px 0 0 var(--accent),
+        inset 0 0 0 2px var(--accent),
+        0 4px 0 #6b4424;
+    }
+
+    .action:has(input:checked) .name::before {
+      content: "✓ ";
+      color: var(--accent);
+    }
+
+    .action:hover { background: #fff1dc; }
+
+    .action:active {
+      transform: translateY(2px);
+      box-shadow: inset 6px 0 0 var(--accent), 0 2px 0 #6b4424;
+    }
+
+    .action:has(input:focus-visible) {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+      box-shadow: 0 0 0 6px var(--focus-halo), inset 6px 0 0 var(--accent), 0 4px 0 #6b4424;
+    }
+
+    .skip {
+      position: absolute;
+      left: 18px;
+      top: 12px;
+      z-index: 5;
+      transform: translateY(-160%);
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--paper);
+      color: var(--ink);
+      border-radius: 12px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    .skip:focus,
+    .skip:focus-visible {
+      transform: none;
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+      box-shadow: 0 0 0 6px var(--focus-halo);
+    }
+
+    .vh {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    [hidden] { display: none !important; }
+
+    input:-webkit-autofill {
+      -webkit-box-shadow: 0 0 0 1000px #fffdf9 inset;
+      -webkit-text-fill-color: var(--ink);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .action:active,
+      .btn-primary:active { transform: none; }
+    }
+
+    @media (forced-colors: active) {
+      .stage,
+      .sheet,
+      .titleblock,
+      .hero,
+      .field,
+      .action,
+      .btn-primary,
+      .pill {
+        forced-color-adjust: auto;
+        background: Canvas;
+        color: CanvasText;
+        border-color: CanvasText;
+        box-shadow: none;
+      }
+
+      .btn-primary { background: ButtonFace; color: ButtonText; }
+
+      .field:focus-within,
+      .btn-primary:focus-visible,
+      .action:has(input:focus-visible),
+      .sheet:focus-visible,
+      .skip:focus-visible {
+        outline: 3px solid Highlight;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="fit">
+    <div class="stage" id="stage">
+      <a class="skip" href="#sheet">跳至登入表單</a>
+      <p class="vh">靜態設計稿。此畫面不會連線，也不會登入。</p>
+      <div class="frame">
+        <figure class="hero">
+          <img
+            src="../../mocks/ui-direction/art/01-guild-quest-board.png"
+            width="1280"
+            height="720"
+            alt="溫暖木屋公會大廳，中央為奶油紙色的任務板。"
+            draggable="false">
+          <figcaption aria-hidden="true">
+            <span class="pill">概念圖 · 公會任務板</span>
+            <span class="pill">靜態設計稿</span>
+          </figcaption>
+        </figure>
+
+        <header class="titleblock">
+          <h1>
+            <span class="en">Kids Town</span>
+            <span class="zh">開羅小鎮</span>
+          </h1>
+          <p class="slogan">
+            <svg class="leaf" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M5 19c8-1 12-8 13-14-6 1-13 5-14 13 3-3 6-4 9-4" fill="none" stroke="#2f8f4a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            歡迎回到開心的小鎮
+          </p>
+        </header>
+
+        <div class="sheet" id="sheet" tabindex="-1">
+          <form class="panel" id="form-kid" data-panel="kid" aria-labelledby="kid-heading">
+            <div class="kicker">
+              <h2 id="kid-heading">孩子登入</h2>
+              <p id="kid-lead">請輸入登入名稱與 PIN。不使用密碼。</p>
+            </div>
+            <div class="login-row">
+              <div class="fields">
+                <label class="field">
+                  <span>登入名稱</span>
+                  <input id="kid-username" name="username" type="text" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="英文字母或數字" required aria-describedby="kid-lead kid-status">
+                </label>
+                <label class="field">
+                  <span>PIN</span>
+                  <input id="kid-pin" name="pin" type="password" minlength="4" maxlength="30" autocomplete="off" placeholder="至少四個字元" required aria-describedby="kid-lead kid-status">
+                </label>
+              </div>
+              <button class="btn-primary" type="submit">進入小鎮</button>
+            </div>
+            <p class="status" id="kid-status" data-status role="status"></p>
+          </form>
+
+          <form class="panel" id="form-parent" data-panel="parent" hidden aria-labelledby="parent-heading">
+            <div class="kicker">
+              <h2 id="parent-heading">家長登入</h2>
+              <p id="parent-lead">請輸入登入名稱與密碼。</p>
+            </div>
+            <div class="login-row">
+              <div class="fields">
+                <label class="field">
+                  <span>登入名稱</span>
+                  <input id="parent-username" name="username" type="text" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="英文字母或數字" required aria-describedby="parent-lead parent-status">
+                </label>
+                <label class="field">
+                  <span>密碼</span>
+                  <input id="parent-password" name="password" type="password" maxlength="30" autocomplete="current-password" placeholder="請輸入密碼" required aria-describedby="parent-lead parent-status">
+                </label>
+              </div>
+              <button class="btn-primary" type="submit">以家長身份登入</button>
+            </div>
+            <p class="status" id="parent-status" data-status role="status"></p>
+          </form>
+
+          <form class="panel" id="form-admin" data-panel="admin" hidden aria-labelledby="admin-heading">
+            <div class="kicker">
+              <h2 id="admin-heading">管理員登入</h2>
+              <p id="admin-lead">請使用已獲授權的帳戶。不設預設密碼。</p>
+            </div>
+            <div class="login-row">
+              <div class="fields">
+                <label class="field">
+                  <span>管理員名稱</span>
+                  <input id="admin-username" name="username" type="text" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="管理員名稱" required aria-describedby="admin-lead admin-status">
+                </label>
+                <label class="field">
+                  <span>密碼</span>
+                  <input id="admin-password" name="password" type="password" maxlength="30" autocomplete="current-password" placeholder="請輸入密碼" required aria-describedby="admin-lead admin-status">
+                </label>
+              </div>
+              <button class="btn-primary" type="submit">以管理員身份登入</button>
+            </div>
+            <p class="status" id="admin-status" data-status role="status"></p>
+          </form>
+
+          <form class="panel" id="form-register" data-panel="register" hidden aria-labelledby="register-heading">
+            <div class="kicker">
+              <h2 id="register-heading">註冊家長帳戶</h2>
+              <p id="register-lead">建立後可管理孩子的登入。密碼至少八個字元。</p>
+            </div>
+            <div class="fields">
+              <label class="field">
+                <span>用戶名稱</span>
+                <input id="reg-username" name="username" type="text" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="英文字母或數字" required aria-describedby="register-lead register-status">
+              </label>
+              <label class="field">
+                <span>密碼</span>
+                <input id="reg-password" name="password" type="password" minlength="8" maxlength="30" autocomplete="new-password" placeholder="至少八個字元" required aria-describedby="register-lead register-status">
+              </label>
+              <label class="field">
+                <span>稱呼</span>
+                <input id="reg-name" name="name" type="text" maxlength="30" autocomplete="name" placeholder="例如：陳媽媽" required aria-describedby="register-lead register-status">
+              </label>
+              <label class="field">
+                <span>電郵（可選）</span>
+                <input id="reg-email" name="email" type="email" maxlength="60" autocomplete="email" placeholder="可以留空" aria-describedby="register-lead register-status">
+              </label>
+            </div>
+            <button class="btn-primary" type="submit">建立帳戶</button>
+            <p class="status" id="register-status" data-status role="status"></p>
+          </form>
+        </div>
+
+        <fieldset class="actions">
+          <legend class="vh">登入方式</legend>
+          <label class="action action-kid">
+            <input type="radio" name="gate" value="kid" checked>
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="3.1" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6.2 19.2c.9-3.3 2.9-5 5.8-5s4.9 1.7 5.8 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <span class="name">孩子登入</span>
+          </label>
+          <label class="action action-parent">
+            <input type="radio" name="gate" value="parent">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="9" cy="8" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="9" r="2.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4.8 19c.7-2.8 2.2-4.2 4.4-4.2 2.3 0 3.8 1.4 4.5 4.2M13.2 15.2c.8-1.5 2-2.3 3.4-2.3 1.8 0 3 1.2 3.6 3.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <span class="name">家長登入</span>
+          </label>
+          <label class="action action-admin">
+            <input type="radio" name="gate" value="admin">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="8" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 12h9l-2 2.2 2 2.2h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="name">管理員</span>
+          </label>
+          <label class="action action-register">
+            <input type="radio" name="gate" value="register">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <span class="name">註冊</span>
+          </label>
+        </fieldset>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var panels = document.querySelectorAll("[data-panel]");
+      var radios = document.querySelectorAll('input[name="gate"]');
+      var fit = document.getElementById("fit");
+      var stage = document.getElementById("stage");
+
+      function show(mode) {
+        panels.forEach(function (panel) {
+          panel.hidden = panel.getAttribute("data-panel") !== mode;
+        });
+      }
+
+      radios.forEach(function (radio) {
+        radio.addEventListener("change", function () {
+          if (radio.checked) show(radio.value);
+        });
+      });
+
+      var preset = (location.hash || "").replace(/^#/, "");
+      if (preset === "kid" || preset === "parent" || preset === "admin" || preset === "register") {
+        radios.forEach(function (radio) {
+          radio.checked = radio.value === preset;
+        });
+        show(preset);
+      }
+
+      document.querySelectorAll("form").forEach(function (form) {
+        form.addEventListener("submit", function (event) {
+          event.preventDefault();
+          var status = form.querySelector("[data-status]");
+          if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+          }
+          status.textContent = "此為靜態設計稿，不會驗證身份，也不會登入。";
+        });
+      });
+
+      function layout() {
+        var vw = document.documentElement.clientWidth;
+        var vh = document.documentElement.clientHeight;
+        var scale = Math.min(vw / 1280, vh / 720);
+        if (!isFinite(scale) || scale <= 0) scale = 1;
+        fit.style.width = (1280 * scale) + "px";
+        fit.style.height = (720 * scale) + "px";
+        stage.style.transform = "scale(" + scale + ")";
+      }
+
+      layout();
+      window.addEventListener("resize", layout);
+    }());
+  </script>
+</body>
+</html>
