@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kids Town UI refresh · mock 圖庫</title>
+  <link rel="stylesheet" href="mock.css">
+  <style>
+    .gallery {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+    .gallery h1 {
+      font-family: var(--font-display);
+      font-size: 32px;
+    }
+    .gallery .lede {
+      font-size: 16px;
+      color: var(--color-muted);
+      max-width: 640px;
+      margin: 8px 0 28px;
+    }
+    .pair {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    .preview {
+      background: #fff;
+      border: 3px solid #fff;
+      border-radius: 28px;
+      padding: 16px;
+      box-shadow: var(--shadow-sticker);
+    }
+    .preview h2 {
+      font-family: var(--font-display);
+      font-size: 20px;
+      margin-bottom: 6px;
+    }
+    .preview iframe {
+      width: 390px;
+      height: 844px;
+      border: 0;
+      transform: scale(0.72);
+      transform-origin: top left;
+      pointer-events: auto;
+    }
+    .frame-clip {
+      width: 281px;
+      height: 608px;
+      overflow: hidden;
+      margin: 12px auto;
+    }
+    .notes {
+      margin-top: 32px;
+      background: #fff;
+      border-radius: 24px;
+      padding: 20px 22px;
+      border: 3px solid #fff;
+      box-shadow: var(--shadow-sticker);
+    }
+    .notes h2 { font-family: var(--font-display); margin-bottom: 8px; }
+    .notes ul { padding-left: 1.2em; }
+    .notes li { margin: 6px 0; }
+    .warn {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--color-pending-soft);
+      font-weight: 800;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="gallery">
+    <h1>Kids Town · 棉花糖 UI 試作</h1>
+    <p class="lede">
+      只係視覺 mock，<strong>未接線</strong>到 <code>index.html</code> / <code>backend_v2.py</code>。
+      方向：更可愛、更大按鈕、分清「待家長確認」同「已入帳」。
+    </p>
+    <div class="pair">
+      <article class="preview">
+        <h2><a href="01-kid-tasks-mobile.html">01 小朋友任務</a></h2>
+        <p class="lede" style="margin:0">底欄任務／城鎮／商店／探險／我的；待確認 vs 已入帳。</p>
+        <div class="frame-clip"><iframe title="小朋友任務 mock" src="01-kid-tasks-mobile.html"></iframe></div>
+      </article>
+      <article class="preview">
+        <h2><a href="02-parent-approval-mobile.html">02 家長蓋章</a></h2>
+        <p class="lede" style="margin:0">批准／拒絕+原因；友善空狀態。切換「全部批完」可睇空畫面。</p>
+        <div class="frame-clip"><iframe title="家長蓋章 mock" src="02-parent-approval-mobile.html"></iframe></div>
+      </article>
+    </div>
+    <section class="notes">
+      <h2>對而家生產 UI 嘅改變（視覺）</h2>
+      <ul>
+        <li><strong>而家：</strong>橙紅 sticky header、emoji 為主、待確認只係 11px 黃字夾喺 meta；完成卡灰掉，分唔清「等確認」同「已入帳」。</li>
+        <li><strong>試作：</strong>待確認有彈跳徽章 + 灰色金幣預覽；已入帳有慶祝條同彩紙，狀態一眼分到。</li>
+        <li><strong>而家：</strong>分頁喺漢堡選單、emoji 細掣；<code>user-scalable=no</code>。</li>
+        <li><strong>試作：</strong>底欄 ≥44px 點擊區、插畫 SVG + 中文標籤；viewport 准放大。</li>
+        <li><strong>而家：</strong>家長批核係管理頁入面 ✅／✖️ 圖示掣。</li>
+        <li><strong>試作：</strong>蓋章站獨立畫面、大粒「蓋章入帳」、拒絕要揀／寫原因、空狀態有吉祥物。</li>
+      </ul>
+      <p class="warn">呢個資料夾唔改遊戲邏輯 · 只供設計討論</p>
+    </section>
+  </div>
+</body>
+</html>
