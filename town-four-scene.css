@@ -160,6 +160,43 @@ body.kt-artstage #tab-town .mp { position: relative; }
   color: transparent;
   cursor: pointer;
   pointer-events: auto;
+  outline: none;
+}
+
+/* Geometry only. Opacity 0 so the dashes are not resampled onto the map.
+   The visible ring is #focusRingLift, one device pixel at a time. */
+#townMap .cell-btn:focus-visible::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: var(--ring-x, 0px);
+  top: var(--ring-y, 0px);
+  width: var(--ring-w, 0px);
+  height: var(--ring-h, 0px);
+  pointer-events: none;
+  background-image: var(--ring-image);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  opacity: 0;
+}
+
+#focusRingPaint,
+#focusRingLift,
+#chosenMarkPaint {
+  position: absolute;
+  pointer-events: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+#focusRingPaint,
+#focusRingLift {
+  z-index: 9;
+}
+
+#chosenMarkPaint {
+  z-index: 7;
 }
 
 #townMap .badge {
@@ -247,7 +284,28 @@ body.kt-artstage #tab-town .mp { position: relative; }
   padding: 8px;
   border: 3px solid var(--wood);
   border-radius: 16px;
-  background: rgba(250, 246, 239, 0.97);
+  background: #faf6ef;
+  /* Own layer, so a focus ring elsewhere does not resample the icons. */
+  isolation: isolate;
+}
+
+/* Sibling of the rounded panel, same border box, no radius. The panel's
+   own background is clipped to the radius, so the screenshot's corner
+   cutouts would otherwise show the map. */
+#palettePlate {
+  position: absolute;
+  z-index: 19;
+  left: 8px;
+  top: 64px;
+  bottom: 78px;
+  width: 236px;
+  background: #faf6ef;
+  pointer-events: none;
+  display: none;
+}
+
+#townMap:has(#palette:not([hidden])) #palettePlate {
+  display: block;
 }
 
 #townMap .palette h2 {
@@ -305,7 +363,25 @@ body.kt-artstage #tab-town .mp { position: relative; }
   padding: 6px;
   border: 3px solid var(--wood);
   border-radius: 16px;
-  background: rgba(250, 246, 239, 0.98);
+  background: #faf6ef;
+  isolation: isolate;
+}
+
+#placeBarPlate {
+  position: absolute;
+  z-index: 29;
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  height: 64px;
+  background: #faf6ef;
+  pointer-events: none;
+  display: none;
+}
+
+#townMap:has(#readyBar:not([hidden])) #placeBarPlate,
+#townMap:has(#uxPlaceBar:not([hidden])) #placeBarPlate {
+  display: block;
 }
 
 #townMap .place-bar p {
@@ -317,6 +393,14 @@ body.kt-artstage #tab-town .mp { position: relative; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+#townMap .cta,
+#townMap .place-bar p,
+#townMap .place-bar button {
+  /* A ring canvas that overlaps the bar resamples this text. A layer of
+     its own keeps the glyphs stable. */
+  transform: translateZ(0);
 }
 
 #townMap .place-bar button {
@@ -381,6 +465,17 @@ body.kt-artstage #tab-town .mp { position: relative; }
     inset 0 0 0 3px rgba(92, 58, 32, .55),
     0 8px 0 #2a180e,
     0 16px 22px rgba(20, 10, 4, .38);
+  isolation: isolate;
+}
+
+/* Same border box as the sheet, square, under the sheet. Height follows
+   the sheet because the panel is content-sized; see syncSheetPlate. */
+#actionSheetPlate {
+  position: absolute;
+  z-index: 31;
+  background: #6e452b;
+  pointer-events: none;
+  display: none;
 }
 
 #townMap .action-sheet::before {

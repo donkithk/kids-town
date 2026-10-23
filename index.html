@@ -1958,6 +1958,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
       </div>
       <div class="palette-grid" id="paletteGrid"></div>
     </aside>
+    <div id="palettePlate" aria-hidden="true"></div>
     <div class="place-bar" id="readyBar" hidden>
       <button id="btnUxBack" type="button">返回地圖</button>
       <p id="readyStatus">請點選金色空地，或打開清單選擇要興建的建築物。</p>
@@ -1968,6 +1969,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
       <p id="placeStatus">按「確定放置」後才扣除資源；取消不會扣除。</p>
       <button id="btnUxConfirm" type="button" disabled>確定放置</button>
     </div>
+    <div id="placeBarPlate" aria-hidden="true"></div>
     <section class="action-sheet" id="actionSheet" hidden aria-label="升級或打開功能">
       <img class="sheet-art" id="sheetArt" alt="">
       <div>
@@ -1984,6 +1986,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
       </div>
       <button class="btn-close-sheet" id="btnCloseSheet" type="button">返去地圖</button>
     </section>
+    <div id="actionSheetPlate" aria-hidden="true"></div>
   </section>
   <div id="townCanvasWrapper"
        ontouchstart="touchStart(event)"
