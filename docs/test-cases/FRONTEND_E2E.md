@@ -6,7 +6,9 @@
 > **Skip rule**: skip **only** if Playwright / Chromium cannot launch; reason must tell the operator to run `python -m playwright install chromium`.  
 > **Install**: see [`README.md`](../../README.md) and [`docs/TDD_PROCESS.md`](../TDD_PROCESS.md) § frontend.
 
-Status map after a run: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).  
+Status map after a run: [`FRONTEND_E2E_STATUS.md`](FRONTEND_E2E_STATUS.md).
+
+公會歡迎登入（設計稿 PR #67 tip `03f1142`，`docs/ui-mocks/login.html`）：[`LOGIN_GUILD.md`](LOGIN_GUILD.md)，結果 [`LOGIN_GUILD_STATUS.md`](LOGIN_GUILD_STATUS.md)。篩選 `python -m pytest tests/test_login_guild_e2e.py -q --tb=line`。呢組對住而家 main 嘅橙色登入卡留紅。唔改產品，亦唔改建築／入倉。  
 Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01`、`TC-FE-PLACE-BUILD-01`；(B) [`MANUAL_B_CHECKLIST.md`](MANUAL_B_CHECKLIST.md).
 
 四場景起屋（設計稿 `3b4671d`／PR #27，**唔好 merge #27**）: `TC-FE-TOWN-UX-01`…`05`、`TC-FE-TOWN-FX-01`／`02`、`TC-FE-TOWN-HIT-01`…`03`、`TC-FE-TOWN-MOTION-01`／`02`。呢個 sheet flow 已經喺 main。舊放置條 `TC-FE-PLACE-SHOP-01`／`TC-FE-PLACE-BUILD-01` 仍然有效，唔係呢個 sheet flow 嘅代替。
