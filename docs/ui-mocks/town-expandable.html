@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>城鎮擴建示意 · Kids Town（靜態設計稿）</title>
+  <!--
+    Grid geometry (design mock only; see docs/ui-mocks/town-expandable.md).
+
+    Buildable town stays 8×8. data-col / data-row are 0..7, matching
+    town-four-scene.js COLS / ROWS. Nothing here unlocks a larger playable grid.
+
+    One locked ring surrounds that square, so the drawn frame is 10×10:
+    data-col and data-row run from -1 through 8. A cell is locked when col or
+    row falls outside 0..7 (36 locked, 64 buildable). The product map has no
+    existing outer frame, so a single cell of margin is the whole MVP picture.
+    No second ring.
+
+    Iso metrics match town-four-scene / mocks/town-building-proof:
+    step 84×50, pad 160×158, slab 168×120. The diamond is scaled down inside
+    this 1280×720 stage so the full 10×10 stays on screen.
+
+    Sample buildings are single-cell silhouettes for contrast. They are not
+    footprints, and this page does not place, move, or spend anything.
+    Unlock rules, prices, and APIs are intentionally absent.
+  -->
+  <style>
+    :root {
+      color-scheme: light;
+      --wood: #8b5e3c;
+      --wood-deep: #5c3d28;
+      --wood-plank: #c4a06a;
+      --cream: #faf6ef;
+      --paper: #fff8ee;
+      --ink: #3b2a1a;
+      --ink-soft: #5c4632;
+      --gold: #d4a017;
+      --gold-bright: #f0c14b;
+      --focus: #c45c26;
+      --letterbox: #140e0b;
+      --locked-filter: grayscale(0.78) brightness(0.74) saturate(0.28);
+      --font: "PingFang TC", "Noto Sans TC", "Noto Sans CJK TC", "Microsoft JhengHei", "WenQuanYi Micro Hei", "Droid Sans Fallback", sans-serif;
+    }
+
+    *,
+    *::before,
+    *::after { box-sizing: border-box; }
+
+    html, body { margin: 0; height: 100%; }
+
+    body {
+      min-height: 100%;
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      background: var(--letterbox);
+      color: var(--ink);
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.4;
+    }
+
+    button { font-family: inherit; }
+
+    :focus { outline: none; }
+
+    :focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    @media (forced-colors: active) {
+      :focus-visible { outline: 3px solid Highlight; }
+    }
+
+    #fit { position: relative; overflow: hidden; }
+
+    body.is-native {
+      display: block;
+      overflow: auto;
+    }
+
+    body.is-native #fit {
+      width: 1280px;
+      height: 720px;
+      margin: 24px auto;
+    }
+
+    .stage {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1280px;
+      height: 720px;
+      overflow: hidden;
+      transform-origin: top left;
+      background:
+        repeating-linear-gradient(90deg, rgba(255, 220, 170, 0.05) 0 2px, transparent 2px 18px),
+        linear-gradient(180deg, #6d4b32, var(--wood-deep) 28%, #4e3422);
+    }
+
+    body.is-native .stage {
+      position: relative;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    .skip {
+      position: absolute;
+      left: 12px;
+      top: -48px;
+      z-index: 60;
+      background: var(--cream);
+      color: var(--ink);
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-weight: 800;
+    }
+
+    .skip:focus,
+    .skip:focus-visible { top: 12px; }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .gh {
+      position: absolute;
+      z-index: 20;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 68px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px;
+      background:
+        linear-gradient(180deg, rgba(255, 248, 236, 0.7), rgba(255, 248, 236, 0) 14px),
+        var(--cream);
+      border: 3px solid var(--wood);
+      border-radius: 0 0 18px 18px;
+      box-shadow: 0 4px 12px rgba(58, 38, 22, 0.16);
+    }
+
+    .av {
+      width: 44px;
+      height: 44px;
+      flex: 0 0 44px;
+      border: 2px solid var(--wood);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .av img { width: 100%; height: 100%; display: block; object-fit: cover; }
+
+    .in {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      flex: 0 1 auto;
+    }
+
+    .nm { font-size: 18px; font-weight: 800; white-space: nowrap; }
+    .nm-lv { font-size: 14px; font-weight: 800; color: #7a5b43; white-space: nowrap; }
+
+    .hdr-mid {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .rw {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .xp {
+      height: 10px;
+      flex: 1 1 auto;
+      min-width: 24px;
+      background: #e7d3ae;
+      border: 2px solid #c4a574;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .xf { height: 100%; width: 60%; background: linear-gradient(90deg, #e7b84a, #c4842a); }
+
+    .xp-num { font-size: 13px; font-weight: 800; color: #7a5b43; white-space: nowrap; }
+
+    .hdr-res { display: flex; gap: 6px; align-items: center; }
+
+    .hdr-res > span {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      min-height: 32px;
+      padding: 4px 8px;
+      border: 2px solid #c4a574;
+      border-radius: 999px;
+      background: #fff;
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .chip-gold { border-color: var(--gold) !important; }
+
+    .mb {
+      width: 44px;
+      min-width: 44px;
+      height: 44px;
+      min-height: 44px;
+      flex: 0 0 44px;
+      padding: 0;
+      border: 2px solid var(--wood);
+      border-radius: 14px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .map {
+      --legend-w: 228px;
+      position: absolute;
+      z-index: 1;
+      left: 8px;
+      right: 8px;
+      top: 74px;
+      bottom: 82px;
+      overflow: hidden;
+      border: 5px solid #3b2a1a;
+      border-radius: 18px;
+      background: #7eae52;
+      box-shadow: inset 0 0 0 4px var(--wood-plank), 0 8px 0 rgba(0, 0, 0, 0.12);
+    }
+
+    .meadow {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center 30%;
+      pointer-events: none;
+    }
+
+    .vignette {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      box-shadow: inset 0 0 36px rgba(59, 42, 26, 0.22);
+    }
+
+    .legend {
+      position: absolute;
+      z-index: 8;
+      left: 10px;
+      top: 10px;
+      width: var(--legend-w);
+      margin: 0;
+      padding: 10px 12px 12px;
+      border: 3px solid var(--wood);
+      border-radius: 16px;
+      background: rgba(250, 246, 239, 0.96);
+      box-shadow: 0 6px 0 rgba(92, 61, 40, 0.12);
+    }
+
+    .legend:focus { outline: none; }
+
+    .legend:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
+    }
+
+    .kicker {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+    }
+
+    .legend h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      line-height: 1.3;
+    }
+
+    .key {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .key li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 36px;
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+
+    .swatch {
+      width: 44px;
+      height: 32px;
+      flex: 0 0 44px;
+      position: relative;
+      display: grid;
+      place-items: center;
+    }
+
+    .swatch img {
+      width: 44px;
+      height: 32px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .swatch-locked img { filter: var(--locked-filter); }
+
+    .swatch .lock-icon {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      right: 0;
+      bottom: 0;
+    }
+
+    .legend p {
+      margin: 8px 0 0;
+      color: var(--ink-soft);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .village {
+      --s: 0.48;
+      --step-x: calc(var(--s) * 84px);
+      --step-y: calc(var(--s) * 50px);
+      --pad-w: calc(var(--s) * 160px);
+      --pad-h: calc(var(--s) * 158px);
+      --origin-y: 36px;
+      position: absolute;
+      z-index: 3;
+      left: calc(var(--legend-w) + 18px);
+      right: 8px;
+      top: 8px;
+      bottom: 8px;
+      overflow: hidden;
+    }
+
+    .pad {
+      position: absolute;
+      width: var(--pad-w);
+      height: var(--pad-h);
+      margin: 0;
+      left: calc(50% + (var(--c) - var(--r)) * var(--step-x) - var(--pad-w) / 2);
+      top: calc(var(--origin-y) + (var(--c) + var(--r) + 1) * var(--step-y));
+      pointer-events: none;
+    }
+
+    .pad > .slab,
+    .pad > .mark,
+    .pad > .shade {
+      position: absolute;
+      width: calc(var(--s) * 168px);
+      height: calc(var(--s) * 120px);
+      left: calc(var(--s) * -4px);
+      top: calc(var(--s) * 71px);
+      pointer-events: none;
+    }
+
+    .pad > .slab { z-index: 0; }
+
+    .pad.is-locked > .slab { filter: var(--locked-filter); }
+
+    .pad > .shade {
+      z-index: 1;
+      clip-path: polygon(50% 0, 100% 41.67%, 50% 83.33%, 0 41.67%);
+      background: repeating-linear-gradient(
+        -32deg,
+        transparent 0 6px,
+        rgba(48, 32, 18, 0.2) 6px 7px
+      );
+    }
+
+    .pad > .shadow {
+      position: absolute;
+      z-index: 1;
+      width: calc(var(--s) * 200px);
+      height: calc(var(--s) * 100px);
+      left: calc(var(--s) * -20px);
+      top: calc(var(--s) * 71px);
+      pointer-events: none;
+    }
+
+    .pad > .mark {
+      z-index: 2;
+      opacity: 0;
+    }
+
+    .pad.is-buildable:hover > .mark,
+    .pad.is-buildable:focus-within > .mark { opacity: 0.75; }
+
+    .pad.is-chosen > .mark { opacity: 1; }
+
+    .pad.is-chosen > .sprite {
+      filter: drop-shadow(0 0 3px rgba(212, 160, 23, 0.95));
+    }
+
+    .pad > .sprite {
+      position: absolute;
+      z-index: 3;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 240 / 210;
+      pointer-events: none;
+    }
+
+    .lock-icon { display: block; }
+
+    .pad > .lock-icon {
+      position: absolute;
+      z-index: 4;
+      left: calc(var(--s) * 80px);
+      top: calc(var(--s) * 121px);
+      width: 20px;
+      height: 20px;
+      transform: translate(-50%, -58%);
+      pointer-events: none;
+      filter: drop-shadow(0 1px 0 rgba(255, 248, 236, 0.9));
+    }
+
+    .cell-btn {
+      position: absolute;
+      z-index: 5;
+      left: calc(var(--s) * -4px);
+      top: calc(var(--s) * 71px);
+      width: calc(var(--s) * 168px);
+      height: calc(var(--s) * 120px);
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: transparent;
+      clip-path: polygon(50% 0, 100% 41.67%, 50% 83.33%, 0 41.67%);
+      cursor: pointer;
+      pointer-events: auto;
+    }
+
+    .pad.is-locked > .cell-btn { cursor: not-allowed; }
+
+    .cell-btn:focus { outline: none; }
+
+    .cell-btn:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 1px;
+    }
+
+    .toast {
+      position: absolute;
+      z-index: 12;
+      top: 10px;
+      left: calc(var(--legend-w) + 28px);
+      right: 16px;
+      width: fit-content;
+      max-width: calc(100% - var(--legend-w) - 48px);
+      margin-inline: auto;
+      padding: 7px 14px;
+      border: 3px solid var(--wood);
+      border-radius: 999px;
+      background: var(--cream);
+      color: var(--ink);
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1.35;
+      text-align: center;
+      box-shadow: 0 6px 0 rgba(92, 61, 40, 0.12);
+      pointer-events: none;
+    }
+
+    .toast[hidden] { display: none !important; }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .toast:not([hidden]) { animation: toast-in 160ms ease; }
+    }
+
+    @keyframes toast-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .kt-footer {
+      position: absolute;
+      z-index: 20;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 76px;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin: 0;
+      padding: 6px 14px 8px;
+      background:
+        linear-gradient(180deg, rgba(255, 248, 236, 0.55), rgba(255, 248, 236, 0) 16px),
+        repeating-linear-gradient(90deg, #faf6ef 0 14px, #f3e6d0 14px 15px),
+        #faf6ef;
+      border: 3px solid var(--wood);
+      border-bottom: 0;
+      border-radius: 18px 18px 0 0;
+      box-shadow: inset 0 1px 0 #fff8ec, 0 -6px 14px rgba(59, 42, 26, 0.16);
+    }
+
+    .footer-tab {
+      min-width: 44px;
+      min-height: 44px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      padding: 2px 4px;
+      border: 4px solid transparent;
+      border-radius: 16px;
+      background: transparent;
+      color: #7a5b43;
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.1;
+      cursor: pointer;
+    }
+
+    .footer-tab img {
+      width: 28px;
+      height: 28px;
+      display: block;
+      object-fit: contain;
+    }
+
+    .footer-tab[aria-current="page"] {
+      color: var(--ink);
+      font-weight: 800;
+      background:
+        linear-gradient(180deg, #fff6d2, #ffe3a0) padding-box,
+        linear-gradient(165deg, var(--gold-bright), var(--gold)) border-box;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.85),
+        inset 0 -3px 0 rgba(168, 112, 18, 0.28);
+    }
+
+    .noscript {
+      position: absolute;
+      z-index: 6;
+      left: calc(var(--legend-w) + 28px);
+      right: 16px;
+      top: 46%;
+      margin: 0;
+      padding: 12px 14px;
+      border: 3px solid var(--wood);
+      border-radius: 16px;
+      background: var(--cream);
+      font-weight: 800;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="fit">
+    <div class="stage" id="stage">
+      <a class="skip" href="#legend">跳至圖例</a>
+      <header class="gh">
+        <div class="av" aria-hidden="true"><img src="../../mocks/town-building-proof/assets/avatar.svg" alt=""></div>
+        <div class="in">
+          <div class="nm">小晴</div>
+          <div class="nm-lv">等級 6</div>
+        </div>
+        <div class="hdr-mid">
+          <div class="rw">
+            <div class="xp" aria-hidden="true"><div class="xf"></div></div>
+            <span class="xp-num">經驗值 90／150</span>
+          </div>
+          <div class="hdr-res" aria-label="資源示意，不能用於擴建">
+            <span class="chip-gold">💰 <span>600</span></span>
+            <span>🪵 <span>40</span></span>
+            <span>🧱 <span>24</span></span>
+            <span>🪟 <span>6</span></span>
+            <span>⚙️ <span>8</span></span>
+          </div>
+        </div>
+        <button class="mb" id="btnMenu" type="button" aria-label="主目錄">☰</button>
+      </header>
+
+      <section class="map" id="townMap" aria-labelledby="mapTitle">
+        <h1 class="sr-only" id="mapTitle">城鎮地圖</h1>
+        <img class="meadow" src="../../mocks/town-building-proof/assets/meadow.svg" alt="">
+        <div class="vignette" aria-hidden="true"></div>
+
+        <aside class="legend" id="legend" tabindex="-1">
+          <p class="kicker">靜態設計稿</p>
+          <h2>圖例</h2>
+          <ul class="key">
+            <li>
+              <span class="swatch swatch-open" aria-hidden="true">
+                <img src="../../mocks/town-building-proof/assets/ground-plot.svg" alt="">
+              </span>
+              <span>可建區域（8×8）</span>
+            </li>
+            <li>
+              <span class="swatch swatch-locked" aria-hidden="true">
+                <img src="../../mocks/town-building-proof/assets/ground-tile.svg" alt="">
+                <svg class="lock-icon" viewBox="0 0 24 24" focusable="false">
+                  <rect x="4" y="10" width="16" height="11" rx="2.5" fill="#fff8ee" stroke="#5c3d28" stroke-width="2"></rect>
+                  <path d="M8 10V7.5a4 4 0 0 1 8 0V10" fill="none" stroke="#5c3d28" stroke-width="2" stroke-linecap="round"></path>
+                  <circle cx="12" cy="15.5" r="1.3" fill="#8b5e3c"></circle>
+                </svg>
+              </span>
+              <span>可擴建（未解鎖）</span>
+            </li>
+          </ul>
+          <p>可建造的範圍仍是中間八乘八，淺色地塊可以點選。外圍一圈是將來可擴建的格子，顏色較暗並標有鎖，現在不能建造。</p>
+          <p>外圍只畫一圈，連同中間約為十乘十。解鎖方式尚未開放。</p>
+        </aside>
+
+        <div class="village" id="village"></div>
+        <p class="toast" id="toast" role="status" hidden></p>
+        <noscript><p class="noscript">請啟用 JavaScript，才能顯示這張靜態地圖。</p></noscript>
+      </section>
+
+      <nav class="kt-footer" aria-label="主要導覽">
+        <button class="footer-tab" type="button" data-tab="town" aria-current="page">
+          <img src="../../mocks/town-building-proof/assets/ui/icon-town-home.svg" alt=""><span>城鎮首頁</span>
+        </button>
+        <button class="footer-tab" type="button" data-tab="guild">
+          <img src="../../mocks/town-building-proof/assets/ui/icon-guild-hall.svg" alt=""><span>公會大廳</span>
+        </button>
+        <button class="footer-tab" type="button" data-tab="quests">
+          <img src="../../mocks/town-building-proof/assets/ui/icon-quest-board.svg" alt=""><span>任務板</span>
+        </button>
+        <button class="footer-tab" type="button" data-tab="shop">
+          <img src="../../mocks/town-building-proof/assets/ui/icon-shop.svg" alt=""><span>商店</span>
+        </button>
+        <button class="footer-tab" type="button" data-tab="bag">
+          <img src="../../mocks/town-building-proof/assets/ui/icon-backpack.svg" alt=""><span>背包</span>
+        </button>
+      </nav>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var ASSET = "../../mocks/town-building-proof/assets/";
+      var LOCKED_TOAST = "此格尚未解鎖，暫時不能建造。";
+      var COLS = 8;
+      var ROWS = 8;
+      var RING = 1;
+      var SAMPLES = {
+        library: { name: "圖書館", file: "bldg-library-iso-still.svg" },
+        shop: { name: "商店", file: "bldg-shop-iso-still.svg" },
+        farm: { name: "農場", file: "bldg-farm-iso-still.svg" },
+        lighthouse: { name: "燈塔", file: "bldg-lighthouse-iso-still.svg" }
+      };
+      /* Single-cell silhouettes inside the 8×8, kept off the inner edge
+         and far enough apart that the sprites do not cover one another. */
+      var PLACED = [
+        { col: 1, row: 1, id: "library" },
+        { col: 5, row: 1, id: "shop" },
+        { col: 2, row: 4, id: "farm" },
+        { col: 6, row: 4, id: "lighthouse" }
+      ];
+
+      var village = document.getElementById("village");
+      var toast = document.getElementById("toast");
+      var fit = document.getElementById("fit");
+      var stage = document.getElementById("stage");
+      var toastTimer = 0;
+      var placed = {};
+
+      PLACED.forEach(function (item) {
+        placed[item.col + "," + item.row] = item.id;
+      });
+
+      function lockSvg() {
+        var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("class", "lock-icon");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("aria-hidden", "true");
+        svg.setAttribute("focusable", "false");
+        function part(name, attrs) {
+          var node = document.createElementNS("http://www.w3.org/2000/svg", name);
+          Object.keys(attrs).forEach(function (key) { node.setAttribute(key, attrs[key]); });
+          svg.appendChild(node);
+        }
+        part("rect", { x: "4", y: "10", width: "16", height: "11", rx: "2.5", fill: "#fff8ee", stroke: "#5c3d28", "stroke-width": "2" });
+        part("path", { d: "M8 10V7.5a4 4 0 0 1 8 0V10", fill: "none", stroke: "#5c3d28", "stroke-width": "2", "stroke-linecap": "round" });
+        part("circle", { cx: "12", cy: "15.5", r: "1.3", fill: "#8b5e3c" });
+        return svg;
+      }
+
+      function img(className, src) {
+        var node = document.createElement("img");
+        node.className = className;
+        node.alt = "";
+        node.draggable = false;
+        node.src = src;
+        return node;
+      }
+
+      function labelFor(col, row, locked, bldgId) {
+        var colText = String(col + 1);
+        var rowText = String(row + 1);
+        if (locked) return "未解鎖格子（欄 " + colText + "，行 " + rowText + "）";
+        if (bldgId) return SAMPLES[bldgId].name + "（欄 " + colText + "，行 " + rowText + "）";
+        return "可建空地（欄 " + colText + "，行 " + rowText + "）";
+      }
+
+      function buildGrid() {
+        var min = -RING;
+        var max = COLS - 1 + RING;
+        var cells = [];
+        var row;
+        var col;
+        for (row = min; row <= max; row += 1) {
+          for (col = min; col <= max; col += 1) cells.push({ col: col, row: row });
+        }
+        cells.sort(function (a, b) {
+          var depth = (a.col + a.row) - (b.col + b.row);
+          if (depth !== 0) return depth;
+          return a.col - b.col;
+        });
+        cells.forEach(function (cell) {
+          var locked = cell.col < 0 || cell.row < 0 || cell.col >= COLS || cell.row >= ROWS;
+          var bldgId = locked ? "" : (placed[cell.col + "," + cell.row] || "");
+          var pad = document.createElement("div");
+          pad.className = "pad " + (locked ? "is-locked" : "is-buildable");
+          pad.style.setProperty("--c", String(cell.col));
+          pad.style.setProperty("--r", String(cell.row));
+          pad.setAttribute("data-col", String(cell.col));
+          pad.setAttribute("data-row", String(cell.row));
+          pad.setAttribute("data-zone", locked ? "locked" : "buildable");
+          if (bldgId) pad.setAttribute("data-bldg", bldgId);
+          pad.appendChild(img("slab", ASSET + (locked ? "ground-tile.svg" : "ground-plot.svg")));
+          if (locked) {
+            var shade = document.createElement("span");
+            shade.className = "shade";
+            shade.setAttribute("aria-hidden", "true");
+            pad.appendChild(shade);
+          }
+          if (bldgId) {
+            pad.appendChild(img("shadow", ASSET + "shadow-iso.svg"));
+            pad.appendChild(img("mark", ASSET + "cell-valid.svg"));
+            pad.appendChild(img("sprite", ASSET + SAMPLES[bldgId].file));
+          } else if (!locked) {
+            pad.appendChild(img("mark", ASSET + "cell-valid.svg"));
+          }
+          if (locked) pad.appendChild(lockSvg());
+          var button = document.createElement("button");
+          button.type = "button";
+          button.className = "cell-btn";
+          button.setAttribute("aria-label", labelFor(cell.col, cell.row, locked, bldgId));
+          if (locked) {
+            button.tabIndex = -1;
+            button.setAttribute("aria-disabled", "true");
+          } else {
+            button.setAttribute("aria-pressed", "false");
+          }
+          pad.appendChild(button);
+          village.appendChild(pad);
+        });
+      }
+
+      function hideToast() {
+        window.clearTimeout(toastTimer);
+        toast.hidden = true;
+      }
+
+      function showToast(message) {
+        window.clearTimeout(toastTimer);
+        toast.hidden = true;
+        toast.textContent = "";
+        window.requestAnimationFrame(function () {
+          toast.textContent = message;
+          toast.hidden = false;
+        });
+        toastTimer = window.setTimeout(hideToast, 3200);
+      }
+
+      function clearChosen() {
+        village.querySelectorAll(".pad.is-chosen").forEach(function (pad) {
+          pad.classList.remove("is-chosen");
+          var button = pad.querySelector(".cell-btn");
+          if (button && button.hasAttribute("aria-pressed")) button.setAttribute("aria-pressed", "false");
+        });
+      }
+
+      function onPadClick(event) {
+        var button = event.target.closest(".cell-btn");
+        if (!button || !village.contains(button)) return;
+        var pad = button.parentNode;
+        if (pad.getAttribute("data-zone") === "locked") {
+          showToast(LOCKED_TOAST);
+          return;
+        }
+        clearChosen();
+        pad.classList.add("is-chosen");
+        button.setAttribute("aria-pressed", "true");
+        var bldgId = pad.getAttribute("data-bldg");
+        var col = Number(pad.getAttribute("data-col")) + 1;
+        var row = Number(pad.getAttribute("data-row")) + 1;
+        if (bldgId) {
+          showToast("已選取" + SAMPLES[bldgId].name + "（欄 " + col + "，行 " + row + "）。此為示意建築。");
+        } else {
+          showToast("已選取可建空地（欄 " + col + "，行 " + row + "）。");
+        }
+      }
+
+      function fitGrid() {
+        var reserveTop = 44;
+        var pad = 6;
+        var availW = village.clientWidth - pad * 2;
+        var availH = village.clientHeight - pad - reserveTop;
+        if (availW < 40 || availH < 40) return;
+        var boxW = 1680;
+        var boxH = 1020;
+        var s = Math.min(availW / boxW, availH / boxH);
+        village.style.setProperty("--s", String(s));
+        var extraY = Math.max(0, availH - boxH * s);
+        var originY = reserveTop + extraY / 2 - 21 * s;
+        village.style.setProperty("--origin-y", originY.toFixed(2) + "px");
+        village.setAttribute("data-s", s.toFixed(3));
+      }
+
+      function layout() {
+        if (!document.body.classList.contains("is-native")) {
+          var vw = document.documentElement.clientWidth;
+          var vh = document.documentElement.clientHeight;
+          var scale = Math.min(vw / 1280, vh / 720);
+          if (!isFinite(scale) || scale <= 0) scale = 1;
+          fit.style.width = (1280 * scale) + "px";
+          fit.style.height = (720 * scale) + "px";
+          stage.style.transform = "scale(" + scale + ")";
+        }
+        fitGrid();
+      }
+
+      function selftest() {
+        var params = new URLSearchParams(location.search);
+        if (params.get("selftest") !== "1") return;
+        var errors = [];
+        var locked = village.querySelectorAll(".pad.is-locked");
+        var open = village.querySelectorAll(".pad.is-buildable");
+        if (locked.length !== 36) errors.push("locked " + locked.length);
+        if (open.length !== 64) errors.push("buildable " + open.length);
+        open.forEach(function (pad) {
+          var col = Number(pad.getAttribute("data-col"));
+          var row = Number(pad.getAttribute("data-row"));
+          if (col < 0 || row < 0 || col > 7 || row > 7) errors.push("open outside " + col + "," + row);
+        });
+        locked.forEach(function (pad) {
+          var col = Number(pad.getAttribute("data-col"));
+          var row = Number(pad.getAttribute("data-row"));
+          if (col >= 0 && row >= 0 && col <= 7 && row <= 7) errors.push("locked inside " + col + "," + row);
+          if (pad.querySelector(".cell-btn").tabIndex !== -1) errors.push("locked tab");
+        });
+        var sample = village.querySelector(".pad.is-buildable:not([data-bldg])");
+        sample.querySelector(".cell-btn").click();
+        if (!sample.classList.contains("is-chosen")) errors.push("not chosen");
+        if (sample.querySelector(".cell-btn").getAttribute("aria-pressed") !== "true") errors.push("pressed");
+        locked[0].querySelector(".cell-btn").click();
+        if (!sample.classList.contains("is-chosen")) errors.push("selection cleared");
+        if (locked[0].classList.contains("is-chosen")) errors.push("locked chosen");
+        window.setTimeout(function () {
+          if (toast.hidden || toast.textContent !== LOCKED_TOAST) errors.push("toast:" + toast.textContent);
+          var button = sample.querySelector(".cell-btn");
+          if (button.offsetWidth < 44 || button.offsetHeight < 44) {
+            errors.push("hit " + button.offsetWidth + "x" + button.offsetHeight);
+          }
+          document.documentElement.setAttribute("data-selftest", errors.length ? "fail" : "pass");
+          document.documentElement.setAttribute("data-selftest-detail", errors.join("; ") || "ok");
+        }, 40);
+      }
+
+      if (/[?&]native=1(?:&|$)/.test(location.search)) document.body.classList.add("is-native");
+
+      buildGrid();
+      village.addEventListener("click", onPadClick);
+      document.getElementById("btnMenu").addEventListener("click", function () {
+        showToast("此為靜態設計稿，目錄不會開啟。");
+      });
+      document.querySelectorAll(".footer-tab").forEach(function (tab) {
+        tab.addEventListener("click", function () {
+          if (tab.getAttribute("data-tab") === "town") return;
+          showToast("此為靜態設計稿，不會離開城鎮地圖。");
+        });
+      });
+      document.addEventListener("keydown", function (event) {
+        if (event.key !== "Escape") return;
+        clearChosen();
+        hideToast();
+      });
+
+      layout();
+      window.addEventListener("resize", layout);
+      selftest();
+    }());
+  </script>
+</body>
+</html>
