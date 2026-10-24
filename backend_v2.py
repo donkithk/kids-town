@@ -5794,7 +5794,7 @@ def auth_login():
     admin = db.execute("SELECT * FROM admins WHERE username=?", (username,)).fetchone()
     if admin:
         if verify_password(password, admin['password']):
-            _set_session('admin', admin['id'], admin_id=admin['id'], role='admin')
+            _set_session('admin', admin['id'], admin_id=admin['id'])
             return jsonify({
                 'role': 'admin',
                 'user': {'id': admin['id'], 'username': admin['username'], 'name': admin['name'], 'role': admin['role']},

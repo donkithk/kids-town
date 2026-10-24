@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
   <script src="/kids/audio.js"></script>
-<title>🌈 Kids Town 2.0 開羅小鎮</title>
+<title>Kids Town</title>
 <style>
 /* ═══════════════════════════════════════
    GLOBAL
@@ -35,62 +35,7 @@ body{
   overflow-x:hidden;
 }
 
-/* ═══════════════════════════════════════
-   LOGIN SCREEN (v3 — role-based auth)
-   ═══════════════════════════════════════ */
-#loginScreen,#registerScreen{
-  position:fixed;inset:0;z-index:999;
-  background:linear-gradient(160deg,#f97316,#ef4444);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:24px;
-}
-#loginScreen.hidden,#registerScreen.hidden{display:none}
-.login-card{
-  background:rgba(255,255,255,0.12);backdrop-filter:blur(8px);
-  border-radius:20px;padding:32px 28px;width:100%;max-width:340px;
-  text-align:center;border:2px solid rgba(255,255,255,0.15);
-}
-.login-logo{font-size:48px;margin-bottom:4px}
-.login-card h1{
-  font-family:var(--pixel-font);font-size:clamp(1rem,5vw,1.5rem);
-  color:#fff;text-shadow:3px 3px 0 rgba(0,0,0,0.2);
-  margin-bottom:2px;
-}
-.login-card h2{
-  font-family:var(--pixel-font);font-size:clamp(0.6rem,3vw,0.85rem);
-  color:#fef3c7;margin-bottom:6px;
-}
-.login-sub{color:#fef3c7;font-size:13px;margin-bottom:20px;}
-.login-field{
-  display:flex;align-items:center;gap:8px;
-  background:rgba(255,255,255,0.9);border-radius:12px;
-  padding:4px 12px;margin-bottom:10px;
-  border:2px solid transparent;transition:0.15s;
-}
-.login-field:focus-within{border-color:#2d3436;background:#fff}
-.login-field .lf-icon{font-size:18px}
-.login-field input{
-  flex:1;padding:12px 4px;border:none;background:transparent;
-  font-size:15px;font-family:var(--body-font);outline:none;
-  color:#1e293b;
-}
-.login-btn{
-  width:100%;padding:14px;border-radius:12px;border:3px solid #2d3436;
-  background:linear-gradient(135deg,#15803d,#16a34a);
-  color:#fff;font-size:16px;font-weight:800;cursor:pointer;
-  transition:0.15s;font-family:var(--pixel-font);margin-top:4px;
-}
-.login-btn:hover{transform:scale(1.02);background:linear-gradient(135deg,#166534,#15803d)}
-.login-btn:active{transform:scale(0.98)}
-.login-error{color:#fca5a5;font-size:12px;margin-top:8px;min-height:20px;}
-.login-footer{display:flex;justify-content:center;gap:16px;margin-top:16px;}
-.login-link{color:#fef3c7;font-size:12px;cursor:pointer;opacity:0.8;transition:0.15s;padding:6px 12px;border-radius:8px;}
-.login-link:hover{opacity:1;background:rgba(255,255,255,0.1)}
-.login-spinner{
-  display:inline-block;width:28px;height:28px;
-  border:3px solid rgba(255,255,255,0.3);border-top:3px solid #fff;
-  border-radius:50%;animation:spin 0.8s linear infinite;
-}
+/* Login stage styles live with the guild-hall block at the end of this sheet. */
 
 /* ═══════════════════════════════════════
    HEADER
@@ -1816,6 +1761,170 @@ body.kt-pane-shop .kt-backpack-block{display:none}
   color: #f4fff6 !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 3px 0 #14532d !important;
 }
+
+/* ═══════════════════════════════════════
+   GUILD-HALL LOGIN
+   Fixed 1280×720 oak stage over the welcome hero.
+   Letterbox math matches the approved mock; submit stays on the real API.
+   ═══════════════════════════════════════ */
+#loginScreen{
+  --lg-ink:#3a2616;
+  --lg-ink-soft:#5c4030;
+  --lg-paper:#fff8ee;
+  --lg-line:#e4c89a;
+  --lg-gold:#c4922a;
+  --lg-green:#187a34;
+  --lg-green-deep:#14532d;
+  --lg-focus:#143e78;
+  --lg-focus-halo:#fff6d0;
+  --lg-font:"PingFang TC","Noto Sans TC","Noto Sans CJK TC","Microsoft JhengHei","WenQuanYi Micro Hei","Droid Sans Fallback",sans-serif;
+  position:fixed;inset:0;z-index:999;
+  background:#140e0b;
+  overflow:hidden;
+  color:var(--lg-ink);
+  font-family:var(--lg-font);
+  font-size:16px;
+  line-height:1.4;
+}
+#loginScreen.hidden{display:none !important}
+#loginFit{position:absolute;overflow:hidden}
+#loginStage{
+  position:absolute;left:0;top:0;
+  width:1280px;height:720px;
+  transform-origin:top left;
+  padding:12px 18px 14px;
+  background-color:#a86b38;
+  background-image:
+    radial-gradient(90% 55% at 50% -8%, rgba(255,226,176,.55), transparent 58%),
+    radial-gradient(70% 45% at 50% 115%, rgba(48,22,8,.28), transparent 55%),
+    repeating-linear-gradient(90deg, rgba(255,244,224,.05) 0 18px, rgba(70,34,14,.05) 18px 20px, rgba(255,244,224,.03) 20px 92px, rgba(48,22,10,.06) 92px 94px),
+    linear-gradient(180deg,#d59a58 0%,#b4763c 42%,#8d552b 100%);
+  box-shadow:inset 0 0 0 8px #4e2e18, inset 0 0 0 11px #efd092;
+}
+#loginScreen .lg-frame{
+  height:100%;min-height:0;
+  display:grid;grid-template-rows:minmax(0,1fr) 64px;gap:8px;
+}
+#loginScreen .lg-hero{
+  position:relative;margin:0;min-height:0;height:100%;
+  border-radius:22px;overflow:hidden;background:#6b4428;
+  box-shadow:inset 0 0 0 3px #efd092, 0 6px 0 #5a341c;
+}
+#loginScreen .lg-hero img{
+  width:100%;height:100%;object-fit:cover;object-position:center 8%;
+  display:block;background:#6b4428;
+}
+#loginScreen .lg-hero figcaption{
+  position:absolute;z-index:2;left:14px;right:14px;top:12px;
+  display:flex;justify-content:space-between;gap:8px;pointer-events:none;
+}
+#loginScreen .lg-pill{
+  background:#fff6e8;color:var(--lg-ink);border:2px solid #e4c48a;border-radius:999px;
+  padding:4px 12px;font-size:13px;font-weight:800;line-height:1.3;
+}
+#loginScreen .lg-sheet{
+  position:absolute;z-index:3;left:0;right:0;bottom:14px;
+  width:min(900px, calc(100% - 36px));margin-inline:auto;
+  display:flex;flex-direction:column;gap:6px;
+  padding:10px 16px 8px;
+  background:rgba(255,248,238,.9);
+  border:2px solid rgba(255,236,214,.95);
+  border-radius:24px;
+  box-shadow:0 14px 32px rgba(40,18,6,.28);
+  backdrop-filter:blur(8px);
+}
+#loginScreen .lg-sheet:focus{outline:none}
+#loginScreen .lg-sheet:focus-visible{
+  outline:3px solid var(--lg-focus);outline-offset:3px;
+  box-shadow:0 0 0 6px var(--lg-focus-halo), 0 14px 32px rgba(40,18,6,.28);
+}
+#loginScreen .lg-slogan{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  margin:2px 0 0;color:var(--lg-ink-soft);font-size:16px;font-weight:700;line-height:22px;
+}
+#loginScreen .lg-panel{
+  flex:0 0 auto;min-height:0;display:flex;flex-direction:column;justify-content:flex-start;gap:8px;
+}
+#loginScreen .lg-login-row{
+  display:grid;grid-template-columns:1fr 1fr 240px;gap:10px;align-items:stretch;
+}
+#loginScreen .lg-login-row .lg-fields{display:contents}
+#loginScreen .lg-login-row .lg-btn{height:auto;min-height:56px;white-space:nowrap}
+#loginScreen .lg-kicker{
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px;min-height:26px;
+}
+#loginScreen .lg-kicker h2{margin:0;font-size:18px;line-height:24px;color:var(--lg-ink);font-family:var(--lg-font);font-weight:800}
+#loginScreen .lg-kicker p{margin:0;color:var(--lg-ink-soft);font-size:15px;line-height:22px}
+#loginScreen .lg-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
+#loginScreen .lg-field{
+  display:flex;flex-direction:column;justify-content:center;min-height:56px;
+  padding:4px 12px 6px;background:#fffdf9;border:2px solid #c9a36b;border-radius:16px;cursor:text;
+}
+#loginScreen .lg-field span{font-size:14px;font-weight:800;line-height:16px;color:#6b4a2c}
+#loginScreen .lg-field input{
+  width:100%;height:28px;margin:0;padding:0;border:0;background:transparent;
+  color:var(--lg-ink);font-family:var(--lg-font);font-size:18px;line-height:28px;outline:none;
+}
+#loginScreen .lg-field input::placeholder{color:#6f5136;opacity:1}
+#loginScreen .lg-field:focus-within{
+  outline:3px solid var(--lg-focus);outline-offset:2px;
+  box-shadow:0 0 0 6px var(--lg-focus-halo);border-color:#8a6230;
+}
+#loginScreen .lg-btn{
+  min-height:56px;height:56px;border-radius:16px;border:3px solid var(--lg-green-deep);
+  background:var(--lg-green);color:#f4fff6;font-family:var(--lg-font);
+  padding:0 14px;font-size:18px;font-weight:800;letter-spacing:.04em;cursor:pointer;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35), 0 4px 0 var(--lg-green-deep);
+}
+#loginScreen .lg-btn:hover{background:#146b30}
+#loginScreen .lg-btn:active{transform:translateY(2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.35), 0 2px 0 var(--lg-green-deep)}
+#loginScreen .lg-btn:focus{outline:none}
+#loginScreen .lg-btn:focus-visible{
+  outline:3px solid var(--lg-focus);outline-offset:3px;
+  box-shadow:0 0 0 6px var(--lg-focus-halo), inset 0 1px 0 rgba(255,255,255,.35), 0 4px 0 var(--lg-green-deep);
+}
+#loginScreen .lg-status{
+  min-height:22px;margin:0;color:#7a3e12;font-size:14px;font-weight:700;line-height:22px;text-align:center;
+}
+#loginScreen .lg-actions{
+  width:100%;align-self:end;margin:0;padding:0;border:0;min-width:0;min-height:56px;display:flex;gap:10px;
+}
+#loginScreen .lg-action{
+  --accent:var(--lg-gold);
+  position:relative;flex:1 1 0;min-width:0;min-height:56px;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:0 12px 0 16px;background:#f3ddc0;color:var(--lg-ink);
+  border:2px solid #6b4424;border-radius:18px;
+  font-size:18px;font-weight:800;letter-spacing:.03em;white-space:nowrap;cursor:pointer;
+  box-shadow:inset 6px 0 0 var(--accent), 0 4px 0 #6b4424;
+}
+#loginScreen .lg-action-kid{--accent:#1f8a3c}
+#loginScreen .lg-action-parent{--accent:#c4922a}
+#loginScreen .lg-action-admin{--accent:#1f4f86}
+#loginScreen .lg-action-register{--accent:#b85a32}
+#loginScreen .lg-action svg{flex:0 0 auto;display:block}
+#loginScreen .lg-action input{
+  position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;
+}
+#loginScreen .lg-action:has(input:checked){
+  background:var(--lg-paper);
+  box-shadow:inset 6px 0 0 var(--accent), inset 0 0 0 2px var(--accent), 0 4px 0 #6b4424;
+}
+#loginScreen .lg-action:hover{background:#fff1dc}
+#loginScreen .lg-action:active{transform:translateY(2px);box-shadow:inset 6px 0 0 var(--accent), 0 2px 0 #6b4424}
+#loginScreen .lg-action:has(input:focus-visible){
+  outline:3px solid var(--lg-focus);outline-offset:3px;
+  box-shadow:0 0 0 6px var(--lg-focus-halo), inset 6px 0 0 var(--accent), 0 4px 0 #6b4424;
+}
+#loginScreen .lg-skip{
+  position:absolute;left:18px;top:12px;z-index:5;transform:translateY(-160%);
+  min-height:44px;display:inline-flex;align-items:center;padding:8px 12px;
+  background:var(--lg-paper);color:var(--lg-ink);border-radius:12px;font-weight:800;text-decoration:none;
+}
+#loginScreen .lg-skip:focus,#loginScreen .lg-skip:focus-visible{
+  transform:none;outline:3px solid var(--lg-focus);outline-offset:2px;box-shadow:0 0 0 6px var(--lg-focus-halo);
+}
+#loginScreen [hidden]{display:none !important}
 </style>
 </head>
 <body>
@@ -1828,67 +1937,139 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 </div>
 
 <div id="loginScreen">
-  <div class="login-card">
-    <div class="login-logo">🌈</div>
-    <h1>Kids Town</h1>
-    <h2>開羅小鎮</h2>
-    <p class="login-sub">⭐ 小朋友嘅開心小鎮 ⭐</p>
-    
-    <div id="loginForm">
-      <div class="login-field">
-        <span class="lf-icon">👤</span>
-        <input type="text" id="loginUsername" placeholder="登入名稱" maxlength="30"
-          autocomplete="username" onkeyup="if(event.key==='Enter')doLogin()">
-      </div>
-      <div class="login-field">
-        <span class="lf-icon">🔑</span>
-        <input type="password" id="loginPassword" placeholder="密碼" maxlength="30"
-          autocomplete="current-password" onkeyup="if(event.key==='Enter')doLogin()">
-      </div>
-      <button class="login-btn" onclick="doLogin()">🚪 登入</button>
-      <div class="login-error" id="loginError"></div>
-    </div>
-    
-    <div id="loginLoading" style="display:none;text-align:center;padding:20px;">
-      <div class="login-spinner"></div>
-      <p style="color:#fef3c7;font-size:13px;margin-top:8px;">登入中...</p>
-    </div>
-    
-    <div class="login-footer">
-      <span class="login-link" onclick="showParentLogin()">👨‍👩‍👧‍👦 家長登入</span>
-      <span class="login-link" onclick="showAdminLogin()">👑 管理員</span>
-      <span class="login-link" onclick="showRegister()">📝 註冊</span>
-    </div>
-  </div>
-</div>
+  <div id="loginFit">
+    <div id="loginStage">
+      <a class="lg-skip" href="#loginSheet">跳至登入表單</a>
+      <div class="lg-frame">
+        <figure class="lg-hero">
+          <img src="assets-c/login-hero.png" width="1280" height="720" alt="公會大廳的拱門敞開，木牌寫著 Kids Town，一名男孩與一名女孩走向陽光照耀的小鎮。" draggable="false">
+          <figcaption aria-hidden="true">
+            <span class="lg-pill">公會歡迎</span>
+            <span class="lg-pill">請選擇登入方式</span>
+          </figcaption>
+          <div class="lg-sheet" id="loginSheet" tabindex="-1">
+            <p class="lg-slogan">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path d="M5 19c8-1 12-8 13-14-6 1-13 5-14 13 3-3 6-4 9-4" fill="none" stroke="#2f8f4a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              歡迎回到開心的小鎮
+            </p>
 
-<!-- ═══════════════ 家長註冊 ═══════════ -->
-<div id="registerScreen" class="hidden">
-  <div class="login-card">
-    <div class="login-logo">📝</div>
-    <h1>註冊家長帳戶</h1>
-    <h2>開個帳戶俾自己</h2>
+            <form class="lg-panel" id="form-kid" data-panel="kid" aria-labelledby="kid-heading">
+              <div class="lg-kicker">
+                <h2 id="kid-heading">孩子登入</h2>
+                <p id="kid-lead">請輸入登入名稱與 PIN。不使用密碼。</p>
+              </div>
+              <div class="lg-login-row">
+                <div class="lg-fields">
+                  <label class="lg-field">
+                    <span>登入名稱</span>
+                    <input id="loginUsername" name="username" type="text" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="英文字母或數字" required aria-describedby="kid-lead loginError">
+                  </label>
+                  <label class="lg-field">
+                    <span>PIN</span>
+                    <input id="loginPassword" name="secret" type="password" minlength="4" maxlength="30" autocomplete="off" placeholder="至少四個字元" required aria-describedby="kid-lead loginError">
+                  </label>
+                </div>
+                <button class="lg-btn" type="submit">進入小鎮</button>
+              </div>
+              <p class="lg-status" id="loginError" data-status role="status"></p>
+            </form>
 
-    <div class="login-field">
-      <span class="lf-icon">👤</span>
-      <input type="text" id="regUsername" placeholder="用戶名（英文字母/數字）" maxlength="30" autocomplete="username">
-    </div>
-    <div class="login-field">
-      <span class="lf-icon">🔑</span>
-      <input type="password" id="regPassword" placeholder="密碼（至少 8 個字）" maxlength="30" autocomplete="new-password">
-    </div>
-    <div class="login-field">
-      <span class="lf-icon">😊</span>
-      <input type="text" id="regName" placeholder="稱呼（例如：媽媽）" maxlength="30">
-    </div>
-    <div class="login-field">
-      <span class="lf-icon">✉️</span>
-      <input type="email" id="regEmail" placeholder="電郵（可選）" maxlength="60">
-    </div>
-    <button class="login-btn" onclick="doRegister()">📝 建立帳戶</button>
-    <div class="login-error" id="regError"></div>
-    <div class="login-footer" style="justify-content:center;">
-      <span class="login-link" onclick="backToLogin()">← 返去登入</span>
+            <form class="lg-panel" id="form-parent" data-panel="parent" hidden aria-labelledby="parent-heading">
+              <div class="lg-kicker">
+                <h2 id="parent-heading">家長登入</h2>
+                <p id="parent-lead">請輸入登入名稱與密碼。</p>
+              </div>
+              <div class="lg-login-row">
+                <div class="lg-fields">
+                  <label class="lg-field">
+                    <span>登入名稱</span>
+                    <input id="parentUsername" name="username" type="text" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="英文字母或數字" required aria-describedby="parent-lead parentStatus">
+                  </label>
+                  <label class="lg-field">
+                    <span>密碼</span>
+                    <input id="parentPassword" name="secret" type="password" maxlength="30" autocomplete="current-password" placeholder="請輸入密碼" required aria-describedby="parent-lead parentStatus">
+                  </label>
+                </div>
+                <button class="lg-btn" type="submit">以家長身份登入</button>
+              </div>
+              <p class="lg-status" id="parentStatus" data-status role="status"></p>
+            </form>
+
+            <form class="lg-panel" id="form-admin" data-panel="admin" hidden aria-labelledby="admin-heading">
+              <div class="lg-kicker">
+                <h2 id="admin-heading">管理員登入</h2>
+                <p id="admin-lead">請使用已獲授權的帳戶。不設預設密碼。</p>
+              </div>
+              <div class="lg-login-row">
+                <div class="lg-fields">
+                  <label class="lg-field">
+                    <span>管理員名稱</span>
+                    <input id="adminUsername" name="username" type="text" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="管理員名稱" required aria-describedby="admin-lead adminStatus">
+                  </label>
+                  <label class="lg-field">
+                    <span>密碼</span>
+                    <input id="adminPassword" name="secret" type="password" maxlength="30" autocomplete="current-password" placeholder="請輸入密碼" required aria-describedby="admin-lead adminStatus">
+                  </label>
+                </div>
+                <button class="lg-btn" type="submit">以管理員身份登入</button>
+              </div>
+              <p class="lg-status" id="adminStatus" data-status role="status"></p>
+            </form>
+
+            <form class="lg-panel" id="form-register" data-panel="register" hidden aria-labelledby="register-heading">
+              <div class="lg-kicker">
+                <h2 id="register-heading">註冊家長帳戶</h2>
+                <p id="register-lead">建立後可管理孩子的登入。密碼至少八個字元。</p>
+              </div>
+              <div class="lg-fields">
+                <label class="lg-field">
+                  <span>用戶名稱</span>
+                  <input id="regUsername" name="username" type="text" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="英文字母或數字" required aria-describedby="register-lead regError">
+                </label>
+                <label class="lg-field">
+                  <span>密碼</span>
+                  <input id="regPassword" name="password" type="password" minlength="8" maxlength="30" autocomplete="new-password" placeholder="至少八個字元" required aria-describedby="register-lead regError">
+                </label>
+                <label class="lg-field">
+                  <span>稱呼</span>
+                  <input id="regName" name="name" type="text" maxlength="30" autocomplete="name" placeholder="例如：陳媽媽" required aria-describedby="register-lead regError">
+                </label>
+                <label class="lg-field">
+                  <span>電郵（可選）</span>
+                  <input id="regEmail" name="email" type="email" maxlength="60" autocomplete="email" placeholder="可以留空" aria-describedby="register-lead regError">
+                </label>
+              </div>
+              <button class="lg-btn" type="submit">建立帳戶</button>
+              <p class="lg-status" id="regError" data-status role="status"></p>
+            </form>
+          </div>
+        </figure>
+
+        <div class="lg-actions" role="radiogroup">
+          <label class="lg-action lg-action-kid">
+            <input type="radio" name="gate" value="kid" aria-label="孩子登入" checked>
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="3.1" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6.2 19.2c.9-3.3 2.9-5 5.8-5s4.9 1.7 5.8 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <span class="name">孩子登入</span>
+          </label>
+          <label class="lg-action lg-action-parent">
+            <input type="radio" name="gate" value="parent" aria-label="家長登入">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="9" cy="8" r="2.6" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="9" r="2.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4.8 19c.7-2.8 2.2-4.2 4.4-4.2 2.3 0 3.8 1.4 4.5 4.2M13.2 15.2c.8-1.5 2-2.3 3.4-2.3 1.8 0 3 1.2 3.6 3.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <span class="name">家長登入</span>
+          </label>
+          <label class="lg-action lg-action-admin">
+            <input type="radio" name="gate" value="admin" aria-label="管理員">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="8" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 12h9l-2 2.2 2 2.2h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="name">管理員</span>
+          </label>
+          <label class="lg-action lg-action-register">
+            <input type="radio" name="gate" value="register" aria-label="註冊">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+            <span class="name">註冊</span>
+          </label>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -2491,161 +2672,191 @@ async function restoreSession() {
   } catch (e) {}
 }
 
-async function doLogin() {
-  const username = document.getElementById('loginUsername').value.trim();
-  const password = document.getElementById('loginPassword').value.trim();
-  const err = document.getElementById('loginError');
-  
-  if (!username || !password) {
-    err.textContent = '請輸入登入名稱同密碼';
+const LOGIN_MODES = ['kid', 'parent', 'admin', 'register'];
+
+function loginModeFromHash() {
+  const mode = (location.hash || '').replace(/^#/, '');
+  return LOGIN_MODES.indexOf(mode) >= 0 ? mode : 'kid';
+}
+
+function applyLoginMode(mode) {
+  if (LOGIN_MODES.indexOf(mode) < 0) mode = 'kid';
+  document.querySelectorAll('#loginScreen form[data-panel]').forEach(function (panel) {
+    panel.hidden = panel.getAttribute('data-panel') !== mode;
+  });
+  document.querySelectorAll('#loginScreen input[name="gate"]').forEach(function (radio) {
+    radio.checked = radio.value === mode;
+  });
+  const nextHash = '#' + mode;
+  if (location.hash !== nextHash) history.replaceState(null, '', nextHash);
+}
+
+function layoutLoginStage() {
+  const fit = document.getElementById('loginFit');
+  const stage = document.getElementById('loginStage');
+  if (!fit || !stage) return;
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+  let scale = Math.min(vw / 1280, vh / 720);
+  if (!isFinite(scale) || scale <= 0) scale = 1;
+  const w = 1280 * scale;
+  const h = 720 * scale;
+  fit.style.width = w + 'px';
+  fit.style.height = h + 'px';
+  fit.style.left = ((vw - w) / 2) + 'px';
+  fit.style.top = ((vh - h) / 2) + 'px';
+  stage.style.transform = 'scale(' + scale + ')';
+}
+
+function loginStatus(form) {
+  return form ? form.querySelector('[data-status]') : null;
+}
+
+function loginFailText(mode, data) {
+  const api = data && data.error ? String(data.error) : '';
+  if (api.indexOf('密碼') >= 0) return mode === 'kid' ? 'PIN 不正確。' : '密碼不正確。';
+  if (api.indexOf('不存在') >= 0 || api.indexOf('帳號') >= 0) return '找不到這個帳戶。';
+  if (api.indexOf('Invalid') >= 0 || api.indexOf('required') >= 0) return '登入失敗。';
+  return api || '登入失敗。';
+}
+
+async function doLogin(form) {
+  if (!form || !form.querySelector) {
+    form = document.querySelector('#loginScreen form[data-panel]:not([hidden])');
+  }
+  if (!form) return;
+  const mode = form.getAttribute('data-panel') || 'kid';
+  const username = (form.querySelector('input[name="username"]') || {}).value || '';
+  const password = (form.querySelector('input[name="secret"]') || {}).value || '';
+  const err = loginStatus(form);
+  const userTrim = username.trim();
+  if (!userTrim || !password) {
+    if (err) err.textContent = mode === 'kid' ? '請輸入登入名稱與 PIN。' : (mode === 'admin' ? '請輸入管理員名稱與密碼。' : '請輸入登入名稱與密碼。');
     return;
   }
-  
-  // Show loading
-  document.getElementById('loginForm').style.display = 'none';
-  document.getElementById('loginLoading').style.display = 'block';
-  err.textContent = '';
-  
+  if (err) err.textContent = '';
   try {
     const res = await fetch(`${API}/api/auth/login`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       credentials: 'same-origin',
-      body: JSON.stringify({username, password})
+      body: JSON.stringify({username: userTrim, password: password})
     });
-    const data = await res.json();
-    
-    document.getElementById('loginForm').style.display = 'block';
-    document.getElementById('loginLoading').style.display = 'none';
-    
+    const data = await res.json().catch(function () { return {}; });
     if (!res.ok) {
-      err.textContent = '❌ ' + (data.error || '登入失敗');
-      Audio.errorBuzzer();
+      if (err) err.textContent = loginFailText(mode, data);
+      try { Audio.errorBuzzer(); } catch (e) {}
       return;
     }
-    
-    // Login success
-    Audio.init();
-    Audio.buttonClick();
-    Audio.coinPickup(0.15);
-    
     currentRole = data.role;
     currentUser = data.user;
-    
+    try {
+      Audio.init();
+      Audio.buttonClick();
+      Audio.coinPickup(0.15);
+    } catch (e) {}
     if (data.role === 'kid') {
-      // Direct kid login — enter app
       currentKidId = data.user.id;
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('app').style.display = 'block';
       document.body.classList.add('kt-landscape');
       ktPreferLandscape();
       ktSyncArtStage();
-      updateHeader();  // Show name immediately, don't wait for loadTown
-      Audio.startAmbient('town');
+      updateHeader();
+      try { Audio.startAmbient('town'); } catch (e) {}
       await loadTown();
       initCanvas();
     } else if (data.role === 'parent') {
-      // Parent login — go to management
       isParentSession = true;
       currentKidId = null;
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('app').style.display = 'block';
-      updateHeader();  // show parent identity, not stale kid HUD
-      // Parent sees manage tab by default
+      updateHeader();
       st('manage');
     } else if (data.role === 'admin') {
-      // Admin login — auto-select first kid
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('app').style.display = 'block';
-      // Find first kid and load their town
       try {
-        const kids = await (await fetch(`${API}/api/kids/`)).json();
+        const kids = await (await fetch(`${API}/api/kids/`, {credentials: 'same-origin'})).json();
         currentKidId = kids?.[0]?.id || null;
-      } catch(e) { currentKidId = null; }
-      if (!currentKidId) currentKidId = 4; // fallback
+      } catch (e) { currentKidId = null; }
+      if (!currentKidId) currentKidId = 4;
       updateHeader();
       await loadTown();
       initCanvas();
     }
-  } catch(e) {
-    document.getElementById('loginForm').style.display = 'block';
-    document.getElementById('loginLoading').style.display = 'none';
-    err.textContent = '⚠️ 無法連接伺服器 (' + e.message + ')';
+  } catch (e) {
+    if (err) err.textContent = '無法連接伺服器。';
   }
 }
 
-function showParentLogin() {
-  // Pre-fill hint for parent login or just reset form
-  document.getElementById('loginUsername').placeholder = '家長登入名稱';
-  document.getElementById('loginPassword').placeholder = '家長密碼';
-  document.getElementById('loginUsername').focus();
-  document.getElementById('loginError').textContent = '💡 家長請用已註冊嘅帳號登入';
-}
+function showParentLogin() { applyLoginMode('parent'); }
+function showAdminLogin() { applyLoginMode('admin'); }
+function showRegister() { applyLoginMode('register'); }
+function backToLogin() { applyLoginMode('kid'); }
 
-function showAdminLogin() {
-  document.getElementById('loginUsername').placeholder = '管理員名稱';
-  document.getElementById('loginPassword').placeholder = '管理員密碼';
-  document.getElementById('loginUsername').value = '';
-  document.getElementById('loginPassword').value = '';
-  document.getElementById('loginError').textContent = '💡 請輸入管理員帳號（無預設口令）';
-}
-
-function showRegister() {
-  document.getElementById('loginScreen').classList.add('hidden');
-  document.getElementById('registerScreen').classList.remove('hidden');
-  const err = document.getElementById('regError');
-  err.textContent = '';
-  err.style.color = '';
-  document.getElementById('regUsername').focus();
-}
-
-function backToLogin() {
-  document.getElementById('registerScreen').classList.add('hidden');
-  document.getElementById('loginScreen').classList.remove('hidden');
-  document.getElementById('loginError').textContent = '';
-}
-
-async function doRegister() {
-  const username = document.getElementById('regUsername').value.trim();
-  const password = document.getElementById('regPassword').value.trim();
-  const name = document.getElementById('regName').value.trim();
-  const email = document.getElementById('regEmail').value.trim();
-  const err = document.getElementById('regError');
-
-  if (!username || !password || !name) {
-    err.textContent = '請填寫用戶名、密碼同稱呼';
-    err.style.color = '#fecaca';
+async function doRegister(form) {
+  if (!form || !form.querySelector) form = document.getElementById('form-register');
+  const username = (form.querySelector('#regUsername') || {}).value || '';
+  const password = (form.querySelector('#regPassword') || {}).value || '';
+  const name = (form.querySelector('#regName') || {}).value || '';
+  const email = (form.querySelector('#regEmail') || {}).value || '';
+  const err = loginStatus(form);
+  const userTrim = username.trim();
+  const nameTrim = name.trim();
+  const emailTrim = email.trim();
+  if (!userTrim || !password || !nameTrim) {
+    if (err) err.textContent = '請填寫用戶名稱、密碼與稱呼。';
     return;
   }
   if (password.length < 8) {
-    err.textContent = '密碼至少 8 個字元';
-    err.style.color = '#fecaca';
+    if (err) err.textContent = '密碼至少八個字元。';
     return;
   }
-
-  err.textContent = '';
+  if (err) err.textContent = '';
   try {
     const res = await fetch(`${API}/api/auth/parent-register`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({username, password, name, email})
+      credentials: 'same-origin',
+      body: JSON.stringify({username: userTrim, password: password, name: nameTrim, email: emailTrim})
     });
-    const data = await res.json();
+    const data = await res.json().catch(function () { return {}; });
     if (!res.ok) {
-      err.textContent = '❌ ' + (data.error || '註冊失敗');
-      err.style.color = '#fecaca';
+      if (err) err.textContent = (data && data.error) ? String(data.error) : '註冊失敗。';
       return;
     }
-    // 註冊成功
-    err.textContent = '✅ 註冊成功！請用新帳戶登入';
-    err.style.color = '#4ade80';
-    document.getElementById('loginUsername').value = username;
-    document.getElementById('loginPassword').value = '';
-  } catch(e) {
-    err.textContent = '⚠️ 無法連接伺服器 (' + e.message + ')';
-    err.style.color = '#fecaca';
+    if (err) err.textContent = '註冊成功。請以家長身份登入。';
+    const kidUser = document.getElementById('loginUsername');
+    const kidSecret = document.getElementById('loginPassword');
+    if (kidUser) kidUser.value = userTrim;
+    if (kidSecret) kidSecret.value = '';
+  } catch (e) {
+    if (err) err.textContent = '無法連接伺服器。';
   }
 }
+
+function bootLogin() {
+  document.querySelectorAll('#loginScreen form[data-panel]').forEach(function (form) {
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (form.getAttribute('data-panel') === 'register') doRegister(form);
+      else doLogin(form);
+    });
+  });
+  document.querySelectorAll('#loginScreen input[name="gate"]').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      if (radio.checked) applyLoginMode(radio.value);
+    });
+  });
+  window.addEventListener('hashchange', function () {
+    applyLoginMode(loginModeFromHash());
+  });
+  window.addEventListener('resize', layoutLoginStage);
+  applyLoginMode(loginModeFromHash());
+  layoutLoginStage();
+}
+bootLogin();
 
 async function logout() {
   // Tiny product hook (FE-P0-06): invalidate the server session, not just local JS state.
@@ -2657,14 +2868,17 @@ async function logout() {
   currentRole = null;
   currentUser = null;
   document.getElementById('app').style.display = 'none';
+  document.body.classList.remove('kt-landscape');
   document.getElementById('loginScreen').classList.remove('hidden');
-  document.getElementById('loginUsername').value = '';
-  document.getElementById('loginPassword').value = '';
-  document.getElementById('loginUsername').placeholder = '登入名稱';
-  document.getElementById('loginPassword').placeholder = '密碼';
-  document.getElementById('loginError').textContent = '';
-  document.getElementById('loginForm').style.display = 'block';
-  document.getElementById('loginLoading').style.display = 'none';
+  document.querySelectorAll('#loginScreen input').forEach(function (input) {
+    if (input.type === 'radio') return;
+    input.value = '';
+  });
+  document.querySelectorAll('#loginScreen [data-status]').forEach(function (el) {
+    el.textContent = '';
+  });
+  applyLoginMode('kid');
+  layoutLoginStage();
   if (expInterval) { clearInterval(expInterval); expInterval = null; }
 }
 
