@@ -1,34 +1,53 @@
 # 可擴建外圈 — 狀態
 
-獨立回歸（本檔更新）。產品仍是 PR #74，測試檔沒有改弱。下面先記這次對綠 tip 的結果，紅測基線留在文末。
+獨立回歸（本檔更新）。這次只認 PR #74 的新 tip。先前 `c1aa5a96` 的 PASS 不沿用。測試檔沒有改，也沒有改弱。紅測基線留在文末。
 
-## 獨立回歸 #74 — PASS，先不要合併
+## 獨立回歸 #74 tip 9c1b648e — PASS，先不要合併
 
-對 PR #74 tip 重跑紅測四條，並另外抽查契約裡測試只抽樣的格子。沒有退回建造者的失敗清單。合併仍等人眼 Preview：村莊為了放進外圈，縮放比以前小。
+對新 tip 重跑紅測四條兩次，並另外抽查縮放與平移。沒有要退回建造者的契約失敗。合併仍等人眼 Preview。
 
 | 項目 | 值 |
 |------|----|
-| 受測 tip | `c1aa5a96f94ce800514b7df1d5d77fe20f87c750`（`c1aa5a96`，分支 `cursor/town-expand-ring-product-1016`，PR #74 head，本次未再移動） |
+| 受測 tip | `9c1b648e2b2e6b42819e904e067f29a6c073fa1d`（`9c1b648e`，分支 `cursor/town-expand-ring-product-1016`，PR #74 head） |
+| 上一 tip | `c1aa5a96f94ce800514b7df1d5d77fe20f87c750`。那次 PASS 不當作這次的結果。 |
 | 紅測契約 | PR #73 tip `ef7be1573b9448055765192bb714eaad0ba66527` |
 | 設計稿 | PR #72 tip `52a5bb06297725045774378427184204d8054823` |
 | 命令 | `python3 -m pytest tests/test_town_expand_ring_e2e.py -q --tb=short` |
-| 環境 | Python 3.12.3，pytest 9.1.1，Playwright Chromium，Linux |
-| 結果 | **4 passed，0 failed**，4.82s。接著 `-v` 再跑一次仍是 4 passed（4.12s），節點名帶 `[chromium]` |
-| 產品差異（相對 #73） | 只有 `town-four-scene.js`、`town-four-scene.css`（+256 / −5）。測試、後端、`index.html`、`kids_town.db` 都沒有進這次 diff |
-| 資料庫 | 追蹤中的 `kids_town.db` sha256 跑前、官方測試後、抽查後都是 `c046fc41e1cf0eb8c5be5ae5a100fd62dfc6390e8c2277a6a84f93002fe3ecfb`。只用臨時庫與 `test_expand_kid`。 |
+| 環境 | Python 3.12.3，pytest 9.2.0，Playwright 1.64.1（Chromium 156.0.8078.4），視窗 1280×720，Linux |
+| 結果 | **4 passed，0 failed**，5.23s。接著 `-v` 再跑一次仍是 4 passed（4.38s），節點名帶 `[chromium]` |
+| 產品差異（相對 #73） | 只有 `town-four-scene.js`（+190 / −3）、`town-four-scene.css`（+148 / −7）。測試與 `docs/test-cases` 相對紅測 tip 沒有 diff |
+| 資料庫 | 追蹤中的 `kids_town.db` sha256 跑前、兩次官方測試後、抽查後都是 `c046fc41e1cf0eb8c5be5ae5a100fd62dfc6390e8c2277a6a84f93002fe3ecfb`。只用臨時庫與 `test_expand_kid`。 |
 
 | ID | Pytest | 結果 | 獨立核對 |
 |----|--------|------|----------|
-| TC-FE-EXPAND-RING-01 | `test_expand_ring_buildable_8x8_stays_centered` | **PASS** | 100 格。可建 64 格在 `data-col`／`data-row` 0..7，`data-zone="buildable"`，class 含 `is-buildable`。鎖住 36 格在 −1..8 的外圈，沒有第二圈，也沒有框外格。每一格 `--c`／`--r` 等於 data 座標。`COLS`／`ROWS` 仍是 8。 |
-| TC-FE-EXPAND-RING-02 | `test_expand_ring_locked_styling_and_labels` | **PASS** | `#townMap` 看得到「可建區域（8×8）」和「可擴建（未解鎖）」。沒有稿上的「靜態設計稿」。36 格 aria-label 都是「未解鎖格子（欄 N，行 M）」。 |
+| TC-FE-EXPAND-RING-01 | `test_expand_ring_buildable_8x8_stays_centered` | **PASS** | 100 格。可建 64 格在 `data-col`／`data-row` 0..7，`data-zone="buildable"`，class 含 `is-buildable`。鎖住 36 格在 −1..8 的外圈，沒有第二圈，也沒有框外格。每一格 `--c`／`--r` 等於 data 座標。`COLS`／`ROWS` 仍是 8。後端 `TOWN_PLACE_COLS`／`ROWS` 仍是 8。 |
+| TC-FE-EXPAND-RING-02 | `test_expand_ring_locked_styling_and_labels` | **PASS** | `#townMap` 看得到「可建區域（8×8）」和「可擴建（未解鎖）」。沒有稿上的「靜態設計稿」。 |
 | TC-FE-EXPAND-RING-03 | `test_expand_ring_locked_click_toast_does_not_select` | **PASS** | 官方測試的六個樣本與 Enter 通過。抽查再點全部 36 格按鈕中心：`#toast` 可見且正好是「此格尚未解鎖，暫時不能建造。」（全形逗號 U+FF0C、句號 U+3002）。場景 1 結束時沒有 `is-chosen`。可建 `(0,0)` 仍是「想在這裏興建？請先按「我要起屋」。」 |
-| TC-FE-EXPAND-RING-04 | `test_expand_ring_locked_not_placeable_keeps_selection` | **PASS** | 官方測試先選可建 `(0,0)`，再點 `(-1,0)` 與 `(8,7)` 通過。抽查在場景 2 對全部 36 格再點一次：選中仍是那一格，`aria-label` 維持「場景 2」，`#uxPlaceBar` 收起。沒有 `POST /buildings`。 |
+| TC-FE-EXPAND-RING-04 | `test_expand_ring_locked_not_placeable_keeps_selection` | **PASS** | 官方測試先選可建 `(0,0)`，再點 `(-1,0)` 與 `(8,7)` 通過。抽查在場景 2 對全部 36 格再點一次：選中仍是那一格，`aria-label` 維持「場景 2」，`#uxPlaceBar` 收起。沒有 `POST /buildings`，也沒有 expand／unlock 請求。 |
 
-假綠檢查：沒有抓到契約失敗。官方 03／04 只抽樣外圈，所以另外把 36 格都點過（場景 1 與場景 2）。鎖頭圖示中心在 `(-1,-1)` 疊在 `.cell-btn` 上，點下去也是同一句。`cellAt` 仍拒絕 0..7 以外，後端 `TOWN_PLACE_COLS` 仍是 8，這次 diff 沒有解鎖 API，抽查期間沒有 expand／unlock 請求。點可建 `(7,7)` 打中的是 `data-zone="buildable"`，走出的是原有「這個位置放不下這座建築物。」，不是鎖住那句；選中留在 `(0,0)`。足跡相鄰的函式沒有改。
+### 縮放與平移
 
-給 Preview 的畫面：`fitExpandRing` 把 `#townMap .village.is-iso` 的 `--s` 從固定 `0.85` 收到約 `0.3868`（`--origin-y` 約 `23.34px`）。紅測允許外圈縮小。可建區仍是 8×8，不是可玩的 10×10。人眼要看縮小後的小鎮還能不能用。
+這次新 tip 拿掉 `fitExpandRing`。`#townMap .village.is-iso` 的 `--s` 計算值是 `0.85`，沒有 inline 覆寫。可建格 `offsetWidth` 是 136（160×0.85），外框寬也是 136，村莊沒有再被父層縮小（scale 1）。
 
-建議：四條可以當真。不要為了這份報告合併。等 Preview 和使用者看過縮小後的城鎮再決定 #74。
+板面比視窗大，所以改為捲動：內容 1452×897，村莊視窗 1162×434，`overflow` 為 `auto`，`scrollLeft` 0..290、`scrollTop` 0..463。游標是 `grab`。開場 `scrollLeft` 145、`scrollTop` 0。水平方向這 145px 把可建地塊的外框中心對到村莊中心。垂直方向沒有對中：`centerLiveVillage` 不改 `scrollTop`，可建地塊中心比村莊中心低約 234px。北面鎖住的格子在開場畫面裡（36 格裡有 17 格的按鈕中心已經在視窗內，含整條北緣）。南緣要往下捲，最多約 463px。
+
+36 格鎖住按鈕都能用捲動放進村莊。捲到定點後，`elementFromPoint` 打中的是該格 `.cell-btn`。在草地上拖曳會加上 `is-panning`，並把 `scrollLeft` 從 145 拉到 290；拖曳那一下沒有選中格子。鬆手後再點當時看得到的鎖住格 `(-1,-1)`，toast 仍是那句，沒有 `is-chosen`，`--s` 仍是 0.85。滑鼠滾輪實測 `scrollTop` +80。
+
+場景 2 在捲動之後點可建 `(7,7)`：打中 `data-zone="buildable"`，toast 文字是「這個位置放不下這座建築物。」，不是鎖住那句。選中留在 `(0,0)`，沒有進場景 3。鎖住地塊上、按鈕以外的一點打中村莊本身，沒有 toast，也沒有把選中改到可建格。`cellAt` 仍拒絕 0..7 以外。契約點的是按鈕中心；按鈕約 37×37（44×0.85）。
+
+接觸陰影跟著 `--s`。實測 `--s: 0.85`：盒子 221×95.1875、`blur(1.5px)`、徑向漸層 120px×40px，`--contact` 為 `calc(0.85 / 0.85)`。把 `--s` 暫時設成 0.39 再量（量完已還原 0.85）：盒子 101.391×43.6719、`blur(0.688235px)`、漸層 55.0588px×18.3529px。空鎮上陰影仍是 `hidden`；這是打開元素讀計算樣式，不是放了一座建築。
+
+Toast 碼位：`此格尚未解鎖，暫時不能建造。` = U+6B64 U+683C U+5C1A U+672A U+89E3 U+9396 U+FF0C U+66AB U+6642 U+4E0D U+80FD U+5EFA U+9020 U+3002。
+
+### Preview
+
+水平已對中，北圈在開場畫面裡。南圈與 8×8 的南半要捲才看得到。人眼要看這個開場是不是要的。鎖住的按鈕被點到時會成為焦點，既有的 `#focusRingLift` 會畫出來（實測 180×109）；該格不是 `is-chosen`，`aria-pressed` 也不是 true。不要把焦點環看成選中。
+
+建議：四條可以當真。不要為了這份報告合併。等 Preview 和使用者看過 0.85 與捲動後的開場再決定 #74。
+
+## 先前 tip c1aa5a96（不沿用）
+
+`c1aa5a96f94ce800514b7df1d5d77fe20f87c750` 上一次獨立回歸是 4 passed。那個 tip 的 `fitExpandRing` 會把 `--s` 收到約 0.3868。這次換了縮放與平移，所以那次 PASS 不算這次。
 
 ## 紅測基線（#73，保留）
 
