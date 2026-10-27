@@ -707,19 +707,61 @@
     map.appendChild(legend);
   }
 
-  /* Shrink the iso diamond so the locked ring stays inside the village. */
-  function fitExpandRing() {
+  /* Keep pre-expand --s. Scroll so the live 8×8 stays centered and the
+     locked ring can be panned into view. Does not shrink the diamond. */
+  function centerLiveVillage() {
     var village = $("village");
-    if (!village) return;
-    var availW = village.clientWidth;
-    var availH = village.clientHeight;
-    if (availW < 80 || availH < 80) return;
-    var boxW = 18 * 84 + 168;
-    var boxH = 1091;
-    var s = Math.min((availW - 16) / boxW, (availH - 12) / boxH);
-    if (!(s > 0.12)) return;
-    village.style.setProperty("--s", s.toFixed(4));
-    village.style.setProperty("--origin-y", (50 * s + 4).toFixed(2) + "px");
+    if (!village || !pads.length || village.clientWidth < 80) return;
+    var pad = pads[0].el;
+    var want = pad.offsetLeft + pad.offsetWidth / 2 - village.clientWidth / 2;
+    var max = Math.max(0, village.scrollWidth - village.clientWidth);
+    if (want < 0) want = 0;
+    if (want > max) want = max;
+    var parked = homeScrollLeft == null || Math.abs(village.scrollLeft - homeScrollLeft) < 1.5;
+    if (!parked) return;
+    if (Math.abs(village.scrollLeft - want) > 0.5) village.scrollLeft = want;
+    homeScrollLeft = want;
+  }
+
+  function wireVillagePan(village) {
+    var drag = null;
+    village.addEventListener("pointerdown", function (event) {
+      if (event.button !== 0) return;
+      var target = event.target;
+      if (target.closest && target.closest("button, a, input, textarea, select")) return;
+      drag = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        left: village.scrollLeft,
+        top: village.scrollTop,
+        moved: false
+      };
+    });
+    village.addEventListener("pointermove", function (event) {
+      if (!drag || event.pointerId !== drag.id) return;
+      var rect = village.getBoundingClientRect();
+      var scaleX = rect.width / village.offsetWidth || 1;
+      var scaleY = rect.height / village.offsetHeight || 1;
+      var dx = (event.clientX - drag.x) / scaleX;
+      var dy = (event.clientY - drag.y) / scaleY;
+      if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+      drag.moved = true;
+      village.classList.add("is-panning");
+      village.scrollLeft = drag.left - dx;
+      village.scrollTop = drag.top - dy;
+      if (village.setPointerCapture) {
+        try { village.setPointerCapture(event.pointerId); } catch (err) { /* already captured */ }
+      }
+    });
+    function endPan(event) {
+      if (!drag || event.pointerId !== drag.id) return;
+      if (drag.moved) panClick = true;
+      drag = null;
+      village.classList.remove("is-panning");
+    }
+    village.addEventListener("pointerup", endPan);
+    village.addEventListener("pointercancel", endPan);
   }
 
   function buildGrid() {
@@ -1680,6 +1722,8 @@
   /* Focus can scroll the cell on the next frame. Paint again after that
      scroll, or the ring stays a fraction of a pixel off the face. */
   var paintFrame = 0;
+  var homeScrollLeft = null;
+  var panClick = false;
   function schedulePaint() {
     refreshPaint();
     if (paintFrame) return;
@@ -1693,7 +1737,7 @@
 
   function render() {
     if (!built) buildGrid();
-    fitExpandRing();
+    centerLiveVillage();
     pads.forEach(renderCell);
     renderPalette();
     renderBars();
@@ -2045,6 +2089,12 @@
     if (!map || map.dataset.wired === "1") return;
     map.dataset.wired = "1";
     map.addEventListener("click", function (event) {
+      if (panClick) {
+        panClick = false;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       var btn = event.target.closest && event.target.closest("button");
       if (btn && !btn.classList.contains("cell-btn")) return;
       var pad = btn && btn.closest(".pad");
@@ -2067,9 +2117,12 @@
       onCell(hit.c, hit.r);
     }, true);
     var village = $("village");
-    if (village) village.addEventListener("scroll", schedulePaint);
+    if (village) {
+      village.addEventListener("scroll", schedulePaint);
+      wireVillagePan(village);
+    }
     window.addEventListener("resize", function () {
-      fitExpandRing();
+      centerLiveVillage();
       syncFocusRing();
       schedulePaint();
     });
