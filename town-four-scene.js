@@ -5,6 +5,7 @@
   var COLS = 8;
   var ROWS = 8;
   var ASSET = "mocks/town-building-proof/assets/";
+  var LOCKED_TOAST = "此格尚未解鎖，暫時不能建造。";
   var MOTION_KEY = "ktTownMotion";
   var MARK_VALID = ASSET + "cell-valid.svg";
 
@@ -601,6 +602,168 @@
     return true;
   }
 
+  function lockedLabel(c, r) {
+    return "未解鎖格子（欄 " + (c + 1) + "，行 " + (r + 1) + "）";
+  }
+
+  function lockIcon() {
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "lock-icon");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    function part(name, attrs) {
+      var node = document.createElementNS("http://www.w3.org/2000/svg", name);
+      Object.keys(attrs).forEach(function (key) { node.setAttribute(key, attrs[key]); });
+      svg.appendChild(node);
+    }
+    part("rect", {
+      x: "4", y: "10", width: "16", height: "11", rx: "2.5",
+      fill: "#fff8ee", stroke: "#5c3d28", "stroke-width": "2"
+    });
+    part("path", {
+      d: "M8 10V7.5a4 4 0 0 1 8 0V10",
+      fill: "none", stroke: "#5c3d28", "stroke-width": "2", "stroke-linecap": "round"
+    });
+    part("circle", { cx: "12", cy: "15.5", r: "1.3", fill: "#8b5e3c" });
+    return svg;
+  }
+
+  /* One locked ring around the playable 8×8. COLS/ROWS stay 8. */
+  function buildLockedRing(village) {
+    var edge = 1;
+    var r;
+    var c;
+    for (r = -edge; r <= ROWS - 1 + edge; r += 1) {
+      for (c = -edge; c <= COLS - 1 + edge; c += 1) {
+        if (c >= 0 && r >= 0 && c < COLS && r < ROWS) continue;
+        var pad = document.createElement("div");
+        pad.className = "pad is-locked";
+        pad.style.setProperty("--c", String(c));
+        pad.style.setProperty("--r", String(r));
+        pad.style.zIndex = String(c + r + 4);
+        pad.setAttribute("data-col", String(c));
+        pad.setAttribute("data-row", String(r));
+        pad.setAttribute("data-zone", "locked");
+        var slab = document.createElement("img");
+        slab.className = "slab";
+        slab.alt = "";
+        slab.src = ASSET + "ground-tile.svg";
+        var shade = document.createElement("span");
+        shade.className = "shade";
+        shade.setAttribute("aria-hidden", "true");
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cell-btn";
+        btn.tabIndex = -1;
+        btn.setAttribute("aria-disabled", "true");
+        btn.setAttribute("aria-label", lockedLabel(c, r));
+        pad.appendChild(slab);
+        pad.appendChild(shade);
+        pad.appendChild(lockIcon());
+        pad.appendChild(btn);
+        village.appendChild(pad);
+      }
+    }
+  }
+
+  function legendSwatch(src, locked) {
+    var swatch = document.createElement("span");
+    swatch.className = "swatch" + (locked ? " swatch-locked" : "");
+    swatch.setAttribute("aria-hidden", "true");
+    var img = document.createElement("img");
+    img.alt = "";
+    img.src = src;
+    swatch.appendChild(img);
+    if (locked) swatch.appendChild(lockIcon());
+    return swatch;
+  }
+
+  function legendRow(text, src, locked) {
+    var row = document.createElement("li");
+    var label = document.createElement("span");
+    label.textContent = text;
+    row.appendChild(legendSwatch(src, locked));
+    row.appendChild(label);
+    return row;
+  }
+
+  function buildLegend(map) {
+    if (!map || map.querySelector("#townLegend")) return;
+    var legend = document.createElement("aside");
+    legend.className = "legend";
+    legend.id = "townLegend";
+    var title = document.createElement("h2");
+    title.textContent = "圖例";
+    var list = document.createElement("ul");
+    list.className = "key";
+    list.appendChild(legendRow("可建區域（8×8）", ASSET + "ground-plot.svg", false));
+    list.appendChild(legendRow("可擴建（未解鎖）", ASSET + "ground-tile.svg", true));
+    var note = document.createElement("p");
+    note.textContent = "中間八乘八可以建造。外圍一圈尚未解鎖，暫時不能建造。";
+    legend.appendChild(title);
+    legend.appendChild(list);
+    legend.appendChild(note);
+    map.appendChild(legend);
+  }
+
+  /* Keep pre-expand --s. Scroll so the live 8×8 stays centered and the
+     locked ring can be panned into view. Does not shrink the diamond. */
+  function centerLiveVillage() {
+    var village = $("village");
+    if (!village || !pads.length || village.clientWidth < 80) return;
+    var pad = pads[0].el;
+    var want = pad.offsetLeft + pad.offsetWidth / 2 - village.clientWidth / 2;
+    var max = Math.max(0, village.scrollWidth - village.clientWidth);
+    if (want < 0) want = 0;
+    if (want > max) want = max;
+    var parked = homeScrollLeft == null || Math.abs(village.scrollLeft - homeScrollLeft) < 1.5;
+    if (!parked) return;
+    if (Math.abs(village.scrollLeft - want) > 0.5) village.scrollLeft = want;
+    homeScrollLeft = want;
+  }
+
+  function wireVillagePan(village) {
+    var drag = null;
+    village.addEventListener("pointerdown", function (event) {
+      if (event.button !== 0) return;
+      var target = event.target;
+      if (target.closest && target.closest("button, a, input, textarea, select")) return;
+      drag = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        left: village.scrollLeft,
+        top: village.scrollTop,
+        moved: false
+      };
+    });
+    village.addEventListener("pointermove", function (event) {
+      if (!drag || event.pointerId !== drag.id) return;
+      var rect = village.getBoundingClientRect();
+      var scaleX = rect.width / village.offsetWidth || 1;
+      var scaleY = rect.height / village.offsetHeight || 1;
+      var dx = (event.clientX - drag.x) / scaleX;
+      var dy = (event.clientY - drag.y) / scaleY;
+      if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+      drag.moved = true;
+      village.classList.add("is-panning");
+      village.scrollLeft = drag.left - dx;
+      village.scrollTop = drag.top - dy;
+      if (village.setPointerCapture) {
+        try { village.setPointerCapture(event.pointerId); } catch (err) { /* already captured */ }
+      }
+    });
+    function endPan(event) {
+      if (!drag || event.pointerId !== drag.id) return;
+      if (drag.moved) panClick = true;
+      drag = null;
+      village.classList.remove("is-panning");
+    }
+    village.addEventListener("pointerup", endPan);
+    village.addEventListener("pointercancel", endPan);
+  }
+
   function buildGrid() {
     var village = $("village");
     if (!village || built) return;
@@ -608,9 +771,13 @@
     for (var r = 0; r < ROWS; r += 1) {
       for (var c = 0; c < COLS; c += 1) {
         var pad = document.createElement("div");
-        pad.className = "pad";
+        pad.className = "pad is-buildable";
         pad.style.setProperty("--c", String(c));
         pad.style.setProperty("--r", String(r));
+        pad.style.zIndex = String(c + r + 4);
+        pad.setAttribute("data-col", String(c));
+        pad.setAttribute("data-row", String(r));
+        pad.setAttribute("data-zone", "buildable");
         var slab = document.createElement("img");
         slab.className = "slab";
         slab.alt = "";
@@ -657,6 +824,8 @@
         });
       }
     }
+    buildLockedRing(village);
+    buildLegend($("townMap"));
   }
 
   function localPoint(el, clientX, clientY) {
@@ -721,7 +890,7 @@
     if (state.scene === 3 && !state.sheet && occ) kind = "illegal";
     else if (state.scene === 3 && !state.sheet && picked) kind = "preview";
     else if (state.scene === 3 && !state.sheet && !occ) kind = "valid";
-    cell.el.className = "pad is-" + kind + (hot ? " is-empty-hot" : "");
+    cell.el.className = "pad is-buildable is-" + kind + (hot ? " is-empty-hot" : "");
 
     if (showGhost) {
       cell.ghost.hidden = false;
@@ -1553,6 +1722,8 @@
   /* Focus can scroll the cell on the next frame. Paint again after that
      scroll, or the ring stays a fraction of a pixel off the face. */
   var paintFrame = 0;
+  var homeScrollLeft = null;
+  var panClick = false;
   function schedulePaint() {
     refreshPaint();
     if (paintFrame) return;
@@ -1566,6 +1737,7 @@
 
   function render() {
     if (!built) buildGrid();
+    centerLiveVillage();
     pads.forEach(renderCell);
     renderPalette();
     renderBars();
@@ -1917,8 +2089,19 @@
     if (!map || map.dataset.wired === "1") return;
     map.dataset.wired = "1";
     map.addEventListener("click", function (event) {
+      if (panClick) {
+        panClick = false;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       var btn = event.target.closest && event.target.closest("button");
       if (btn && !btn.classList.contains("cell-btn")) return;
+      var pad = btn && btn.closest(".pad");
+      if (pad && pad.getAttribute("data-zone") === "locked") {
+        if (typeof showToast === "function") showToast(LOCKED_TOAST);
+        return;
+      }
       var hit = cellAt(event.clientX, event.clientY);
       /* Keyboard activation reports detail 0 at the origin. Use the button's cell. */
       if (!hit && btn && btn.classList.contains("cell-btn") && event.detail === 0) {
@@ -1934,8 +2117,12 @@
       onCell(hit.c, hit.r);
     }, true);
     var village = $("village");
-    if (village) village.addEventListener("scroll", schedulePaint);
+    if (village) {
+      village.addEventListener("scroll", schedulePaint);
+      wireVillagePan(village);
+    }
     window.addEventListener("resize", function () {
+      centerLiveVillage();
       syncFocusRing();
       schedulePaint();
     });
