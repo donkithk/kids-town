@@ -30,8 +30,16 @@ body.kt-artstage #tab-town .mp { position: relative; }
 #townMap [hidden] { display: none !important; }
 
 #townMap .village.is-iso {
-  /* 0.85 fits the 1344px diamond inside the ~1162px village with ≥8px side margins. */
+  /* Same scale as the pre-expand 8×8 (0.85 fits that diamond in this
+     village). The locked ring is wider and taller, so the board scrolls
+     instead of shrinking --s to squeeze 10×10 into the viewport. */
   --s: 0.85;
+  --origin-y: 0px;
+  --ring-margin: 12px;
+  /* Slab extremes at s=1: 18×84 + 168 wide, south slab bottom 1041. */
+  --board-w: calc(var(--s) * 1680px + 2 * var(--ring-margin));
+  --board-h: calc(var(--s) * 1041px + var(--ring-margin));
+  --origin-x: calc(var(--board-w) / 2);
   --step-x: calc(var(--s) * 84px);
   --step-y: calc(var(--s) * 50px);
   --pad-w: calc(var(--s) * 160px);
@@ -42,9 +50,23 @@ body.kt-artstage #tab-town .mp { position: relative; }
   right: 8px;
   top: 8px;
   bottom: 72px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+  touch-action: none;
+  cursor: grab;
   pointer-events: auto;
+}
+
+#townMap .village.is-iso.is-panning { cursor: grabbing; }
+
+/* In-flow size so west/north cells sit at scroll 0 instead of negative. */
+#townMap .village.is-iso::before {
+  content: "";
+  display: block;
+  width: var(--board-w);
+  height: var(--board-h);
+  pointer-events: none;
 }
 
 #townMap .village.is-iso .pad {
@@ -54,8 +76,8 @@ body.kt-artstage #tab-town .mp { position: relative; }
   width: var(--pad-w);
   height: var(--pad-h);
   margin: 0;
-  left: calc(50% + (var(--c) - var(--r)) * var(--step-x) - var(--pad-w) / 2);
-  top: calc((var(--c) + var(--r) + 1) * var(--step-y));
+  left: calc(var(--origin-x) + (var(--c) - var(--r)) * var(--step-x) - var(--pad-w) / 2);
+  top: calc(var(--origin-y, 0px) + (var(--c) + var(--r) + 1) * var(--step-y));
   pointer-events: none;
 }
 
@@ -68,8 +90,127 @@ body.kt-artstage #tab-town .mp { position: relative; }
   pointer-events: none;
 }
 
+#townMap .pad.is-locked > .slab {
+  filter: grayscale(0.78) brightness(0.74) saturate(0.28);
+}
+
+#townMap .pad.is-locked > .shade {
+  position: absolute;
+  z-index: 1;
+  width: calc(var(--s, 1) * 168px);
+  height: calc(var(--s, 1) * 120px);
+  left: calc(var(--s, 1) * -4px);
+  top: calc(var(--s, 1) * 71px);
+  pointer-events: none;
+  clip-path: polygon(50% 0, 100% 41.67%, 50% 83.33%, 0 41.67%);
+  background: repeating-linear-gradient(
+    -32deg,
+    transparent 0 6px,
+    rgba(48, 32, 18, 0.2) 6px 7px
+  );
+}
+
+#townMap .pad.is-locked > .lock-icon {
+  position: absolute;
+  z-index: 5;
+  left: calc(var(--s, 1) * 80px);
+  top: calc(var(--s, 1) * 121px);
+  width: 20px;
+  height: 20px;
+  display: block;
+  transform: translate(-50%, -58%);
+  pointer-events: none;
+  filter: drop-shadow(0 1px 0 rgba(255, 248, 236, 0.9));
+}
+
+#townMap .pad.is-locked > .cell-btn {
+  cursor: not-allowed;
+}
+
+#townMap .legend {
+  position: absolute;
+  z-index: 8;
+  left: 12px;
+  top: 10px;
+  width: 216px;
+  margin: 0;
+  padding: 10px 12px 12px;
+  border: 3px solid var(--wood);
+  border-radius: 16px;
+  background: rgba(250, 246, 239, 0.96);
+  box-shadow: 0 6px 0 rgba(92, 61, 40, 0.12);
+  color: var(--ink);
+  pointer-events: none;
+}
+
+#townMap .legend h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+#townMap .legend .key {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#townMap .legend .key li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+#townMap .legend .swatch {
+  width: 44px;
+  height: 32px;
+  flex: 0 0 44px;
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+#townMap .legend .swatch img {
+  width: 44px;
+  height: 32px;
+  object-fit: contain;
+  display: block;
+}
+
+#townMap .legend .swatch-locked img {
+  filter: grayscale(0.78) brightness(0.74) saturate(0.28);
+}
+
+#townMap .legend .lock-icon {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  right: 0;
+  bottom: 0;
+  display: block;
+}
+
+#townMap .legend p {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 #townMap .pad > .shadow,
 #townMap .pad > [data-contact-shadow] {
+  /* Ellipse 120×40 and blur 1.5px are the soft contact shadow at --s: 0.85.
+     --contact is 1 at that scale and tracks --s so the oval, blur, and box
+     stay in proportion instead of clipping into a hard blob. */
+  --contact: calc(var(--s, 0.85) / 0.85);
   position: absolute;
   z-index: 2;
   width: calc(var(--s, 1) * 260px);
@@ -79,7 +220,7 @@ body.kt-artstage #tab-town .mp { position: relative; }
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cellipse/%3E%3C/svg%3E"),
     radial-gradient(
-      ellipse 120px 40px at 50% 50%,
+      ellipse calc(var(--contact) * 120px) calc(var(--contact) * 40px) at 50% 50%,
       rgba(44, 28, 16, 0.88) 0%,
       rgba(44, 28, 16, 0.84) 58%,
       rgba(44, 28, 16, 0.4) 76%,
@@ -88,7 +229,7 @@ body.kt-artstage #tab-town .mp { position: relative; }
     );
   background-size: 0 0, auto;
   background-repeat: no-repeat;
-  filter: blur(1.5px);
+  filter: blur(calc(var(--contact) * 1.5px));
   pointer-events: none;
 }
 

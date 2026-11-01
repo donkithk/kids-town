@@ -13,6 +13,8 @@ Experience C（真機體驗加固）: `TC-FE-CEREMONY-01`、`TC-FE-PLACE-SHOP-01
 
 四場景起屋（設計稿 `3b4671d`／PR #27，**唔好 merge #27**）: `TC-FE-TOWN-UX-01`…`05`、`TC-FE-TOWN-FX-01`／`02`、`TC-FE-TOWN-HIT-01`…`03`、`TC-FE-TOWN-MOTION-01`／`02`。呢個 sheet flow 已經喺 main。舊放置條 `TC-FE-PLACE-SHOP-01`／`TC-FE-PLACE-BUILD-01` 仍然有效，唔係呢個 sheet flow 嘅代替。
 
+可擴建外圈（設計稿 PR #72 tip `52a5bb0`，`docs/ui-mocks/town-expandable.html`）：[`TOWN_EXPAND_RING.md`](TOWN_EXPAND_RING.md)，結果 [`TOWN_EXPAND_RING_STATUS.md`](TOWN_EXPAND_RING_STATUS.md)。篩選 `python -m pytest tests/test_town_expand_ring_e2e.py -q --tb=line`。中間可建仍然係 8×8；外圍一圈鎖住，撳落 toast「此格尚未解鎖，暫時不能建造。」，唔選中、唔放置。唔測解鎖經濟，亦唔改 #71 足跡相鄰。對住 main 留紅。唔改產品。
+
 8×8 地圖同格外收倉: `TC-FE-TOWN-GRID-01`、`TC-FE-TOWN-STORE-LEGACY-01`、`TC-FE-TOWN-STORE-LEGACY-02`。篩選 `-k 'town_grid or store_legacy'`。可建地圖係欄 0..7 × 行 0..7，場景 1–3 同一個 8×8。載入城鎮時，格外或者無合法格、而且 `stored=0` 嘅屋要一次過收進存倉（`stored=1`），保留同一行、`def_id`、等級。收倉之後場景 1 唔好畫佢哋，建築清單唔好當地圖「已起」鎖住。用現有「存倉」放返空地，唔扣資源。唔好用清單「去擺位置」搬屋來代替。產品喺城鎮載入同建築物讀取時收倉，場景 1–3 係 8×8。
 
 已經 `stored=1` 嘅屋唔好當新建築賣: `TC-FE-TOWN-STORE-LIST-01`、`TC-FE-TOWN-STORE-PLACE-01`、`TC-FE-TOWN-STORE-CONFIRM-01`。篩選 `-k 'store_list or store_place or store_confirm'`。場景 2 建築清單唔好把存倉屋標成「未起」兼顯示價錢，亦唔好帶入「確定先至扣資源」然後 POST `/buildings`。呢個新建查重包埋 `stored=1` 嘅行，所以 API 回 400「你已經興建咗呢種建築物」。正確放返係現有存倉（`#placementBar`，POST `/buildings/<id>/unstored`），唔扣金幣同材料，同一行變 `stored=0`。呢三條喺 main 上留紅。唔改產品。
