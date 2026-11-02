@@ -1,12 +1,16 @@
 # Kids Town 視覺方向 / Visual Direction
 
-**狀態：使用者已核准（2026-09-22）。本資料夾鎖定畫面方向，供之後實作參考。**
-**Status: user-approved (2026-09-22). This folder locks the visual direction for later implementation.**
+**狀態：畫面方向使用者已核准（2026-09-22）。美術風格指南、色票與城鎮鎖定首批提示詞另於 2026-11-02 鎖定（合啦）。**
+**Status: screen direction user-approved (2026-09-22). Art style guide, palette, and town-lock first-batch prompts locked 2026-11-02 (合啦).**
 
-這裡只有概念圖與方向說明，不是已上線的介面，也不改遊戲邏輯。
-Concept art and direction notes only. These are not shipped screens, and they do not change gameplay.
+這裡有已核准的概念圖，以及 2026-11-02 鎖定的美術方向。都不是已上線的介面，也不改遊戲邏輯。
+Approved concept art lives here, plus the art direction locked on 2026-11-02. These are not shipped screens, and they do not change gameplay.
 
-## 鎖定的三個畫面 / Locked screens
+## 鎖定的三個畫面 / Locked screens（2026-09-22）
+
+2026-09-22 的畫面方向仍然有效。下面三張核准概念圖保留，不因 2026-11-02 的風格鎖定而取代。
+
+The 2026-09-22 visual direction remains. These three approved concept images stay; the 2026-11-02 art lock does not replace them.
 
 | 檔案 | 用途 | 感覺 |
 | --- | --- | --- |
@@ -24,7 +28,28 @@ Concept art and direction notes only. These are not shipped screens, and they do
 概念圖裡的數字、文案與按鈕是氣氛參考。產品文案維持現有繁體中文；榮譽圖上的英文是情緒示意。
 Numbers, labels, and buttons in the art are mood references. Product copy stays Traditional Chinese; English on the honour image is mood only.
 
+## 美術風格鎖定 / Art style lock（2026-11-02）
+
+使用者於 2026-11-02 確認（合啦）：風格指南、色票，以及城鎮鎖定首批提示詞 **A–C**。怪物重繪**延後**——英雄是粗線 chibi，狼偏寫實軟邊，風格不一致，先不出貨，本批提示詞不含怪物。
+
+Locked 2026-11-02 (合啦): style guide, palette, and town-lock first-batch prompts **A–C**. **Monsters are deferred** — the hero is bold-outline chibi and the wolf is softer and more realist, so the mismatch does not ship. This batch has no monster prompts.
+
+| 檔案 | 用途 |
+| --- | --- |
+| [`style-guide.md`](style-guide.md) | 風格指南（LOCKED 2026-11-02）：手繪暖木、奶油紙卡、等角城鎮 |
+| [`palette.md`](palette.md) | 鎖定色票與 CSS `:root`；禁止自創 hex |
+| [`palette-swatch.png`](palette-swatch.png) | 色票色卡 |
+| [`prompt-sheets/2026-11-02-first-batch.md`](prompt-sheets/2026-11-02-first-batch.md) | 首批提示詞 A 木框、B 空廣場／草地、C 探險公會精靈 |
+| [`shot-list.md`](shot-list.md) | 城鎮鎖定鏡頭清單；標出延後的怪物與不在本批的項目 |
+
+提示詞只寫用詞，像素由圖像工具產出。圖內零文字；書面語中文由 DOM 承擔。
+The prompt sheet is wording only. Pixels come from the image tool. No text in images; Traditional Chinese copy stays in the DOM.
+
 ## 色盤提示 / Palette cues
+
+口語色感仍是下面四點。精確用色以 [`palette.md`](palette.md) 的鎖定 token 為準，不要另造 hex。
+
+The spoken color feel is still the four cues below. Exact colors follow the locked tokens in [`palette.md`](palette.md).
 
 - 暖木色 warm wood（框架、大廳、木牌）
 - 奶油紙色 cream paper（任務列、證書）
@@ -45,8 +70,8 @@ These are superseded and are non-direction:
 
 ## 實作邊界 / Implementation boundary
 
-合併本 PR 只加入設計資產，可安全合併：不動 `index.html`、`backend_v2.py`，也不動玩法。
-This PR is design assets only and is safe to merge. It does not touch `index.html`, `backend_v2.py`, or gameplay.
+2026-09-22 的畫面方向與 2026-11-02 的美術鎖定都只放在本資料夾。合併只加入設計文件與概念圖，可安全合併：不動 `index.html`、`backend_v2.py`，也不動玩法。
+The 2026-09-22 screen direction and the 2026-11-02 art lock both live in this folder. Merge adds design docs and concept art only. It does not touch `index.html`, `backend_v2.py`, or gameplay.
 
-合併之後，若要照這三張方向做真正的 UI，是下一步的可選工作，不在本次範圍。
-After merge, building the real UI from this direction is an optional next step, not part of this change.
+合併之後，若要照方向做真正的 UI 或產出 A–C 像素，是下一步的可選工作，不在本次範圍。怪物重繪仍延後。
+After merge, building the real UI from this direction, or generating A–C pixels, is an optional next step, not part of this change. Monster reskin stays deferred.
