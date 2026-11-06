@@ -9,7 +9,7 @@
 
 The suite is green. **8 passed** in 0.72s.
 
-Pytest ran on green product commit `58d960f7f1c48db9c730d5d398e9bc516ed32185` (`58d960f`). This status commit sits directly on that product commit and does not change product code or tests. A commit cannot contain its own hash; the branch tip SHA is this status commit and is written in the pull request body. Product bytes match `58d960f`.
+Pytest ran on green product commit `58d960f7f1c48db9c730d5d398e9bc516ed32185` (`58d960f`). Green result note: `7c876700ae86f85f1887b631a049d2dd483c68f9` (`7c87670`). The commit that writes this hash into the note does not change product code, tests, or the result table. Product bytes match `58d960f`.
 
 Wait for Grok Preview before 合啦. Red #77 can close after this merges.
 
