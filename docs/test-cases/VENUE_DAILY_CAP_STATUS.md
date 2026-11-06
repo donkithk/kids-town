@@ -48,3 +48,45 @@ Two older fixtures seeded or looked up `daily_battles.battle_date` with `date.to
 ### Compared with main `2e6bdaf`
 
 On main this suite was 3 failed, 5 passed. The three failures were the colloquial error `今日已打過此區，聽日再嚟`, Hong Kong midnight leaving the venue closed, and UTC midnight opening it early because `battle_date` used `date.today()`. Those three now pass. Boss wins still do not write `daily_battles`.
+
+## Independent regress — PASS
+
+Recorded against tip `f200bcec8e14799e5c1c01e06a5b00f5f40b3c44`. `git rev-parse HEAD` was that SHA before the suite and after it. Docs only. The red file was not edited. Do not merge this note ahead of a person reading it.
+
+`git diff 58d960f7f1c48db9c730d5d398e9bc516ed32185 HEAD` is this status file only, so the product bytes under test are `58d960f`. `git diff 9dce1eb9929f67a656f503ee255550f0a4e13558 HEAD -- tests/test_venue_daily_cap.py docs/test-cases/VENUE_DAILY_CAP.md` is empty. The colloquial string `今日已打過此區，聽日再嚟` is not in `backend_v2.py` or `index.html`.
+
+### Command
+
+`TZ=UTC python3 -m pytest tests/test_venue_daily_cap.py -v --tb=short`
+
+**8 passed** in 0.66s. Python 3.12.3, pytest 9.2.0. Wall clock was 2026-11-06 11:52 UTC, still the same calendar day in Hong Kong, so the suite's own freezes are what separate the two clocks.
+
+| Case ID | Result |
+| --- | --- |
+| TC-API-VENUE-DAILY-CAP-01 | **PASS** |
+| TC-API-VENUE-DAILY-CAP-02 | **PASS** |
+| TC-API-VENUE-DAILY-CAP-03 | **PASS** |
+| TC-API-VENUE-DAILY-CAP-04 | **PASS** |
+| TC-API-VENUE-DAILY-CAP-05 | **PASS** |
+| TC-API-VENUE-DAILY-CAP-06 | **PASS** |
+| TC-API-VENUE-DAILY-CAP-07 | **PASS** |
+| TC-API-VENUE-DAILY-CAP-08 | **PASS** |
+
+Same HEAD, same database hash: `tests/test_battle_integration.py`, `tests/test_preview_seed.py`, and `tests/test_expedition_gold.py::test_explore_can_be_farmed_again_after_claim` — **19 passed** in 0.79s (12 + 6 + 1).
+
+### False greens
+
+Extra probes, not added to the suite.
+
+- At 2026-11-06 20:00 UTC (`hk_today_str()` is 2026-11-07, `date.today()` is 2026-11-06) a row dated 2026-11-06 does not block venue A. A row dated 2026-11-07 does, and `error` is exactly `今日已在此區域獲勝，請明日再來。`.
+- A boss summon and win writes no `daily_battles` row, pays gold, and venue A still starts (HTTP 201).
+- After a venue A win, explore start + claim twice still pays. Each start deducts the region 1 fee of 10. Each claim adds its gold (range 6–10) and does not read or write `daily_battles`. The venue row stays `(1, 2026-11-06)`. The next `battle-start` is HTTP 400 with the locked sentence.
+- Regions 4 and 5 return `region_locked` even when a `daily_battles` row exists for that region.
+- `preview_kid` writes `(1, 2026-11-06)` on the win and can start again. Renaming that stored username to `Preview_Kid` makes `kid_is_preview` false, and the next start is HTTP 400 with the locked sentence. Typed login `Preview_Kid` still finds stored `preview_kid`, because `/api/auth/login` lowercases the name before the lookup.
+- Another kid can start venue A on the same day.
+- `battle-action` after the win is HTTP 400 `No running battle`. Points and EXP stay put. The row stays one.
+- `ensure_preview_kid` at 20:00 UTC deletes the preview kid's 2026-11-07 row and leaves 2026-11-06. A normal kid keeps both rows.
+
+`index.html` is not in the #78 diff. `startBattle` still toasts `⚠️ ` plus `data.error`. TC-FE-10 was not run. It only asserts that the error and the toast contain `今日`.
+
+Production `kids_town.db` sha256 before and after every run: `c046fc41e1cf0eb8c5be5ae5a100fd62dfc6390e8c2277a6a84f93002fe3ecfb`.
