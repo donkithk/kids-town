@@ -1937,8 +1937,8 @@ def ensure_preview_kid(db):
             (kid_id, region_id),
         )
 
-    # Preview-only: clear today's daily locks so designers can re-fight all soft-v1 bodies.
-    today = date.today().isoformat()
+    # Preview-only: clear today's Hong Kong daily locks so designers can re-fight all soft-v1 bodies.
+    today = hk_today_str()
     db.execute(
         "DELETE FROM daily_battles WHERE kid_id=? AND battle_date=?",
         (kid_id, today),
@@ -4366,13 +4366,13 @@ def battle_start(kid_id):
     if running:
         return jsonify({'error': 'Expedition already running'}), 400
 
-    # 每區一日一次 (打贏先計). Preview demo kid skips so soft-v1 art can be re-checked.
-    today = date.today().isoformat()
+    # 每區一日一次 (打贏先計). Same Hong Kong day as the farm. Preview demo kid skips so soft-v1 art can be re-checked.
+    today = hk_today_str()
     if not preview:
         won_today = db.execute("SELECT 1 FROM daily_battles WHERE kid_id=? AND region_id=? AND battle_date=?",
                                (kid_id, region_id, today)).fetchone()
         if won_today:
-            return jsonify({'error': '今日已打過此區，聽日再嚟'}), 400
+            return jsonify({'error': '今日已在此區域獲勝，請明日再來。'}), 400
 
     # Get monster for this region (or Preview soft-v1 override)
     if preview_monster is not None:
@@ -5091,7 +5091,7 @@ def _record_daily_battle(db, kid_id, bd):
     """Record a daily region win (打贏先計 — only regular battles, not boss)."""
     if bd.get('is_boss'):
         return
-    today = date.today().isoformat()
+    today = hk_today_str()
     db.execute("INSERT OR IGNORE INTO daily_battles (kid_id, region_id, battle_date) VALUES (?,?,?)",
                (kid_id, bd.get('region_id', 1), today))
 

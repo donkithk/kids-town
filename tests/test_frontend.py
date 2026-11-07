@@ -73,8 +73,6 @@ import socket
 import subprocess
 import sys
 import time
-from datetime import date
-
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -996,11 +994,13 @@ def test_default_admin_login_fails_on_fresh_db(page, base_url):
 @pytest.mark.case_id("TC-FE-10")
 def test_battle_daily_region_limit_blocks_second_start(page, base_url, test_db_path):
     """TC-FE-10 今日已打贏嘅區域再開戰 → API 400，UI 提示今日已打過。"""
+    import backend_v2 as b
+
     kid_id = _fe_kid_id(test_db_path)
     db = connect_db(test_db_path)
     db.execute(
         "INSERT OR IGNORE INTO daily_battles (kid_id, region_id, battle_date) VALUES (?,?,?)",
-        (kid_id, 1, date.today().isoformat()),
+        (kid_id, 1, b.hk_today_str()),
     )
     db.commit()
     db.close()

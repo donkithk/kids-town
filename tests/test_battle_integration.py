@@ -3,7 +3,6 @@
 These MUST fail before the wiring is done (RED), then pass after (GREEN).
 """
 import sqlite3
-from datetime import date
 
 import backend_v2 as b
 
@@ -108,7 +107,7 @@ def test_region_once_per_day_blocks_second_battle(battle_client, test_db, battle
     db.execute("DELETE FROM daily_battles WHERE kid_id=?", (kid_id,))
     db.execute(
         "INSERT INTO daily_battles (kid_id, region_id, battle_date) VALUES (?,1,?)",
-        (kid_id, date.today().isoformat()),
+        (kid_id, b.hk_today_str()),
     )
     db.commit()
     db.close()
@@ -123,7 +122,7 @@ def test_region_once_per_day_allows_different_region(battle_client, test_db, bat
     db.execute("DELETE FROM daily_battles WHERE kid_id=?", (kid_id,))
     db.execute(
         "INSERT INTO daily_battles (kid_id, region_id, battle_date) VALUES (?,1,?)",
-        (kid_id, date.today().isoformat()),
+        (kid_id, b.hk_today_str()),
     )
     db.commit()
     db.close()
@@ -141,7 +140,7 @@ def test_win_records_daily_battle(test_db, battle_kid):
     db.commit()
     row = db.execute(
         "SELECT * FROM daily_battles WHERE kid_id=? AND region_id=1 AND battle_date=?",
-        (kid_id, date.today().isoformat()),
+        (kid_id, b.hk_today_str()),
     ).fetchone()
     assert row is not None, "打贏應該記錄今日戰鬥"
     db.close()
