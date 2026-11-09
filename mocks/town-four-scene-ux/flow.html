@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>四步流程 · 城鎮起屋</title>
+  <link rel="stylesheet" href="chrome.css">
+  <link rel="stylesheet" href="scene.css">
+</head>
+<body class="flow-page">
+  <main class="story">
+    <h1>起屋四步</h1>
+    <p class="lede">小朋友每次只做一件事：先睇鎮，再揀空地，再擺位置，最後先升級或者打開功能。四步都玩得通，全部係示範，冇接遊戲。</p>
+    <a class="back" href="index.html">打開互動舞台</a>
+
+    <ol class="rail-wire" aria-label="四步順序">
+      <li>1 睇地圖</li>
+      <li class="arrow" aria-hidden="true">→</li>
+      <li>2 揀空地</li>
+      <li class="arrow" aria-hidden="true">→</li>
+      <li>3 擺位置</li>
+      <li class="arrow" aria-hidden="true">→</li>
+      <li>4 升級或打開</li>
+    </ol>
+
+    <div class="frames">
+      <article class="frame" id="scene-1">
+        <h2>1 · 睇地圖</h2>
+        <p>平靜瀏覽。地圖已經有圖書館、農場、商店。空地唔會發光。主按鈕係「我要起屋」。點已起嘅屋會打開升級同功能。</p>
+        <ul class="wire-list">
+          <li>模式：瀏覽。步驟列金色停喺「睇地圖」。</li>
+          <li>已放置：圖書館、農場、商店（鎖定剪影，字喺 DOM）。</li>
+          <li>出口：我要起屋 → 場景 2。點已起屋 → 場景 4。</li>
+        </ul>
+        <div class="slot">
+          <iframe title="場景 1 睇地圖" src="index.html?scene=1"></iframe>
+        </div>
+      </article>
+
+      <article class="frame" id="scene-2">
+        <h2>2 · 揀空地／建築清單</h2>
+        <p>空地變金框。可以點一格，或者打開清單揀一座未起嘅屋。兩樣都揀好，先至去擺位置。已起嘅屋唔可以再起，只可以睇升級。</p>
+        <ul class="wire-list">
+          <li>模式：揀。金框只標空地，已起嘅屋保持原樣。</li>
+          <li>兩條路：點空地，或撳「建築清單」。</li>
+          <li>出口：去擺位置（要空地加未起嘅屋）。返去睇地圖會清走呢次選擇。</li>
+        </ul>
+        <div class="slot">
+          <iframe title="場景 2 揀空地同清單" src="index.html?scene=2&amp;list=1"></iframe>
+        </div>
+      </article>
+
+      <article class="frame" id="scene-3">
+        <h2>3 · 擺位置</h2>
+        <p>半透明屋影落喺揀好嘅格。點其他金色空地就可以搬位。已有屋嘅格係紅框「唔得」，搬唔到，確定掣只會喺空地先至可撳。取消返去場景 2，示範資源唔變。確定先至扣資源，然後打開場景 4。</p>
+        <ul class="wire-list">
+          <li>預覽：半透明剪影 ＋「預覽」。可以搬去另一塊空地。</li>
+          <li>合法：金框。非法：紅框「唔得」，確定停用。</li>
+          <li>取消：唔扣資源。確定：放低座屋，扣示範籌碼，打開升級面板。</li>
+        </ul>
+        <div class="slot">
+          <iframe title="場景 3 擺位置" src="index.html?scene=3&amp;pad=1,0&amp;bldg=gym"></iframe>
+        </div>
+      </article>
+
+      <article class="frame" id="scene-4">
+        <h2>4 · 升級或打開功能</h2>
+        <p>放好之後，或者點一座已起嘅屋，下面彈出木紋面板。面板寫住升級費用。撳「升級」會喺面板上面再開一個確認視窗，唔係喺面板入面問。取消只關確認窗。確定先至加等級，並扣 💰50 🪵2，同時閃一輪金星。打開功能之後可以撳借書、收成呢類掣。</p>
+        <ul class="wire-list">
+          <li>入口：確定放置之後，或場景 1 點已起嘅屋，或步驟列「升級」。</li>
+          <li>面板：木紋同立體邊。屋名、等級、費用、升級（金）、打開功能（綠）、返去地圖（米）。</li>
+          <li>確認：獨立彈窗，蓋喺面板上面。取消（紅褐）只關窗。確定升級（綠）先至扣。</li>
+          <li>升級同功能都玩得通（示範）。返去地圖會關面板同確認窗。</li>
+        </ul>
+        <div class="slot">
+          <iframe title="場景 4 升級或打開功能" src="index.html?scene=4&amp;bldg=library"></iframe>
+        </div>
+        <a class="back" href="index.html?scene=4&amp;bldg=library&amp;confirm=1">打開場景 4 嘅確認彈窗</a>
+      </article>
+    </div>
+
+    <p class="note">只係設計稿。冇接遊戲、API、經濟。資源只係呢頁嘅示範籌碼。未得用戶話 OK 之前唔好 merge。</p>
+  </main>
+</body>
+</html>
