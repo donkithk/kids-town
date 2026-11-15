@@ -472,6 +472,27 @@ def test_art_on_keeps_grid_scale_and_clicks(page, art_base_url):
     assert abs(scaled["scaleX"] - scaled["expect"]) < 0.03
     assert scaled["expect"] < 0.9
 
+    page.set_viewport_size({"width": 1280, "height": 640})
+    page.wait_for_function(
+        """() => {
+          const stage = document.getElementById('stage').getBoundingClientRect();
+          const village = document.getElementById('village');
+          const south = document.querySelector('#townMap .pad[data-col="8"][data-row="8"] .cell-btn');
+          if (!south) return false;
+          const tip = south.getBoundingClientRect();
+          const h = window.innerHeight;
+          const w = window.innerWidth;
+          return Math.abs(stage.height - h) < 3
+            && stage.width < w - 16
+            && stage.left > 8
+            && tip.bottom <= stage.bottom + 1
+            && tip.top >= stage.top - 1
+            && village.scrollWidth <= village.clientWidth + 2
+            && village.scrollHeight <= village.clientHeight + 2;
+        }""",
+        timeout=4000,
+    )
+
     page.set_viewport_size({"width": 1280, "height": 720})
     locked = page.locator("#townMap .pad.is-locked .cell-btn").first
     locked.scroll_into_view_if_needed()
@@ -538,6 +559,14 @@ def test_menu_stays_on_stage_and_footer_still_navigates(page, art_base_url):
     _open_menu(page)
     off = _menu_inside_stage(page)
     assert off["drawer"] and off["close"] and off["toggle"], off
+    page.locator("#dr .dc").click()
+    page.goto(f"{art_base_url}/kids/?art=abc")
+    page.locator("#townMap").wait_for(state="visible", timeout=8000)
+    page.set_viewport_size({"width": 1280, "height": 640})
+    page.wait_for_timeout(300)
+    _open_menu(page)
+    short = _menu_inside_stage(page)
+    assert short["drawer"] and short["close"] and short["toggle"], short
 
 
 @pytest.mark.case_id("TC-FE-ART-ABC-03")

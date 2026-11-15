@@ -635,6 +635,7 @@
     village.style.bottom = "";
     village.style.width = "";
     village.style.height = "";
+    village.style.overflow = "";
   }
 
   /* Fit the 10×10 board (8×8 plus one locked ring) inside the map.
@@ -668,6 +669,7 @@
     village.style.bottom = "auto";
     village.style.width = boardW + "px";
     village.style.height = boardH + "px";
+    village.style.overflow = "hidden";
   }
 
   function setArtAbc(on) {

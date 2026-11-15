@@ -1666,7 +1666,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 }
 
 </style>
-<link rel="stylesheet" href="/kids/town-four-scene.css">
+<link rel="stylesheet" href="/kids/town-four-scene.css?v=stage3">
 <style>
 /* Upgrade panel. After the stylesheet so a cached town-four-scene.css cannot
    leave the sheet pale or the confirm box as default buttons outside the stage. */
@@ -4230,12 +4230,50 @@ function ktPreferLandscape() {
   } catch (e) {}
 }
 
+function visibleGameViewport() {
+  const root = document.documentElement;
+  let w = root.clientWidth;
+  let h = root.clientHeight;
+  const vv = window.visualViewport;
+  if (vv) {
+    if (vv.width > 0) w = Math.min(w, vv.width);
+    if (vv.height > 0) h = Math.min(h, vv.height);
+  }
+  return { w: w, h: h };
+}
+
+/* The stage layout stays 1280×720. The visible window only changes this
+   uniform scale. 100dvh can be taller than the area Chrome actually shows. */
+function layoutGameStage() {
+  const stage = document.getElementById('stage');
+  if (!stage) return;
+  if (!document.body.classList.contains('kt-artstage')) {
+    stage.style.transform = '';
+    return;
+  }
+  const box = visibleGameViewport();
+  let scale = Math.min(box.w / 1280, box.h / 720);
+  if (!isFinite(scale) || scale <= 0) scale = 1;
+  stage.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
+}
+
+function mountStageChrome() {
+  const stage = document.getElementById('stage');
+  const dov = document.getElementById('dov');
+  const drawer = document.getElementById('dr');
+  if (!stage) return;
+  if (dov && dov.parentElement !== stage) stage.appendChild(dov);
+  if (drawer && drawer.parentElement !== stage) stage.appendChild(drawer);
+}
+
 function ktSyncArtStage() {
+  mountStageChrome();
   const tab = document.querySelector('.tab-content.active');
   const id = tab && tab.id;
   const battle = document.body.classList.contains('kt-battle');
   const on = battle || id === 'tab-town' || id === 'tab-tasks' || id === 'tab-honour' || id === 'tab-shop' || id === 'tab-expedition';
   document.body.classList.toggle('kt-artstage', on);
+  layoutGameStage();
   const gh = document.querySelector('.gh');
   const hpEl = document.getElementById('hudHp');
   if (hpEl && !battle) hpEl.textContent = '';
@@ -4249,6 +4287,16 @@ function ktSyncArtStage() {
   gh.style.zIndex = '';
 }
 window.addEventListener('resize', () => { if (typeof ktSyncArtStage === 'function') ktSyncArtStage(); });
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', mountStageChrome);
+} else {
+  mountStageChrome();
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    if (typeof layoutGameStage === 'function') layoutGameStage();
+  });
+}
 
 function ktSyncFooter() {
   if (!document.querySelector('#ktFooter .kt-footer-tab.has-icon')) ktFooterMountIcons();
@@ -6909,6 +6957,6 @@ if ('serviceWorker' in navigator) {
   console.log('[PWA] Service Worker not supported');
 }
 </script>
-<script src="/kids/town-four-scene.js"></script>
+<script src="/kids/town-four-scene.js?v=stage3"></script>
 </body>
 </html>
