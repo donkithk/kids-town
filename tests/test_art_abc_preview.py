@@ -159,6 +159,70 @@ def test_static_serves_cutout_and_original_jpeg(client):
     assert denied.status_code == 404
 
 
+def _preview_server_module():
+    path = os.path.join(REPO, "scripts", "art_abc_preview_server.py")
+    spec = importlib.util.spec_from_file_location("art_abc_preview_server", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.case_id("TC-ART-ABC-05")
+def test_preview_port_isolated_from_shared_9123(tmp_path):
+    """TC-ART-ABC-05 預設仍是 9123；9124 只聽臨時庫，不改 kids_town.db。"""
+    import urllib.request
+
+    module = _preview_server_module()
+    assert module.resolve_port([]) == 9123
+    assert module.resolve_port(["--port", "9124"]) == 9124
+    old = os.environ.get("ART_PREVIEW_PORT")
+    os.environ["ART_PREVIEW_PORT"] = "9124"
+    try:
+        assert module.resolve_port([]) == 9124
+        assert module.resolve_port(["--port", "9130"]) == 9130
+    finally:
+        if old is None:
+            os.environ.pop("ART_PREVIEW_PORT", None)
+        else:
+            os.environ["ART_PREVIEW_PORT"] = old
+    with pytest.raises(SystemExit):
+        module.resolve_port(["--port", "0"])
+
+    _prod_untouched()
+    db_path = str(tmp_path / "art-preview.db")
+    env = os.environ.copy()
+    env.pop("ART_PREVIEW_PORT", None)
+    env["ART_PREVIEW_DB"] = db_path
+    proc = subprocess.Popen(
+        [sys.executable, "-u", os.path.join(REPO, "scripts", "art_abc_preview_server.py"), "--port", "9124"],
+        cwd=REPO,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        if not _wait_port(9124, timeout=20):
+            out = ""
+            if proc.stdout:
+                proc.terminate()
+                out = proc.stdout.read()
+            raise AssertionError(f"preview server did not bind 9124:\n{out}")
+        with urllib.request.urlopen("http://127.0.0.1:9124/kids/?art=abc", timeout=10) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            assert resp.status == 200
+        assert "kt-art-abc" in body
+        assert os.path.abspath(db_path) != os.path.abspath(PROD_DB)
+        assert os.path.isfile(db_path)
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+    _prod_untouched()
+
+
 def _playwright_unavailable_reason():
     try:
         from playwright.sync_api import sync_playwright

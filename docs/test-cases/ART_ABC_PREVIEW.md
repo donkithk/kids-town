@@ -11,3 +11,4 @@ Review toggle only. Does not change the live 8×8, the expansion ring, footprint
 | TC-FE-ART-ABC-01 | `/kids/` without `?art=abc` does not show the frame. The menu has 「開啟美術預覽」. |
 | TC-FE-ART-ABC-02 | With `?art=abc`, stage offset is 1280×720, scale is uniform, pads stay 64 buildable + 36 locked, pad width matches art-off, a locked click toasts the locked sentence, an empty click toasts the scene-1 sentence, and the footer tab is still the click target. |
 | TC-FE-ART-ABC-03 | With `?art=abc`, 探險公會 uses the cutout, the image corner alpha is 0, the DOM name is 「探險公會」, and the contact-shadow node is still there. A non-guild building stays on the SVG. |
+| TC-ART-ABC-05 | Preview port stays 9123 unless `--port` or `ART_PREVIEW_PORT` is set. `--port` wins. Isolated 9124 serves `/kids/` from a temp DB and does not change `kids_town.db`. |

@@ -6,19 +6,19 @@
 
 不要用倉庫裡的 `kids_town.db`，也不要開隧道。
 
+不解壓 git、也不要打開倉庫裡的 `kids_town.db` 或隧道。審查包在 Agent Store：`/cursor/stores/self/art-abc-review.tar.gz`。裡面沒有資料庫。
+
 ```bash
-python3 scripts/art_abc_preview_server.py
+mkdir -p /tmp/art-abc-review
+tar -xzf /cursor/stores/self/art-abc-review.tar.gz -C /tmp/art-abc-review
+cd /tmp/art-abc-review/kids-town
+python3 -m pip install -r requirements.txt
+ART_PREVIEW_PORT=9124 ART_PREVIEW_DB=/tmp/kids-town-art-preview.db python3 scripts/art_abc_preview_server.py
 ```
 
-腳本只寫 `/tmp/kids-town-art-preview.db`（可用 `ART_PREVIEW_DB` 改路徑）。若路徑是倉庫的 `kids_town.db`，它會拒絕。
+`--port 9124` 跟 `ART_PREVIEW_PORT` 一樣，只聽 `127.0.0.1`。兩個都沒給時仍是 **9123**。`--port` 蓋過環境變數。路徑若是倉庫的 `kids_town.db`，腳本會拒絕。
 
-瀏覽器開：
-
-`http://127.0.0.1:9123/kids/?art=abc`
-
-登入：`art_preview` / `1357`
-
-地圖上已有相接的健身室 `(0,0)` 和探險公會 `(2,0)`。選單「關閉美術預覽」可關掉；關掉之後是「開啟美術預覽」。`?art=off` 強制關閉。選擇會記在這個瀏覽器的 `localStorage` 鍵 `ktArtAbc`。
+瀏覽器開 `http://127.0.0.1:9124/kids/?art=abc`。登入走現有登入流程，不另開免登入截圖。地圖上有相接的健身室 `(0,0)` 和探險公會 `(2,0)`。選單「關閉美術預覽」可關掉。`?art=off` 強制關閉。
 
 對照測試：
 

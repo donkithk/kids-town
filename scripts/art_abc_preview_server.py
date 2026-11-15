@@ -2,16 +2,18 @@
 """Local town server for the A–C art review.
 
 Uses a temporary SQLite file. Refuses the repo's kids_town.db.
-Does not open a tunnel and does not change game rewards.
+Listens on 127.0.0.1 only. Does not open a tunnel.
 
     python3 scripts/art_abc_preview_server.py
+    python3 scripts/art_abc_preview_server.py --port 9124
+    ART_PREVIEW_PORT=9124 python3 scripts/art_abc_preview_server.py
 
-Then open http://127.0.0.1:9123/kids/?art=abc
-Kid login: art_preview / 1357
-Menu: 開啟美術預覽 / 關閉美術預覽
+Default port stays 9123. --port wins over ART_PREVIEW_PORT.
+Then open http://127.0.0.1:<port>/kids/?art=abc
 """
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 
@@ -22,9 +24,29 @@ if ROOT not in sys.path:
 import backend_v2 as backend
 from tests.factories import init_empty_db, insert_kid
 
-PORT = 9123
+DEFAULT_PORT = 9123
 DB_PATH = os.environ.get("ART_PREVIEW_DB", "/tmp/kids-town-art-preview.db")
 PROD_DB = os.path.join(ROOT, "kids_town.db")
+
+
+def resolve_port(argv=None) -> int:
+    """9123 unless --port or ART_PREVIEW_PORT is set. --port wins."""
+    parser = argparse.ArgumentParser(add_help=True)
+    parser.add_argument("--port", type=int, default=None)
+    args = parser.parse_args(argv)
+    raw = args.port
+    if raw is None:
+        env = os.environ.get("ART_PREVIEW_PORT", "").strip()
+        if env:
+            try:
+                raw = int(env)
+            except ValueError:
+                raise SystemExit("ART_PREVIEW_PORT must be an integer from 1 to 65535")
+        else:
+            raw = DEFAULT_PORT
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 1 or raw > 65535:
+        raise SystemExit("port must be an integer from 1 to 65535")
+    return raw
 
 
 def _refuse_prod(path: str) -> None:
@@ -67,9 +89,10 @@ def main() -> int:
     _place(DB_PATH, kid["id"], "探險公會", 2, 0)
     backend.DB_PATH = DB_PATH
     backend.app.config["TESTING"] = True
-    print(f"art preview DB={DB_PATH} port={PORT}", flush=True)
-    print("open http://127.0.0.1:%s/kids/?art=abc  login art_preview / 1357" % PORT, flush=True)
-    backend.app.run(host="127.0.0.1", port=PORT, debug=False, use_reloader=False)
+    port = resolve_port()
+    print(f"art preview DB={DB_PATH} port={port}", flush=True)
+    print("open http://127.0.0.1:%s/kids/?art=abc" % port, flush=True)
+    backend.app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False)
     return 0
 
 
