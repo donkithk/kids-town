@@ -627,12 +627,58 @@
     if (btn) btn.setAttribute("aria-pressed", on ? "true" : "false");
   }
 
+  function clearArtFit(village) {
+    village.style.removeProperty("--s");
+    village.style.left = "";
+    village.style.top = "";
+    village.style.right = "";
+    village.style.bottom = "";
+    village.style.width = "";
+    village.style.height = "";
+  }
+
+  /* Fit the 10×10 board (8×8 plus one locked ring) inside the map.
+     Formulas match --board-w / --board-h in town-four-scene.css. */
+  function fitArtBoard() {
+    var village = $("village");
+    if (!village) return;
+    if (!artOn()) {
+      clearArtFit(village);
+      return;
+    }
+    var map = village.parentElement;
+    if (!map || map.clientWidth < 80 || map.clientHeight < 80) return;
+    var topGap = 8;
+    var bottomGap = 56;
+    var sideGap = 8;
+    var availW = map.clientWidth - sideGap * 2;
+    var availH = map.clientHeight - topGap - bottomGap;
+    if (availW < 80 || availH < 80) return;
+    var s = Math.min((availW - 28) / 1680, (availH - 16) / 1041);
+    s = Math.max(0.3, Math.min(0.85, s));
+    s = Math.round(s * 1000) / 1000;
+    village.style.setProperty("--s", String(s));
+    var boardW = 1680 * s + 24;
+    var boardH = 1041 * s + 12;
+    var left = sideGap + Math.max(0, (availW - boardW) / 2);
+    var top = topGap + Math.max(0, (availH - boardH) / 2);
+    village.style.left = left + "px";
+    village.style.top = top + "px";
+    village.style.right = "auto";
+    village.style.bottom = "auto";
+    village.style.width = boardW + "px";
+    village.style.height = boardH + "px";
+  }
+
   function setArtAbc(on) {
     document.documentElement.classList.toggle("kt-art-abc", !!on);
     try { localStorage.setItem("ktArtAbc", on ? "1" : "0"); } catch (e) {}
     paintArtToggle();
     render();
-    requestAnimationFrame(function () { centerLiveVillage(); });
+    requestAnimationFrame(function () {
+      fitArtBoard();
+      centerLiveVillage();
+    });
   }
 
   function show(el, on) {
@@ -2174,10 +2220,15 @@
       wireVillagePan(village);
     }
     window.addEventListener("resize", function () {
+      fitArtBoard();
       centerLiveVillage();
       syncFocusRing();
       schedulePaint();
     });
+    if (window.ResizeObserver && map) {
+      var fitObserver = new ResizeObserver(function () { fitArtBoard(); });
+      fitObserver.observe(map);
+    }
     document.addEventListener("focusin", schedulePaint);
     document.addEventListener("focusout", function () {
       setTimeout(schedulePaint, 0);
@@ -2247,6 +2298,7 @@
     buildGrid();
     wire();
     render();
+    requestAnimationFrame(function () { fitArtBoard(); });
   }
 
   motionOn = readMotion();

@@ -407,7 +407,11 @@ def test_art_on_keeps_grid_scale_and_clicks(page, art_base_url):
           const stage = document.getElementById('stage');
           const frame = document.getElementById('artAbcFrame');
           const village = document.getElementById('village');
-          const s = getComputedStyle(village).getPropertyValue('--s').trim();
+          const s = parseFloat(getComputedStyle(village).getPropertyValue('--s'));
+          const frameMatrix = getComputedStyle(frame).transform;
+          const frameParts = frameMatrix.startsWith('matrix(')
+            ? frameMatrix.slice(7, -1).split(',').map(Number)
+            : [];
           const matrix = getComputedStyle(stage).transform;
           const parts = matrix.startsWith('matrix(')
             ? matrix.slice(7, -1).split(',').map(Number)
@@ -423,7 +427,11 @@ def test_art_on_keeps_grid_scale_and_clicks(page, art_base_url):
             offsetH: stage.offsetHeight,
             scaleX, scaleY, expect,
             s,
+            frameScale: frameParts.length ? frameParts[0] : 1,
             framePE: getComputedStyle(frame).pointerEvents,
+            overflow: getComputedStyle(village).overflow,
+            fits: village.scrollWidth <= village.clientWidth + 2
+              && village.scrollHeight <= village.clientHeight + 2,
             buildable: document.querySelectorAll('#townMap .pad[data-zone="buildable"]').length,
             locked: document.querySelectorAll('#townMap .pad[data-zone="locked"]').length,
             footerHit: !!(hit && hit.closest && hit.closest('#ktFooter .kt-footer-tab'))
@@ -431,12 +439,15 @@ def test_art_on_keeps_grid_scale_and_clicks(page, art_base_url):
         }"""
     )
     assert info["offsetW"] == 1280 and info["offsetH"] == 720
-    assert info["s"] == "0.85"
+    assert 0.3 < info["s"] < 0.85
+    assert info["frameScale"] > 1.02
     assert abs(info["scaleX"] - info["scaleY"]) < 0.01
     assert abs(info["scaleX"] - info["expect"]) < 0.03
     assert info["framePE"] == "none"
+    assert info["overflow"] == "hidden"
+    assert info["fits"] is True
     assert info["buildable"] == 64 and info["locked"] == 36
-    assert _pad_width(page) == off_width
+    assert _pad_width(page) < off_width
     assert info["footerHit"] is True
 
     page.set_viewport_size({"width": 800, "height": 600})
@@ -480,6 +491,53 @@ def test_art_on_keeps_grid_scale_and_clicks(page, art_base_url):
           === '想在這裏興建？請先按「我要起屋」。'""",
         timeout=4000,
     )
+
+
+def _open_menu(page):
+    page.locator(".gh .mb").click()
+    page.locator("#dr.o").wait_for(state="visible", timeout=4000)
+    page.locator("#btnArtAbc").wait_for(state="visible", timeout=4000)
+
+
+def _menu_inside_stage(page):
+    return page.evaluate(
+        """() => {
+          const stage = document.getElementById('stage').getBoundingClientRect();
+          const drawer = document.getElementById('dr').getBoundingClientRect();
+          const close = document.querySelector('#dr .dc').getBoundingClientRect();
+          const toggle = document.getElementById('btnArtAbc').getBoundingClientRect();
+          function inside(box) {
+            return box.width > 20 && box.height > 20
+              && box.left >= stage.left - 1 && box.top >= stage.top - 1
+              && box.right <= stage.right + 1 && box.bottom <= stage.bottom + 1;
+          }
+          return {
+            drawer: inside(drawer),
+            close: inside(close),
+            toggle: inside(toggle),
+            bg: getComputedStyle(document.getElementById('dr')).backgroundColor
+          };
+        }"""
+    )
+
+
+@pytest.mark.case_id("TC-FE-ART-ABC-04")
+def test_menu_stays_on_stage_and_footer_still_navigates(page, art_base_url):
+    """TC-FE-ART-ABC-04 主目錄留在舞台內；底欄不會被遮罩吃掉點擊。"""
+    _login(page, art_base_url, "?art=abc")
+    _open_menu(page)
+    on = _menu_inside_stage(page)
+    assert on["drawer"] and on["close"] and on["toggle"], on
+    assert on["bg"] not in ("rgb(240, 248, 255)", "rgba(240, 248, 255, 1)")
+    page.get_by_role("button", name="公會大廳").click()
+    page.locator("#tab-expedition.tab-content.active").wait_for(state="visible", timeout=4000)
+    assert page.locator("#dov").evaluate("el => getComputedStyle(el).display") == "none"
+
+    page.goto(f"{art_base_url}/kids/?art=off")
+    page.locator("#townMap").wait_for(state="visible", timeout=8000)
+    _open_menu(page)
+    off = _menu_inside_stage(page)
+    assert off["drawer"] and off["close"] and off["toggle"], off
 
 
 @pytest.mark.case_id("TC-FE-ART-ABC-03")

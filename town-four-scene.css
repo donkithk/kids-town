@@ -60,6 +60,43 @@ body.kt-artstage #tab-town .mp { position: relative; }
 
 #townMap .village.is-iso.is-panning { cursor: grabbing; }
 
+/* Art preview fits the 8×8 plus the locked ring in the opening.
+   --s is set from the measured box. Overflow stays hidden so the
+   cream frame is not cut by scrollbars. */
+html.kt-art-abc #townMap .village.is-iso {
+  overflow: hidden;
+}
+
+html.kt-art-abc #townMap .legend {
+  width: auto;
+  max-width: min(560px, 58%);
+  padding: 6px 10px 8px;
+}
+html.kt-art-abc #townMap .legend h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+html.kt-art-abc #townMap .legend .key {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+html.kt-art-abc #townMap .legend .key li {
+  min-height: 28px;
+  font-size: 13px;
+}
+html.kt-art-abc #townMap .legend p {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+html.kt-art-abc #townMap .cta {
+  bottom: 6px;
+}
+html.kt-art-abc #townMap .tools {
+  top: 6px;
+  right: 8px;
+}
+
 /* In-flow size so west/north cells sit at scroll 0 instead of negative. */
 #townMap .village.is-iso::before {
   content: "";

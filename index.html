@@ -1116,22 +1116,29 @@ body.kt-artstage #tab-expedition.tab-content.active.kt-wild-on{
 #artAbcFrame{
   display:none;position:absolute;left:0;top:0;width:1280px;height:720px;
   z-index:4;pointer-events:none;user-select:none;
+  transform-origin:center center;
 }
 html.kt-art-abc body.kt-artstage:has(#tab-town.tab-content.active) #artAbcFrame{
   display:block;
+  /* Uniform zoom of the locked cutout. The stage clips the outer wood,
+     so the visible rim is thinner and the opening is larger. Not a 9-slice. */
+  transform:scale(1.08);
 }
 html.kt-art-abc body.kt-artstage:has(#tab-town.tab-content.active) .gsw{
   background:#faf6ef;
 }
 html.kt-art-abc body.kt-artstage:has(#tab-town.tab-content.active) .gs{
-  top:60px;
+  top:28px;height:60px;
+}
+html.kt-art-abc body.kt-artstage:has(#tab-town.tab-content.active) .gh{
+  height:60px;min-height:60px;
 }
 html.kt-art-abc body.kt-artstage:has(#tab-town.tab-content.active) #ktFooter{
-  bottom:54px;
+  bottom:22px;height:64px;padding-top:4px;padding-bottom:4px;
 }
 html.kt-art-abc body.kt-artstage:has(#tab-town.tab-content.active) #tab-town.tab-content.active{
   z-index:6;background:transparent;
-  padding:140px 64px 150px;
+  padding:92px 32px 92px;
 }
 body.kt-artstage #tab-town.tab-content.active{
   display:flex;flex-direction:column;box-sizing:border-box;
@@ -1212,8 +1219,37 @@ body.kt-landscape .kt-art{width:100%;height:auto;aspect-ratio:16/9;object-fit:co
 }
 .kt-toast:empty{display:none}
 body.kt-artstage .kt-toast,body.kt-artstage .kt-tag{font-size:16px}
-body.kt-artstage .dr{height:720px}
-body.kt-artstage .dov{position:absolute}
+/* Drawer lives in the 1280×720 stage so letterbox scale keeps it on the
+   canvas. Cream paper, not the light-blue fallback. Footer stays above
+   the backdrop so the five tabs still receive clicks. */
+body.kt-artstage .dov{
+  position:absolute;inset:0 0 88px 0;z-index:200;
+  background:rgba(44,28,16,.28);
+}
+body.kt-artstage .dr{
+  position:absolute;top:12px;bottom:96px;height:auto;width:300px;
+  right:12px;z-index:210;
+  transform:translateX(calc(100% + 24px));
+  background:#faf6ef;color:#3b2a1a;
+  border:3px solid #8b5e3c;border-radius:18px;
+  box-shadow:-8px 8px 24px rgba(59,42,26,.28);
+  padding:8px 0 12px;
+}
+body.kt-artstage .dr.o{right:12px;transform:none}
+body.kt-artstage .dh{
+  border-bottom:2px solid #c4a06a;margin:0 12px 8px;padding:4px 4px 8px;
+}
+body.kt-artstage .dh h3{
+  font-family:var(--body-font);font-size:18px;font-weight:800;color:#3b2a1a;
+}
+body.kt-artstage .dc{
+  min-width:44px;min-height:44px;color:#5c3d28;font-size:22px;border-radius:12px;
+}
+body.kt-artstage .di{
+  min-height:44px;font-size:16px;font-weight:800;color:#3b2a1a;padding:8px 16px;
+}
+body.kt-artstage .di:active{background:#f3e6c8}
+body.kt-artstage #ktFooter{z-index:230}
 #guildToast.kt-toast,#honourToast.kt-toast{position:static;left:auto;top:auto;transform:none;max-width:100%}
 .vh{
   position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
@@ -6230,6 +6266,10 @@ document.addEventListener('click', function (e) {
   const nav = e.target.closest && e.target.closest('[data-kt-nav]');
   if (nav) {
     e.preventDefault();
+    const dov = document.getElementById('dov');
+    if (dov && (dov.style.display === 'block' || getComputedStyle(dov).display !== 'none')) {
+      if (typeof td === 'function') td();
+    }
     const dest = nav.getAttribute('data-kt-nav');
     if (dest) st(dest);
     return;
