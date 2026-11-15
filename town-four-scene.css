@@ -265,6 +265,16 @@ body.kt-artstage #tab-town .mp { position: relative; }
   pointer-events: none;
 }
 
+/* Locked guild cutout is taller than the 240×210 slot. Width stays one pad.
+   The bottom of the crop is the stone plinth, so bottom:0 is the contact.
+   The CSS contact shadow is unchanged. */
+html.kt-art-abc #townMap .pad > .sprite.is-locked-guild,
+html.kt-art-abc #townMap .pad > .ghost.is-locked-guild {
+  aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center bottom;
+}
+
 #townMap .pad > .ghost { opacity: 0.55; }
 
 #townMap .pad > .badge,

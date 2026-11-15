@@ -5,6 +5,8 @@
   var COLS = 8;
   var ROWS = 8;
   var ASSET = "mocks/town-building-proof/assets/";
+  /* Locked bg-town-plaza.jpg is not applied: its painted 6×6 diamond is not the live 8×8. */
+  var LOCKED_GUILD = "/kids/assets/art-locked-2026-11-04/derived/building-adventure-guild-cutout.png";
   var LOCKED_TOAST = "此格尚未解鎖，暫時不能建造。";
   var MOTION_KEY = "ktTownMotion";
   var MARK_VALID = ASSET + "cell-valid.svg";
@@ -583,10 +585,54 @@
     return footprintFree(state.pad.c, state.pad.r, state.unstoreId);
   }
 
+  function artOn() {
+    return document.documentElement.classList.contains("kt-art-abc");
+  }
+
+  function lockedGuild(name) {
+    return artOn() && name === "探險公會";
+  }
+
   function assetSrc(name, still) {
+    if (lockedGuild(name)) return LOCKED_GUILD;
     var id = ASSET_ID[name] || "shop";
     var frozen = still || !motionOn;
     return ASSET + "bldg-" + id + "-iso" + (frozen ? "-still" : "") + ".svg";
+  }
+
+  /* The short SVG name sits on the pad. The guild crop is taller than the pad,
+     so the same top:0 would land on the banner. Lift it by the overflow. */
+  function placeGuildCap(cell) {
+    var img = cell.sprite;
+    function place() {
+      if (!img.classList.contains("is-locked-guild") || img.hidden || !img.naturalWidth) {
+        cell.cap.style.top = "";
+        return;
+      }
+      var padW = cell.el.offsetWidth || 1;
+      var padH = cell.el.offsetHeight || 0;
+      var spriteH = padW * img.naturalHeight / img.naturalWidth;
+      var lift = Math.max(0, spriteH - padH) + 4;
+      cell.cap.style.top = (-lift) + "px";
+    }
+    if (img.complete && img.naturalWidth) place();
+    else img.addEventListener("load", place, { once: true });
+  }
+
+  function paintArtToggle() {
+    var on = artOn();
+    var label = $("artAbcLabel");
+    if (label) label.textContent = on ? "關閉美術預覽" : "開啟美術預覽";
+    var btn = $("btnArtAbc");
+    if (btn) btn.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+
+  function setArtAbc(on) {
+    document.documentElement.classList.toggle("kt-art-abc", !!on);
+    try { localStorage.setItem("ktArtAbc", on ? "1" : "0"); } catch (e) {}
+    paintArtToggle();
+    render();
+    requestAnimationFrame(function () { centerLiveVillage(); });
   }
 
   function show(el, on) {
@@ -897,8 +943,10 @@
       var gsrc = assetSrc(ghostDef.name);
       if (cell.ghost.getAttribute("src") !== gsrc) cell.ghost.src = gsrc;
       cell.ghost.alt = "";
+      cell.ghost.classList.toggle("is-locked-guild", lockedGuild(ghostDef.name));
     } else {
       cell.ghost.hidden = true;
+      cell.ghost.classList.remove("is-locked-guild");
     }
 
     cell.shadow.hidden = !(occ || showGhost);
@@ -908,13 +956,17 @@
       var ssrc = assetSrc(occ.name);
       if (cell.sprite.getAttribute("src") !== ssrc) cell.sprite.src = ssrc;
       cell.sprite.alt = occ.name || "";
+      cell.sprite.classList.toggle("is-locked-guild", lockedGuild(occ.name));
       cell.cap.hidden = false;
       cell.cap.textContent = occ.name || "";
+      placeGuildCap(cell);
     } else {
       cell.sprite.hidden = true;
       cell.sprite.alt = "";
+      cell.sprite.classList.remove("is-locked-guild");
       cell.cap.hidden = true;
       cell.cap.textContent = "";
+      cell.cap.style.top = "";
     }
 
     var showMark = !state.sheet && (kind === "empty" || kind === "chosen" || kind === "preview");
@@ -2180,6 +2232,14 @@
       try { localStorage.setItem(MOTION_KEY, motionOn ? "on" : "off"); } catch (e) {}
       render();
     });
+    var artBtn = $("btnArtAbc");
+    if (artBtn) {
+      artBtn.addEventListener("click", function () {
+        setArtAbc(!artOn());
+        if (typeof td === "function") td();
+      });
+    }
+    paintArtToggle();
   }
 
   function townUxSync() {

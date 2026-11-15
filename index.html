@@ -2,6 +2,17 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
+<script>
+/* Art preview is off unless ?art=abc or a saved choice says on. ?art=off wins. */
+(function () {
+  var q = "";
+  try { q = new URLSearchParams(location.search).get("art") || ""; } catch (e) {}
+  var stored = "";
+  try { stored = localStorage.getItem("ktArtAbc") || ""; } catch (e2) {}
+  var on = q === "abc" || (q !== "off" && stored === "1");
+  if (on) document.documentElement.classList.add("kt-art-abc");
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f97316">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1098,6 +1109,30 @@ body.kt-artstage #tab-expedition.tab-content.active.kt-wild-on{
   margin:0;padding:0;overflow:hidden;display:block;
 }
 /* Town home uses the same stage chrome as shop/guild: header 72px, footer 88px. */
+/* Locked wood frame (A). Only while the town tab is showing, and only when
+   html.kt-art-abc is set. The cream center is transparent. Header and footer
+   sit inside the opening so the rails do not cover labels. The 8×8 map is
+   not restyled into the plaza's 6×6. */
+#artAbcFrame{
+  display:none;position:absolute;left:0;top:0;width:1280px;height:720px;
+  z-index:4;pointer-events:none;user-select:none;
+}
+html.kt-art-abc body.kt-artstage:has(#tab-town.tab-content.active) #artAbcFrame{
+  display:block;
+}
+html.kt-art-abc body.kt-artstage:has(#tab-town.tab-content.active) .gsw{
+  background:#faf6ef;
+}
+html.kt-art-abc body.kt-artstage:has(#tab-town.tab-content.active) .gs{
+  top:60px;
+}
+html.kt-art-abc body.kt-artstage:has(#tab-town.tab-content.active) #ktFooter{
+  bottom:54px;
+}
+html.kt-art-abc body.kt-artstage:has(#tab-town.tab-content.active) #tab-town.tab-content.active{
+  z-index:6;background:transparent;
+  padding:140px 64px 150px;
+}
 body.kt-artstage #tab-town.tab-content.active{
   display:flex;flex-direction:column;box-sizing:border-box;
   padding:96px 48px 104px;
@@ -2077,6 +2112,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
 <!-- ═══════════════ MAIN APP ═══════════ -->
 <div id="app" style="display:none">
   <div class="gsw stage" id="stage">
+    <img id="artAbcFrame" alt="" src="/kids/assets/art-locked-2026-11-04/derived/ui-town-wood-frame-cutout.png">
     <div class="gs">
       <div class="gh">
         <div class="av" id="hudAv">🐱</div>
@@ -2545,6 +2581,7 @@ body.kt-pane-shop .kt-backpack-block{display:none}
       <button class="di" onclick="st('savings');td()"><span class="ic">🎯</span> 儲蓄目標</button>
       <button class="di" onclick="st('ledger');td()"><span class="ic">📊</span> 帳本</button>
       <button class="di" onclick="st('manage');td()"><span class="ic">⚙️</span> 設定 <span class="sb">→</span></button>
+      <button class="di" id="btnArtAbc" type="button" aria-pressed="false"><span class="ic">🪵</span> <span id="artAbcLabel">開啟美術預覽</span></button>
       <button class="di" id="logoutBtn" onclick="logout();td()"><span class="ic">🚪</span> 登出</button>
     </div>
   </div>
