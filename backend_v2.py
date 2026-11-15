@@ -19,7 +19,7 @@ app.config['SESSION_COOKIE_PATH'] = '/'
 CORS(app, supports_credentials=True)
 
 # Static files the /kids/ route may serve. Anything else (including .db/.py) is 404.
-STATIC_ALLOWED_EXT = {'.html', '.js', '.css', '.png', '.svg', '.ico', '.json', '.woff2', '.webp'}
+STATIC_ALLOWED_EXT = {'.html', '.js', '.css', '.png', '.jpg', '.jpeg', '.svg', '.ico', '.json', '.woff2', '.webp'}
 STATIC_DENIED_MARKERS = ('.db', '.py', '.pyc', '.pyo', '.env', '.pem', '.key', '.sql')
 # Write endpoints kids must not call even for themselves (points / debug inventory).
 KID_DENIED_WRITE_SUFFIXES = ('/points', '/points/adjust', '/inventory/add')

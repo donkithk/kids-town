@@ -60,6 +60,43 @@ body.kt-artstage #tab-town .mp { position: relative; }
 
 #townMap .village.is-iso.is-panning { cursor: grabbing; }
 
+/* Art preview fits the 8×8 plus the locked ring in the opening.
+   --s is set from the measured box. Overflow stays hidden so the
+   cream frame is not cut by scrollbars. */
+html.kt-art-abc #townMap .village.is-iso {
+  overflow: hidden;
+}
+
+html.kt-art-abc #townMap .legend {
+  width: auto;
+  max-width: min(560px, 58%);
+  padding: 6px 10px 8px;
+}
+html.kt-art-abc #townMap .legend h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+html.kt-art-abc #townMap .legend .key {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+html.kt-art-abc #townMap .legend .key li {
+  min-height: 28px;
+  font-size: 13px;
+}
+html.kt-art-abc #townMap .legend p {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+html.kt-art-abc #townMap .cta {
+  bottom: 6px;
+}
+html.kt-art-abc #townMap .tools {
+  top: 6px;
+  right: 8px;
+}
+
 /* In-flow size so west/north cells sit at scroll 0 instead of negative. */
 #townMap .village.is-iso::before {
   content: "";
@@ -263,6 +300,16 @@ body.kt-artstage #tab-town .mp { position: relative; }
   height: auto;
   aspect-ratio: 240 / 210;
   pointer-events: none;
+}
+
+/* Locked guild cutout is taller than the 240×210 slot. Width stays one pad.
+   The bottom of the crop is the stone plinth, so bottom:0 is the contact.
+   The CSS contact shadow is unchanged. */
+html.kt-art-abc #townMap .pad > .sprite.is-locked-guild,
+html.kt-art-abc #townMap .pad > .ghost.is-locked-guild {
+  aspect-ratio: auto;
+  object-fit: contain;
+  object-position: center bottom;
 }
 
 #townMap .pad > .ghost { opacity: 0.55; }
